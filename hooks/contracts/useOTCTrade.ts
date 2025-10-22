@@ -1,9 +1,8 @@
 import { useContractRead, useAccount } from 'wagmi';
 import { parseEther, formatEther, Address } from 'viem';
 import { useContractWhitelist } from './useContractWhitelist';
-
-// We'll need to update this with the actual deployed contract address
-const OTC_CONTRACT_ADDRESS = '0x342DF6d98d06f03a20Ae6E2c456344Bb91cE33a2';
+import { getContractAddress } from '@/config/testing';
+import { useContract } from '@/context/ContractContext';
 
 // Import the contract ABI - using the correct ABI from the contract
 const OTC_ABI = [
@@ -107,7 +106,11 @@ export interface OrderDetails {
 }
 
 export function useOTCTrade() {
-  const { address } = useAccount();
+  const { address, chainId } = useAccount();
+  const { activeContract } = useContract();
+  
+  // Get the contract address for the current chain and active contract
+  const contractAddress = getContractAddress(chainId, activeContract);
   
   // Use the whitelist system for write functions
   const {
@@ -118,11 +121,14 @@ export function useOTCTrade() {
     isConnected
   } = useContractWhitelist();
 
-  // Read functions
+  // Read functions - only if we have a valid contract address
   const { data: ordersCount } = useContractRead({
-    address: OTC_CONTRACT_ADDRESS,
+    address: contractAddress as Address,
     abi: OTC_ABI,
     functionName: 'getOrderCounter',
+    query: {
+      enabled: !!contractAddress,
+    },
   });
 
   return {
@@ -133,6 +139,8 @@ export function useOTCTrade() {
     userAddress: address,
     isWalletConnected,
     isConnected,
+    contractAddress,
+    chainId,
   };
 }
 

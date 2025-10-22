@@ -8,6 +8,8 @@ import { useTokenStats } from '@/hooks/crypto/useTokenStats';
 import { useAccount, usePublicClient } from 'wagmi';
 import { useTokenAccess } from '@/context/TokenAccessContext';
 import { PAYWALL_ENABLED, REQUIRED_PARTY_TOKENS, REQUIRED_TEAM_TOKENS, PAYWALL_TITLE, PAYWALL_DESCRIPTION } from '@/config/paywall';
+import { getContractAddress } from '@/config/testing';
+import { useContract } from '@/context/ContractContext';
 import PaywallModal from './PaywallModal';
 
 // Helper function to find the highest version of a token in tokenStats
@@ -199,8 +201,12 @@ export default function OrderHistoryTable({
   maxiTokenAddresses,
   onNavigateToMarketplace
 }: OrderHistoryTableProps) {
-  const { address } = useAccount();
+  const { address, chainId } = useAccount();
   const publicClient = usePublicClient();
+  const { activeContract } = useContract();
+  
+  // Contract address for querying events - get based on current chain and active contract
+  const OTC_CONTRACT_ADDRESS = getContractAddress(chainId, activeContract);
   
   // Token-gating - use centralized validation
   const { hasTokenAccess, partyBalance, teamBalance, isChecking: checkingTokenBalance } = useTokenAccess();

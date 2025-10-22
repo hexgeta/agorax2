@@ -5,9 +5,6 @@ import { useAccount } from 'wagmi';
 import { parseEther, formatEther, Address } from 'viem';
 import { useOTCTrade } from '../hooks/contracts/useOTCTrade';
 
-// Contract address - update with actual deployed address
-const OTC_CONTRACT_ADDRESS = '0x342DF6d98d06f03a20Ae6E2c456344Bb91cE33a2';
-
 // Import the contract ABI
 const OTC_ABI = [
   {
@@ -80,18 +77,12 @@ export function OTCTrading() {
       const buyAmounts = activeTab === 'buy' ? [parseEther(formData.price)] : [parseEther(formData.amount)];
 
       await placeOrder({
-        address: OTC_CONTRACT_ADDRESS,
-        abi: OTC_ABI,
-        functionName: 'placeOrder',
-        args: [{
-          sellToken,
-          sellAmount,
-          buyTokensIndex,
-          buyAmounts,
-          expirationTime: BigInt(expirationTime)
-        }],
-        value: activeTab === 'buy' ? sellAmount : undefined
-      });
+        sellToken,
+        sellAmount,
+        buyTokensIndex,
+        buyAmounts,
+        expirationTime: BigInt(expirationTime)
+      }, activeTab === 'buy' ? sellAmount : undefined);
 
       // Reset form
       setFormData({

@@ -1,12 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import { createPublicClient, http } from 'viem';
 import { Address } from 'viem';
+import { useAccount } from 'wagmi';
+import { getContractAddress, PULSECHAIN_CHAIN_ID, PULSECHAIN_TESTNET_CHAIN_ID } from '@/config/testing';
+import { useContract } from '@/context/ContractContext';
 
-// Contract address - PulseChain OTC contract
-const OTC_CONTRACT_ADDRESS = '0x342DF6d98d06f03a20Ae6E2c456344Bb91cE33a2' as Address;
-
-// Use the working RPC endpoint
-const PULSECHAIN_RPC = 'https://rpc.pulsechain.com';
+// RPC endpoints per chain
+const RPC_ENDPOINTS = {
+  [PULSECHAIN_CHAIN_ID]: 'https://rpc.pulsechain.com',
+  [PULSECHAIN_TESTNET_CHAIN_ID]: 'https://pulsechain-testnet-rpc.publicnode.com',
+};
 
 // Import the full ABI from the contract
 const OTC_ABI = [
@@ -263,12 +266,36 @@ export interface CompleteOrderDetails {
 }
 
 // Helper function to create client (only on client side)
-function createClient() {
-  // Import pulsechain only when needed (client-side only)
+function createClient(chainId: number) {
+  // Get the appropriate RPC endpoint
+  const rpcUrl = RPC_ENDPOINTS[chainId as keyof typeof RPC_ENDPOINTS];
+  
+  if (!rpcUrl) {
+    throw new Error(`No RPC endpoint configured for chain ${chainId}`);
+  }
+  
+  // Import chains only when needed (client-side only)
   const { pulsechain } = require('viem/chains');
+  
+  // Use the appropriate chain config based on chainId
+  const chainConfig = chainId === PULSECHAIN_CHAIN_ID ? pulsechain : {
+    id: chainId,
+    name: 'PulseChain Testnet v4',
+    network: 'pulsechain-testnet',
+    nativeCurrency: {
+      decimals: 18,
+      name: 'Test PLS',
+      symbol: 'tPLS',
+    },
+    rpcUrls: {
+      default: { http: [rpcUrl] },
+      public: { http: [rpcUrl] },
+    },
+  };
+  
   return createPublicClient({
-    chain: pulsechain,
-    transport: http('https://rpc.pulsechain.com', {
+    chain: chainConfig,
+    transport: http(rpcUrl, {
       timeout: 10000, // 10 second timeout per call
       retryCount: 0, // Let our error handling manage retries
     })
@@ -276,11 +303,14 @@ function createClient() {
 }
 
 // Helper function to fetch contract data
-async function fetchContractData() {
+async function fetchContractData(contractAddress: Address, chainId: number) {
   try {
+    if (!contractAddress) {
+      throw new Error('No contract address provided');
+    }
     
     // Create client only when needed (client-side only)
-    const client = createClient();
+    const client = createClient(chainId);
     
     // Test basic connectivity first
     try {
@@ -292,7 +322,7 @@ async function fetchContractData() {
     // Fetch all contract data in parallel
     const [contractName, contractOwner, contractSymbol, totalSupply, orderCounter] = await Promise.all([
       client.readContract({
-        address: OTC_CONTRACT_ADDRESS,
+        address: contractAddress,
         abi: OTC_ABI,
         functionName: 'name',
       }).catch(err => {
@@ -300,7 +330,7 @@ async function fetchContractData() {
       }),
       
       client.readContract({
-        address: OTC_CONTRACT_ADDRESS,
+        address: contractAddress,
         abi: OTC_ABI,
         functionName: 'owner',
       }).catch(err => {
@@ -308,7 +338,7 @@ async function fetchContractData() {
       }),
       
       client.readContract({
-        address: OTC_CONTRACT_ADDRESS,
+        address: contractAddress,
         abi: OTC_ABI,
         functionName: 'symbol',
       }).catch(err => {
@@ -316,7 +346,7 @@ async function fetchContractData() {
       }),
       
       client.readContract({
-        address: OTC_CONTRACT_ADDRESS,
+        address: contractAddress,
         abi: OTC_ABI,
         functionName: 'totalSupply',
       }).catch(err => {
@@ -324,7 +354,7 @@ async function fetchContractData() {
       }),
       
       client.readContract({
-        address: OTC_CONTRACT_ADDRESS,
+        address: contractAddress,
         abi: OTC_ABI,
         functionName: 'getOrderCounter',
       }).catch(err => {
@@ -352,7 +382,7 @@ async function fetchContractData() {
         
         const batchPromises = batch.map(orderId => 
           client.readContract({
-            address: OTC_CONTRACT_ADDRESS,
+            address: contractAddress,
             abi: OTC_ABI,
             functionName: 'getOrderDetails',
             args: [BigInt(orderId)],
@@ -409,6 +439,10 @@ async function fetchContractData() {
 }
 
 export function useOpenPositions() {
+  const { chainId } = useAccount();
+  const { activeContract } = useContract();
+  const contractAddress = getContractAddress(chainId, activeContract);
+  
   const [data, setData] = useState<{
     contractName: string | null;
     contractOwner: Address | null;
@@ -426,12 +460,17 @@ export function useOpenPositions() {
 
   const fetchData = useCallback(async () => {
     if (!isClient) return;
+    if (!contractAddress || !chainId) {
+      setError(new Error('Contract not deployed on this chain'));
+      setIsLoading(false);
+      return;
+    }
     
     setIsLoading(true);
     setError(null);
     
     try {
-      const result = await fetchContractData();
+      const result = await fetchContractData(contractAddress as Address, chainId);
       setData(result);
       
       // If all data is null, there might be an issue
@@ -443,7 +482,7 @@ export function useOpenPositions() {
     } finally {
       setIsLoading(false);
     }
-  }, [isClient]);
+  }, [isClient, contractAddress, chainId, activeContract]);
 
   useEffect(() => {
     setIsClient(true);

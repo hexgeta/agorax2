@@ -1,7 +1,7 @@
-import { useContractRead } from 'wagmi'
+import { useContractRead, useAccount } from 'wagmi'
 import { Address } from 'viem'
-
-const OTC_CONTRACT_ADDRESS = '0x342DF6d98d06f03a20Ae6E2c456344Bb91cE33a2'
+import { getContractAddress } from '@/config/testing'
+import { useContract } from '@/context/ContractContext'
 
 // ABI for the whitelist reading functions
 const WHITELIST_ABI = [
@@ -92,20 +92,29 @@ export interface WhitelistedToken {
 }
 
 export function useContractWhitelistRead() {
+  const { chainId } = useAccount();
+  const { activeContract } = useContract();
+  const contractAddress = getContractAddress(chainId, activeContract);
+  
   // Get the total count of whitelisted tokens
   const { data: totalCount, isLoading: isLoadingCount } = useContractRead({
-    address: OTC_CONTRACT_ADDRESS,
+    address: contractAddress as Address,
     abi: WHITELIST_ABI,
     functionName: 'viewCountWhitelisted',
+    query: {
+      enabled: !!contractAddress,
+    },
   })
 
   // Get all whitelisted tokens (we'll fetch them in batches if needed)
   const { data: whitelistedData, isLoading: isLoadingWhitelist } = useContractRead({
-    address: OTC_CONTRACT_ADDRESS,
+    address: contractAddress as Address,
     abi: WHITELIST_ABI,
     functionName: 'viewWhitelisted',
     args: [0n, totalCount || 100n], // Start from 0, fetch up to totalCount or 100
-    enabled: !!totalCount && totalCount > 0n,
+    query: {
+      enabled: !!contractAddress && !!totalCount && totalCount > 0n,
+    },
   })
 
   // Process the whitelisted data to include indices
@@ -128,12 +137,18 @@ export function useContractWhitelistRead() {
 
 // Hook to get token info by index
 export function useTokenInfoAt(index: number) {
+  const { chainId } = useAccount();
+  const { activeContract } = useContract();
+  const contractAddress = getContractAddress(chainId, activeContract);
+  
   const { data, isLoading, error } = useContractRead({
-    address: OTC_CONTRACT_ADDRESS,
+    address: contractAddress as Address,
     abi: WHITELIST_ABI,
     functionName: 'getTokenInfoAt',
     args: [BigInt(index)],
-    enabled: index >= 0,
+    query: {
+      enabled: !!contractAddress && index >= 0,
+    },
   })
 
   return {

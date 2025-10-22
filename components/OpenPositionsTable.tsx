@@ -20,6 +20,8 @@ import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
 import { useTransaction } from '@/context/TransactionContext';
 import { useTokenAccess } from '@/context/TokenAccessContext';
 import { PAYWALL_ENABLED, REQUIRED_PARTY_TOKENS, REQUIRED_TEAM_TOKENS, PAYWALL_TITLE, PAYWALL_DESCRIPTION } from '@/config/paywall';
+import { getContractAddress } from '@/config/testing';
+import { useContract } from '@/context/ContractContext';
 
 // Sorting types
 type SortField = 'sellAmount' | 'askingFor' | 'progress' | 'owner' | 'status' | 'date' | 'backingPrice' | 'currentPrice' | 'otcVsMarket';
@@ -262,12 +264,13 @@ function TokenLogo({ src, alt, className }: { src: string; alt: string; classNam
 
 export const OpenPositionsTable = forwardRef<any, {}>((props, ref) => {
   const { executeOrder, cancelOrder, updateOrderInfo, updateOrderPrice, updateOrderExpirationTime, isWalletConnected } = useContractWhitelist();
-  const { address } = useAccount();
+  const { address, chainId } = useAccount();
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
+  const { activeContract } = useContract();
 
-  // Contract address for querying events
-  const OTC_CONTRACT_ADDRESS = '0x342DF6d98d06f03a20Ae6E2c456344Bb91cE33a2' as const;
+  // Contract address for querying events - get based on current chain and active contract
+  const OTC_CONTRACT_ADDRESS = getContractAddress(chainId, activeContract) as `0x${string}`;
   const { setTransactionPending } = useTransaction();
   const { toast } = useToast();
   
@@ -927,7 +930,7 @@ export const OpenPositionsTable = forwardRef<any, {}>((props, ref) => {
             }
           ],
           functionName: 'allowance',
-          args: [address as `0x${string}`, '0x342DF6d98d06f03a20Ae6E2c456344Bb91cE33a2' as `0x${string}`]
+          args: [address as `0x${string}`, OTC_CONTRACT_ADDRESS as `0x${string}`]
         });
 
 
@@ -956,7 +959,7 @@ export const OpenPositionsTable = forwardRef<any, {}>((props, ref) => {
               }
             ],
             functionName: 'approve',
-            args: ['0x342DF6d98d06f03a20Ae6E2c456344Bb91cE33a2' as `0x${string}`, buyAmount]
+            args: [OTC_CONTRACT_ADDRESS as `0x${string}`, buyAmount]
           });
 
           
@@ -1739,10 +1742,10 @@ export const OpenPositionsTable = forwardRef<any, {}>((props, ref) => {
         <div className="bg-white/5 p-6 rounded-lg border-2 border-white/10">
           <h2 className="text-xl font-bold mb-4">AgoráX Contract Information</h2>
           <div className="text-red-500">
-            <p className="font-semibold mb-2">Unable to connect to the AgoráX OTC contract</p>
+            <p className="font-semibold mb-2">Unable to connect to the AgoráX Bistro contract</p>
             <p className="text-sm mb-2">Error: {error.message}</p>
             <p className="text-sm text-gray-400 mb-2">
-              Contract Address: 0x342DF6d98d06f03a20Ae6E2c456344Bb91cE33a2
+              Contract Address: {OTC_CONTRACT_ADDRESS || 'Not deployed on this chain'}
             </p>
             <p className="text-sm text-gray-400 mb-3">
               RPC Endpoint: https://rpc.pulsechain.com

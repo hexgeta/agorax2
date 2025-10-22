@@ -11,6 +11,7 @@ import { MORE_COINS } from '@/constants/more-coins';
 import { useTokenStats } from '@/hooks/crypto/useTokenStats';
 import { useTokenPrices } from '@/hooks/crypto/useTokenPrices';
 import { useContractWhitelist } from '@/hooks/contracts/useContractWhitelist';
+import { useOTCTrade } from '@/hooks/contracts/useOTCTrade';
 import { parseEther, formatEther } from 'viem';
 import { useBalance, usePublicClient } from 'wagmi';
 import { useTransaction } from '@/context/TransactionContext';
@@ -162,7 +163,8 @@ export function CreatePositionModal({
   const publicClient = usePublicClient();
 
   // Contract address for token approvals
-  const OTC_CONTRACT_ADDRESS = '0x342DF6d98d06f03a20Ae6E2c456344Bb91cE33a2';
+  // Get contract address and chain from hooks
+  const { contractAddress: OTC_CONTRACT_ADDRESS, chainId: currentChainId } = useOTCTrade();
 
   // Handle close - let AnimatePresence handle the timing
   const handleClose = () => {
@@ -380,7 +382,7 @@ export function CreatePositionModal({
     approveToken
   } = useTokenApproval(
     needsApproval && sellToken ? sellToken.address as `0x${string}` : '0x0000000000000000000000000000000000000000' as `0x${string}`,
-    OTC_CONTRACT_ADDRESS,
+    (OTC_CONTRACT_ADDRESS || '0x0000000000000000000000000000000000000000') as `0x${string}`,
     sellAmountWei
   );
 
@@ -395,7 +397,7 @@ export function CreatePositionModal({
   const { data: sellTokenBalance, isLoading: sellBalanceLoading, error: sellBalanceError } = useBalance({
     address: address,
     token: isNativeToken(sellToken?.address || '') ? undefined : sellToken?.address as `0x${string}`,
-    chainId: 369, // PulseChain
+    chainId: currentChainId,
     query: {
       enabled: !!address && !!sellToken,
       retry: 3,

@@ -1,5 +1,7 @@
 import { useAccount, useContractWrite } from 'wagmi';
 import { Address } from 'viem';
+import { getContractAddress } from '@/config/testing';
+import { useContract } from '@/context/ContractContext';
 
 // Whitelist of allowed WRITE functions (non-admin only)
 const WHITELISTED_WRITE_FUNCTIONS = [
@@ -41,9 +43,6 @@ const READ_FUNCTIONS = [
 
 export type WhitelistedWriteFunction = typeof WHITELISTED_WRITE_FUNCTIONS[number];
 export type ReadFunction = typeof READ_FUNCTIONS[number];
-
-// Contract configuration
-const OTC_CONTRACT_ADDRESS = '0x342DF6d98d06f03a20Ae6E2c456344Bb91cE33a2';
 
 // Full contract ABI with all write functions
 const OTC_ABI = [
@@ -503,8 +502,12 @@ const OTC_ABI = [
  * Only allows function calls when wallet is connected
  */
 export function useContractWhitelist() {
-  const { isConnected, address } = useAccount();
+  const { isConnected, address, chainId } = useAccount();
   const { writeContractAsync } = useContractWrite();
+  const { activeContract } = useContract();
+
+  // Get the contract address for the current chain and active contract
+  const contractAddress = getContractAddress(chainId, activeContract);
 
   /**
    * Check if a function is whitelisted for write operations
@@ -533,6 +536,11 @@ export function useContractWhitelist() {
       throw new Error('Wallet not connected. Please connect your wallet to execute contract functions.');
     }
 
+    // Check if contract address exists for current chain
+    if (!contractAddress) {
+      throw new Error('Contract not deployed on this chain. Please switch to a supported network.');
+    }
+
     // Check if function is whitelisted for write operations
     if (!isWriteFunctionWhitelisted(functionName)) {
       throw new Error(`Function "${functionName}" is not whitelisted for write operations.`);
@@ -541,10 +549,10 @@ export function useContractWhitelist() {
     // Execute the contract function
     try {
       const result = await writeContractAsync({
-        address: OTC_CONTRACT_ADDRESS,
+        address: contractAddress as Address,
         abi: OTC_ABI,
         functionName,
-        args,
+        args: args as any,
         value,
         // Add transaction metadata for better wallet display
         gas: 2000000n, // Set a reasonable gas limit
@@ -591,6 +599,8 @@ export function useContractWhitelist() {
     // Connection status
     isConnected,
     address,
+    chainId,
+    contractAddress,
     
     // Individual function wrappers for convenience
     placeOrder: (orderDetails: any, value?: bigint) => 
