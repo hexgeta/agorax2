@@ -12,6 +12,11 @@ import { getContractAddress } from '@/config/testing';
 import { useContract } from '@/context/ContractContext';
 import PaywallModal from './PaywallModal';
 
+// Helper function to get remaining percentage (works for both Bistro and AgoraX)
+const getRemainingPercentage = (orderDetailsWithId: any): bigint => {
+  return orderDetailsWithId.remainingFillPercentage || orderDetailsWithId.remainingExecutionPercentage || 0n;
+};
+
 // Helper function to find the highest version of a token in tokenStats
 // e.g. if API has eBASE, eBASE2, eBASE3, it returns "eBASE3"
 const getHighestTokenVersion = (tokenStats: Record<string, any>, prefix: string, baseTicker: string): string => {
@@ -489,7 +494,7 @@ export default function OrderHistoryTable({
 
         // Calculate fill percentages from base order
         const originalSellAmount = baseOrder.orderDetailsWithId.orderDetails.sellAmount;
-        const remainingExecutionPercentage = baseOrder.orderDetailsWithId.remainingExecutionPercentage;
+        const remainingExecutionPercentage = getRemainingPercentage(baseOrder.orderDetailsWithId);
         
         // Convert to numbers for percentage calculation
         const originalSellAmountNum = Number(formatTokenAmount(originalSellAmount, sellTokenInfo.decimals));

@@ -20,7 +20,8 @@ export type ContractType = 'BISTRO' | 'AGORAX';
 
 // Get contract addresses from environment variables
 const BISTRO_CONTRACT = process.env.NEXT_PUBLIC_BISTRO_SMART_CONTRACT || '0x342DF6d98d06f03a20Ae6E2c456344Bb91cE33a2';
-const AGORAX_CONTRACT = process.env.NEXT_PUBLIC_AGORAX_SMART_CONTRACT || 'PLACEHOLDER5555';
+// TODO: Set NEXT_PUBLIC_AGORAX_SMART_CONTRACT in .env with the deployed AgoraX contract address
+const AGORAX_CONTRACT = process.env.NEXT_PUBLIC_AGORAX_SMART_CONTRACT || '';
 
 // Bistro Smart Contract addresses per chain
 export const BISTRO_CONTRACT_ADDRESSES = {

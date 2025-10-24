@@ -4,6 +4,7 @@ import { Address } from 'viem';
 import { useAccount } from 'wagmi';
 import { getContractAddress, PULSECHAIN_CHAIN_ID, PULSECHAIN_TESTNET_CHAIN_ID } from '@/config/testing';
 import { useContract } from '@/context/ContractContext';
+import { getContractABI } from '@/config/abis';
 
 // RPC endpoints per chain
 const RPC_ENDPOINTS = {
@@ -11,233 +12,7 @@ const RPC_ENDPOINTS = {
   [PULSECHAIN_TESTNET_CHAIN_ID]: 'https://pulsechain-testnet-rpc.publicnode.com',
 };
 
-// Import the full ABI from the contract
-const OTC_ABI = [
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "_adminWallet",
-        "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "_beanToken",
-        "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "_uniswapAnchor",
-        "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "_bistroStaking",
-        "type": "address"
-      },
-      {
-        "internalType": "uint256",
-        "name": "_listingFeesInUSD",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "_redeemFees",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "_discountInRedeemFees",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "_listingFeesLimit",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "_redeemFeesLimit",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint32",
-        "name": "_cooldownPeriod",
-        "type": "uint32"
-      }
-    ],
-    "stateMutability": "nonpayable",
-    "type": "constructor"
-  },
-  {
-    "inputs": [],
-    "name": "name",
-    "outputs": [
-      {
-        "internalType": "string",
-        "name": "",
-        "type": "string"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "symbol",
-    "outputs": [
-      {
-        "internalType": "string",
-        "name": "",
-        "type": "string"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "totalSupply",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "owner",
-    "outputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "getOrderCounter",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "_orderId",
-        "type": "uint256"
-      }
-    ],
-    "name": "getOrderDetails",
-    "outputs": [
-      {
-        "components": [
-          {
-            "components": [
-              {
-                "internalType": "uint256",
-                "name": "orderIndex",
-                "type": "uint256"
-              },
-              {
-                "internalType": "address",
-                "name": "orderOwner",
-                "type": "address"
-              }
-            ],
-            "internalType": "struct OTC.UserOrderDetails",
-            "name": "userDetails",
-            "type": "tuple"
-          },
-          {
-            "components": [
-              {
-                "internalType": "uint256",
-                "name": "orderId",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint256",
-                "name": "remainingExecutionPercentage",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint256",
-                "name": "redemeedPercentage",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint32",
-                "name": "lastUpdateTime",
-                "type": "uint32"
-              },
-              {
-                "internalType": "enum OTC.OrderStatus",
-                "name": "status",
-                "type": "uint8"
-              },
-              {
-                "components": [
-                  {
-                    "internalType": "address",
-                    "name": "sellToken",
-                    "type": "address"
-                  },
-                  {
-                    "internalType": "uint256",
-                    "name": "sellAmount",
-                    "type": "uint256"
-                  },
-                  {
-                    "internalType": "uint256[]",
-                    "name": "buyTokensIndex",
-                    "type": "uint256[]"
-                  },
-                  {
-                    "internalType": "uint256[]",
-                    "name": "buyAmounts",
-                    "type": "uint256[]"
-                  },
-                  {
-                    "internalType": "uint256",
-                    "name": "expirationTime",
-                    "type": "uint256"
-                  }
-                ],
-                "internalType": "struct OTC.OrderDetails",
-                "name": "orderDetails",
-                "type": "tuple"
-              }
-            ],
-            "internalType": "struct OTC.OrderDetailsWithId",
-            "name": "orderDetailsWithId",
-            "type": "tuple"
-          }
-        ],
-        "internalType": "struct OTC.CompleteOrderDetails",
-        "name": "",
-        "type": "tuple"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  }
-] as const;
-
+// Type definitions that work for both contracts
 export interface UserOrderDetails {
   orderIndex: bigint;
   orderOwner: Address;
@@ -251,10 +26,15 @@ export interface OrderDetails {
   expirationTime: bigint;
 }
 
+// Unified interface that works for both contracts
 export interface OrderDetailsWithId {
   orderId: bigint;
-  remainingExecutionPercentage: bigint;
-  redemeedPercentage: bigint;
+  // Bistro uses 'remainingExecutionPercentage', AgoraX uses 'remainingFillPercentage'
+  remainingExecutionPercentage?: bigint;
+  remainingFillPercentage?: bigint;
+  // Bistro uses 'redemeedPercentage', AgoraX uses 'redeemedPercentage'
+  redemeedPercentage?: bigint;
+  redeemedPercentage?: bigint;
   lastUpdateTime: number;
   status: number; // 0: Active, 1: Cancelled, 2: Completed
   orderDetails: OrderDetails;
@@ -263,6 +43,21 @@ export interface OrderDetailsWithId {
 export interface CompleteOrderDetails {
   userDetails: UserOrderDetails;
   orderDetailsWithId: OrderDetailsWithId;
+}
+
+// Helper function to normalize order data between contracts
+function normalizeOrderData(order: any): CompleteOrderDetails {
+  return {
+    userDetails: order.userDetails,
+    orderDetailsWithId: {
+      ...order.orderDetailsWithId,
+      // Normalize to use both property names for compatibility
+      remainingExecutionPercentage: order.orderDetailsWithId.remainingExecutionPercentage || order.orderDetailsWithId.remainingFillPercentage,
+      remainingFillPercentage: order.orderDetailsWithId.remainingFillPercentage || order.orderDetailsWithId.remainingExecutionPercentage,
+      redemeedPercentage: order.orderDetailsWithId.redemeedPercentage || order.orderDetailsWithId.redeemedPercentage,
+      redeemedPercentage: order.orderDetailsWithId.redeemedPercentage || order.orderDetailsWithId.redemeedPercentage,
+    }
+  };
 }
 
 // Helper function to create client (only on client side)
@@ -303,7 +98,7 @@ function createClient(chainId: number) {
 }
 
 // Helper function to fetch contract data
-async function fetchContractData(contractAddress: Address, chainId: number) {
+async function fetchContractData(contractAddress: Address, chainId: number, contractType: 'BISTRO' | 'AGORAX') {
   try {
     if (!contractAddress) {
       throw new Error('No contract address provided');
@@ -311,6 +106,9 @@ async function fetchContractData(contractAddress: Address, chainId: number) {
     
     // Create client only when needed (client-side only)
     const client = createClient(chainId);
+    
+    // Get the correct ABI for the contract type
+    const contractABI = getContractABI(contractType);
     
     // Test basic connectivity first
     try {
@@ -323,7 +121,7 @@ async function fetchContractData(contractAddress: Address, chainId: number) {
     const [contractName, contractOwner, contractSymbol, totalSupply, orderCounter] = await Promise.all([
       client.readContract({
         address: contractAddress,
-        abi: OTC_ABI,
+        abi: contractABI,
         functionName: 'name',
       }).catch(err => {
         return null;
@@ -331,7 +129,7 @@ async function fetchContractData(contractAddress: Address, chainId: number) {
       
       client.readContract({
         address: contractAddress,
-        abi: OTC_ABI,
+        abi: contractABI,
         functionName: 'owner',
       }).catch(err => {
         return null;
@@ -339,7 +137,7 @@ async function fetchContractData(contractAddress: Address, chainId: number) {
       
       client.readContract({
         address: contractAddress,
-        abi: OTC_ABI,
+        abi: contractABI,
         functionName: 'symbol',
       }).catch(err => {
         return null;
@@ -347,7 +145,7 @@ async function fetchContractData(contractAddress: Address, chainId: number) {
       
       client.readContract({
         address: contractAddress,
-        abi: OTC_ABI,
+        abi: contractABI,
         functionName: 'totalSupply',
       }).catch(err => {
         return null;
@@ -355,7 +153,7 @@ async function fetchContractData(contractAddress: Address, chainId: number) {
       
       client.readContract({
         address: contractAddress,
-        abi: OTC_ABI,
+        abi: contractABI,
         functionName: 'getOrderCounter',
       }).catch(err => {
         return null;
@@ -383,7 +181,7 @@ async function fetchContractData(contractAddress: Address, chainId: number) {
         const batchPromises = batch.map(orderId => 
           client.readContract({
             address: contractAddress,
-            abi: OTC_ABI,
+            abi: contractABI,
             functionName: 'getOrderDetails',
             args: [BigInt(orderId)],
           }).catch(err => {
@@ -393,8 +191,10 @@ async function fetchContractData(contractAddress: Address, chainId: number) {
         
         const batchResults = await Promise.all(batchPromises);
         
-        // Filter out null results and add to allOrders
-        const validOrders = batchResults.filter((order): order is CompleteOrderDetails => order !== null);
+        // Filter out null results, normalize, and add to allOrders
+        const validOrders = batchResults
+          .filter((order): order is any => order !== null)
+          .map(order => normalizeOrderData(order));
         allOrders.push(...validOrders);
         
         
@@ -470,7 +270,7 @@ export function useOpenPositions() {
     setError(null);
     
     try {
-      const result = await fetchContractData(contractAddress as Address, chainId);
+      const result = await fetchContractData(contractAddress as Address, chainId, activeContract);
       setData(result);
       
       // If all data is null, there might be an issue

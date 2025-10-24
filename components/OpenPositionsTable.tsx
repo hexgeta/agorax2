@@ -27,6 +27,11 @@ import { useContract } from '@/context/ContractContext';
 type SortField = 'sellAmount' | 'askingFor' | 'progress' | 'owner' | 'status' | 'date' | 'backingPrice' | 'currentPrice' | 'otcVsMarket';
 type SortDirection = 'asc' | 'desc';
 
+// Helper function to get remaining percentage (works for both Bistro and AgoraX)
+const getRemainingPercentage = (orderDetailsWithId: any): bigint => {
+  return orderDetailsWithId.remainingFillPercentage || orderDetailsWithId.remainingExecutionPercentage || 0n;
+};
+
 // Copy to clipboard function
 const copyToClipboard = async (text: string) => {
   try {
@@ -263,7 +268,7 @@ function TokenLogo({ src, alt, className }: { src: string; alt: string; classNam
 }
 
 export const OpenPositionsTable = forwardRef<any, {}>((props, ref) => {
-  const { executeOrder, cancelOrder, updateOrderInfo, updateOrderPrice, updateOrderExpirationTime, isWalletConnected } = useContractWhitelist();
+  const { fillOrExecuteOrder, cancelOrder, updateOrderInfo, updateOrderPrice, updateOrderExpirationTime, isWalletConnected } = useContractWhitelist();
   const { address, chainId } = useAccount();
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
@@ -789,7 +794,7 @@ export const OpenPositionsTable = forwardRef<any, {}>((props, ref) => {
     const newInputs: {[tokenAddress: string]: string} = {};
     
     // Fill each token with the specified percentage of its remaining amount
-    const remainingPercentage = Number(order.orderDetailsWithId.remainingExecutionPercentage) / 1e18;
+    const remainingPercentage = Number(getRemainingPercentage(order.orderDetailsWithId)) / 1e18;
     
     buyTokensIndex.forEach((tokenIndex: bigint, idx: number) => {
       const tokenInfo = getTokenInfoByIndex(Number(tokenIndex));
@@ -983,8 +988,8 @@ export const OpenPositionsTable = forwardRef<any, {}>((props, ref) => {
       // Set executing state before execution
       setExecutingOrders(prev => new Set(prev).add(orderId));
 
-      // Execute the order
-      const txHash = await executeOrder(
+      // Execute/Fill the order (works for both Bistro and AgoraX)
+      const txHash = await fillOrExecuteOrder(
         BigInt(orderId),
         BigInt(tokenIndexToExecute),
         buyAmount,
@@ -1411,8 +1416,8 @@ export const OpenPositionsTable = forwardRef<any, {}>((props, ref) => {
           comparison = aAsking - bAsking;
           break;
         case 'progress':
-          const aProgress = 100 - ((Number(a.orderDetailsWithId.remainingExecutionPercentage) / 1e18) * 100);
-          const bProgress = 100 - ((Number(b.orderDetailsWithId.remainingExecutionPercentage) / 1e18) * 100);
+          const aProgress = 100 - ((Number(getRemainingPercentage(a.orderDetailsWithId)) / 1e18) * 100);
+          const bProgress = 100 - ((Number(getRemainingPercentage(b.orderDetailsWithId)) / 1e18) * 100);
           comparison = aProgress - bProgress;
           break;
         case 'owner':
@@ -1459,7 +1464,7 @@ export const OpenPositionsTable = forwardRef<any, {}>((props, ref) => {
           const aOtcPercentage = (() => {
             const sellTokenAddress = a.orderDetailsWithId.orderDetails.sellToken;
             const sellTokenInfo = getTokenInfo(sellTokenAddress);
-            const rawRemainingPercentage = a.orderDetailsWithId.remainingExecutionPercentage;
+            const rawRemainingPercentage = getRemainingPercentage(a.orderDetailsWithId);
             const remainingPercentage = Number(rawRemainingPercentage) / 1e18;
             const originalSellAmount = a.orderDetailsWithId.orderDetails.sellAmount;
             const isCompletedOrCancelled = a.orderDetailsWithId.status === 2 || a.orderDetailsWithId.status === 1;
@@ -1501,7 +1506,7 @@ export const OpenPositionsTable = forwardRef<any, {}>((props, ref) => {
           const bOtcPercentage = (() => {
             const sellTokenAddress = b.orderDetailsWithId.orderDetails.sellToken;
             const sellTokenInfo = getTokenInfo(sellTokenAddress);
-            const rawRemainingPercentage = b.orderDetailsWithId.remainingExecutionPercentage;
+            const rawRemainingPercentage = getRemainingPercentage(b.orderDetailsWithId);
             const remainingPercentage = Number(rawRemainingPercentage) / 1e18;
             const originalSellAmount = b.orderDetailsWithId.orderDetails.sellAmount;
             const isCompletedOrCancelled = b.orderDetailsWithId.status === 2 || b.orderDetailsWithId.status === 1;
@@ -2082,7 +2087,7 @@ export const OpenPositionsTable = forwardRef<any, {}>((props, ref) => {
                 // Calculate USD values for percentage calculation
                 const sellTokenAddress = order.orderDetailsWithId.orderDetails.sellToken;
                 const sellTokenInfo = getTokenInfo(sellTokenAddress);
-                const rawRemainingPercentage = order.orderDetailsWithId.remainingExecutionPercentage;
+                const rawRemainingPercentage = getRemainingPercentage(order.orderDetailsWithId);
                 const remainingPercentage = Number(rawRemainingPercentage) / 1e18;
                 const originalSellAmount = order.orderDetailsWithId.orderDetails.sellAmount;
                 
@@ -2306,7 +2311,7 @@ export const OpenPositionsTable = forwardRef<any, {}>((props, ref) => {
                               // For completed orders, show original amounts; for others, show remaining amounts
                               // Check if we're in completed filter section - if so, always use original amounts
                               const isCompleted = statusFilter === 'completed' || order.orderDetailsWithId.status === 1;
-                            const remainingPercentage = Number(order.orderDetailsWithId.remainingExecutionPercentage) / 1e18;
+                            const remainingPercentage = Number(getRemainingPercentage(order.orderDetailsWithId)) / 1e18;
                             
                             // Debug: Log status for completed orders (only once per order)
                             if (statusFilter === 'completed' && idx === 0) {
@@ -2356,7 +2361,7 @@ export const OpenPositionsTable = forwardRef<any, {}>((props, ref) => {
                   {/* COLUMN 3: Fill Status % Content */}
                   <div className="flex flex-col items-center space-y-2  mt-0.5 min-w-0">
                     {(() => {
-                      const fillPercentage = 100 - ((Number(order.orderDetailsWithId.remainingExecutionPercentage) / 1e18) * 100);
+                      const fillPercentage = 100 - ((Number(getRemainingPercentage(order.orderDetailsWithId)) / 1e18) * 100);
                       
                       return (
                         <span className={`text-xs ${fillPercentage === 0 ? 'text-gray-500' : 'text-white'}`}>
@@ -2366,7 +2371,7 @@ export const OpenPositionsTable = forwardRef<any, {}>((props, ref) => {
                     })()}
                     <div className="w-[60px] h-1 bg-gray-500 rounded-full overflow-hidden relative">
                       {(() => {
-                        const fillPercentage = 100 - ((Number(order.orderDetailsWithId.remainingExecutionPercentage) / 1e18) * 100);
+                        const fillPercentage = 100 - ((Number(getRemainingPercentage(order.orderDetailsWithId)) / 1e18) * 100);
                         
                         return (
                           <div 

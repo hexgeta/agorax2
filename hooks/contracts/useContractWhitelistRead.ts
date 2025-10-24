@@ -2,88 +2,7 @@ import { useContractRead, useAccount } from 'wagmi'
 import { Address } from 'viem'
 import { getContractAddress } from '@/config/testing'
 import { useContract } from '@/context/ContractContext'
-
-// ABI for the whitelist reading functions
-const WHITELIST_ABI = [
-  {
-    "inputs": [],
-    "name": "viewCountWhitelisted",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "cursor",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "size",
-        "type": "uint256"
-      }
-    ],
-    "name": "viewWhitelisted",
-    "outputs": [
-      {
-        "components": [
-          {
-            "internalType": "address",
-            "name": "tokenAddress",
-            "type": "address"
-          },
-          {
-            "internalType": "bool",
-            "name": "isActive",
-            "type": "bool"
-          }
-        ],
-        "internalType": "struct Whitelist.TokenInfo[]",
-        "name": "",
-        "type": "tuple[]"
-      },
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "_index",
-        "type": "uint256"
-      }
-    ],
-    "name": "getTokenInfoAt",
-    "outputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      },
-      {
-        "internalType": "bool",
-        "name": "",
-        "type": "bool"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  }
-] as const
+import { getContractABI } from '@/config/abis'
 
 export interface WhitelistedToken {
   tokenAddress: Address
@@ -95,11 +14,12 @@ export function useContractWhitelistRead() {
   const { chainId } = useAccount();
   const { activeContract } = useContract();
   const contractAddress = getContractAddress(chainId, activeContract);
+  const contractABI = getContractABI(activeContract);
   
   // Get the total count of whitelisted tokens
   const { data: totalCount, isLoading: isLoadingCount } = useContractRead({
     address: contractAddress as Address,
-    abi: WHITELIST_ABI,
+    abi: contractABI,
     functionName: 'viewCountWhitelisted',
     query: {
       enabled: !!contractAddress,
@@ -109,7 +29,7 @@ export function useContractWhitelistRead() {
   // Get all whitelisted tokens (we'll fetch them in batches if needed)
   const { data: whitelistedData, isLoading: isLoadingWhitelist } = useContractRead({
     address: contractAddress as Address,
-    abi: WHITELIST_ABI,
+    abi: contractABI,
     functionName: 'viewWhitelisted',
     args: [0n, totalCount || 100n], // Start from 0, fetch up to totalCount or 100
     query: {
@@ -140,10 +60,11 @@ export function useTokenInfoAt(index: number) {
   const { chainId } = useAccount();
   const { activeContract } = useContract();
   const contractAddress = getContractAddress(chainId, activeContract);
+  const contractABI = getContractABI(activeContract);
   
   const { data, isLoading, error } = useContractRead({
     address: contractAddress as Address,
-    abi: WHITELIST_ABI,
+    abi: contractABI,
     functionName: 'getTokenInfoAt',
     args: [BigInt(index)],
     query: {
