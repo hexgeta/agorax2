@@ -77,7 +77,7 @@ export default function Home() {
                     onClick={() => setShowCreateModal(true)}
                     className="px-6 md:px-8 py-3 mb-4 border border-white text-white rounded-full font-semibold transition-colors duration-0 create-deal-button text-sm md:text-base"
                   >
-                    + Create New OTC Deal
+                    + Create New OTC Dea
                   </button>
                 )}
               </div>
