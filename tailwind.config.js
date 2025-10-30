@@ -98,14 +98,20 @@ module.exports = {
     			'accordion-up': 'accordion-up 0.2s ease-out',
     			shine: 'shine 1s linear infinite'
     		},
-		fontFamily: {
-			sans: [
-				'League Spartan',
-				'ui-sans-serif',
-				'system-ui',
-				'sans-serif',
-			],
-		},
+	fontFamily: {
+		sans: [
+			'Share Tech Mono',
+			'monospace',
+			'ui-monospace',
+			'Courier New',
+		],
+		mono: [
+			'Share Tech Mono',
+			'monospace',
+			'ui-monospace',
+			'Courier New',
+		],
+	},
     	}
     },
     plugins: [

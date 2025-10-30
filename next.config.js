@@ -61,7 +61,7 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: https: blob:",
               "font-src 'self' data:",
-              "connect-src 'self' https://rpc.pulsechain.com https://*.supabase.co https://vercel.live wss://*.supabase.co wss://ws.walletconnect.com wss://ws.walletconnect.org wss://relay.walletconnect.com wss://relay.walletconnect.org https://relay.walletconnect.com https://relay.walletconnect.org https://*.reown.com wss://*.reown.com https://cloudflare-eth.com https://rpc.ankr.com https://api.dexscreener.com",
+              "connect-src 'self' https://rpc.pulsechain.com https://rpc.v4.testnet.pulsechain.com https://pulsechain-testnet-rpc.publicnode.com https://rpc-testnet-pulsechain.g4mm4.io https://*.supabase.co https://vercel.live wss://*.supabase.co wss://ws.walletconnect.com wss://ws.walletconnect.org wss://relay.walletconnect.com wss://relay.walletconnect.org https://relay.walletconnect.com https://relay.walletconnect.org https://*.reown.com wss://*.reown.com https://cloudflare-eth.com https://rpc.ankr.com https://api.dexscreener.com",
               "frame-src 'self' https://verify.walletconnect.com https://verify.walletconnect.org https://secure.walletconnect.com https://secure.walletconnect.org",
               "object-src 'none'",
               "base-uri 'self'",

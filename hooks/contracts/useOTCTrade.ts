@@ -2,8 +2,7 @@ import { useContractRead, useAccount } from 'wagmi';
 import { parseEther, formatEther, Address } from 'viem';
 import { useContractWhitelist } from './useContractWhitelist';
 import { getContractAddress } from '@/config/testing';
-import { useContract } from '@/context/ContractContext';
-import { getContractABI } from '@/config/abis';
+import { CONTRACT_ABI } from '@/config/abis';
 
 export interface OrderDetails {
   sellToken: Address;
@@ -15,11 +14,9 @@ export interface OrderDetails {
 
 export function useOTCTrade() {
   const { address, chainId } = useAccount();
-  const { activeContract } = useContract();
   
-  // Get the contract address and ABI for the current chain and active contract
-  const contractAddress = getContractAddress(chainId, activeContract);
-  const contractABI = getContractABI(activeContract);
+  // Get the contract address for the current chain
+  const contractAddress = getContractAddress(chainId);
   
   // Use the whitelist system for write functions
   const {
@@ -37,7 +34,7 @@ export function useOTCTrade() {
   // Read functions - only if we have a valid contract address
   const { data: ordersCount } = useContractRead({
     address: contractAddress as Address,
-    abi: contractABI,
+    abi: CONTRACT_ABI,
     functionName: 'getOrderCounter',
     query: {
       enabled: !!contractAddress,
@@ -47,9 +44,7 @@ export function useOTCTrade() {
   return {
     ordersCount: ordersCount as bigint,
     placeOrder,
-    // Use the unified function that works for both contracts
     fillOrExecuteOrder,
-    // Provide individual functions for flexibility
     executeOrder,
     fillOrder,
     cancelOrder,
@@ -60,7 +55,6 @@ export function useOTCTrade() {
     isConnected,
     contractAddress,
     chainId,
-    activeContract,
   };
 }
 

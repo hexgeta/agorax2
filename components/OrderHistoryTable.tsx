@@ -9,7 +9,6 @@ import { useAccount, usePublicClient } from 'wagmi';
 import { useTokenAccess } from '@/context/TokenAccessContext';
 import { PAYWALL_ENABLED, REQUIRED_PARTY_TOKENS, REQUIRED_TEAM_TOKENS, PAYWALL_TITLE, PAYWALL_DESCRIPTION } from '@/config/paywall';
 import { getContractAddress } from '@/config/testing';
-import { useContract } from '@/context/ContractContext';
 import PaywallModal from './PaywallModal';
 
 // Helper function to get remaining percentage (works for both Bistro and AgoraX)
@@ -58,7 +57,7 @@ function TokenLogo({ src, alt, className }: { src: string; alt: string; classNam
   if (src.includes('default.svg') || hasError || !isClient) {
     return (
       <CircleDollarSign 
-        className={`${className} text-white`}
+        className={`${className} text-[#00D9FF]`}
       />
     );
   }
@@ -194,7 +193,7 @@ const getStatusColor = (order: any) => {
     case 0: return 'text-green-400';
     case 1: return 'text-red-400';
     case 2: return 'text-blue-400';
-    default: return 'text-gray-400';
+    default: return 'text-[#00D9FF]/60';
   }
 };
 
@@ -208,10 +207,9 @@ export default function OrderHistoryTable({
 }: OrderHistoryTableProps) {
   const { address, chainId } = useAccount();
   const publicClient = usePublicClient();
-  const { activeContract } = useContract();
   
-  // Contract address for querying events - get based on current chain and active contract
-  const OTC_CONTRACT_ADDRESS = getContractAddress(chainId, activeContract);
+  // Contract address for querying events - get based on current chain
+  const OTC_CONTRACT_ADDRESS = getContractAddress(chainId);
   
   // Token-gating - use centralized validation
   const { hasTokenAccess, partyBalance, teamBalance, isChecking: checkingTokenBalance } = useTokenAccess();
@@ -394,7 +392,7 @@ export default function OrderHistoryTable({
 
   if (displayRows.length === 0) {
     return (
-      <div className="text-center py-8 text-gray-400">
+      <div className="text-center py-8 text-[#00D9FF]/60">
         No order history found
       </div>
     );
@@ -403,12 +401,12 @@ export default function OrderHistoryTable({
   return (
     <div className="w-full min-w-[800px] text-lg">
       {/* Table Header */}
-      <div className="grid grid-cols-[minmax(120px,1fr)_minmax(120px,1fr)_minmax(80px,120px)_minmax(100px,140px)_minmax(100px,140px)_minmax(80px,120px)_minmax(80px,120px)_minmax(80px,120px)_auto] items-center gap-4 pb-4 border-b border-white/10">
+      <div className="grid grid-cols-[minmax(120px,1fr)_minmax(120px,1fr)_minmax(80px,120px)_minmax(100px,140px)_minmax(100px,140px)_minmax(80px,120px)_minmax(80px,120px)_minmax(80px,120px)_auto] items-center gap-4 pb-4 border-b border-[#00D9FF]/30">
         {/* COLUMN 1: You Bought */}
         <button 
           onClick={() => handleSort('sellAmount')}
-          className={`text-sm font-medium text-left hover:text-white transition-colors ${
-            sortField === 'sellAmount' ? 'text-white' : 'text-gray-400'
+          className={`text-sm font-medium text-left hover:text-[#00D9FF] transition-colors ${
+            sortField === 'sellAmount' ? 'text-[#00D9FF]' : 'text-[#00D9FF]/60'
           }`}
         >
           You Bought {sortField === 'sellAmount' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
@@ -417,8 +415,8 @@ export default function OrderHistoryTable({
         {/* COLUMN 2: You Paid */}
         <button 
           onClick={() => handleSort('askingFor')}
-          className={`text-sm font-medium text-left hover:text-white transition-colors ${
-            sortField === 'askingFor' ? 'text-white' : 'text-gray-400'
+          className={`text-sm font-medium text-left hover:text-[#00D9FF] transition-colors ${
+            sortField === 'askingFor' ? 'text-[#00D9FF]' : 'text-[#00D9FF]/60'
           }`}
         >
           You Paid {sortField === 'askingFor' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
@@ -427,45 +425,40 @@ export default function OrderHistoryTable({
         {/* COLUMN 3: Fill Status % */}
         <button 
           onClick={() => handleSort('progress')}
-          className={`text-sm font-medium text-center hover:text-white transition-colors ${
-            sortField === 'progress' ? 'text-white' : 'text-gray-400'
+          className={`text-sm font-medium text-center hover:text-[#00D9FF] transition-colors ${
+            sortField === 'progress' ? 'text-[#00D9FF]' : 'text-[#00D9FF]/60'
           }`}
         >
-          Your Tx vs Order Filled Status % {sortField === 'progress' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+          Fill Status % {sortField === 'progress' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
         </button>
         
         {/* COLUMN 4: OTC % */}
         <button 
           onClick={() => handleSort('otcVsMarket')}
-          className={`text-sm font-medium text-center hover:text-white transition-colors ${
-            sortField === 'otcVsMarket' ? 'text-white' : 'text-gray-400'
+          className={`text-sm font-medium text-center hover:text-[#00D9FF] transition-colors ${
+            sortField === 'otcVsMarket' ? 'text-[#00D9FF]' : 'text-[#00D9FF]/60'
           }`}
         >
           OTC vs Market Price {sortField === 'otcVsMarket' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
         </button>
         
-        {/* COLUMN 5: Backing Price */}
-        <div className="text-sm font-medium text-center text-gray-400">
-          OTC vs Backing Price
-        </div>
-        
-        {/* COLUMN 6: Status */}
-        <div className="text-sm font-medium text-center text-gray-400">
+        {/* COLUMN 5: Status */}
+        <div className="text-sm font-medium text-center text-[#00D9FF]/60">
           Status
         </div>
         
-        {/* COLUMN 7: Date */}
+        {/* COLUMN 6: Date */}
         <button 
           onClick={() => handleSort('date')}
-          className={`text-sm font-medium text-center hover:text-white transition-colors ${
-            sortField === 'date' ? 'text-white' : 'text-gray-400'
+          className={`text-sm font-medium text-center hover:text-[#00D9FF] transition-colors ${
+            sortField === 'date' ? 'text-[#00D9FF]' : 'text-[#00D9FF]/60'
           }`}
         >
           Tx Date {sortField === 'date' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
         </button>
         
-        {/* COLUMN 8: Actions */}
-        <div className="text-sm font-medium text-center text-gray-400">
+        {/* COLUMN 7: Actions */}
+        <div className="text-sm font-medium text-center text-[#00D9FF]/60">
           
         </div>
       </div>
@@ -599,7 +592,7 @@ export default function OrderHistoryTable({
           <div
             key={transaction.transactionHash}
             className={`grid grid-cols-[minmax(120px,1fr)_minmax(120px,1fr)_minmax(80px,120px)_minmax(100px,140px)_minmax(100px,140px)_minmax(80px,120px)_minmax(80px,120px)_minmax(80px,120px)_auto] items-start gap-4 py-8 ${
-              displayRows.indexOf(displayRows.find(r => r.transaction.transactionHash === transaction.transactionHash)!) < displayRows.length - 1 ? 'border-b border-white/10' : ''
+              displayRows.indexOf(displayRows.find(r => r.transaction.transactionHash === transaction.transactionHash)!) < displayRows.length - 1 ? 'border-b border-[#00D9FF]/20' : ''
             }`}
           >
             {/* COLUMN 1: You Bought Content */}
@@ -608,10 +601,10 @@ export default function OrderHistoryTable({
                 {isSellTransaction ? (
                   // For SELL: Show what you received (buy tokens from ORIGINAL order)
                   <>
-                    <span className={`text-lg font-medium ${originalMinBuyAmountUSD > 0 ? 'text-white' : 'text-gray-500'}`}>
+                    <span className={`text-lg font-medium ${originalMinBuyAmountUSD > 0 ? 'text-[#00D9FF]' : 'text-gray-500'}`}>
                       {originalMinBuyAmountUSD > 0 ? formatUSD(originalMinBuyAmountUSD) : '--'}
                     </span>
-                    <div className="w-1/2 h-px bg-white/10 my-2"></div>
+                    <div className="w-1/2 h-px bg-[#00D9FF]/10 my-2"></div>
                     <div className="flex flex-col gap-1">
                       {originalBuyTokensIndex.map((tokenIndex: bigint, idx: number) => {
                         const buyTokenInfo = getTokenInfoByIndex(Number(tokenIndex));
@@ -629,10 +622,10 @@ export default function OrderHistoryTable({
                               className="w-6 h-6 rounded-full"
                             />
                             <div className="flex flex-col">
-                              <span className="text-white text-sm font-medium whitespace-nowrap">
+                              <span className="text-[#00D9FF] text-sm font-medium whitespace-nowrap">
                                 {formatTokenTicker(buyTokenInfo.ticker)}
                               </span>
-                              <span className="text-gray-400 text-xs whitespace-nowrap">
+                              <span className="text-[#00D9FF]/60 text-xs whitespace-nowrap">
                                 {formatTokenAmountDisplay(originalAmount)}
                               </span>
                               {originalBuyTokensIndex.length > 1 && buyPrice > 0 && (
@@ -649,10 +642,10 @@ export default function OrderHistoryTable({
                 ) : (
                   // For BUY: Show what you bought (sell token)
                   <>
-                    <span className={`text-lg font-medium ${sellPrice > 0 ? 'text-white' : 'text-gray-500'}`}>
+                    <span className={`text-lg font-medium ${sellPrice > 0 ? 'text-[#00D9FF]' : 'text-gray-500'}`}>
                       {sellPrice > 0 ? formatUSD(sellUSD) : '--'}
                     </span>
-                    <div className="w-1/2 h-px bg-white/10 my-2"></div>
+                    <div className="w-1/2 h-px bg-[#00D9FF]/10 my-2"></div>
                     <div className="flex items-center space-x-2">
                       <TokenLogo 
                         src={sellTokenInfo.logo}
@@ -660,10 +653,10 @@ export default function OrderHistoryTable({
                         className="w-6 h-6 rounded-full"
                       />
                       <div className="flex flex-col">
-                        <span className="text-white text-sm font-medium whitespace-nowrap">
+                        <span className="text-[#00D9FF] text-sm font-medium whitespace-nowrap">
                           {formatTokenTicker(sellTokenInfo.ticker)}
                         </span>
-                        <span className="text-gray-400 text-xs whitespace-nowrap">
+                        <span className="text-[#00D9FF]/60 text-xs whitespace-nowrap">
                           {formatTokenAmountDisplay(transaction.sellAmount)}
                         </span>
                       </div>
@@ -679,10 +672,10 @@ export default function OrderHistoryTable({
                 {isSellTransaction ? (
                   // For SELL: Show what you gave (sell token - use ORIGINAL amount)
                   <>
-                    <span className={`text-lg font-medium ${sellPrice > 0 ? 'text-white' : 'text-gray-500'}`}>
+                    <span className={`text-lg font-medium ${sellPrice > 0 ? 'text-[#00D9FF]' : 'text-gray-500'}`}>
                       {sellPrice > 0 ? formatUSD(originalSellAmountUSD) : '--'}
                     </span>
-                    <div className="w-1/2 h-px bg-white/10 my-2"></div>
+                    <div className="w-1/2 h-px bg-[#00D9FF]/10 my-2"></div>
                     <div className="flex items-center space-x-2">
                       <TokenLogo 
                         src={sellTokenInfo.logo}
@@ -690,10 +683,10 @@ export default function OrderHistoryTable({
                         className="w-6 h-6 rounded-full"
                       />
                       <div className="flex flex-col">
-                        <span className="text-white text-sm font-medium whitespace-nowrap">
+                        <span className="text-[#00D9FF] text-sm font-medium whitespace-nowrap">
                           {formatTokenTicker(sellTokenInfo.ticker)}
                         </span>
-                        <span className="text-gray-400 text-xs whitespace-nowrap">
+                        <span className="text-[#00D9FF]/60 text-xs whitespace-nowrap">
                           {formatTokenAmountDisplay(originalSellAmountNum)}
                         </span>
                       </div>
@@ -702,10 +695,10 @@ export default function OrderHistoryTable({
                 ) : (
                   // For BUY: Show what you paid (buy tokens from ORIGINAL order)
                   <>
-                    <span className={`text-lg font-medium ${originalMinBuyAmountUSD > 0 ? 'text-white' : 'text-gray-500'}`}>
+                    <span className={`text-lg font-medium ${originalMinBuyAmountUSD > 0 ? 'text-[#00D9FF]' : 'text-gray-500'}`}>
                       {originalMinBuyAmountUSD > 0 ? formatUSD(originalMinBuyAmountUSD) : '--'}
                     </span>
-                    <div className="w-1/2 h-px bg-white/10 my-2"></div>
+                    <div className="w-1/2 h-px bg-[#00D9FF]/10 my-2"></div>
                     <div className="flex flex-col gap-1">
                       {originalBuyTokensIndex.map((tokenIndex: bigint, idx: number) => {
                         const buyTokenInfo = getTokenInfoByIndex(Number(tokenIndex));
@@ -723,10 +716,10 @@ export default function OrderHistoryTable({
                               className="w-6 h-6 rounded-full"
                             />
                             <div className="flex flex-col">
-                              <span className="text-white text-sm font-medium whitespace-nowrap">
+                              <span className="text-[#00D9FF] text-sm font-medium whitespace-nowrap">
                                 {formatTokenTicker(buyTokenInfo.ticker)}
                               </span>
-                              <span className="text-gray-400 text-xs whitespace-nowrap">
+                              <span className="text-[#00D9FF]/60 text-xs whitespace-nowrap">
                                 {formatTokenAmountDisplay(originalAmount)}
                               </span>
                               {originalBuyTokensIndex.length > 1 && buyPrice > 0 && (
@@ -746,7 +739,7 @@ export default function OrderHistoryTable({
 
             {/* COLUMN 3: Fill Status % Content */}
             <div className="flex flex-col items-center space-y-2 mt-0.5 min-w-0">
-              <span className={`text-xs ${fillPercentage === 0 ? 'text-gray-500' : 'text-white'}`}>
+              <span className={`text-xs ${fillPercentage === 0 ? 'text-gray-500' : 'text-[#00D9FF]'}`}>
                 {userSharePercentage > 0 
                   ? `${formatPercentage(userSharePercentage)} / ${formatPercentage(fillPercentage)}`
                   : formatPercentage(fillPercentage)
@@ -795,7 +788,7 @@ export default function OrderHistoryTable({
                 )}
               </div>
               {otcPercentage !== null && (
-                <div className="text-xs text-gray-400 mt-0">
+                <div className="text-xs text-[#00D9FF]/60 mt-0">
                   {otcPercentage < 0 ? 'discount' : 'premium'}
                 </div>
               )}
@@ -814,12 +807,12 @@ export default function OrderHistoryTable({
                         }}
                         className="p-2 inline-flex items-center justify-center hover:opacity-80 transition-opacity"
                       >
-                        <Lock className="w-5 h-5 -mt-1 text-gray-400 hover:text-white" />
+                        <Lock className="w-5 h-5 -mt-1 text-[#00D9FF]/60 hover:text-[#00D9FF]" />
                       </button>
                     ) : (
                       <span className={`font-medium ${
                         isAboveBackingPrice 
-                          ? 'text-gray-400'    // Neutral - selling above backing price
+                          ? 'text-[#00D9FF]/60'    // Neutral - selling above backing price
                           : 'text-red-400'     // Red discount - selling below backing price (good deal)
                       }`}>
                         {isAboveBackingPrice 
@@ -834,7 +827,7 @@ export default function OrderHistoryTable({
                 )}
               </div>
               {backingPriceDiscount !== null && !(PAYWALL_ENABLED && !hasTokenAccess) && (
-                <div className="text-xs text-gray-400 mt-0">
+                <div className="text-xs text-[#00D9FF]/60 mt-0">
                   {isAboveBackingPrice ? 'premium' : 'discount'}
                 </div>
               )}
@@ -868,15 +861,15 @@ export default function OrderHistoryTable({
             <div className="text-center min-w-0 mt-0.5">
               {transaction.timestamp ? (
                 <div className="flex flex-col items-center">
-                  <span className="text-white text-sm font-medium">
+                  <span className="text-[#00D9FF] text-sm font-medium">
                     {formatTimestamp(transaction.timestamp).date}
                   </span>
-                  <span className="text-gray-400 text-xs">
+                  <span className="text-[#00D9FF]/60 text-xs">
                     {formatTimestamp(transaction.timestamp).time}
                   </span>
                 </div>
               ) : (
-                <span className="text-gray-400 text-sm">--</span>
+                <span className="text-[#00D9FF]/60 text-sm">--</span>
               )}
             </div>
 
@@ -896,7 +889,7 @@ export default function OrderHistoryTable({
                 {transaction?.transactionHash && (
                   <button
                     onClick={() => window.open(`https://otter.pulsechain.com/tx/${transaction.transactionHash}`, '_blank')}
-                    className="px-3 py-2 mt-1 font-medium bg-transparent text-white text-xs rounded-full border border-white hover:bg-white/10 hover:text-white transition-colors"
+                    className="px-3 py-2 mt-1 font-medium bg-transparent text-[#00D9FF] text-xs rounded-full border border-white hover:bg-[#00D9FF]/10 hover:text-[#00D9FF] transition-colors"
                     title="View Transaction on Otterscan"
                   >
                     View Tx
@@ -913,7 +906,7 @@ export default function OrderHistoryTable({
       </div>
       
       {/* Note about pricing */}
-      <div className="mt-6 text-center text-sm text-gray-400">
+      <div className="mt-6 text-center text-sm text-[#00D9FF]/60">
         All $ values are based on today's prices
       </div>
       

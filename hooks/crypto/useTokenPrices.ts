@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import useSWR from 'swr';
 import { TOKEN_CONSTANTS } from '@/constants/crypto'
-import { MORE_COINS } from '@/constants/more-coins';
 import { PRICE_CACHE_KEYS } from './utils/cache-keys';
 
 export interface TokenPriceData {
@@ -140,8 +139,8 @@ async function fetchTokenPrices(contractAddresses: string[], customTokens: any[]
   const tokensByChain: { [chain: string]: { ticker: string; contractAddress: string; pairAddress: string }[] } = {};
   
   for (const contractAddress of contractAddresses) {
-    // Look for token in TOKEN_CONSTANTS, MORE_COINS, and custom tokens by contract address
-    const allTokens = [...TOKEN_CONSTANTS, ...MORE_COINS, ...customTokens];
+    // Look for token in TOKEN_CONSTANTS and custom tokens by contract address
+    const allTokens = [...TOKEN_CONSTANTS, ...customTokens];
     const tokenConfig = allTokens.find(token => 
       token.a && token.a.toLowerCase() === contractAddress.toLowerCase()
     );

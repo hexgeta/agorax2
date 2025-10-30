@@ -1,8 +1,7 @@
 import { useContractRead, useAccount } from 'wagmi'
 import { Address } from 'viem'
 import { getContractAddress } from '@/config/testing'
-import { useContract } from '@/context/ContractContext'
-import { getContractABI } from '@/config/abis'
+import { CONTRACT_ABI } from '@/config/abis'
 
 export interface WhitelistedToken {
   tokenAddress: Address
@@ -12,24 +11,29 @@ export interface WhitelistedToken {
 
 export function useContractWhitelistRead() {
   const { chainId } = useAccount();
-  const { activeContract } = useContract();
-  const contractAddress = getContractAddress(chainId, activeContract);
-  const contractABI = getContractABI(activeContract);
+  const contractAddress = getContractAddress(chainId);
+  
+  // Debug logging
+  console.log('🔍 useContractWhitelistRead - chainId:', chainId);
+  console.log('🔍 useContractWhitelistRead - contractAddress:', contractAddress);
   
   // Get the total count of whitelisted tokens
-  const { data: totalCount, isLoading: isLoadingCount } = useContractRead({
+  const { data: totalCount, isLoading: isLoadingCount, error: countError } = useContractRead({
     address: contractAddress as Address,
-    abi: contractABI,
+    abi: CONTRACT_ABI,
     functionName: 'viewCountWhitelisted',
     query: {
       enabled: !!contractAddress,
     },
   })
+  
+  // Log results
+  console.log('🔍 viewCountWhitelisted result:', { totalCount, isLoadingCount, countError });
 
   // Get all whitelisted tokens (we'll fetch them in batches if needed)
   const { data: whitelistedData, isLoading: isLoadingWhitelist } = useContractRead({
     address: contractAddress as Address,
-    abi: contractABI,
+    abi: CONTRACT_ABI,
     functionName: 'viewWhitelisted',
     args: [0n, totalCount || 100n], // Start from 0, fetch up to totalCount or 100
     query: {
@@ -58,13 +62,11 @@ export function useContractWhitelistRead() {
 // Hook to get token info by index
 export function useTokenInfoAt(index: number) {
   const { chainId } = useAccount();
-  const { activeContract } = useContract();
-  const contractAddress = getContractAddress(chainId, activeContract);
-  const contractABI = getContractABI(activeContract);
+  const contractAddress = getContractAddress(chainId);
   
   const { data, isLoading, error } = useContractRead({
     address: contractAddress as Address,
-    abi: contractABI,
+    abi: CONTRACT_ABI,
     functionName: 'getTokenInfoAt',
     args: [BigInt(index)],
     query: {

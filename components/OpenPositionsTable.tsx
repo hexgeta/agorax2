@@ -21,7 +21,6 @@ import { useTransaction } from '@/context/TransactionContext';
 import { useTokenAccess } from '@/context/TokenAccessContext';
 import { PAYWALL_ENABLED, REQUIRED_PARTY_TOKENS, REQUIRED_TEAM_TOKENS, PAYWALL_TITLE, PAYWALL_DESCRIPTION } from '@/config/paywall';
 import { getContractAddress } from '@/config/testing';
-import { useContract } from '@/context/ContractContext';
 
 // Sorting types
 type SortField = 'sellAmount' | 'askingFor' | 'progress' | 'owner' | 'status' | 'date' | 'backingPrice' | 'currentPrice' | 'otcVsMarket';
@@ -267,15 +266,18 @@ function TokenLogo({ src, alt, className }: { src: string; alt: string; classNam
   );
 }
 
-export const OpenPositionsTable = forwardRef<any, {}>((props, ref) => {
+interface OpenPositionsTableProps {
+  isMarketplaceMode?: boolean;
+}
+
+export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ isMarketplaceMode = false }, ref) => {
   const { fillOrExecuteOrder, cancelOrder, updateOrderInfo, updateOrderPrice, updateOrderExpirationTime, isWalletConnected } = useContractWhitelist();
   const { address, chainId } = useAccount();
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
-  const { activeContract } = useContract();
 
-  // Contract address for querying events - get based on current chain and active contract
-  const OTC_CONTRACT_ADDRESS = getContractAddress(chainId, activeContract) as `0x${string}`;
+  // Contract address for querying events - get based on current chain
+  const OTC_CONTRACT_ADDRESS = getContractAddress(chainId) as `0x${string}`;
   const { setTransactionPending } = useTransaction();
   const { toast } = useToast();
   
@@ -316,8 +318,8 @@ export const OpenPositionsTable = forwardRef<any, {}>((props, ref) => {
   
   // Level 1: Token type filter
   const [tokenFilter, setTokenFilter] = useState<'maxi' | 'non-maxi'>('maxi');
-  // Level 2: Ownership filter  
-  const [ownershipFilter, setOwnershipFilter] = useState<'mine' | 'non-mine'>('mine');
+  // Level 2: Ownership filter - set based on mode
+  const [ownershipFilter, setOwnershipFilter] = useState<'mine' | 'non-mine'>(isMarketplaceMode ? 'non-mine' : 'mine');
   // Level 3: Status filter
   const [statusFilter, setStatusFilter] = useState<'active' | 'completed' | 'inactive' | 'cancelled' | 'order-history'>('active');
   // Search filter
@@ -1289,49 +1291,6 @@ export const OpenPositionsTable = forwardRef<any, {}>((props, ref) => {
     // Filter orders (positions only - no order history)
     let orders = allOrders;
     
-    // Level 1: Filter by token type (MAXI vs Non-MAXI)
-    if (tokenFilter === 'maxi') {
-      orders = orders.filter(order => {
-          const sellToken = order.orderDetailsWithId.orderDetails.sellToken.toLowerCase();
-          
-          // Check if sell token is in MAXI tokens
-          const sellTokenInList = maxiTokenAddresses.some(addr => 
-            sellToken === addr.toLowerCase()
-          );
-          
-          // Check if any buy token is in MAXI tokens
-          const buyTokensInList = order.orderDetailsWithId.orderDetails.buyTokensIndex.some(buyTokenIndex => {
-            const buyTokenInfo = getTokenInfoByIndex(Number(buyTokenIndex));
-            const buyTokenAddress = buyTokenInfo.address?.toLowerCase() || '';
-            return maxiTokenAddresses.some(addr => 
-              buyTokenAddress === addr.toLowerCase()
-            );
-          });
-          
-          return sellTokenInList || buyTokensInList;
-        });
-    } else if (tokenFilter === 'non-maxi') {
-      orders = orders.filter(order => {
-        const sellToken = order.orderDetailsWithId.orderDetails.sellToken.toLowerCase();
-        
-        // Check if sell token is NOT in MAXI tokens
-        const sellTokenInList = maxiTokenAddresses.some(addr => 
-          sellToken === addr.toLowerCase()
-        );
-        
-        // Check if any buy token is NOT in MAXI tokens
-        const buyTokensInList = order.orderDetailsWithId.orderDetails.buyTokensIndex.some(buyTokenIndex => {
-          const buyTokenInfo = getTokenInfoByIndex(Number(buyTokenIndex));
-          const buyTokenAddress = buyTokenInfo.address?.toLowerCase() || '';
-          return maxiTokenAddresses.some(addr => 
-            buyTokenAddress === addr.toLowerCase()
-          );
-        });
-        
-        return !(sellTokenInList || buyTokensInList);
-      });
-    }
-    
     // Level 2: Filter by ownership (Mine vs Non-Mine vs Order History)
     if (ownershipFilter === 'mine') {
       orders = orders.filter(order => 
@@ -1608,40 +1567,8 @@ export const OpenPositionsTable = forwardRef<any, {}>((props, ref) => {
 
   // Helper functions for cascading filter counts
   const getLevel1Orders = (tokenType: 'maxi' | 'non-maxi') => {
-    // Use allOrders directly (order history is handled separately)
-    const cleanOrders = allOrders;
-    
-    if (tokenType === 'maxi') {
-        return cleanOrders.filter(order => {
-          const sellToken = order.orderDetailsWithId.orderDetails.sellToken.toLowerCase();
-          const sellTokenInList = maxiTokenAddresses.some(addr => 
-            sellToken === addr.toLowerCase()
-          );
-          const buyTokensInList = order.orderDetailsWithId.orderDetails.buyTokensIndex.some(buyTokenIndex => {
-            const buyTokenInfo = getTokenInfoByIndex(Number(buyTokenIndex));
-            const buyTokenAddress = buyTokenInfo.address?.toLowerCase() || '';
-            return maxiTokenAddresses.some(addr => 
-              buyTokenAddress === addr.toLowerCase()
-            );
-          });
-          return sellTokenInList || buyTokensInList;
-        });
-    } else {
-      return cleanOrders.filter(order => {
-        const sellToken = order.orderDetailsWithId.orderDetails.sellToken.toLowerCase();
-        const sellTokenInList = maxiTokenAddresses.some(addr => 
-          sellToken === addr.toLowerCase()
-        );
-        const buyTokensInList = order.orderDetailsWithId.orderDetails.buyTokensIndex.some(buyTokenIndex => {
-          const buyTokenInfo = getTokenInfoByIndex(Number(buyTokenIndex));
-          const buyTokenAddress = buyTokenInfo.address?.toLowerCase() || '';
-          return maxiTokenAddresses.some(addr => 
-            buyTokenAddress === addr.toLowerCase()
-          );
-        });
-        return !(sellTokenInList || buyTokensInList);
-      });
-    }
+    // Return all orders - no longer filtering by token type
+    return allOrders;
   };
 
   const getLevel2Orders = (tokenType: 'maxi' | 'non-maxi', ownership: 'mine' | 'non-mine') => {
@@ -1722,8 +1649,13 @@ export const OpenPositionsTable = forwardRef<any, {}>((props, ref) => {
     });
   }, [allOrders]);
 
-  // Loading state - only for initial load
-  if (!mounted || isTableLoading) {
+  // Show nothing if wallet not connected (no loading state)
+  if (!mounted || !address) {
+    return null;
+  }
+
+  // Loading state - only for initial load when connected
+  if (isTableLoading) {
     return (
       <div className="bg-black text-white relative overflow-hidden">
         <div className="max-w-[1000px] mx-auto w-full relative">
@@ -1782,98 +1714,6 @@ export const OpenPositionsTable = forwardRef<any, {}>((props, ref) => {
     <div 
       className="w-full max-w-[1200px] mx-auto mb-8 mt-8"
     >
-      {/* Level 1: Token Type Filter - Hidden (forced to MAXI) */}
-      <div className="hidden">
-        <button
-          onClick={() => {
-            setTokenFilter('maxi');
-            clearExpandedPositions();
-          }}
-          className={`px-6 py-3 rounded-full transition-all duration-100 border ${
-            tokenFilter === 'maxi'
-              ? 'bg-purple-500/20 text-purple-400 border-purple-400'
-              : 'bg-gray-800/50 text-gray-300 border-gray-600 hover:bg-gray-700/50'
-          }`}
-        >
-          MAXI ({getLevel1Orders('maxi').length})
-        </button>
-        <button
-          onClick={() => {
-            setTokenFilter('non-maxi');
-            clearExpandedPositions();
-          }}
-          className={`px-6 py-3 rounded-full transition-all duration-100 border ${
-            tokenFilter === 'non-maxi'
-              ? 'bg-blue-500/20 text-blue-400 border-blue-400'
-              : 'bg-gray-800/50 text-gray-300 border-gray-600 hover:bg-gray-700/50'
-          }`}
-        >
-          Non-MAXI ({getLevel1Orders('non-maxi').length})
-        </button>
-      </div>
-
-      {/* Level 2: Ownership Filter */}
-      <div className="flex justify-center sm:justify-start mb-4 w-full md:w-auto">
-        <div className={`inline-flex items-center bg-black border rounded-full relative w-full md:w-auto ${
-          ownershipFilter === 'mine' ? 'border-green-600' : 'border-orange-600'
-        }`}>
-          <button
-            onClick={() => {
-              setOwnershipFilter('mine');
-              clearExpandedPositions();
-            }}
-            className={`flex-1 md:flex-none px-3 md:px-4 py-2 rounded-full text-sm md:text-base font-medium transition-colors duration-200 relative z-10 whitespace-nowrap ${
-              ownershipFilter === 'mine'
-                ? 'text-white'
-                : 'text-orange-600 hover:text-orange-500'
-            }`}
-          >
-            {ownershipFilter === 'mine' && (
-              <motion.div
-                layoutId="activeTab"
-                className="absolute inset-0 rounded-full bg-green-600 shadow-sm"
-                transition={{
-                  type: "spring",
-                  stiffness: 300,
-                  damping: 30
-                }}
-                style={{ zIndex: -1 }}
-              />
-            )}
-            My Deals ({getLevel2Orders(tokenFilter, 'mine').length})
-          </button>
-          <button
-            onClick={() => {
-              setOwnershipFilter('non-mine');
-              // If currently on order-history, switch to active when going to marketplace
-              if (statusFilter === 'order-history') {
-                setStatusFilter('active');
-              }
-              clearExpandedPositions();
-            }}
-            className={`flex-1 md:flex-none px-3 md:px-4 py-2 rounded-full text-sm md:text-base font-medium transition-colors duration-200 relative z-10 whitespace-nowrap ${
-              ownershipFilter === 'non-mine'
-                ? 'text-white'
-                : 'text-green-600 hover:text-green-500'
-            }`}
-          >
-            {ownershipFilter === 'non-mine' && (
-              <motion.div
-                layoutId="activeTab"
-                className="absolute inset-0 rounded-full bg-orange-600 shadow-sm"
-                transition={{
-                  type: "spring",
-                  stiffness: 300,
-                  damping: 30
-                }}
-                style={{ zIndex: -1 }}
-              />
-            )}
-            Marketplace ({getLevel2Orders(tokenFilter, 'non-mine').length})
-          </button>
-        </div>
-      </div>
-
       {/* Level 3: Status Filter */}
         <div className="flex flex-wrap justify-center sm:justify-start gap-3 mb-6">
         <button
@@ -1881,9 +1721,9 @@ export const OpenPositionsTable = forwardRef<any, {}>((props, ref) => {
             setStatusFilter('active');
             clearExpandedPositions();
           }}
-          className={`px-3 md:px-4 py-2 rounded-full transition-all duration-100 border whitespace-nowrap text-sm md:text-base ${
+          className={`px-3 md:px-4 py-2  transition-all duration-100 border whitespace-nowrap text-sm md:text-base ${
             statusFilter === 'active'
-              ? 'bg-green-500/20 text-green-400 border-green-400'
+              ? 'bg-[#00D9FF]/20 text-[#00D9FF] border-[#00D9FF]'
               : 'bg-gray-800/50 text-gray-300 border-gray-600 hover:bg-gray-700/50'
           }`}
         >
@@ -1891,52 +1731,30 @@ export const OpenPositionsTable = forwardRef<any, {}>((props, ref) => {
         </button>
         <button
           onClick={() => {
-            setStatusFilter('completed');
-            clearExpandedPositions();
-          }}
-          className={`px-3 md:px-4 py-2 rounded-full transition-all duration-100 border whitespace-nowrap text-sm md:text-base ${
-            statusFilter === 'completed'
-              ? 'bg-blue-500/20 text-blue-400 border-blue-400'
-              : 'bg-gray-800/50 text-gray-300 border-gray-600 hover:bg-gray-700/50'
-          }`}
-        >
-          Completed ({getLevel3Orders(tokenFilter, ownershipFilter, 'completed').length})
-        </button>
-        <button
-          onClick={() => {
             setStatusFilter('inactive');
             clearExpandedPositions();
           }}
-          className={`px-3 md:px-4 py-2 rounded-full transition-all duration-100 border whitespace-nowrap text-sm md:text-base ${
+          className={`px-3 md:px-4 py-2  transition-all duration-100 border whitespace-nowrap text-sm md:text-base ${
             statusFilter === 'inactive'
-              ? 'bg-yellow-500/20 text-yellow-400 border-yellow-400'
+              ? 'bg-[#00D9FF]/20 text-[#00D9FF] border-[#00D9FF]'
               : 'bg-gray-800/50 text-gray-300 border-gray-600 hover:bg-gray-700/50'
           }`}
         >
-          Inactive ({getLevel3Orders(tokenFilter, ownershipFilter, 'inactive').length})
+          Inactive ({
+            getLevel3Orders(tokenFilter, ownershipFilter, 'completed').length +
+            getLevel3Orders(tokenFilter, ownershipFilter, 'inactive').length +
+            getLevel3Orders(tokenFilter, ownershipFilter, 'cancelled').length
+          })
         </button>
-        <button
-          onClick={() => {
-            setStatusFilter('cancelled');
-            clearExpandedPositions();
-          }}
-          className={`px-3 md:px-4 py-2 rounded-full transition-all duration-100 border whitespace-nowrap text-sm md:text-base ${
-            statusFilter === 'cancelled'
-              ? 'bg-red-500/20 text-red-400 border-red-400'
-              : 'bg-gray-800/50 text-gray-300 border-gray-600 hover:bg-gray-700/50'
-          }`}
-        >
-          Cancelled ({getLevel3Orders(tokenFilter, ownershipFilter, 'cancelled').length})
-        </button>
-        {ownershipFilter === 'mine' && (
+        {!isMarketplaceMode && (
           <button
             onClick={() => {
               setStatusFilter('order-history');
               clearExpandedPositions();
             }}
-            className={`px-3 md:px-4 py-2 rounded-full transition-all duration-100 border whitespace-nowrap text-sm md:text-base ${
+            className={`px-3 md:px-4 py-2  transition-all duration-100 border whitespace-nowrap text-sm md:text-base ${
               statusFilter === 'order-history'
-                ? 'bg-purple-500/20 text-purple-400 border-purple-400'
+                ? 'bg-[#00D9FF]/20 text-[#00D9FF] border-[#00D9FF]'
                 : 'bg-gray-800/50 text-gray-300 border-gray-600 hover:bg-gray-700/50'
             }`}
           >
@@ -1947,21 +1765,21 @@ export const OpenPositionsTable = forwardRef<any, {}>((props, ref) => {
 
       {/* Search Bar */}
       <div className="mb-6">
-        <div className="relative max-w-md">
+        <div className="relative w-full">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500" />
           <input
             type="text"
             placeholder="Search"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-black border-2 border-white/10 rounded-full text-white placeholder-gray-500 focus:outline-none focus:border-white/10 focus:bg-black/10 transition-colors"
+            className="w-full pl-10 pr-4 py-2 bg-black border-2 border-[#00D9FF]  text-[#00D9FF] placeholder-[#00D9FF]/30 focus:outline-none focus:border-[#00D9FF] focus:bg-black/10 transition-colors shadow-[0_0_10px_rgba(0,217,255,0.3)]"
           />
         </div>
       </div>
 
       <div 
-        className={`bg-black border-2 border-white/10 rounded-2xl p-6 transition-all duration-500 ease-out ${
-          expandedPositions.size > 0 ? 'shadow-2xl shadow-white/10' : ''
+        className={`bg-black/80 backdrop-blur-sm border-2 border-[#00D9FF]  p-6 transition-all duration-500 ease-out shadow-[0_0_30px_rgba(0,217,255,0.3)] ${
+          expandedPositions.size > 0 ? 'shadow-[0_0_50px_rgba(0,217,255,0.5)]' : ''
         }`}
         style={{ 
           minHeight: '200px',
@@ -1991,15 +1809,15 @@ export const OpenPositionsTable = forwardRef<any, {}>((props, ref) => {
             <div className="w-full min-w-[800px] text-lg">
             {/* Table Header */}
             <div 
-              className={`grid grid-cols-[minmax(120px,1fr)_minmax(120px,1fr)_minmax(80px,120px)_minmax(100px,140px)_minmax(100px,140px)_minmax(80px,120px)_minmax(80px,120px)_minmax(80px,120px)_auto] items-center gap-4 pb-4 border-b border-white/10 ${
+              className={`grid grid-cols-[minmax(120px,1fr)_minmax(120px,1fr)_minmax(80px,120px)_minmax(100px,140px)_minmax(80px,120px)_minmax(80px,120px)_minmax(80px,120px)_auto] items-center gap-4 pb-4 border-b border-[#00D9FF]/30 ${
                 expandedPositions.size > 0 ? 'opacity-90' : 'opacity-100'
               }`}
             >
               {/* COLUMN 1: Token For Sale */}
               <button 
                 onClick={() => handleSort('sellAmount')}
-                className={`text-sm font-medium text-left hover:text-white transition-colors ${
-                  sortField === 'sellAmount' ? 'text-white' : 'text-gray-400'
+                className={`text-sm font-medium text-left hover:text-[#00D9FF] transition-colors ${
+                  sortField === 'sellAmount' ? 'text-[#00D9FF]' : 'text-[#00D9FF]/60'
                 }`}
               >
                             {statusFilter === 'completed' ? 'Sold' : 'For Sale'} {sortField === 'sellAmount' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
@@ -2008,8 +1826,8 @@ export const OpenPositionsTable = forwardRef<any, {}>((props, ref) => {
               {/* COLUMN 2: Asking For */}
               <button 
                 onClick={() => handleSort('askingFor')}
-                className={`text-sm font-medium text-left hover:text-white transition-colors ${
-                  sortField === 'askingFor' ? 'text-white' : 'text-gray-400'
+                className={`text-sm font-medium text-left hover:text-[#00D9FF] transition-colors ${
+                  sortField === 'askingFor' ? 'text-[#00D9FF]' : 'text-[#00D9FF]/60'
                 }`}
               >
                             {statusFilter === 'completed' ? 'Bought' : 'Asking For'} {sortField === 'askingFor' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
@@ -2018,8 +1836,8 @@ export const OpenPositionsTable = forwardRef<any, {}>((props, ref) => {
               {/* COLUMN 3: Fill Status % */}
               <button 
                 onClick={() => handleSort('progress')}
-                className={`text-sm font-medium text-center hover:text-white transition-colors ${
-                  sortField === 'progress' ? 'text-white' : 'text-gray-400'
+                className={`text-sm font-medium text-center hover:text-[#00D9FF] transition-colors ${
+                  sortField === 'progress' ? 'text-[#00D9FF]' : 'text-[#00D9FF]/60'
                 }`}
               >
                 Fill Status % {sortField === 'progress' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
@@ -2028,28 +1846,18 @@ export const OpenPositionsTable = forwardRef<any, {}>((props, ref) => {
               {/* COLUMN 4: OTC % */}
               <button 
                 onClick={() => handleSort('otcVsMarket')}
-                className={`text-sm font-medium text-center hover:text-white transition-colors ${
-                  sortField === 'otcVsMarket' ? 'text-white' : 'text-gray-400'
+                className={`text-sm font-medium text-center hover:text-[#00D9FF] transition-colors ${
+                  sortField === 'otcVsMarket' ? 'text-[#00D9FF]' : 'text-[#00D9FF]/60'
                 }`}
               >
                 OTC vs Market Price {sortField === 'otcVsMarket' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
               </button>
               
-              {/* COLUMN 5: Backing Price */}
-              <button 
-                onClick={() => handleSort('backingPrice')}
-                className={`text-sm font-medium text-center hover:text-white transition-colors ${
-                  sortField === 'backingPrice' ? 'text-white' : 'text-gray-400'
-                }`}
-              >
-                OTC vs Backing Price{sortField === 'backingPrice' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
-              </button>
-              
-              {/* COLUMN 6: Status */}
+              {/* COLUMN 5: Status */}
               <button 
                 onClick={() => handleSort('status')}
-                className={`text-sm font-medium text-center hover:text-white transition-colors ${
-                  sortField === 'status' ? 'text-white' : 'text-gray-400'
+                className={`text-sm font-medium text-center hover:text-[#00D9FF] transition-colors ${
+                  sortField === 'status' ? 'text-[#00D9FF]' : 'text-[#00D9FF]/60'
                 }`}
               >
                 Status {sortField === 'status' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
@@ -2058,15 +1866,15 @@ export const OpenPositionsTable = forwardRef<any, {}>((props, ref) => {
               {/* COLUMN 7: Expires */}
               <button 
                 onClick={() => handleSort('date')}
-                className={`text-sm font-medium text-center hover:text-white transition-colors ${
-                  sortField === 'date' ? 'text-white' : 'text-gray-400'
+                className={`text-sm font-medium text-center hover:text-[#00D9FF] transition-colors ${
+                  sortField === 'date' ? 'text-[#00D9FF]' : 'text-[#00D9FF]/60'
                 }`}
               >
                 Expires {sortField === 'date' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
               </button>
               
               {/* COLUMN 8: Actions / Order ID */}
-              <div className="text-sm font-medium text-center text-gray-400">
+              <div className="text-sm font-medium text-center text-[#00D9FF]/60">
                 {(statusFilter === 'inactive' || statusFilter === 'completed') ? 'Order ID' : ''}
             </div>
             </div>
@@ -2216,10 +2024,10 @@ export const OpenPositionsTable = forwardRef<any, {}>((props, ref) => {
                 
                 return (
                   <div key={`${orderId}-${tokenFilter}-${ownershipFilter}-${statusFilter}`} data-order-id={orderId}
-                      className={`grid grid-cols-[minmax(120px,1fr)_minmax(120px,1fr)_minmax(80px,120px)_minmax(100px,140px)_minmax(100px,140px)_minmax(80px,120px)_minmax(80px,120px)_minmax(80px,120px)_auto] items-start gap-4 py-8 ${
-                        index < displayOrders.length - 1 ? 'border-b border-white/10' : ''
+                      className={`grid grid-cols-[minmax(120px,1fr)_minmax(120px,1fr)_minmax(80px,120px)_minmax(100px,140px)_minmax(80px,120px)_minmax(80px,120px)_minmax(80px,120px)_auto] items-start gap-4 py-8 ${
+                        index < displayOrders.length - 1 ? 'border-b border-[#00D9FF]/20' : ''
                       }`}
-                    >
+                  >
                     {/* COLUMN 1: Token For Sale Content */}
                     <div className="flex flex-col items-start space-y-1 min-w-0 overflow-hidden">
                     {(() => {
@@ -2249,21 +2057,21 @@ export const OpenPositionsTable = forwardRef<any, {}>((props, ref) => {
                       
                       return (
                         <div className="inline-block">
-                          <span className={`text-lg font-medium ${tokenPrice > 0 ? 'text-white' : 'text-gray-500'} ${tokenPrice === 0 ? 'py-1' : ''}`}>
+                          <span className={`text-lg font-medium ${tokenPrice > 0 ? 'text-[#00D9FF]' : 'text-gray-500'} ${tokenPrice === 0 ? 'py-1' : ''}`}>
                             {tokenPrice > 0 ? formatUSD(usdValue) : '--'}
                           </span>
-                          <div className="w-1/2 h-px bg-white/10 my-2"></div>
+                          <div className="w-1/2 h-px bg-[#00D9FF]/10 my-2"></div>
                   <div className="flex items-center space-x-2">
                     <TokenLogo 
                       src={getTokenInfo(order.orderDetailsWithId.orderDetails.sellToken).logo}
                               alt={formatTokenTicker(getTokenInfo(order.orderDetailsWithId.orderDetails.sellToken).ticker)}
-                      className="w-6 h-6 rounded-full"
+                      className="w-6 h-6 "
                     />
                             <div className="flex flex-col">
-                    <span className="text-white text-sm font-medium whitespace-nowrap">
+                    <span className="text-[#00D9FF] text-sm font-medium whitespace-nowrap">
                                 {formatTokenTicker(getTokenInfo(order.orderDetailsWithId.orderDetails.sellToken).ticker)}
                     </span>
-                              <span className="text-gray-400 text-xs whitespace-nowrap">
+                              <span className="text-[#00D9FF]/60 text-xs whitespace-nowrap">
                                 {formatTokenAmountDisplay(tokenAmount)}
                               </span>
                               {/* Hide individual USD price for single token (redundant with total) */}
@@ -2298,10 +2106,10 @@ export const OpenPositionsTable = forwardRef<any, {}>((props, ref) => {
                       
                       return (
                         <div className="inline-block">
-                          <span className={`text-lg font-medium ${totalUsdValue > 0 ? 'text-white' : 'text-gray-500'} ${totalUsdValue === 0 ? 'py-1' : ''}`}>
+                          <span className={`text-lg font-medium ${totalUsdValue > 0 ? 'text-[#00D9FF]' : 'text-gray-500'} ${totalUsdValue === 0 ? 'py-1' : ''}`}>
                             {totalUsdValue > 0 ? formatUSD(totalUsdValue) : '--'}
                           </span>
-                          <div className="w-1/2 h-px bg-white/10 my-2"></div>
+                          <div className="w-1/2 h-px bg-[#00D9FF]/10 my-2"></div>
                           {(() => {
                             // For completed and active orders
                             const hasMultipleTokens = buyTokensIndex.length > 1;
@@ -2333,13 +2141,13 @@ export const OpenPositionsTable = forwardRef<any, {}>((props, ref) => {
                           <TokenLogo 
                             src={tokenInfo.logo}
                                   alt={formatTokenTicker(tokenInfo.ticker)}
-                            className="w-6 h-6 rounded-full"
+                            className="w-6 h-6 "
                           />
                                 <div className="flex flex-col">
-                          <span className="text-white text-sm font-medium whitespace-nowrap">
+                          <span className="text-[#00D9FF] text-sm font-medium whitespace-nowrap">
                                     {formatTokenTicker(tokenInfo.ticker)}
                           </span>
-                                  <span className="text-gray-400 text-xs whitespace-nowrap">
+                                  <span className="text-[#00D9FF]/60 text-xs whitespace-nowrap">
                             {formatTokenAmountDisplay(tokenAmount)}
                           </span>
                                   {/* Only show individual USD price if there are multiple tokens */}
@@ -2364,19 +2172,19 @@ export const OpenPositionsTable = forwardRef<any, {}>((props, ref) => {
                       const fillPercentage = 100 - ((Number(getRemainingPercentage(order.orderDetailsWithId)) / 1e18) * 100);
                       
                       return (
-                        <span className={`text-xs ${fillPercentage === 0 ? 'text-gray-500' : 'text-white'}`}>
+                        <span className={`text-xs ${fillPercentage === 0 ? 'text-gray-500' : 'text-[#00D9FF]'}`}>
                           {formatPercentage(fillPercentage)}
                     </span>
                       );
                     })()}
-                    <div className="w-[60px] h-1 bg-gray-500 rounded-full overflow-hidden relative">
+                    <div className="w-[60px] h-1 bg-gray-500  overflow-hidden relative">
                       {(() => {
                         const fillPercentage = 100 - ((Number(getRemainingPercentage(order.orderDetailsWithId)) / 1e18) * 100);
                         
                         return (
                           <div 
-                            className={`h-full rounded-full transition-all duration-300 ${
-                              fillPercentage === 0 ? 'bg-gray-500' : 'bg-blue-500'
+                            className={`h-full  transition-all duration-300 ${
+                              fillPercentage === 0 ? 'bg-gray-500' : 'bg-[#00D9FF]'
                             }`}
                         style={{ 
                               width: `${fillPercentage}%` 
@@ -2410,63 +2218,32 @@ export const OpenPositionsTable = forwardRef<any, {}>((props, ref) => {
                         {isAboveAsking ? 'discount' : 'premium'}
                       </div>
                     )}
-                  </div>
-                  
-                  {/* COLUMN 5: Backing Price Discount Content */}
-                  <div className="text-center min-w-0">
-                    <div className="text-sm">
-                      {backingPriceDiscount !== null ? (
-                        <>
-                          {(PAYWALL_ENABLED && !hasTokenAccess) ? (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setShowPaywallModal(true);
-                              }}
-                              className="p-2 inline-flex items-center justify-center hover:opacity-80 transition-opacity"
-                            >
-                              <Lock className="w-5 h-5 -mt-1 text-gray-400 hover:text-white" />
-                            </button>
-                          ) : (
-                            <span className={`font-medium ${
-                              isAboveBackingPrice 
-                                ? 'text-gray-400'    // Neutral - selling above backing price
-                                : 'text-red-400'     // Red discount - selling below backing price (good deal)
-                            }`}>
-                              {isAboveBackingPrice 
-                                ? `+${Math.abs(backingPriceDiscount).toLocaleString('en-US', { maximumFractionDigits: 0 })}%`
-                                : `-${Math.abs(backingPriceDiscount).toLocaleString('en-US', { maximumFractionDigits: 0 })}%`
-                              }
-                            </span>
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          {/* Show lock for MAXI tokens even when data doesn't load if user has no access */}
-                          {isEligibleForBackingStats && (PAYWALL_ENABLED && !hasTokenAccess) ? (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setShowPaywallModal(true);
-                              }}
-                              className="p-2 inline-flex items-center justify-center hover:opacity-80 transition-opacity"
-                            >
-                              <Lock className="w-5 h-5 -mt-1 text-gray-400 hover:text-white" />
-                            </button>
-                          ) : (
-                            <span className="text-gray-500">--</span>
-                          )}
-                        </>
-                      )}
-                    </div>
-                    {backingPriceDiscount !== null && !(PAYWALL_ENABLED && !hasTokenAccess) && (
-                      <div className="text-xs text-gray-400 mt-0">
-                        {isAboveBackingPrice ? 'premium' : 'discount'}
+                    {/* Add backing price stats as second row */}
+                    {backingPriceDiscount !== null && (
+                      <div className="text-xs text-gray-400 mt-1">
+                        {(PAYWALL_ENABLED && !hasTokenAccess) ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowPaywallModal(true);
+                            }}
+                            className="inline-flex items-center justify-center hover:opacity-80 transition-opacity"
+                          >
+                            <Lock className="w-4 h-4 text-gray-400 hover:text-white" />
+                          </button>
+                        ) : (
+                          <>
+                            {isAboveBackingPrice 
+                              ? `+${Math.abs(backingPriceDiscount).toLocaleString('en-US', { maximumFractionDigits: 0 })}%`
+                              : `-${Math.abs(backingPriceDiscount).toLocaleString('en-US', { maximumFractionDigits: 0 })}%`
+                            } vs backing
+                          </>
+                        )}
                       </div>
                     )}
                   </div>
                   
-                  {/* COLUMN 6: Status Content */}
+                  {/* COLUMN 5: Status Content */}
                   <div className="text-center min-w-0 mt-1">
                     <span className={`px-3 py-2 rounded-full text-sm font-medium border ${
                       getStatusText(order) === 'Inactive'
@@ -2531,14 +2308,14 @@ export const OpenPositionsTable = forwardRef<any, {}>((props, ref) => {
                   {/* Expandable Actions Shelf */}
                     {expandedPositions.has(order.orderDetailsWithId.orderId.toString()) && (
                       <div
-                        className="col-span-full rounded-2xl mt-2 border border-white/10 bg-white/5 w-full"
+                        className="col-span-full  mt-2 border-2 border-[#00D9FF] bg-black/60 backdrop-blur-sm w-full shadow-[0_0_20px_rgba(0,217,255,0.3)]"
                       >
                         <div className="p-3">
                           <div className="flex flex-col space-y-2">
                             <h4 className="text-white font-medium text-xl">Your Trade</h4>
                             
                             {/* Offer Input Fields */}
-                            <div className="mt-3 pt-3 border-t border-white/10">
+                            <div className="mt-3 pt-3 border-t border-[#00D9FF]/30">
                               <h5 className="text-white font-medium text-xs mb-2">You pay:</h5>
                               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                                 {order.orderDetailsWithId.orderDetails.buyTokensIndex.map((tokenIndex: bigint, idx: number) => {
@@ -2568,7 +2345,7 @@ export const OpenPositionsTable = forwardRef<any, {}>((props, ref) => {
                                             removeCommas(e.target.value),
                                             order
                                           )}
-                                          className="bg-transparent border border-white/20 rounded px-2 py-1 text-white text-sm w-26 md:w-20 focus:border-white/40 focus:outline-none"
+                                          className="bg-transparent border border-white/20  px-2 py-1 text-white text-sm w-26 md:w-20 focus:border-white/40 focus:outline-none"
                                           placeholder="0"
                                         />
           </div>
@@ -2673,7 +2450,7 @@ export const OpenPositionsTable = forwardRef<any, {}>((props, ref) => {
                                             )}
                                           </div>
                                         </div>
-                                        <div className="border-t border-white/10 pt-1">
+                                        <div className="border-t border-[#00D9FF]/30 pt-1">
                                           <div className="flex justify-between">
                                             <span className="text-white font-bold">You Pay:</span>
                                             <div className="flex items-center space-x-1">
@@ -2738,7 +2515,7 @@ export const OpenPositionsTable = forwardRef<any, {}>((props, ref) => {
                               )}
 
                               {/* Submit Section */}
-                              <div className="mt-4 pt-3 border-t border-white/10">
+                              <div className="mt-4 pt-3 border-t border-[#00D9FF]/30">
                                 {(() => {
                                   const orderId = order.orderDetailsWithId.orderId.toString();
                                   const currentInputs = offerInputs[orderId];
@@ -2772,7 +2549,7 @@ export const OpenPositionsTable = forwardRef<any, {}>((props, ref) => {
                             
                             {/* Owner Actions - Only show for user's own orders */}
                             {address && order.userDetails.orderOwner.toLowerCase() === address.toLowerCase() && (
-                              <div className="mt-3 pt-3 border-t border-white/10">
+                              <div className="mt-3 pt-3 border-t border-[#00D9FF]/30">
                                 <div className="flex gap-2">
                                   {/* Cancel Button */}
                                   <button

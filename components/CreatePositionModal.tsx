@@ -2,12 +2,12 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, ArrowLeftRight, Lock } from 'lucide-react';
+import { X, ArrowLeftRight, Lock, Search } from 'lucide-react';
 import PaywallModal from './PaywallModal';
 import { Slider } from '@/components/ui/slider';
-import { getTokenInfo, getTokenInfoByIndex, formatTokenTicker, parseTokenAmount, formatTokenAmount } from '@/utils/tokenUtils';
+import { Input } from '@/components/ui/input';
+import { getTokenInfo, getTokenInfoByIndex, formatTokenTicker, parseTokenAmount, formatTokenAmount, PRIORITY_TOKEN_ADDRESSES } from '@/utils/tokenUtils';
 import { TOKEN_CONSTANTS } from '@/constants/crypto';
-import { MORE_COINS } from '@/constants/more-coins';
 import { useTokenStats } from '@/hooks/crypto/useTokenStats';
 import { useTokenPrices } from '@/hooks/crypto/useTokenPrices';
 import { useContractWhitelist } from '@/hooks/contracts/useContractWhitelist';
@@ -45,27 +45,7 @@ const getHighestTokenVersion = (tokenStats: Record<string, any>, prefix: string,
   return highestKey;
 };
 
-// Contract whitelist mapping - index to token address
-const CONTRACT_WHITELIST_MAP = {
-  0: '0x95b303987a60c71504d99aa1b13b4da07b0790ab', // PLSX - PulseX
-  1: '0xefd766ccb38eaf1dfd701853bfce31359239f305', // weDAI - Wrapped DAI from Eth
-  2: '0x000000000000000000000000000000000000dead', // PLS - Pulse
-  3: '0x2fa878ab3f87cc1c9737fc071108f904c0b0c95d', // INC - Incentive
-  4: '0x2b591e99afe9f32eaa6214f7b7629768c40eeb39', // HEX - HEX on Pls
-  5: '0x0deed1486bc52aa0d3e6f8849cec5add6598a162', // stPLS (Liquid Loans) - Not added to dropdown
-  6: '0x02dcdd04e3f455d838cd1249292c58f3b79e3c3c', // weWETH - Wrapped WETH from Eth
-  7: '0x15d38573d2feeb82e7ad5187ab8c1d52810b1f07', // weUSDC - Wrapped USDC from Eth (INACTIVE) Not added to dropdown
-  8: '0x0cb6f5a34ad42ec934882a05265a7d5f59b51a2f', // weUSDT - Wrapped USDT from Eth (INACTIVE) Not added to dropdown
-  9: '0x115f3fa979a936167f9d208a7b7c4d85081e84bd', // 2PHUX - 2PHUX Governance Token Not added to dropdown
-} as const;
-
-// Active tokens only (for trading)
-const ACTIVE_CONTRACT_INDICES = [0, 1, 2, 3, 4, 5, 6, 9];
-
-// Inactive tokens
-const INACTIVE_CONTRACT_INDICES = [7, 8];
-
-// MAXI tokens (not in contract whitelist but kept for reference)
+// MAXI tokens with stats data (kept for stats functionality)
 const MAXI_TOKENS = [
   '0x0d86eb9f43c57f6ff3bc9e23d8f9d82503f0e84b', // pMAXI
   '0x6b32022693210cd2cfc466b9ac0085de8fc34ea6', // pDECI
@@ -79,37 +59,37 @@ const MAXI_TOKENS = [
   '0xda073388422065fe8d3b5921ec2ae475bae57bed', // weBASE
 ];
 
-// Custom dropdown order - specify the order you want tokens to appear
-const DROPDOWN_ORDER = [
-  4, // HEX first
-  2, // PLS fourth
-  0, // PLSX second
-  1, // weDAI third
-  3, // INC fifth
-  6, // weWETH seventh
-  // Inactive tokens
-  // 7, // weUSDC
-  // 8, // weUSDT
-];
+// Helper function to get all token addresses from TOKEN_CONSTANTS
+// Returns priority tokens first, then all other tokens
+// Note: Priority token order is defined in @/utils/tokenUtils.ts (PRIORITY_TOKEN_ADDRESSES)
+const getAllTokenAddresses = (): string[] => {
+  // Get all valid token addresses from TOKEN_CONSTANTS
+  const allAddresses: string[] = [];
+  for (const token of TOKEN_CONSTANTS) {
+    const address = token.a;
+    if (address && typeof address === 'string' && address !== 'eee' && address !== '0xxx' && address !== '0x' && address !== '0xsss') {
+      allAddresses.push(address.toLowerCase());
+    }
+  }
+  
+  // Create a Set of priority addresses (lowercase for comparison)
+  const prioritySet = new Set(PRIORITY_TOKEN_ADDRESSES.map(addr => addr.toLowerCase()));
+  
+  // Get non-priority tokens (those not in priority list)
+  const nonPriorityTokens = allAddresses.filter(addr => !prioritySet.has(addr));
+  
+  // Return priority tokens first, then all others
+  return [
+    ...PRIORITY_TOKEN_ADDRESSES,
+    ...nonPriorityTokens
+  ];
+};
 
-// Combined buy side whitelist - ordered by DROPDOWN_ORDER, then MAXI tokens
-const BUY_WHITELISTED_TOKENS = [
-  // Contract tokens in custom order
-  ...DROPDOWN_ORDER.map(index => CONTRACT_WHITELIST_MAP[index as keyof typeof CONTRACT_WHITELIST_MAP]),
+// All tokens available for buy side
+const BUY_WHITELISTED_TOKENS = getAllTokenAddresses();
 
-  // MAXI tokens at the end
-  ...MAXI_TOKENS,
-];
-
-// Whitelisted tokens for OTC trading - SELL SIDE (what you can offer)
-// Uses the same contract whitelist mapping and dropdown order as buy side
-const SELL_WHITELISTED_TOKENS = [
-  // Contract tokens in custom order (same as buy side)
-  ...DROPDOWN_ORDER.map(index => CONTRACT_WHITELIST_MAP[index as keyof typeof CONTRACT_WHITELIST_MAP]),
-
-  // MAXI tokens at the end
-  ...MAXI_TOKENS,
-];
+// All tokens available for sell side
+const SELL_WHITELISTED_TOKENS = getAllTokenAddresses();
 
 
 
@@ -366,7 +346,6 @@ export function CreatePositionModal({
   const [sellAmountError, setSellAmountError] = useState<string | null>(null);
   const [buyAmountErrors, setBuyAmountErrors] = useState<(string | null)[]>(['']);
   const [duplicateTokenError, setDuplicateTokenError] = useState<string | null>(null);
-  const [maxiTokenError, setMaxiTokenError] = useState<string | null>(null);
 
   // Token approval hook - only for ERC20 tokens (not native PLS)
   const sellAmountWei = sellToken && sellAmount ? parseTokenAmount(removeCommas(sellAmount), sellToken.decimals) : 0n;
@@ -399,14 +378,32 @@ export function CreatePositionModal({
     token: isNativeToken(sellToken?.address || '') ? undefined : sellToken?.address as `0x${string}`,
     chainId: currentChainId,
     query: {
-      enabled: !!address && !!sellToken,
+      enabled: !!address && !!sellToken && !!currentChainId,
       retry: 3,
+      staleTime: 5000,
+      refetchInterval: 10000,
     }
   });
 
   // Removed buyTokenBalance - not needed for ask side
 
   // Debug logging for balance issues
+  console.log('💰 Balance Debug:', {
+    address,
+    currentChainId,
+    sellToken: sellToken?.address,
+    isNativeToken: sellToken ? isNativeToken(sellToken.address) : false,
+    isWalletConnected,
+    sellBalanceLoading,
+    sellBalanceError: sellBalanceError?.message || sellBalanceError,
+    sellTokenBalance: sellTokenBalance?.formatted,
+    contractAddress: OTC_CONTRACT_ADDRESS
+  });
+  
+  // Log full error if present
+  if (sellBalanceError) {
+    console.error('❌ Balance Error Details:', sellBalanceError);
+  }
 
   // UI Debug logging
 
@@ -547,6 +544,10 @@ export function CreatePositionModal({
   const [showSellDropdown, setShowSellDropdown] = useState(false);
   const [showBuyDropdowns, setShowBuyDropdowns] = useState<boolean[]>([false]);
 
+  // Search state for token dropdowns
+  const [sellSearchQuery, setSellSearchQuery] = useState('');
+  const [buySearchQueries, setBuySearchQueries] = useState<string[]>(['']);
+
   // Refs for dropdown containers
   const sellDropdownRef = useRef<HTMLDivElement>(null);
   const buyDropdownRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -591,22 +592,31 @@ export function CreatePositionModal({
     return tokenStats[tokenKey] && token.ticker !== 'HEX';
   };
 
-  // Check for chain mismatch between sell and buy tokens
-  const hasChainMismatch = () => {
-    if (!sellToken || buyTokens.length === 0) return false;
+  // Check if combination is pHEX + PulseChain MAXI tokens (p* variants)
+  const isValidPulseChainCombo = () => {
+    if (!sellToken || buyTokens.length === 0 || !buyTokens[0]) return false;
     
-    const isEthereumWrappedSell = sellToken.ticker.startsWith('we') || sellToken.ticker.startsWith('e');
+    const isPulseChainMaxi = (token: TokenOption) => {
+      // Check if it's a PulseChain MAXI token (pMAXI, pDECI, pLUCKY, pTRIO, pBASE)
+      return token.ticker === 'MAXI' || token.ticker === 'DECI' || 
+             token.ticker === 'LUCKY' || token.ticker === 'TRIO' || token.ticker === 'BASE';
+    };
     
-    // Check if ANY buy token has a chain mismatch
-    return buyTokens.some(buyToken => {
-      if (!buyToken) return false;
-      const isEthereumWrappedBuy = buyToken.ticker.startsWith('we') || buyToken.ticker.startsWith('e');
-    return (isEthereumWrappedSell && !isEthereumWrappedBuy) || (!isEthereumWrappedSell && isEthereumWrappedBuy);
-    });
+    const isPHex = (token: TokenOption) => {
+      return token.ticker === 'HEX'; // PulseChain HEX
+    };
+    
+    // Check if one token is pHEX and the other is a PulseChain MAXI token
+    const sellIsPHex = isPHex(sellToken);
+    const buyIsPHex = buyTokens.some(token => token && isPHex(token));
+    const sellIsMaxi = isPulseChainMaxi(sellToken);
+    const buyIsMaxi = buyTokens.some(token => token && isPulseChainMaxi(token));
+    
+    return (sellIsPHex && buyIsMaxi) || (buyIsPHex && sellIsMaxi);
   };
   
-  const showSellStats = !hasChainMismatch() && shouldShowTokenStats(sellToken);
-  const showBuyStats = !hasChainMismatch() && buyTokens.some(token => shouldShowTokenStats(token));
+  const showSellStats = isValidPulseChainCombo() && shouldShowTokenStats(sellToken);
+  const showBuyStats = isValidPulseChainCombo() && buyTokens.some(token => shouldShowTokenStats(token));
   const gridColsClass = (showSellStats && showBuyStats) ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1';
 
   // Calculate OTC price in HEX terms for any token pair (uses first buy token)
@@ -648,29 +658,74 @@ export function CreatePositionModal({
     return null;
   }, [sellToken, buyTokens, sellAmount, buyAmounts, tokenPrices]);
 
-  // Get whitelisted token options for sell side
-  const sellTokenOptions: TokenOption[] = SELL_WHITELISTED_TOKENS.map(address => {
-    const tokenInfo = getTokenInfo(address);
-    return {
-      address,
-      ticker: tokenInfo.ticker,
-      name: tokenInfo.name,
-      logo: tokenInfo.logo,
-      decimals: tokenInfo.decimals
-    };
-  }).filter(token => token.ticker); // Filter out any invalid tokens
+  // Get whitelisted token options for sell side - show all tokens except those selected in buy
+  const sellTokenOptions: TokenOption[] = useMemo(() => {
+    const allTokens = SELL_WHITELISTED_TOKENS.map(address => {
+      const tokenInfo = getTokenInfo(address);
+      return {
+        address,
+        ticker: tokenInfo.ticker,
+        name: tokenInfo.name,
+        logo: tokenInfo.logo,
+        decimals: tokenInfo.decimals
+      };
+    }).filter(token => token.ticker); // Filter out any invalid tokens
+    
+    // Exclude tokens already selected in buy side
+    const availableTokens = allTokens.filter(token => {
+      const isSelectedInBuy = buyTokens.some(buyToken => 
+        buyToken && buyToken.address.toLowerCase() === token.address.toLowerCase()
+      );
+      return !isSelectedInBuy;
+    });
+    
+    // Filter by search query
+    if (sellSearchQuery.trim() === '') return availableTokens;
+    
+    const query = sellSearchQuery.toLowerCase();
+    return availableTokens.filter(token => 
+      token.ticker.toLowerCase().includes(query) || 
+      token.name.toLowerCase().includes(query)
+    );
+  }, [sellSearchQuery, buyTokens]);
 
-  // Get whitelisted token options for buy side
-  const buyTokenOptions: TokenOption[] = BUY_WHITELISTED_TOKENS.map(address => {
-    const tokenInfo = getTokenInfo(address);
-    return {
-      address,
-      ticker: tokenInfo.ticker,
-      name: tokenInfo.name,
-      logo: tokenInfo.logo,
-      decimals: tokenInfo.decimals
-    };
-  }).filter(token => token.ticker); // Filter out any invalid tokens
+  // Get whitelisted token options for buy side - show all tokens except sell token and other selected buy tokens
+  const getBuyTokenOptions = (index: number): TokenOption[] => {
+    const allTokens = BUY_WHITELISTED_TOKENS.map(address => {
+      const tokenInfo = getTokenInfo(address);
+      return {
+        address,
+        ticker: tokenInfo.ticker,
+        name: tokenInfo.name,
+        logo: tokenInfo.logo,
+        decimals: tokenInfo.decimals
+      };
+    }).filter(token => token.ticker); // Filter out any invalid tokens
+    
+    // Exclude sell token and tokens already selected in other buy slots
+    const availableTokens = allTokens.filter(token => {
+      // Exclude if it's the sell token
+      if (sellToken && token.address.toLowerCase() === sellToken.address.toLowerCase()) {
+        return false;
+      }
+      
+      // Exclude if it's already selected in another buy token slot
+      const isSelectedInOtherBuySlot = buyTokens.some((buyToken, idx) => 
+        idx !== index && buyToken && buyToken.address.toLowerCase() === token.address.toLowerCase()
+      );
+      return !isSelectedInOtherBuySlot;
+    });
+    
+    // Filter by search query
+    const searchQuery = buySearchQueries[index] || '';
+    if (searchQuery.trim() === '') return availableTokens;
+    
+    const query = searchQuery.toLowerCase();
+    return availableTokens.filter(token => 
+      token.ticker.toLowerCase().includes(query) || 
+      token.name.toLowerCase().includes(query)
+    );
+  };
 
   // Helper function to get token index from address (for sell tokens)
   const getSellTokenIndex = (address: string): number => {
@@ -682,13 +737,10 @@ export function CreatePositionModal({
 
   // Helper function to get token index from address (for buy tokens)
   const getBuyTokenIndex = (address: string): number => {
-    // Find the contract index, not the position in BUY_WHITELISTED_TOKENS
-    for (const [index, tokenAddress] of Object.entries(CONTRACT_WHITELIST_MAP)) {
-      if (tokenAddress.toLowerCase() === address.toLowerCase()) {
-        return parseInt(index);
-      }
-    }
-    return -1;
+    const index = BUY_WHITELISTED_TOKENS.findIndex(tokenAddress =>
+      tokenAddress.toLowerCase() === address.toLowerCase()
+    );
+    return index;
   };
 
   // Handle MAX button clicks
@@ -709,6 +761,7 @@ export function CreatePositionModal({
     setBuyAmounts([...buyAmounts, '']);
     setBuyAmountErrors([...buyAmountErrors, null]);
     setShowBuyDropdowns([...showBuyDropdowns, false]);
+    setBuySearchQueries([...buySearchQueries, '']); // Add empty search query for new dropdown
   };
 
   // Remove a buy token field
@@ -718,6 +771,7 @@ export function CreatePositionModal({
       setBuyAmounts(buyAmounts.filter((_, i) => i !== index));
       setBuyAmountErrors(buyAmountErrors.filter((_, i) => i !== index));
       setShowBuyDropdowns(showBuyDropdowns.filter((_, i) => i !== index));
+      setBuySearchQueries(buySearchQueries.filter((_, i) => i !== index)); // Remove search query as well
       setDuplicateTokenError(null); // Clear duplicate error when removing
     }
   };
@@ -740,28 +794,6 @@ export function CreatePositionModal({
     return false;
   };
 
-  // Check for MAXI token presence - runs whenever tokens change
-  useEffect(() => {
-    if (!sellToken || buyTokens.length === 0 || !buyTokens[0]) {
-      setMaxiTokenError(null);
-      return;
-    }
-
-    const isMaxiToken = (address: string) => {
-      return MAXI_TOKENS.some(
-        maxiAddress => maxiAddress.toLowerCase() === address.toLowerCase()
-      );
-    };
-
-    const sellIsMaxiToken = isMaxiToken(sellToken.address);
-    const anyBuyIsMaxiToken = buyTokens.some(token => token && isMaxiToken(token.address));
-
-    if (!sellIsMaxiToken && !anyBuyIsMaxiToken) {
-      setMaxiTokenError('At least one token must be a MAXI token (MAXI, DECI, LUCKY, TRIO, BASE, or their wrapped versions)');
-    } else {
-      setMaxiTokenError(null);
-    }
-  }, [sellToken, buyTokens]);
 
   // Manual balance check for debugging
   const checkBalanceManually = async () => {
@@ -807,11 +839,8 @@ export function CreatePositionModal({
       return;
     }
 
-    // Check for duplicate buy tokens
-    if (checkDuplicateTokens(buyTokens)) {
-      setOrderError(duplicateTokenError || 'Duplicate tokens detected');
-      return;
-    }
+    // Note: Duplicate token checking is no longer needed since we filter out
+    // selected tokens from dropdowns, preventing duplicates at the UI level
 
     // Check if the sell token matches any buy token
     for (const buyToken of buyTokens) {
@@ -819,12 +848,6 @@ export function CreatePositionModal({
       setOrderError(`Cannot trade ${sellToken.ticker} for ${buyToken.ticker}. Please select different tokens for your offer and ask.`);
       return;
       }
-    }
-
-    // MAXI token check (already validated in real-time, but check again for safety)
-    if (maxiTokenError) {
-      setOrderError(maxiTokenError);
-      return;
     }
 
     // Strict validation before submission
@@ -933,6 +956,7 @@ export function CreatePositionModal({
   const handleSellTokenSelect = (token: TokenOption) => {
     setSellToken(token);
     setShowSellDropdown(false);
+    setSellSearchQuery(''); // Clear search on selection
   };
 
   const handleBuyTokenSelect = (token: TokenOption, index: number) => {
@@ -944,8 +968,13 @@ export function CreatePositionModal({
     newDropdowns[index] = false;
     setShowBuyDropdowns(newDropdowns);
     
-    // Check for duplicates
-    checkDuplicateTokens(newBuyTokens);
+    // Clear search on selection
+    const newSearchQueries = [...buySearchQueries];
+    newSearchQueries[index] = '';
+    setBuySearchQueries(newSearchQueries);
+    
+    // Note: checkDuplicateTokens is no longer needed since we filter out
+    // selected tokens from dropdowns, preventing duplicates at the UI level
   };
 
   const handleSellDropdownToggle = () => {
@@ -1092,6 +1121,8 @@ export function CreatePositionModal({
                               src={sellToken.logo}
                               alt={sellToken.ticker}
                               className="w-6 h-6 rounded-full"
+                              loading="eager"
+                              decoding="async"
                               onError={(e) => {
                                 e.currentTarget.src = '/coin-logos/default.svg';
                               }}
@@ -1109,27 +1140,53 @@ export function CreatePositionModal({
 
                     {/* Dropdown */}
                     {showSellDropdown && (
-                      <div className="absolute top-full left-0 right-0 mt-1 bg-black border border-gray-600 rounded-lg max-h-60 overflow-y-auto scrollbar-hide z-10">
-                        {sellTokenOptions.map((token) => (
-                          <button
-                            key={token.address}
-                            onClick={() => handleSellTokenSelect(token)}
-                            className="w-full p-3 flex items-center space-x-3 hover:bg-white/5 transition-colors text-left"
-                          >
-                            <img
-                              src={token.logo}
-                              alt={token.ticker}
-                              className="w-6 h-6 rounded-full"
-                              onError={(e) => {
-                                e.currentTarget.src = '/coin-logos/default.svg';
-                              }}
+                      <div className="absolute top-full left-0 right-0 mt-1 bg-black border border-gray-600 rounded-lg z-10">
+                        {/* Search Input */}
+                        <div className="p-3 border-b border-gray-600 sticky top-0 bg-black">
+                          <div className="relative">
+                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <Input
+                              type="text"
+                              placeholder="Search tokens..."
+                              value={sellSearchQuery}
+                              onChange={(e) => setSellSearchQuery(e.target.value)}
+                              className="pl-10 bg-white/5 border-gray-600 text-white placeholder-gray-400"
+                              onClick={(e) => e.stopPropagation()}
                             />
-                            <div>
-                              <div className="text-white font-medium">{formatTokenTicker(token.ticker)}</div>
-                              <div className="text-gray-400 text-xs">{token.name}</div>
+                          </div>
+                        </div>
+                        
+                        {/* Token List */}
+                        <div className="max-h-60 overflow-y-auto scrollbar-hide">
+                          {sellTokenOptions.length > 0 ? (
+                            sellTokenOptions.map((token) => (
+                              <button
+                                key={token.address}
+                                onClick={() => handleSellTokenSelect(token)}
+                                className="w-full p-3 flex items-center space-x-3 hover:bg-white/5 transition-colors text-left"
+                              >
+                                <img
+                                  src={token.logo}
+                                  alt={token.ticker}
+                                  className="w-6 h-6 rounded-full"
+                                  loading="lazy"
+                                  decoding="async"
+                                  onError={(e) => {
+                                    e.currentTarget.src = '/coin-logos/default.svg';
+                                  }}
+                                />
+                                <div>
+                                  <div className="text-white font-medium">{formatTokenTicker(token.ticker)}</div>
+                                  <div className="text-gray-400 text-xs">{token.name}</div>
+                                </div>
+                              </button>
+                            ))
+                          ) : (
+                            <div className="p-4 text-center text-gray-400 text-sm">
+                              No tokens found
                             </div>
-                          </button>
-                        ))}
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1250,6 +1307,8 @@ export function CreatePositionModal({
                               src={buyToken.logo}
                               alt={buyToken.ticker}
                               className="w-6 h-6 rounded-full"
+                              loading="eager"
+                              decoding="async"
                               onError={(e) => {
                                 e.currentTarget.src = '/coin-logos/default.svg';
                               }}
@@ -1281,27 +1340,57 @@ export function CreatePositionModal({
 
                     {/* Dropdown */}
                               {showBuyDropdowns[index] && (
-                      <div className="absolute top-full left-0 right-0 mt-1 bg-black border border-gray-600 rounded-lg max-h-60 overflow-y-auto scrollbar-hide z-10">
-                        {buyTokenOptions.map((token) => (
-                          <button
-                            key={token.address}
-                                      onClick={() => handleBuyTokenSelect(token, index)}
-                            className="w-full p-3 flex items-center space-x-3 hover:bg-white/5 transition-colors text-left"
-                          >
-                            <img
-                              src={token.logo}
-                              alt={token.ticker}
-                              className="w-6 h-6 rounded-full"
-                              onError={(e) => {
-                                e.currentTarget.src = '/coin-logos/default.svg';
+                      <div className="absolute top-full left-0 right-0 mt-1 bg-black border border-gray-600 rounded-lg z-10">
+                        {/* Search Input */}
+                        <div className="p-3 border-b border-gray-600 sticky top-0 bg-black">
+                          <div className="relative">
+                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <Input
+                              type="text"
+                              placeholder="Search tokens..."
+                              value={buySearchQueries[index] || ''}
+                              onChange={(e) => {
+                                const newQueries = [...buySearchQueries];
+                                newQueries[index] = e.target.value;
+                                setBuySearchQueries(newQueries);
                               }}
+                              className="pl-10 bg-white/5 border-gray-600 text-white placeholder-gray-400"
+                              onClick={(e) => e.stopPropagation()}
                             />
-                            <div>
-                              <div className="text-white font-medium">{formatTokenTicker(token.ticker)}</div>
-                              <div className="text-gray-400 text-xs">{token.name}</div>
+                          </div>
+                        </div>
+                        
+                        {/* Token List */}
+                        <div className="max-h-60 overflow-y-auto scrollbar-hide">
+                          {getBuyTokenOptions(index).length > 0 ? (
+                            getBuyTokenOptions(index).map((token) => (
+                              <button
+                                key={token.address}
+                                        onClick={() => handleBuyTokenSelect(token, index)}
+                                className="w-full p-3 flex items-center space-x-3 hover:bg-white/5 transition-colors text-left"
+                              >
+                                <img
+                                  src={token.logo}
+                                  alt={token.ticker}
+                                  className="w-6 h-6 rounded-full"
+                                  loading="lazy"
+                                  decoding="async"
+                                  onError={(e) => {
+                                    e.currentTarget.src = '/coin-logos/default.svg';
+                                  }}
+                                />
+                                <div>
+                                  <div className="text-white font-medium">{formatTokenTicker(token.ticker)}</div>
+                                  <div className="text-gray-400 text-xs">{token.name}</div>
+                                </div>
+                              </button>
+                            ))
+                          ) : (
+                            <div className="p-4 text-center text-gray-400 text-sm">
+                              No tokens found
                             </div>
-                          </button>
-                        ))}
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1420,6 +1509,7 @@ export function CreatePositionModal({
                       <span className="text-gray-400">Your Offer:</span>
                       <span className="text-white font-medium">{formatBalanceDisplay(removeCommas(sellAmount))} {formatTokenTicker(sellToken.ticker)}</span>
                     </div>
+                    
                     {buyTokens.map((token, index) => {
                       const amount = buyAmounts[index];
                       if (!token || !amount || amount.trim() === '') return null;
@@ -1435,44 +1525,37 @@ export function CreatePositionModal({
                       );
                     })}
                     
-                    {/* Show fees for each token */}
-                    {buyTokens.some((token, index) => token && buyAmounts[index] && buyAmounts[index].trim() !== '') && (
-                      <>
-                        {buyTokens.map((token, index) => {
-                          const amount = buyAmounts[index];
-                          if (!token || !amount || amount.trim() === '') return null;
-                          return (
-                            <div key={`fee-${index}`} className="flex justify-between items-center">
-                              <span className="text-gray-400">
-                                {index === 0 ? (
-                                  <>
-                                    MAX Fee{buyTokens.filter((t, idx) => t && buyAmounts[idx] && buyAmounts[idx].trim() !== '').length > 1 ? ' (Either of)' : ''}:
-                        <div className="text-xs text-gray-500 mt-1">Max 1% fee deducted from buyer at sale (0.5% with NFT)</div>
-                                  </>
-                                ) : ''}
-                              </span>
-                              <span className="text-red-400 font-medium">
-                                -{formatBalanceDisplay((parseFloat(removeCommas(amount)) * 0.01).toFixed(4))} {formatTokenTicker(token.ticker)}
-                              </span>
-                      </div>
-                          );
-                        })}
-                      </>
-                    )}
+                    {/* Show fee deducted from buyer */}
+                    {buyTokens.filter((t, idx) => t && buyAmounts[idx] && buyAmounts[idx].trim() !== '').map((token, index) => {
+                      const amount = buyAmounts[buyTokens.indexOf(token)];
+                      if (!token || !amount || amount.trim() === '') return null;
+                      return (
+                        <div key={`fee-${index}`} className="flex justify-between items-center">
+                          <span className="text-gray-400">
+                            {index === 0 ? 'Fee (0.2%):' : ''}
+                          </span>
+                          <span className="text-red-400 font-medium">
+                            -{formatBalanceDisplay((parseFloat(removeCommas(amount)) * 0.002).toFixed(4))} {formatTokenTicker(token.ticker)}
+                          </span>
+                        </div>
+                      );
+                    })}
 
-                    <div className="border-t border-white/10 pt-3 space-y-3">
-                      {buyTokens.map((token, index) => {
-                        const amount = buyAmounts[index];
+                    <div className="border-t border-white/10 pt-3">
+                      {buyTokens.filter((t, idx) => t && buyAmounts[idx] && buyAmounts[idx].trim() !== '').map((token, index) => {
+                        const filteredBuyTokens = buyTokens.filter((t, idx) => t && buyAmounts[idx] && buyAmounts[idx].trim() !== '');
+                        const amount = buyAmounts[buyTokens.indexOf(token)];
                         if (!token || !amount || amount.trim() === '') return null;
+                        const amountAfterFee = parseFloat(removeCommas(amount)) * 0.998; // Subtract 0.2% fee
                         return (
-                          <div key={`receive-${index}`} className="flex justify-between items-center">
+                          <div key={`receive-${index}`} className="flex justify-between items-center mb-2 last:mb-0">
                             <span className="text-white font-semibold">
-                              {index === 0 ? `You Receive${buyTokens.filter((t, idx) => t && buyAmounts[idx] && buyAmounts[idx].trim() !== '').length > 1 ? ' (Either of)' : ''}:` : ''}
+                              {index === 0 ? `You Receive${filteredBuyTokens.length > 1 ? ' (Either of)' : ''}:` : ''}
                             </span>
                             <span className="text-white font-bold">
-                              {formatBalanceDisplay((parseFloat(removeCommas(amount)) * 0.99).toFixed(4))} {formatTokenTicker(token.ticker)}
+                              {formatBalanceDisplay(amountAfterFee.toFixed(6))} {formatTokenTicker(token.ticker)}
                             </span>
-                      </div>
+                          </div>
                         );
                       })}
                     </div>
@@ -1561,6 +1644,8 @@ export function CreatePositionModal({
                               src={sellToken.logo}
                               alt={sellToken.ticker}
                               className="w-5 h-5 rounded-full"
+                              loading="eager"
+                              decoding="async"
                               onError={(e) => {
                                 e.currentTarget.src = '/coin-logos/default.svg';
                               }}
@@ -1704,6 +1789,8 @@ export function CreatePositionModal({
                               src={buyToken.logo}
                               alt={buyToken.ticker}
                               className="w-5 h-5 rounded-full"
+                              loading="eager"
+                              decoding="async"
                               onError={(e) => {
                                 e.currentTarget.src = '/coin-logos/default.svg';
                               }}
@@ -1928,15 +2015,6 @@ export function CreatePositionModal({
               </div>
             )}
 
-            {/* MAXI Token Warning */}
-            {maxiTokenError && (
-              <div className="mt-4 p-3 bg-yellow-900/20 border border-yellow-500/30 rounded-lg">
-                <p className="text-yellow-400 text-sm">
-                  ⚠️ {maxiTokenError}
-                </p>
-              </div>
-            )}
-
             {/* Approval Error Display */}
             {approvalError && (
               <div className="mt-4 p-3 bg-red-900/20 border border-red-500/30 rounded-lg max-h-32 overflow-y-auto">
@@ -1975,7 +2053,6 @@ export function CreatePositionModal({
                   !!isLocalApproving || 
                   !isWalletConnected || 
                   !!duplicateTokenError ||
-                  !!maxiTokenError ||
                   (sellToken && buyTokens.some(buyToken => buyToken && sellToken.address === buyToken.address))
                 }
                 className={`px-6 py-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${needsApproval && tokenNeedsApproval

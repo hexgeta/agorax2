@@ -2,7 +2,6 @@
 
 import { useAccount, useSwitchChain } from 'wagmi';
 import { ChevronDown } from 'lucide-react';
-import Image from 'next/image';
 import { motion } from 'framer-motion';
 import {
   DropdownMenu,
@@ -29,37 +28,54 @@ export function ChainSwitcher({ isCheckingConnection }: { isCheckingConnection: 
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.5 }}
-      className="flex-[0.3] md:flex-none"
     >
       <DropdownMenu>
-        <DropdownMenuTrigger className="flex items-center justify-center gap-2 md:gap-3 px-3 md:px-4 h-10 bg-black/40 border border-white/30 rounded-md hover:bg-white/10 transition-colors w-full md:w-[220px] focus:outline-none focus-visible:outline-none">
-          <Image
-            src={currentChain.icon}
-            alt={currentChain.name}
-            width={20}
-            height={20}
-            className="w-3 h-3 md:w-4 md:h-4"
-          />
-          <span className="text-white font-medium hidden md:inline">{currentChain.name}</span>
-          <ChevronDown className="w-3 h-3 md:w-4 md:h-4 text-white/70" />
+        <DropdownMenuTrigger className="flex items-center justify-center gap-2 md:gap-3 px-3 md:px-4 h-12 bg-black/40 border border-[#00D9FF]/30 hover:bg-[#00D9FF]/10 transition-colors w-full md:w-[220px] rounded-none focus:outline-none focus-visible:outline-none">
+          <div 
+            className="w-3 h-3 md:w-4 md:h-4 relative"
+            style={{ 
+              WebkitMaskImage: `url(${currentChain.icon})`,
+              WebkitMaskSize: 'contain',
+              WebkitMaskRepeat: 'no-repeat',
+              WebkitMaskPosition: 'center',
+              maskImage: `url(${currentChain.icon})`,
+              maskSize: 'contain',
+              maskRepeat: 'no-repeat',
+              maskPosition: 'center',
+            }}
+            aria-label={currentChain.name}
+          >
+            <div className="absolute inset-0 bg-[#00D9FF]" />
+          </div>
+          <span className="text-[#00D9FF] font-medium hidden md:inline">{currentChain.name}</span>
+          <ChevronDown className="w-3 h-3 md:w-4 md:h-4 text-[#00D9FF]/70" />
         </DropdownMenuTrigger>
-        <DropdownMenuContent className="bg-black/95 border rounded-md border-white/10 backdrop-blur-sm z-[200] md:w-[220px]">
+        <DropdownMenuContent className="bg-black/95 border border-[#00D9FF]/10 backdrop-blur-sm z-[200] w-full md:w-[220px] rounded-lg">
           {CHAINS.map((chainOption) => (
             <DropdownMenuItem
               key={chainOption.id}
               onClick={() => switchChain({ chainId: chainOption.id })}
-              className="group flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2 cursor-pointer text-white hover:text-black hover:bg-white data-[highlighted]:bg-white data-[highlighted]:text-black focus-visible:outline-none text-xs md:text-base transition-colors"
+              className="group flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2 cursor-pointer text-[#00D9FF] hover:text-black hover:bg-[#00D9FF] data-[highlighted]:bg-[#00D9FF] data-[highlighted]:text-black focus-visible:outline-none text-xs md:text-base transition-colors"
             >
-              <Image
-                src={chainOption.icon}
-                alt={chainOption.name}
-                width={20}
-                height={20}
-                className="w-3 h-3 md:w-4 md:h-4 group-hover:brightness-0 group-data-[highlighted]:brightness-0 transition-all"
-              />
+              <div 
+                className="w-3 h-3 md:w-4 md:h-4 relative"
+                style={{ 
+                  WebkitMaskImage: `url(${chainOption.icon})`,
+                  WebkitMaskSize: 'contain',
+                  WebkitMaskRepeat: 'no-repeat',
+                  WebkitMaskPosition: 'center',
+                  maskImage: `url(${chainOption.icon})`,
+                  maskSize: 'contain',
+                  maskRepeat: 'no-repeat',
+                  maskPosition: 'center',
+                }}
+                aria-label={chainOption.name}
+              >
+                <div className="absolute inset-0 bg-[#00D9FF] group-hover:bg-black group-data-[highlighted]:bg-black transition-colors" />
+              </div>
               <span className="hidden md:inline">{chainOption.name}</span>
               {chain?.id === chainOption.id && (
-                <span className="ml-auto text-green-400">✓</span>
+                <span className="ml-auto text-[#FF00D9]">✓</span>
               )}
             </DropdownMenuItem>
           ))}

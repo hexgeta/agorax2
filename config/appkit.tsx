@@ -10,7 +10,7 @@ if (!projectId) {
   throw new Error('Project ID is not defined')
 }
 
-// Define PulseChain network
+// Define PulseChain Mainnet network
 const pulsechain: AppKitNetwork = {
   id: 369,
   name: 'PulseChain',
@@ -30,10 +30,37 @@ const pulsechain: AppKitNetwork = {
   testnet: false,
 }
 
-// Testnet network (only included when TESTING_MODE is enabled)
+// Testnet network with explicit configuration
 const pulsechainTestnet: AppKitNetwork = {
-  ...PULSECHAIN_TESTNET_CONFIG,
+  id: 943,
+  name: 'PLS Testnet',
   network: 'pulsechain-testnet',
+  nativeCurrency: {
+    name: 'Test PLS',
+    symbol: 'tPLS',
+    decimals: 18,
+  },
+  rpcUrls: {
+    default: { 
+      http: [
+        'https://rpc.v4.testnet.pulsechain.com',
+        'https://pulsechain-testnet-rpc.publicnode.com',
+      ] 
+    },
+    public: { 
+      http: [
+        'https://rpc.v4.testnet.pulsechain.com',
+        'https://pulsechain-testnet-rpc.publicnode.com',
+      ] 
+    },
+  },
+  blockExplorers: {
+    default: { 
+      name: 'PulseChain Testnet Explorer', 
+      url: 'https://scan.v4.testnet.pulsechain.com' 
+    },
+  },
+  testnet: true,
 }
 
 // Build networks array - include testnet first if testing mode is enabled
@@ -43,11 +70,14 @@ const networksArray: AppKitNetwork[] = TESTING_MODE
 
 export const networks = networksArray as [AppKitNetwork, ...AppKitNetwork[]]
 
-//Set up the Wagmi Adapter (Config)
+// Set up the Wagmi Adapter (Config) with explicit configuration
 export const wagmiAdapter = new WagmiAdapter({
   ssr: true,
   projectId,
-  networks
+  networks,
+  transports: {
+    // Explicitly configure transports if needed
+  }
 })
 
 export const config = wagmiAdapter.wagmiConfig

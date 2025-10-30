@@ -3,8 +3,7 @@ import { createPublicClient, http } from 'viem';
 import { Address } from 'viem';
 import { useAccount } from 'wagmi';
 import { getContractAddress, PULSECHAIN_CHAIN_ID, PULSECHAIN_TESTNET_CHAIN_ID } from '@/config/testing';
-import { useContract } from '@/context/ContractContext';
-import { getContractABI } from '@/config/abis';
+import { CONTRACT_ABI } from '@/config/abis';
 
 // RPC endpoints per chain
 const RPC_ENDPOINTS = {
@@ -98,22 +97,25 @@ function createClient(chainId: number) {
 }
 
 // Helper function to fetch contract data
-async function fetchContractData(contractAddress: Address, chainId: number, contractType: 'BISTRO' | 'AGORAX') {
+async function fetchContractData(contractAddress: Address, chainId: number) {
+  console.log('🔧 fetchContractData starting', { contractAddress, chainId });
+  
   try {
     if (!contractAddress) {
+      console.error('❌ No contract address provided');
       throw new Error('No contract address provided');
     }
     
     // Create client only when needed (client-side only)
     const client = createClient(chainId);
-    
-    // Get the correct ABI for the contract type
-    const contractABI = getContractABI(contractType);
+    console.log('✅ RPC client created');
     
     // Test basic connectivity first
     try {
       const blockNumber = await client.getBlockNumber();
+      console.log('✅ RPC connection OK, block number:', blockNumber);
     } catch (rpcError) {
+      console.error('❌ RPC connection failed:', rpcError);
       throw rpcError;
     }
     
@@ -121,7 +123,7 @@ async function fetchContractData(contractAddress: Address, chainId: number, cont
     const [contractName, contractOwner, contractSymbol, totalSupply, orderCounter] = await Promise.all([
       client.readContract({
         address: contractAddress,
-        abi: contractABI,
+        abi: CONTRACT_ABI,
         functionName: 'name',
       }).catch(err => {
         return null;
@@ -129,7 +131,7 @@ async function fetchContractData(contractAddress: Address, chainId: number, cont
       
       client.readContract({
         address: contractAddress,
-        abi: contractABI,
+        abi: CONTRACT_ABI,
         functionName: 'owner',
       }).catch(err => {
         return null;
@@ -137,7 +139,7 @@ async function fetchContractData(contractAddress: Address, chainId: number, cont
       
       client.readContract({
         address: contractAddress,
-        abi: contractABI,
+        abi: CONTRACT_ABI,
         functionName: 'symbol',
       }).catch(err => {
         return null;
@@ -145,7 +147,7 @@ async function fetchContractData(contractAddress: Address, chainId: number, cont
       
       client.readContract({
         address: contractAddress,
-        abi: contractABI,
+        abi: CONTRACT_ABI,
         functionName: 'totalSupply',
       }).catch(err => {
         return null;
@@ -153,7 +155,7 @@ async function fetchContractData(contractAddress: Address, chainId: number, cont
       
       client.readContract({
         address: contractAddress,
-        abi: contractABI,
+        abi: CONTRACT_ABI,
         functionName: 'getOrderCounter',
       }).catch(err => {
         return null;
@@ -181,7 +183,7 @@ async function fetchContractData(contractAddress: Address, chainId: number, cont
         const batchPromises = batch.map(orderId => 
           client.readContract({
             address: contractAddress,
-            abi: contractABI,
+            abi: CONTRACT_ABI,
             functionName: 'getOrderDetails',
             args: [BigInt(orderId)],
           }).catch(err => {
@@ -212,7 +214,7 @@ async function fetchContractData(contractAddress: Address, chainId: number, cont
     const cancelledOrders = allOrders.filter(order => order.orderDetailsWithId.status === 1);
 
 
-    return {
+    const result = {
       contractName: contractName as string | null,
       contractOwner: contractOwner as Address | null,
       contractSymbol: contractSymbol as string | null,
@@ -223,7 +225,17 @@ async function fetchContractData(contractAddress: Address, chainId: number, cont
       completedOrders: completedOrders,
       cancelledOrders: cancelledOrders,
     };
+    
+    console.log('✅ fetchContractData returning:', {
+      contractName,
+      orderCount: allOrders.length,
+      activeCount: activeOrders.length,
+      orderCounter: orderCounter?.toString()
+    });
+    
+    return result;
   } catch (error) {
+    console.error('❌ fetchContractData error:', error);
     return {
       contractName: null,
       contractOwner: null,
@@ -239,9 +251,8 @@ async function fetchContractData(contractAddress: Address, chainId: number, cont
 }
 
 export function useOpenPositions() {
-  const { chainId } = useAccount();
-  const { activeContract } = useContract();
-  const contractAddress = getContractAddress(chainId, activeContract);
+  const { chainId, isConnected } = useAccount();
+  const contractAddress = getContractAddress(chainId);
   
   const [data, setData] = useState<{
     contractName: string | null;
@@ -254,35 +265,54 @@ export function useOpenPositions() {
     completedOrders: CompleteOrderDetails[];
     cancelledOrders: CompleteOrderDetails[];
   } | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [isClient, setIsClient] = useState(false);
 
   const fetchData = useCallback(async () => {
-    if (!isClient) return;
+    console.log('📊 useOpenPositions fetchData called', { isClient, isConnected, contractAddress, chainId });
+    
+    if (!isClient) {
+      console.log('⏳ Waiting for client to initialize...');
+      return;
+    }
+    
+    // Don't fetch if wallet is not connected
+    if (!isConnected) {
+      console.log('👛 Wallet not connected, skipping fetch');
+      setIsLoading(false);
+      return;
+    }
+    
     if (!contractAddress || !chainId) {
+      console.error('❌ Contract not deployed on chain', { contractAddress, chainId });
       setError(new Error('Contract not deployed on this chain'));
       setIsLoading(false);
       return;
     }
     
+    console.log('🚀 Starting data fetch for contract:', contractAddress, 'on chain:', chainId);
     setIsLoading(true);
     setError(null);
     
     try {
-      const result = await fetchContractData(contractAddress as Address, chainId, activeContract);
+      const result = await fetchContractData(contractAddress as Address, chainId);
+      console.log('✅ Data fetched successfully:', result);
       setData(result);
       
       // If all data is null, there might be an issue
       if (!result.contractName && !result.contractOwner && !result.contractSymbol && !result.totalSupply && !result.orderCounter) {
+        console.error('❌ All contract calls returned null');
         setError(new Error('All contract calls failed. Check console for details.'));
       }
     } catch (err) {
+      console.error('❌ Error fetching contract data:', err);
       setError(err as Error);
     } finally {
       setIsLoading(false);
+      console.log('✅ Fetch complete');
     }
-  }, [isClient, contractAddress, chainId, activeContract]);
+  }, [isClient, isConnected, contractAddress, chainId]);
 
   useEffect(() => {
     setIsClient(true);

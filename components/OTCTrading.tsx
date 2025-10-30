@@ -68,7 +68,8 @@ export function OTCTrading() {
       // Calculate expiration time (current time + days)
       const expirationTime = Math.floor(Date.now() / 1000) + (parseInt(formData.expirationDays) * 24 * 60 * 60);
       
-      const sellToken = activeTab === 'sell' ? formData.tokenAddress as Address : '0x000000000000000000000000000000000000dEaD' as Address;
+      // AgoraX uses 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE for native PLS
+      const sellToken = activeTab === 'sell' ? formData.tokenAddress as Address : '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE' as Address;
       const sellAmount = activeTab === 'sell' ? parseEther(formData.amount) : parseEther(formData.price);
       
       // For buy orders, we're selling ETH for tokens

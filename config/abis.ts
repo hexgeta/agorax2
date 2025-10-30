@@ -1,249 +1,9 @@
 /**
- * Contract ABIs for different contract types
+ * AgoraX Contract ABI
+ * 
+ * This file contains the ABI for the AgoraX smart contract.
+ * AgoraX is a decentralized limit order platform with simplified fee structure.
  */
-
-// Bistro/OTC Contract ABI
-export const BISTRO_ABI = [
-  // Place Order
-  {
-    "inputs": [
-      {
-        "components": [
-          {
-            "internalType": "address",
-            "name": "sellToken",
-            "type": "address"
-          },
-          {
-            "internalType": "uint256",
-            "name": "sellAmount",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256[]",
-            "name": "buyTokensIndex",
-            "type": "uint256[]"
-          },
-          {
-            "internalType": "uint256[]",
-            "name": "buyAmounts",
-            "type": "uint256[]"
-          },
-          {
-            "internalType": "uint256",
-            "name": "expirationTime",
-            "type": "uint256"
-          }
-        ],
-        "internalType": "struct OTC.OrderDetails",
-        "name": "_orderDetails",
-        "type": "tuple"
-      }
-    ],
-    "name": "placeOrder",
-    "outputs": [],
-    "stateMutability": "payable",
-    "type": "function"
-  },
-  // Cancel Order
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "_orderId",
-        "type": "uint256"
-      }
-    ],
-    "name": "cancelOrder",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  // Execute Order (Bistro specific)
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "_orderId",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "_buyTokenIndexInOrder",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "_buyAmount",
-        "type": "uint256"
-      }
-    ],
-    "name": "executeOrder",
-    "outputs": [],
-    "stateMutability": "payable",
-    "type": "function"
-  },
-  // Redeem Order
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "_orderId",
-        "type": "uint256"
-      }
-    ],
-    "name": "redeemOrder",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  // Get Order Counter
-  {
-    "inputs": [],
-    "name": "getOrderCounter",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  // Get Order Details
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "_orderId",
-        "type": "uint256"
-      }
-    ],
-    "name": "getOrderDetails",
-    "outputs": [
-      {
-        "components": [
-          {
-            "components": [
-              {
-                "internalType": "uint256",
-                "name": "orderIndex",
-                "type": "uint256"
-              },
-              {
-                "internalType": "address",
-                "name": "orderOwner",
-                "type": "address"
-              }
-            ],
-            "internalType": "struct OTC.UserOrderDetails",
-            "name": "userDetails",
-            "type": "tuple"
-          },
-          {
-            "components": [
-              {
-                "internalType": "uint256",
-                "name": "orderId",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint256",
-                "name": "remainingExecutionPercentage",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint256",
-                "name": "redemeedPercentage",
-                "type": "uint256"
-              },
-              {
-                "internalType": "uint32",
-                "name": "lastUpdateTime",
-                "type": "uint32"
-              },
-              {
-                "internalType": "enum OTC.OrderStatus",
-                "name": "status",
-                "type": "uint8"
-              },
-              {
-                "components": [
-                  {
-                    "internalType": "address",
-                    "name": "sellToken",
-                    "type": "address"
-                  },
-                  {
-                    "internalType": "uint256",
-                    "name": "sellAmount",
-                    "type": "uint256"
-                  },
-                  {
-                    "internalType": "uint256[]",
-                    "name": "buyTokensIndex",
-                    "type": "uint256[]"
-                  },
-                  {
-                    "internalType": "uint256[]",
-                    "name": "buyAmounts",
-                    "type": "uint256[]"
-                  },
-                  {
-                    "internalType": "uint256",
-                    "name": "expirationTime",
-                    "type": "uint256"
-                  }
-                ],
-                "internalType": "struct OTC.OrderDetails",
-                "name": "orderDetails",
-                "type": "tuple"
-              }
-            ],
-            "internalType": "struct OTC.OrderDetailsWithId",
-            "name": "orderDetailsWithId",
-            "type": "tuple"
-          }
-        ],
-        "internalType": "struct OTC.CompleteOrderDetails",
-        "name": "",
-        "type": "tuple"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  // View functions
-  {
-    "inputs": [],
-    "name": "name",
-    "outputs": [{ "internalType": "string", "name": "", "type": "string" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "symbol",
-    "outputs": [{ "internalType": "string", "name": "", "type": "string" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "totalSupply",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "owner",
-    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
-    "stateMutability": "view",
-    "type": "function"
-  }
-] as const;
 
 // AgoraX Contract ABI
 export const AGORAX_ABI = [
@@ -354,7 +114,7 @@ export const AGORAX_ABI = [
     "stateMutability": "view",
     "type": "function"
   },
-  // Get Order Details (different structure than Bistro)
+  // Get Order Details
   {
     "inputs": [
       {
@@ -749,8 +509,11 @@ export const AGORAX_ABI = [
   }
 ] as const;
 
-// Helper to get the correct ABI based on contract type
-export function getContractABI(contractType: 'BISTRO' | 'AGORAX') {
-  return contractType === 'BISTRO' ? BISTRO_ABI : AGORAX_ABI;
+// Export the AgoraX ABI as the default contract ABI
+export const CONTRACT_ABI = AGORAX_ABI;
+
+// Helper function for backwards compatibility
+export function getContractABI() {
+  return AGORAX_ABI;
 }
 

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=League+Spartan:wght@100;200;300;400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,7 +6,11 @@
 
 :root {
   --background-color: #000000;
-  --text-color: #ffffff;
+  --text-color: #00D9FF;
+  --neon-pink: #FF0080;
+  --neon-cyan: #00D9FF;
+  --neon-green: #39FF14;
+  --neon-blue: #0080FF;
 }
 
 /* No-select utility classes */
@@ -68,9 +72,9 @@
 html,
 body {
   @apply w-full m-0 font-sans bg-[var(--background-color)] text-[var(--text-color)];
-  font-family: 'League Spartan', ui-sans-serif, system-ui, sans-serif;
-  font-size: 19px;
-  line-height: 1.4;
+  font-family: 'Share Tech Mono', monospace, ui-monospace, 'Courier New';
+  font-size: 16px;
+  line-height: 1.5;
   overflow-y: auto;
   position: relative;
 }
@@ -124,43 +128,43 @@ html {
 
 * {
   box-sizing: border-box;
-  font-family: 'League Spartan', ui-sans-serif, system-ui, sans-serif !important;
-  letter-spacing: 0.05em;
-  word-spacing: 0.2em;
+  font-family: 'Share Tech Mono', monospace, ui-monospace, 'Courier New' !important;
+  letter-spacing: 0.02em;
+  word-spacing: 0.1em;
 }
 
 a {
   @apply text-inherit no-underline;
-  font-family: 'League Spartan', ui-sans-serif, system-ui, sans-serif !important;
+  font-family: 'Share Tech Mono', monospace, ui-monospace, 'Courier New' !important;
 }
 
-/* Ensure all text elements use League Spartan */
+/* Ensure all text elements use Share Tech Mono */
 span, div, p, h1, h2, h3, h4, h5, h6, button, input, textarea, label {
-  font-family: 'League Spartan', ui-sans-serif, system-ui, sans-serif !important;
-  letter-spacing: 0.05em;
-  word-spacing: 0.2em;
+  font-family: 'Share Tech Mono', monospace, ui-monospace, 'Courier New' !important;
+  letter-spacing: 0.02em;
+  word-spacing: 0.1em;
 }
 
 /* Target Web3Modal button specifically */
 w3m-button, w3m-button *, w3m-button button, w3m-button span {
-  font-family: 'League Spartan', ui-sans-serif, system-ui, sans-serif !important;
+  font-family: 'Share Tech Mono', monospace, ui-monospace, 'Courier New' !important;
 }
 
 /* Target any Web3Modal components */
 [data-w3m], [data-w3m] *, [data-w3m] button, [data-w3m] span {
-  font-family: 'League Spartan', ui-sans-serif, system-ui, sans-serif !important;
+  font-family: 'Share Tech Mono', monospace, ui-monospace, 'Courier New' !important;
 }
 
 /* More aggressive Web3Modal targeting */
 .w3m-button, .w3m-button *, .w3m-button button, .w3m-button span,
 .w3m-connect-button, .w3m-connect-button *, .w3m-connect-button button, .w3m-connect-button span,
 .w3m-modal, .w3m-modal *, .w3m-modal button, .w3m-modal span {
-  font-family: 'League Spartan', ui-sans-serif, system-ui, sans-serif !important;
+  font-family: 'Share Tech Mono', monospace, ui-monospace, 'Courier New' !important;
 }
 
 /* Target all possible button variations */
 button, .button, [role="button"] {
-  font-family: 'League Spartan', ui-sans-serif, system-ui, sans-serif !important;
+  font-family: 'Share Tech Mono', monospace, ui-monospace, 'Courier New' !important;
 }
 
 /* Ultra-aggressive Web3Modal targeting - try to catch everything */
@@ -172,7 +176,7 @@ w3m-modal, w3m-modal *, w3m-modal button, w3m-modal span, w3m-modal div,
 .w3m-connect-button, .w3m-connect-button *, .w3m-modal, .w3m-modal *,
 w3m-button::part(button), w3m-button::part(text), w3m-button::part(label),
 w3m-connect-button::part(button), w3m-connect-button::part(text), w3m-connect-button::part(label) {
-  font-family: 'League Spartan', ui-sans-serif, system-ui, sans-serif !important;
+  font-family: 'Share Tech Mono', monospace, ui-monospace, 'Courier New' !important;
   color: white !important;
   background-color: white !important;
   border: 1px solid white !important;
@@ -181,7 +185,7 @@ w3m-connect-button::part(button), w3m-connect-button::part(text), w3m-connect-bu
 /* Try to target shadow DOM elements */
 w3m-button::shadow, w3m-connect-button::shadow, w3m-modal::shadow,
 w3m-button::shadow *, w3m-connect-button::shadow *, w3m-modal::shadow * {
-  font-family: 'League Spartan', ui-sans-serif, system-ui, sans-serif !important;
+  font-family: 'Share Tech Mono', monospace, ui-monospace, 'Courier New' !important;
   color: white !important;
   background-color: white !important;
 }
@@ -189,11 +193,11 @@ w3m-button::shadow *, w3m-connect-button::shadow *, w3m-modal::shadow * {
 /* Add a style tag injection approach */
 @supports (selector(:where(*))) {
   :where(w3m-button, w3m-connect-button, w3m-modal) {
-    font-family: 'League Spartan', ui-sans-serif, system-ui, sans-serif !important;
+    font-family: 'Share Tech Mono', monospace, ui-monospace, 'Courier New' !important;
   }
   
   :where(w3m-button, w3m-connect-button, w3m-modal) * {
-    font-family: 'League Spartan', ui-sans-serif, system-ui, sans-serif !important;
+    font-family: 'Share Tech Mono', monospace, ui-monospace, 'Courier New' !important;
     color: white !important;
     background-color: white !important;
   }
@@ -309,12 +313,12 @@ textarea {
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground font-sans;
-    font-family: 'League Spartan', ui-sans-serif, system-ui, sans-serif;
-    font-size: 19px;
-    line-height: 1.4;
-    letter-spacing: 0.05em;
-    word-spacing: 0.2em;
+    @apply bg-background text-foreground font-mono;
+    font-family: 'Share Tech Mono', monospace, ui-monospace, 'Courier New';
+    font-size: 16px;
+    line-height: 1.5;
+    letter-spacing: 0.02em;
+    word-spacing: 0.1em;
   }
 }
 
@@ -386,9 +390,9 @@ w3m-button div,
 [data-w3m] button,
 [data-w3m] span,
 [data-w3m] div {
-  font-family: 'League Spartan', ui-sans-serif, system-ui, sans-serif !important;
-  letter-spacing: 0.05em !important;
-  word-spacing: 0.2em !important;
+  font-family: 'Share Tech Mono', monospace, ui-monospace, 'Courier New' !important;
+  letter-spacing: 0.02em !important;
+  word-spacing: 0.1em !important;
 }
 
 /* Style the main button element - multiple selectors */
@@ -667,4 +671,104 @@ w3m-modal [style*="background"],
   .connect-button-wrapper appkit-button button {
     @apply px-4 py-2 text-sm;
   }
+}
+
+/* Neon Cyberpunk Theme Utilities */
+.neon-text-pink {
+  color: var(--neon-pink);
+}
+
+.neon-text-cyan {
+  color: var(--neon-cyan);
+}
+
+.neon-text-green {
+  color: var(--neon-green);
+}
+
+.neon-border-pink {
+  border: 2px solid var(--neon-pink);
+  box-shadow: 0 0 10px var(--neon-pink), 0 0 20px var(--neon-pink), inset 0 0 10px rgba(255, 0, 128, 0.2);
+}
+
+.neon-border-cyan {
+  border: 2px solid var(--neon-cyan);
+  box-shadow: 0 0 10px var(--neon-cyan), 0 0 20px var(--neon-cyan), inset 0 0 10px rgba(0, 217, 255, 0.2);
+}
+
+.neon-border-green {
+  border: 2px solid var(--neon-green);
+  box-shadow: 0 0 10px var(--neon-green), 0 0 20px var(--neon-green), inset 0 0 10px rgba(57, 255, 20, 0.2);
+}
+
+.neon-glow-pink {
+  box-shadow: 0 0 20px var(--neon-pink), 0 0 40px var(--neon-pink), 0 0 60px var(--neon-pink);
+}
+
+.neon-glow-cyan {
+  box-shadow: 0 0 20px var(--neon-cyan), 0 0 40px var(--neon-cyan), 0 0 60px var(--neon-cyan);
+}
+
+.neon-glow-green {
+  box-shadow: 0 0 20px var(--neon-green), 0 0 40px var(--neon-green), 0 0 60px var(--neon-green);
+}
+
+.neon-bg-pink {
+  background: linear-gradient(135deg, rgba(255, 0, 128, 0.1) 0%, rgba(255, 0, 128, 0.05) 100%);
+  border: 2px solid var(--neon-pink);
+  box-shadow: 0 0 20px rgba(255, 0, 128, 0.5), inset 0 0 20px rgba(255, 0, 128, 0.1);
+}
+
+.neon-bg-cyan {
+  background: linear-gradient(135deg, rgba(0, 217, 255, 0.1) 0%, rgba(0, 217, 255, 0.05) 100%);
+  border: 2px solid var(--neon-cyan);
+  box-shadow: 0 0 20px rgba(0, 217, 255, 0.5), inset 0 0 20px rgba(0, 217, 255, 0.1);
+}
+
+.neon-bg-green {
+  background: linear-gradient(135deg, rgba(57, 255, 20, 0.1) 0%, rgba(57, 255, 20, 0.05) 100%);
+  border: 2px solid var(--neon-green);
+  box-shadow: 0 0 20px rgba(57, 255, 20, 0.5), inset 0 0 20px rgba(57, 255, 20, 0.1);
+}
+
+/* Animated neon pulse */
+@keyframes neon-pulse {
+  0%, 100% {
+    filter: brightness(1) saturate(1);
+    opacity: 1;
+  }
+  50% {
+    filter: brightness(1.5) saturate(1.5);
+    opacity: 0.95;
+  }
+}
+
+.neon-pulse {
+  animation: neon-pulse 2s ease-in-out infinite;
+}
+
+/* Custom scrollbar for notifications dropdown */
+.notifications-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 217, 255, 0.5) rgba(0, 0, 0, 0.3);
+}
+
+.notifications-scroll::-webkit-scrollbar {
+  width: 8px;
+  display: block !important;
+}
+
+.notifications-scroll::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+}
+
+.notifications-scroll::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 217, 255, 0.5);
+  border-radius: 4px;
+  display: block !important;
+}
+
+.notifications-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0, 217, 255, 0.8);
 }

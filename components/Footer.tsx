@@ -7,32 +7,29 @@ const CURRENT_YEAR = new Date().getFullYear();
 
 const Footer = () => {
   return (
-    <footer className="w-full bg-black/60 px-4 md:px-8 py-8 pb-12 md:pb-8 border-t border-[rgba(255,255,255,0.2)] relative z-[100]">
+    <footer className="w-full bg-black bg-blur-[1.65px] px-4 md:px-8 py-8 pb-12 md:pb-8 border-t border-[#00D9FF]/20 relative z-[100]">
       <div className="max-w-[1200px] mx-auto">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           {/* Main Info Column */}
           <div>
-            <h3 className="text-s font-semibold mb-2">
+            <h3 className="text-s font-semibold mb-2 text-[#00D9FF]">
               AgoráX {CURRENT_YEAR}
             </h3>
-            <p className="text-sm text-[rgb(153,153,153)]">
-              Peer-to-peer pooled HEX stake trading
-            </p>
-            <p className="text-sm mt-1 text-[rgb(153,153,153)]">
-              Powered by <a href="https://www.0xbistro.io/" target="_blank" rel="noopener noreferrer" className="underline hover:text-white transition-colors">0xBistro</a>
+            <p className="text-sm text-[#00D9FF]/70">
+              PulseChain OTC Trading
             </p>
           </div>
 
           {/* Legal Column */}
           <div>
-            <h4 className="text-s font-semibold mb-2 text-white">
+            <h4 className="text-s font-semibold mb-2 text-[#00D9FF]">
               Legal
             </h4>
             <ul className="space-y-1">
               <li>
                 <Link 
                   href="/privacy-policy" 
-                  className="text-sm text-[rgb(153,153,153)] hover:text-white transition-colors"
+                  className="text-sm text-[#00D9FF]/70 hover:text-[#00D9FF] transition-colors"
                 >
                   Privacy Policy
                 </Link>
@@ -40,7 +37,7 @@ const Footer = () => {
               <li>
                 <Link 
                   href="/terms-and-conditions" 
-                  className="text-sm text-[rgb(153,153,153)] hover:text-white transition-colors"
+                  className="text-sm text-[#00D9FF]/70 hover:text-[#00D9FF] transition-colors"
                 >
                   Terms and Conditions
                 </Link>

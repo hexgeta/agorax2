@@ -113,6 +113,9 @@ export function useTokenApproval(tokenAddress: Address, spenderAddress: Address,
 }
 
 // Helper to check if a token is native (PLS in this case)
+// AgoraX uses 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE for native PLS
 export function isNativeToken(address: string): boolean {
-  return address.toLowerCase() === '0x000000000000000000000000000000000000dead';
+  const normalized = address.toLowerCase();
+  return normalized === '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' || 
+         normalized === '0x000000000000000000000000000000000000dead'; // Backwards compatibility
 }

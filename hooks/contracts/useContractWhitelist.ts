@@ -1,36 +1,19 @@
 import { useAccount, useContractWrite } from 'wagmi';
 import { Address } from 'viem';
 import { getContractAddress } from '@/config/testing';
-import { useContract } from '@/context/ContractContext';
-import { getContractABI } from '@/config/abis';
+import { CONTRACT_ABI } from '@/config/abis';
 
 // Whitelist of allowed WRITE functions (non-admin only)
-// Bistro functions
-const BISTRO_WRITE_FUNCTIONS = [
+// AgoraX write functions
+const WRITE_FUNCTIONS = [
   'placeOrder',            // Create a new trading order (sell tokens for buy tokens)
-  'cancelOrder',           // cancel your order after you make it
+  'cancelOrder',           // Cancel your order after you make it
   'redeemOrder',           // Redeem tokens from a single executed order
-  'redeemMultipleOrders',  // Redeem tokens from multiple executed orders
-  'executeMultipleOrder',  // Execute multiple orders in a single transaction
-  'executeOrder',          // Execute/fulfill a single trading order (Bistro)
-  'updateOrderExpirationTime', // Update the expiration time of user's own order
-  'updateOrderInfo',       // Update order details (sell amount, buy tokens, amounts)
-  'updateOrderPrice'       // Update the price/amounts for user's own order
+  'fillOrder',             // Fill/fulfill a single trading order
+  'cancelAllExpiredOrders' // Cancel all expired orders at once
 ] as const;
 
-// AgoraX functions
-const AGORAX_WRITE_FUNCTIONS = [
-  'placeOrder',            // Create a new trading order (sell tokens for buy tokens)
-  'cancelOrder',           // cancel your order after you make it
-  'redeemOrder',           // Redeem tokens from a single executed order
-  'fillOrder',             // Fill/fulfill a single trading order (AgoraX)
-  'cancelAllExpiredOrders' // Cancel all expired orders at once (AgoraX)
-] as const;
-
-// Combined type for all write functions
-type BistroWriteFunction = typeof BISTRO_WRITE_FUNCTIONS[number];
-type AgoraXWriteFunction = typeof AGORAX_WRITE_FUNCTIONS[number];
-type WhitelistedWriteFunction = BistroWriteFunction | AgoraXWriteFunction;
+type WhitelistedWriteFunction = typeof WRITE_FUNCTIONS[number];
 
 // List of READ functions (view functions - no wallet connection required)
 const READ_FUNCTIONS = [
@@ -61,22 +44,15 @@ export type ReadFunction = typeof READ_FUNCTIONS[number];
 export function useContractWhitelist() {
   const { isConnected, address, chainId } = useAccount();
   const { writeContractAsync } = useContractWrite();
-  const { activeContract } = useContract();
 
-  // Get the contract address and ABI for the current chain and active contract
-  const contractAddress = getContractAddress(chainId, activeContract);
-  const contractABI = getContractABI(activeContract);
-  
-  // Get the correct function list based on active contract
-  const allowedWriteFunctions = activeContract === 'BISTRO' 
-    ? BISTRO_WRITE_FUNCTIONS 
-    : AGORAX_WRITE_FUNCTIONS;
+  // Get the contract address for the current chain
+  const contractAddress = getContractAddress(chainId);
 
   /**
    * Check if a function is whitelisted for write operations
    */
   const isWriteFunctionWhitelisted = (functionName: string): functionName is WhitelistedWriteFunction => {
-    return (allowedWriteFunctions as readonly string[]).includes(functionName);
+    return (WRITE_FUNCTIONS as readonly string[]).includes(functionName);
   };
 
   /**
@@ -113,7 +89,7 @@ export function useContractWhitelist() {
     try {
       const result = await writeContractAsync({
         address: contractAddress as Address,
-        abi: contractABI,
+        abi: CONTRACT_ABI,
         functionName,
         args: args as any,
         value,
@@ -148,12 +124,6 @@ export function useContractWhitelist() {
     return isConnected && !!address;
   };
 
-  // Unified fill/execute function that works for both contracts
-  const fillOrExecuteOrder = (orderId: bigint, buyTokenIndex: bigint, buyAmount: bigint, value?: bigint) => {
-    const functionName = activeContract === 'AGORAX' ? 'fillOrder' : 'executeOrder';
-    return executeWriteFunction(functionName as WhitelistedWriteFunction, [orderId, buyTokenIndex, buyAmount], value);
-  };
-
   return {
     // Main execution function
     executeWriteFunction,
@@ -170,9 +140,8 @@ export function useContractWhitelist() {
     address,
     chainId,
     contractAddress,
-    activeContract,
     
-    // Individual function wrappers for convenience (common to both)
+    // Individual function wrappers for convenience
     placeOrder: (orderDetails: any, value?: bigint) => 
       executeWriteFunction('placeOrder', [orderDetails], value),
     
@@ -182,48 +151,16 @@ export function useContractWhitelist() {
     redeemOrder: (orderId: bigint) => 
       executeWriteFunction('redeemOrder', [orderId]),
     
-    // Unified function that works for both contracts
-    fillOrExecuteOrder,
+    fillOrder: (orderId: bigint, buyTokenIndex: bigint, buyAmount: bigint, value?: bigint) => 
+      executeWriteFunction('fillOrder', [orderId, buyTokenIndex, buyAmount], value),
     
-    // Bistro-specific functions
-    executeOrder: activeContract === 'BISTRO' 
-      ? (orderId: bigint, buyTokenIndex: bigint, buyAmount: bigint, value?: bigint) => 
-          executeWriteFunction('executeOrder', [orderId, buyTokenIndex, buyAmount], value)
-      : undefined,
+    cancelAllExpiredOrders: () => 
+      executeWriteFunction('cancelAllExpiredOrders', []),
     
-    executeMultipleOrder: activeContract === 'BISTRO'
-      ? (orderIds: bigint[], buyTokenIndexes: bigint[], buyAmounts: bigint[], value?: bigint) => 
-          executeWriteFunction('executeMultipleOrder', [orderIds, buyTokenIndexes, buyAmounts], value)
-      : undefined,
-    
-    redeemMultipleOrders: activeContract === 'BISTRO'
-      ? (orderIds: bigint[]) => 
-          executeWriteFunction('redeemMultipleOrders', [orderIds])
-      : undefined,
-    
-    updateOrderInfo: activeContract === 'BISTRO'
-      ? (orderId: bigint, newSellAmount: bigint, newBuyTokensIndex: bigint[], newBuyAmounts: bigint[], value?: bigint) => 
-          executeWriteFunction('updateOrderInfo', [orderId, newSellAmount, newBuyTokensIndex, newBuyAmounts], value)
-      : undefined,
-    
-    updateOrderPrice: activeContract === 'BISTRO'
-      ? (orderId: bigint, indexes: bigint[], newBuyAmounts: bigint[]) => 
-          executeWriteFunction('updateOrderPrice', [orderId, indexes, newBuyAmounts])
-      : undefined,
-    
-    updateOrderExpirationTime: activeContract === 'BISTRO'
-      ? (orderId: bigint, expirationTime: bigint) => 
-          executeWriteFunction('updateOrderExpirationTime', [orderId, expirationTime])
-      : undefined,
-    
-    // AgoraX-specific functions
-    fillOrder: activeContract === 'AGORAX'
-      ? (orderId: bigint, buyTokenIndex: bigint, buyAmount: bigint, value?: bigint) => 
-          executeWriteFunction('fillOrder', [orderId, buyTokenIndex, buyAmount], value)
-      : undefined,
-    
-    cancelAllExpiredOrders: activeContract === 'AGORAX'
-      ? () => executeWriteFunction('cancelAllExpiredOrders', [])
-      : undefined,
+    // Alias for backwards compatibility (fillOrder is the AgoraX function)
+    fillOrExecuteOrder: (orderId: bigint, buyTokenIndex: bigint, buyAmount: bigint, value?: bigint) => 
+      executeWriteFunction('fillOrder', [orderId, buyTokenIndex, buyAmount], value),
+    executeOrder: (orderId: bigint, buyTokenIndex: bigint, buyAmount: bigint, value?: bigint) => 
+      executeWriteFunction('fillOrder', [orderId, buyTokenIndex, buyAmount], value),
   };
 }

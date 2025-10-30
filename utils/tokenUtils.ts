@@ -1,63 +1,57 @@
 import { TOKEN_CONSTANTS } from '@/constants/crypto';
-import { MORE_COINS } from '@/constants/more-coins';
+
+// ===================================
+// PRIORITY TOKEN ORDER
+// These tokens appear first in dropdowns and are preloaded first for optimal UX
+// Edit this list to change the order of priority tokens across the app
+// ===================================
+export const PRIORITY_TOKEN_ADDRESSES = [
+  '0x2b591e99afe9f32eaa6214f7b7629768c40eeb39', // HEX - HEX on Pls
+  '0x57fde0a71132198BBeC939B98976993d8D89D225', // weHEX - Wrapped HEX from Eth
+  '0x000000000000000000000000000000000000dead', // PLS - Pulse (mapped internally)
+  '0x95b303987a60c71504d99aa1b13b4da07b0790ab', // PLSX - PulseX
+  '0x2fa878ab3f87cc1c9737fc071108f904c0b0c95d', // INC - Incentive
+  '0xefd766ccb38eaf1dfd701853bfce31359239f305', // weDAI - Wrapped DAI from Eth
+  '0x15d38573d2feeb82e7ad5187ab8c1d52810b1f07', // weUSDC - Wrapped USDC from Eth
+  '0x0cb6f5a34ad42ec934882a05265a7d5f59b51a2f', // weUSDT - Wrapped USDT from Eth
+  '0x0deed1486bc52aa0d3e6f8849cec5add6598a162', // USDL - USDL (Liquid Loans)
+  '0xeb6b7932da20c6d7b3a899d5887d86dfb09a6408', // PXDC - PXDC Stablecoin (Powercity)
+  '0x1fe0319440a672526916c232eaee4808254bdb00', // HEXDC - HEXDC Stablecoin
+  '0x02dcdd04e3f455d838cd1249292c58f3b79e3c3c', // weWETH - Wrapped WETH from Eth
+  // MAXI tokens
+  '0x0d86eb9f43c57f6ff3bc9e23d8f9d82503f0e84b', // MAXI
+  '0x6b32022693210cd2cfc466b9ac0085de8fc34ea6', // DECI
+  '0x6b0956258ff7bd7645aa35369b55b61b8e6d6140', // LUCKY
+  '0xf55cd1e399e1cc3d95303048897a680be3313308', // TRIO
+  '0xe9f84d418b008888a992ff8c6d22389c2c3504e0', // BASE
+  '0x352511c9bc5d47dbc122883ed9353e987d10a3ba', // weMAXI
+  '0x189a3ca3cc1337e85c7bc0a43b8d3457fd5aae89', // weDECI
+  '0x8924f56df76ca9e7babb53489d7bef4fb7caff19', // weLUCKY
+  '0x0f3c6134f4022d85127476bc4d3787860e5c5569', // weTRIO
+  '0xda073388422065fe8d3b5921ec2ae475bae57bed', // weBASE
+];
 
 // Function to get token logo URL based on ticker
 function getTokenLogo(ticker: string): string {
-  const logoMap: Record<string, string> = {
-    // Base tokens
-    'PLS': '/coin-logos/PLS.svg',
+  // Special case mappings for tokens that use different logos
+  const specialCases: Record<string, string> = {
     'WPLS': '/coin-logos/PLS.svg', // Wrapped PLS uses PLS logo
-    'PLSX': '/coin-logos/PLSX.svg',
-    'HEX': '/coin-logos/HEX.svg',
-    'ETH': '/coin-logos/ETH.svg',
-    'BASE': '/coin-logos/BASE.svg',
-    'MAXI': '/coin-logos/MAXI.svg',
-    'DECI': '/coin-logos/DECI.svg',
-    'LUCKY': '/coin-logos/LUCKY.svg',
-    'TRIO': '/coin-logos/TRIO.svg',
-    'INC': '/coin-logos/INC.svg',
-    'PCOCK': '/coin-logos/PCOCK.svg',
-    'HTT3000': '/coin-logos/HTT3000.svg',
-    'HTT5000': '/coin-logos/HTT5000.svg',
-    'HTT7000': '/coin-logos/HTT7000.svg',
-    'ALAMO': '/coin-logos/ALAMO.svg',
-    'BRIAH': '/coin-logos/BRIAH.svg',
-    'weHEX': '/coin-logos/weHEX.svg',
-    'weMAXI': '/coin-logos/weMAXI.svg',
-    'weDECI': '/coin-logos/weDECI.svg',
-    'weLUCKY': '/coin-logos/weLUCKY.svg',
-    'weTRIO': '/coin-logos/weTRIO.svg',
-    'weBASE': '/coin-logos/weBASE.svg',
-    'WPLS': '/coin-logos/WPLS.svg',
-    'weWETH': '/coin-logos/weWETH.svg',
-    'weDAI': '/coin-logos/weDAI.svg',
-    'weUSDC': '/coin-logos/weUSDC.svg',
-    'weUSDT': '/coin-logos/weUSDT.svg',
-    'HDRN': '/coin-logos/HDRN.svg',
-    'ICSA': '/coin-logos/ICSA.svg',
-    'COM': '/coin-logos/COM.svg',
-    'YEP': '/coin-logos/YEP.svg',
-    'EDAI': '/coin-logos/EDAI.svg',
-    'eDAI': '/coin-logos/EDAI.svg',
     'DAI': '/coin-logos/weDAI.svg', // DAI uses weDAI logo
-    'weWETH': '/coin-logos/weWETH.svg',
-    'WPLS': '/coin-logos/WPLS.svg',
-    'INC': '/coin-logos/INC.svg',
-    'PCOCK': '/coin-logos/PCOCK.svg',
-    'HTT3000': '/coin-logos/HTT3000.svg',
-    'HTT5000': '/coin-logos/HTT5000.svg',
-    'HTT7000': '/coin-logos/HTT7000.svg',
-    'ALAMO': '/coin-logos/ALAMO.svg',
-    'BRIAH': '/coin-logos/BRIAH.svg',
-    'HDRN': '/coin-logos/HDRN.svg',
-    'ICSA': '/coin-logos/ICSA.svg',
-    'COM': '/coin-logos/COM.svg',
+    'eDAI': '/coin-logos/EDAI.svg',
   };
   
-  return logoMap[ticker] || '/coin-logos/default.svg';
+  // Check special cases first
+  if (specialCases[ticker]) {
+    return specialCases[ticker];
+  }
+  
+  // For all other tokens, automatically try to load logo based on ticker name
+  // This will try to load /coin-logos/TICKER.svg for each token
+  // If the file doesn't exist, the onError handler in the component will fall back to default.svg
+  return `/coin-logos/${ticker}.svg`;
 }
 
-// Create a map of token addresses to token info from both TOKEN_CONSTANTS and MORE_COINS
+// Create a map of token addresses to token info from TOKEN_CONSTANTS
 const TOKEN_MAP = new Map([
   // Add tokens from TOKEN_CONSTANTS (only if they have an address)
   ...TOKEN_CONSTANTS
@@ -77,19 +71,7 @@ const TOKEN_MAP = new Map([
     name: 'Pulse',
     decimals: 18,
     logo: getTokenLogo('PLS')
-  }],
-  // Add tokens from MORE_COINS (only if not already in TOKEN_CONSTANTS)
-  ...MORE_COINS
-    .filter(coin => coin.a && coin.a.trim() !== '' && !TOKEN_CONSTANTS.some(token => token.a && token.a.toLowerCase() === coin.a.toLowerCase()))
-    .map(coin => [
-      coin.a.toLowerCase(),
-      {
-        ticker: coin.ticker,
-        name: coin.name,
-        decimals: coin.decimals,
-        logo: getTokenLogo(coin.ticker)
-      }
-    ])
+  }]
 ]);
 
 

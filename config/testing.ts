@@ -15,32 +15,26 @@ export const PULSECHAIN_TESTNET_CHAIN_ID = 943;
 export const PULSECHAIN_CHAIN_ID = 369;
 export const ETHEREUM_CHAIN_ID = 1;
 
-// Contract type for testing
-export type ContractType = 'BISTRO' | 'AGORAX';
-
-// Get contract addresses from environment variables
-const BISTRO_CONTRACT = process.env.NEXT_PUBLIC_BISTRO_SMART_CONTRACT || '0x342DF6d98d06f03a20Ae6E2c456344Bb91cE33a2';
-// TODO: Set NEXT_PUBLIC_AGORAX_SMART_CONTRACT in .env with the deployed AgoraX contract address
+// Get contract address from environment variables
+// AgoraX deployed at: 0x321b52b7f55ea307e9ca87891d52cc92f37905cf (PLS Testnet)
 const AGORAX_CONTRACT = process.env.NEXT_PUBLIC_AGORAX_SMART_CONTRACT || '';
 
-// Bistro Smart Contract addresses per chain
-export const BISTRO_CONTRACT_ADDRESSES = {
-  [PULSECHAIN_CHAIN_ID]: BISTRO_CONTRACT, // PulseChain Mainnet
-  [PULSECHAIN_TESTNET_CHAIN_ID]: BISTRO_CONTRACT, // PulseChain Testnet v4
-  // [ETHEREUM_CHAIN_ID]: '0x...', // Ethereum Mainnet (if needed)
-} as const;
+// Debug: Log contract address on load
+if (typeof window !== 'undefined') {
+  console.log('🔍 AgoraX Contract Address:', AGORAX_CONTRACT);
+  console.log('🔍 Environment Variable:', process.env.NEXT_PUBLIC_AGORAX_SMART_CONTRACT);
+}
 
 // AgoraX Smart Contract addresses per chain
-export const AGORAX_CONTRACT_ADDRESSES = {
+export const CONTRACT_ADDRESSES = {
   [PULSECHAIN_CHAIN_ID]: AGORAX_CONTRACT, // PulseChain Mainnet
   [PULSECHAIN_TESTNET_CHAIN_ID]: AGORAX_CONTRACT, // PulseChain Testnet v4
-  // [ETHEREUM_CHAIN_ID]: '0x...', // Ethereum Mainnet (if needed)
 } as const;
 
-// Testnet configuration
+// Testnet configuration with multiple RPC fallbacks
 export const PULSECHAIN_TESTNET_CONFIG = {
   id: PULSECHAIN_TESTNET_CHAIN_ID,
-  name: 'PulseChain Testnet v4',
+  name: 'PLS Testnet',
   nativeCurrency: {
     name: 'Test PLS',
     symbol: 'tPLS',
@@ -48,10 +42,18 @@ export const PULSECHAIN_TESTNET_CONFIG = {
   },
   rpcUrls: {
     default: {
-      http: ['https://pulsechain-testnet-rpc.publicnode.com'],
+      http: [
+        'https://rpc.v4.testnet.pulsechain.com',
+        'https://pulsechain-testnet-rpc.publicnode.com',
+        'https://rpc-testnet-pulsechain.g4mm4.io',
+      ],
     },
     public: {
-      http: ['https://pulsechain-testnet-rpc.publicnode.com'],
+      http: [
+        'https://rpc.v4.testnet.pulsechain.com',
+        'https://pulsechain-testnet-rpc.publicnode.com',
+        'https://rpc-testnet-pulsechain.g4mm4.io',
+      ],
     },
   },
   blockExplorers: {
@@ -99,7 +101,7 @@ export function isTestnetChain(chainId: number | undefined): boolean {
 export function getChainDisplayName(chainId: number | undefined): string {
   switch (chainId) {
     case PULSECHAIN_TESTNET_CHAIN_ID:
-      return 'PulseChain Testnet v4';
+      return 'PLS Testnet';
     case PULSECHAIN_CHAIN_ID:
       return 'PulseChain';
     case ETHEREUM_CHAIN_ID:
@@ -110,41 +112,29 @@ export function getChainDisplayName(chainId: number | undefined): string {
 }
 
 /**
- * Gets the contract address for the current chain and contract type
+ * Gets the AgoraX contract address for the current chain
  * Returns undefined if chain is not supported
  */
-export function getContractAddress(chainId: number | undefined, contractType: ContractType = 'BISTRO'): string | undefined {
+export function getContractAddress(chainId: number | undefined): string | undefined {
   if (!chainId) return undefined;
+  const address = CONTRACT_ADDRESSES[chainId as keyof typeof CONTRACT_ADDRESSES];
   
-  const addresses = contractType === 'BISTRO' ? BISTRO_CONTRACT_ADDRESSES : AGORAX_CONTRACT_ADDRESSES;
-  return addresses[chainId as keyof typeof addresses];
+  // Return undefined if address is empty string
+  if (!address || address === '') {
+    console.error('❌ No contract address configured for chain', chainId);
+    console.error('❌ Please set NEXT_PUBLIC_AGORAX_SMART_CONTRACT in .env.local');
+    return undefined;
+  }
+  
+  return address;
 }
-
-/**
- * Gets the Bistro Smart Contract address for the current chain
- * Returns undefined if chain is not supported
- */
-export function getBistroContractAddress(chainId: number | undefined): string | undefined {
-  return getContractAddress(chainId, 'BISTRO');
-}
-
-/**
- * Gets the AgoraX Smart Contract address for the current chain
- * Returns undefined if chain is not supported
- */
-export function getAgoraXContractAddress(chainId: number | undefined): string | undefined {
-  return getContractAddress(chainId, 'AGORAX');
-}
-
-// Alias for backwards compatibility
-export const getOTCContractAddress = getBistroContractAddress;
 
 /**
  * Checks if a chain is supported (has a contract deployed)
  */
 export function isSupportedChain(chainId: number | undefined): boolean {
   if (!chainId) return false;
-  return chainId in BISTRO_CONTRACT_ADDRESSES;
+  return chainId in CONTRACT_ADDRESSES;
 }
 
 /**
@@ -154,22 +144,17 @@ export function isSupportedChain(chainId: number | undefined): boolean {
 export function getAvailableChains() {
   const chains = [
     {
-      id: PULSECHAIN_CHAIN_ID,
+      id: 369,           // PulseChain
       name: 'PulseChain',
       icon: '/coin-logos/PLS-white.svg',
     },
-    {
-      id: ETHEREUM_CHAIN_ID,
-      name: 'Ethereum',
-      icon: '/coin-logos/ETH-white.svg',
-    },
   ];
 
-  // Add testnet as first option when testing mode is enabled
+  // Add testnet as first option when TESTING_MODE is true
   if (TESTING_MODE) {
     chains.unshift({
-      id: PULSECHAIN_TESTNET_CHAIN_ID,
-      name: 'PulseChain Testnet v4',
+      id: 943,           // PulseChain Testnet v4
+      name: 'PLS Testnet',
       icon: '/coin-logos/PLS-white.svg',
     });
   }

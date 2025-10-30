@@ -16,32 +16,22 @@ export interface TokenConfig {
 }
 
 // ===================================
-// WHITELISTED TOKENS (Active on OTC Contract: 0x342DF6d98d06f03a20Ae6E2c456344Bb91cE33a2)
-// Last verified: 2025-10-10 via RPC
-// Total Active: 8 tokens
+// WHITELISTED TOKENS (AgoraX Contract: 0x321b52b7f55ea307e9ca87891d52cc92f37905cf)
+// Last verified: 2025-10-25 via RPC
+// Note: Tokens must be whitelisted in the AgoraX contract to be tradable
 // ===================================
-// 1. PLSX - 0x95B303987A60C71504D99Aa1b13B4DA07b0790ab ✅
-// 2. weDAI - 0xefD766cCb38EaF1dfd701853BFCe31359239F305 ✅
-// 3. PLS - 0x000000000000000000000000000000000000dEaD ✅
-// 4. INC - 0x2fa878Ab3F87CC1C9737Fc071108F904c0B0C95d ✅
-// 5. HEX - 0x2b591e99afE9f32eAA6214f7B7629768c40Eeb39 ✅
-// 6. USDL - 0x0dEEd1486bc52aA0d3E6f8849cEC5adD6598A162 ✅
-// 7. weWETH - 0x02DcdD04e3F455D838cd1249292C58f3B79e3C3C ✅
-// 8. 2PHUX - 0x115f3Fa979a936167f9D208a7B7c4d85081e84BD ✅
-// 
-// INACTIVE:
-// - weUSDC - 0x15D38573d2feeb82e7ad5187aB8c1D52810B1f07 ❌
-// - weUSDT - 0x0Cb6F5a34ad42ec934882A05265A7d5F59b51A2f ❌
+// AgoraX uses 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE for native PLS
+// (Different from Bistro's 0x000000000000000000000000000000000000dEaD)
 // ===================================
 
 export const TOKEN_CONSTANTS = [{
   chain: 369,
-  a: "0x000000000000000000000000000000000000dEaD",
+  a: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",
   dexs: "0xe56043671df55de5cdf8459710433c10324de0ae",
   ticker: "PLS",
   decimals: 18,
   name: "Pulse",
-  isWhitelisted: true
+  isWhitelisted: false // Must be whitelisted in AgoraX contract
 }, {
   chain: 369,
   a: "0x95b303987a60c71504d99aa1b13b4da07b0790ab",
@@ -299,6 +289,15 @@ export const TOKEN_CONSTANTS = [{
   name: "Coast"
 }, {
   chain: 369,
+  a: "0xa5B0D537CeBE97f087Dc5FE5732d70719caaEc1D", // hUSDC
+  dexs: null,
+  ticker: "hUSDC",
+  decimals: 6,
+  name: "Hyperlane USDC",
+  type: "token"
+  }, 
+{
+  chain: 369,
   a: "0x0deed1486bc52aa0d3e6f8849cec5add6598a162",
   dexs: "0x27557d148293d1c8e8f8c5deeab93545b1eb8410",
   ticker: "USDL",
@@ -312,6 +311,13 @@ export const TOKEN_CONSTANTS = [{
   ticker: "PXDC",
   decimals: 18,
   name: "PXDC Stablecoin (Powercity)"
+}, {
+  chain: 369,
+  a: "0x144Cd22AaA2a80FEd0Bb8B1DeADDc51A53Df1d50",
+  dexs: "0x2cb92b1e8B2fC53b5A9165E765488e17B38C26D3",
+  ticker: "INCD",
+  decimals: 18,
+  name: "INCD"
 }, {
   chain: 369,
   a: "0x9c6fa17d92898b684676993828143596894aa2a6",
@@ -1193,14 +1199,14 @@ export const TOKEN_CONSTANTS = [{
 },
 {
   chain: 369,
-  a: "0xxx",
+  a: "0x",
   dexs: "0x6d69654390c70d9e8814b04c69a542632dc93161",
   ticker: "stLOAN (Liquid Loans)",
   decimals: 18,
   name: "Staked LOAN on Liquid Loans"
 }, {
   chain: 369,
-  a: "0x0deed1486bc52aa0d3e6f8849cec5add6598a162",
+  a: "0x",
   dexs: "0x27557d148293d1c8e8f8c5deeab93545b1eb8410",
   ticker: "stUSDL (Liquid Loans)",
   decimals: 18,
@@ -1208,7 +1214,7 @@ export const TOKEN_CONSTANTS = [{
 },
 {
   chain: 369,
-  a: "0x0deed1486bc52aa0d3e6f8849cec5add6598a162",
+  a: "0x",
   dexs: "0x27557d148293d1c8e8f8c5deeab93545b1eb8410",
   ticker: "PLS (Liquid Loans)",
   decimals: 18,
