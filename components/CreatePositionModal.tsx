@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, ArrowLeftRight, Lock, Search } from 'lucide-react';
+import { X, ArrowLeftRight, Lock, Search, Calendar as CalendarIcon } from 'lucide-react';
+import { Calendar } from '@/components/ui/calendar';
 import PaywallModal from './PaywallModal';
 import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
@@ -368,6 +369,8 @@ export function CreatePositionModal({
   // State for order creation
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
   const [orderError, setOrderError] = useState<string | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   
   // Local state for approval process (to maintain spinner throughout entire approval + creation flow)
   const [isLocalApproving, setIsLocalApproving] = useState(false);
@@ -386,26 +389,6 @@ export function CreatePositionModal({
   });
 
   // Removed buyTokenBalance - not needed for ask side
-
-  // Debug logging for balance issues
-  console.log('💰 Balance Debug:', {
-    address,
-    currentChainId,
-    sellToken: sellToken?.address,
-    isNativeToken: sellToken ? isNativeToken(sellToken.address) : false,
-    isWalletConnected,
-    sellBalanceLoading,
-    sellBalanceError: sellBalanceError?.message || sellBalanceError,
-    sellTokenBalance: sellTokenBalance?.formatted,
-    contractAddress: OTC_CONTRACT_ADDRESS
-  });
-  
-  // Log full error if present
-  if (sellBalanceError) {
-    console.error('❌ Balance Error Details:', sellBalanceError);
-  }
-
-  // UI Debug logging
 
   // Helper function to format numbers with commas
   const formatNumberWithCommas = (value: string): string => {
@@ -541,6 +524,29 @@ export function CreatePositionModal({
       setBuyAmounts([tempAmount]);
     }
   };
+
+  const handleExpirationPreset = (days: number) => {
+    setExpirationDays(days);
+    // Calculate and set the date
+    const futureDate = new Date();
+    futureDate.setDate(futureDate.getDate() + Math.ceil(days));
+    setSelectedDate(futureDate);
+  };
+
+  const handleDateSelect = (date: Date | undefined) => {
+    if (!date) return;
+    
+    setSelectedDate(date);
+    const now = new Date();
+    const diffTime = date.getTime() - now.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays > 0) {
+      setExpirationDays(diffDays);
+    }
+    setShowDatePicker(false);
+  };
+
   const [showSellDropdown, setShowSellDropdown] = useState(false);
   const [showBuyDropdowns, setShowBuyDropdowns] = useState<boolean[]>([false]);
 
@@ -1160,26 +1166,26 @@ export function CreatePositionModal({
                         <div className="max-h-60 overflow-y-auto scrollbar-hide">
                           {sellTokenOptions.length > 0 ? (
                             sellTokenOptions.map((token) => (
-                              <button
-                                key={token.address}
-                                onClick={() => handleSellTokenSelect(token)}
-                                className="w-full p-3 flex items-center space-x-3 hover:bg-white/5 transition-colors text-left"
-                              >
-                                <img
-                                  src={token.logo}
-                                  alt={token.ticker}
-                                  className="w-6 h-6 rounded-full"
+                          <button
+                            key={token.address}
+                            onClick={() => handleSellTokenSelect(token)}
+                            className="w-full p-3 flex items-center space-x-3 hover:bg-white/5 transition-colors text-left"
+                          >
+                            <img
+                              src={token.logo}
+                              alt={token.ticker}
+                              className="w-6 h-6 rounded-full"
                                   loading="lazy"
                                   decoding="async"
-                                  onError={(e) => {
-                                    e.currentTarget.src = '/coin-logos/default.svg';
-                                  }}
-                                />
-                                <div>
-                                  <div className="text-white font-medium">{formatTokenTicker(token.ticker)}</div>
-                                  <div className="text-gray-400 text-xs">{token.name}</div>
-                                </div>
-                              </button>
+                              onError={(e) => {
+                                e.currentTarget.src = '/coin-logos/default.svg';
+                              }}
+                            />
+                            <div>
+                              <div className="text-white font-medium">{formatTokenTicker(token.ticker)}</div>
+                              <div className="text-gray-400 text-xs">{token.name}</div>
+                            </div>
+                          </button>
                             ))
                           ) : (
                             <div className="p-4 text-center text-gray-400 text-sm">
@@ -1267,7 +1273,7 @@ export function CreatePositionModal({
                     }`}
                     title={buyTokens.length > 1 ? "Cannot swap with multiple tokens" : "Swap tokens and amounts"}
                   >
-                    <ArrowLeftRight className={`w-5 h-5 text-gray-400 ${
+                    <ArrowLeftRight className={`w-5 h-5 text-gray-400 rotate-90 ${
                       buyTokens.length > 1 
                         ? '' 
                         : 'hover:text-white'
@@ -1328,7 +1334,7 @@ export function CreatePositionModal({
                                 {index > 0 && (
                                   <button
                                     onClick={() => handleRemoveBuyToken(index)}
-                                    className="p-3 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 rounded-lg transition-colors"
+                                    className="p-3 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 rounded-lg transition-colors flex items-center justify-center"
                                     title="Remove token"
                                   >
                                     <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1364,26 +1370,26 @@ export function CreatePositionModal({
                         <div className="max-h-60 overflow-y-auto scrollbar-hide">
                           {getBuyTokenOptions(index).length > 0 ? (
                             getBuyTokenOptions(index).map((token) => (
-                              <button
-                                key={token.address}
-                                        onClick={() => handleBuyTokenSelect(token, index)}
-                                className="w-full p-3 flex items-center space-x-3 hover:bg-white/5 transition-colors text-left"
-                              >
-                                <img
-                                  src={token.logo}
-                                  alt={token.ticker}
-                                  className="w-6 h-6 rounded-full"
+                          <button
+                            key={token.address}
+                                      onClick={() => handleBuyTokenSelect(token, index)}
+                            className="w-full p-3 flex items-center space-x-3 hover:bg-white/5 transition-colors text-left"
+                          >
+                            <img
+                              src={token.logo}
+                              alt={token.ticker}
+                              className="w-6 h-6 rounded-full"
                                   loading="lazy"
                                   decoding="async"
-                                  onError={(e) => {
-                                    e.currentTarget.src = '/coin-logos/default.svg';
-                                  }}
-                                />
-                                <div>
-                                  <div className="text-white font-medium">{formatTokenTicker(token.ticker)}</div>
-                                  <div className="text-gray-400 text-xs">{token.name}</div>
-                                </div>
-                              </button>
+                              onError={(e) => {
+                                e.currentTarget.src = '/coin-logos/default.svg';
+                              }}
+                            />
+                            <div>
+                              <div className="text-white font-medium">{formatTokenTicker(token.ticker)}</div>
+                              <div className="text-gray-400 text-xs">{token.name}</div>
+                            </div>
+                          </button>
                             ))
                           ) : (
                             <div className="p-4 text-center text-gray-400 text-sm">
@@ -1481,23 +1487,165 @@ export function CreatePositionModal({
 
               {/* Expiration */}
               <div className="bg-white/5 rounded-xl p-6 mt-6">
-                <h3 className="text-white font-semibold mb-4">Expiration (Days)</h3>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-white font-semibold">Expiration (Days)</h3>
+                  {selectedDate && (
+                    <span className="text-gray-400 text-xs">
+                      {expirationDays <= 1 ? (
+                        // Show UTC time for hour-based presets (1 day or less)
+                        `${selectedDate.getUTCHours() % 12 || 12}${selectedDate.getUTCHours() >= 12 ? 'pm' : 'am'} UTC ${selectedDate.getUTCDate()} ${selectedDate.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' })} ${selectedDate.getUTCFullYear()}`
+                      ) : (
+                        // Show regular date for day-based presets
+                        selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                      )}
+                    </span>
+                  )}
+                </div>
                 <input
                   type="number"
                   value={expirationDays === 0 ? '' : expirationDays}
                   onChange={(e) => {
                     const value = e.target.value;
-                    // Allow empty string or positive integers, no leading zeros
                     if (value === '') {
                       setExpirationDays(0);
-                    } else if (value.match(/^[1-9]\d*$/) && parseInt(value) > 0) {
-                      setExpirationDays(Number(value));
+                      setSelectedDate(undefined);
+                    } else {
+                      const numValue = parseFloat(value);
+                      if (!isNaN(numValue) && numValue > 0) {
+                        setExpirationDays(numValue);
+                        // Calculate and set the date
+                        const futureDate = new Date();
+                        futureDate.setDate(futureDate.getDate() + Math.ceil(numValue));
+                        setSelectedDate(futureDate);
+                      }
                     }
                   }}
                   placeholder="Enter days"
-                  min="1"
+                  min="0.01"
+                  step="0.01"
                   className="w-full bg-black border border-gray-600 rounded-lg p-3 text-white placeholder-gray-400 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 />
+                
+                {/* Expiration Preset Buttons */}
+                <div className="mt-3 flex gap-2 w-full">
+                  <button
+                    type="button"
+                    onClick={() => handleExpirationPreset(0.04)}
+                    className="flex-1 py-1.5 text-xs bg-white/10 text-white border border-white/20 hover:bg-white/20 hover:border-white/40 transition-all h-[28px] flex items-center justify-center"
+                  >
+                    1h
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleExpirationPreset(0.25)}
+                    className="flex-1 py-1.5 text-xs bg-white/10 text-white border border-white/20 hover:bg-white/20 hover:border-white/40 transition-all h-[28px] flex items-center justify-center"
+                  >
+                    6h
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleExpirationPreset(0.5)}
+                    className="flex-1 py-1.5 text-xs bg-white/10 text-white border border-white/20 hover:bg-white/20 hover:border-white/40 transition-all h-[28px] flex items-center justify-center"
+                  >
+                    12h
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleExpirationPreset(1)}
+                    className="flex-1 py-1.5 text-xs bg-white/10 text-white border border-white/20 hover:bg-white/20 hover:border-white/40 transition-all h-[28px] flex items-center justify-center"
+                  >
+                    24h
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleExpirationPreset(7)}
+                    className="flex-1 py-1.5 text-xs bg-white/10 text-white border border-white/20 hover:bg-white/20 hover:border-white/40 transition-all h-[28px] flex items-center justify-center"
+                  >
+                    7d
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleExpirationPreset(30)}
+                    className="flex-1 py-1.5 text-xs bg-white/10 text-white border border-white/20 hover:bg-white/20 hover:border-white/40 transition-all h-[28px] flex items-center justify-center"
+                  >
+                    30d
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleExpirationPreset(90)}
+                    className="flex-1 py-1.5 text-xs bg-white/10 text-white border border-white/20 hover:bg-white/20 hover:border-white/40 transition-all h-[28px] flex items-center justify-center"
+                  >
+                    90d
+                  </button>
+                  
+                  {/* Calendar Date Picker Button */}
+                  <div className="relative flex-1">
+                    <button
+                      type="button"
+                      onClick={() => setShowDatePicker(!showDatePicker)}
+                      className="w-full py-1.5 text-xs bg-white/10 text-white border border-white/20 hover:bg-white/20 hover:border-white/40 transition-all h-[28px] flex items-center justify-center"
+                      title="Select specific date"
+                    >
+                      <CalendarIcon className="w-3 h-3" />
+                    </button>
+                    
+                    {/* Calendar Popup */}
+                    {showDatePicker && (
+                      <div className="absolute top-full right-0 mt-2 z-[100] bg-black border-2 border-white/20 shadow-lg rounded-md">
+                        <style jsx global>{`
+                          .calendar-white .rdp {
+                            --rdp-cell-size: 40px;
+                            --rdp-accent-color: #fff;
+                            --rdp-background-color: rgba(255, 255, 255, 0.1);
+                          }
+                          .calendar-white .rdp-months {
+                            color: #fff;
+                          }
+                          .calendar-white .rdp-day_selected {
+                            background-color: #fff !important;
+                            color: #000 !important;
+                            font-weight: bold;
+                          }
+                          .calendar-white .rdp-day {
+                            color: #fff;
+                          }
+                          .calendar-white .rdp-day:hover:not(.rdp-day_selected) {
+                            background-color: rgba(255, 255, 255, 0.2);
+                          }
+                          .calendar-white .rdp-day_today {
+                            background-color: rgba(255, 255, 255, 0.2);
+                            font-weight: 600;
+                          }
+                          .calendar-white .rdp-day_outside {
+                            color: rgba(255, 255, 255, 0.3);
+                          }
+                          .calendar-white .rdp-day_disabled {
+                            color: rgba(255, 255, 255, 0.2);
+                          }
+                          .calendar-white .rdp-head_cell {
+                            color: rgba(255, 255, 255, 0.7);
+                          }
+                          .calendar-white .rdp-caption_label {
+                            color: #fff;
+                          }
+                          .calendar-white button.rdp-nav_button {
+                            color: #fff;
+                          }
+                          .calendar-white button.rdp-nav_button:hover {
+                            background-color: rgba(255, 255, 255, 0.2);
+                          }
+                        `}</style>
+                        <Calendar
+                          mode="single"
+                          selected={selectedDate}
+                          onSelect={handleDateSelect}
+                          disabled={(date: Date) => date < new Date()}
+                          className="calendar-white"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
 
               {/* Deal Summary - Only show when offer amount is entered and no duplicate tokens */}
@@ -1528,18 +1676,19 @@ export function CreatePositionModal({
                     {/* Show fee deducted from buyer */}
                     {buyTokens.filter((t, idx) => t && buyAmounts[idx] && buyAmounts[idx].trim() !== '').map((token, index) => {
                       const amount = buyAmounts[buyTokens.indexOf(token)];
-                      if (!token || !amount || amount.trim() === '') return null;
-                      return (
-                        <div key={`fee-${index}`} className="flex justify-between items-center">
-                          <span className="text-gray-400">
+                          if (!token || !amount || amount.trim() === '') return null;
+                      const feeAmount = parseFloat(removeCommas(amount)) * 0.002;
+                          return (
+                            <div key={`fee-${index}`} className="flex justify-between items-center">
+                              <span className="text-gray-400">
                             {index === 0 ? 'Fee (0.2%):' : ''}
-                          </span>
-                          <span className="text-red-400 font-medium">
-                            -{formatBalanceDisplay((parseFloat(removeCommas(amount)) * 0.002).toFixed(4))} {formatTokenTicker(token.ticker)}
-                          </span>
-                        </div>
-                      );
-                    })}
+                              </span>
+                              <span className="text-red-400 font-medium">
+                            -{formatBalanceDisplay(feeAmount.toString())} {formatTokenTicker(token.ticker)}
+                              </span>
+                      </div>
+                          );
+                        })}
 
                     <div className="border-t border-white/10 pt-3">
                       {buyTokens.filter((t, idx) => t && buyAmounts[idx] && buyAmounts[idx].trim() !== '').map((token, index) => {
@@ -1555,7 +1704,7 @@ export function CreatePositionModal({
                             <span className="text-white font-bold">
                               {formatBalanceDisplay(amountAfterFee.toFixed(6))} {formatTokenTicker(token.ticker)}
                             </span>
-                          </div>
+                      </div>
                         );
                       })}
                     </div>

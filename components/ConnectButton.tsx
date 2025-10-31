@@ -59,7 +59,7 @@ export const ConnectButton = () => {
     <>
       <button
         onClick={handleConnectClick}
-        className="px-4 md:px-8 py-2 md:py-3 bg-black text-[#00D9FF] rounded-none font-semibold hover:bg-[#00D9FF] hover:text-black transition-colors text-sm md:text-base"
+        className="px-4 md:px-8 py-2 md:py-3 bg-black text-[#00D9FF] border-2 border-[#00D9FF] rounded-none font-semibold hover:bg-[#00D9FF] hover:text-black transition-colors text-sm md:text-base"
       >
         Connect Wallet
       </button>

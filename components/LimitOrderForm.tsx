@@ -11,11 +11,12 @@ import { useTokenStats } from '@/hooks/crypto/useTokenStats';
 import { useTokenAccess } from '@/context/TokenAccessContext';
 import { PAYWALL_ENABLED, REQUIRED_PARTY_TOKENS, REQUIRED_TEAM_TOKENS, PAYWALL_TITLE, PAYWALL_DESCRIPTION } from '@/config/paywall';
 import PaywallModal from './PaywallModal';
-import { Lock, ArrowLeftRight } from 'lucide-react';
+import { Lock, ArrowLeftRight, Calendar as CalendarIcon } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
+import { Calendar } from '@/components/ui/calendar';
 
 interface LimitOrderFormProps {
-  onTokenChange?: (sellToken: string | undefined, buyToken: string | undefined) => void;
+  onTokenChange?: (sellToken: string | undefined, buyTokens: (string | undefined)[]) => void;
   onLimitPriceChange?: (price: number | undefined) => void;
   onInvertPriceDisplayChange?: (inverted: boolean) => void;
   externalLimitPrice?: number;
@@ -171,6 +172,8 @@ export function LimitOrderForm({
   const [isBuyInputFocused, setIsBuyInputFocused] = useState<boolean[]>([false]);
   const [isSellInputFocused, setIsSellInputFocused] = useState(false);
   const [duplicateTokenError, setDuplicateTokenError] = useState<string | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   
   const sellDropdownRef = useRef<HTMLDivElement>(null);
   const buyDropdownRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -474,10 +477,11 @@ export function LimitOrderForm({
     }
   }, [invertPriceDisplay, limitPrice, externalMarketPrice, sellToken, buyTokens, prices]);
 
-  // Notify parent of token changes (use first buy token for chart)
+  // Notify parent of token changes (pass all buy tokens for chart)
   useEffect(() => {
-    if (onTokenChange && (sellToken || buyTokens[0])) {
-      onTokenChange(sellToken?.a, buyTokens[0]?.a);
+    if (onTokenChange && (sellToken || buyTokens.some(t => t))) {
+      const buyTokenAddresses = buyTokens.map(token => token?.a);
+      onTokenChange(sellToken?.a, buyTokenAddresses);
     }
   }, [sellToken, buyTokens, onTokenChange]);
 
@@ -496,7 +500,7 @@ export function LimitOrderForm({
     }
   }, []);
 
-  // Close dropdowns when clicking outside
+  // Close dropdowns and date picker when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (sellDropdownRef.current && !sellDropdownRef.current.contains(event.target as Node)) {
@@ -510,11 +514,19 @@ export function LimitOrderForm({
           setShowBuyDropdowns(newDropdowns);
         }
       });
+      
+      // Close date picker if clicking outside
+      if (showDatePicker) {
+        const target = event.target as HTMLElement;
+        if (!target.closest('.date-picker-container')) {
+          setShowDatePicker(false);
+        }
+      }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showBuyDropdowns]);
+  }, [showBuyDropdowns, showDatePicker]);
 
   const getTokenLogo = (ticker: string) => {
     return `/coin-logos/${ticker}.svg`;
@@ -553,9 +565,14 @@ export function LimitOrderForm({
       setLimitPrice(externalLimitPrice.toString());
       
       if (sellAmountNum > 0) {
-        const newBuyAmount = sellAmountNum * externalLimitPrice;
-        const newAmounts = [...buyAmounts];
-        newAmounts[0] = formatCalculatedValue(newBuyAmount);
+        // Update all buy amounts based on the new limit price
+        const newAmounts = buyAmounts.map((_, index) => {
+          if (buyTokens[index]) {
+            const newBuyAmount = sellAmountNum * externalLimitPrice;
+            return formatCalculatedValue(newBuyAmount);
+          }
+          return '';
+        });
         setBuyAmounts(newAmounts);
       }
       
@@ -571,7 +588,7 @@ export function LimitOrderForm({
         setPricePercentage(percentageAboveMarket);
       }
     }
-  }, [externalLimitPrice, sellAmountNum, marketPrice, invertPriceDisplay]);
+  }, [externalLimitPrice, sellAmountNum, marketPrice, invertPriceDisplay, buyTokens.length]);
 
   // When sell amount changes, update buy amount based on limit price
   useEffect(() => {
@@ -584,16 +601,21 @@ export function LimitOrderForm({
       const limitPriceNum = parseFloat(limitPrice);
       if (limitPriceNum > 0) {
         isUpdatingFromOtherInputRef.current = true;
-        const newBuyAmount = sellAmountNum * limitPriceNum;
-        const newAmounts = [...buyAmounts];
-        newAmounts[0] = formatCalculatedValue(newBuyAmount);
+        // Update all buy amounts based on the new sell amount and limit price
+        const newAmounts = buyAmounts.map((_, index) => {
+          if (buyTokens[index]) {
+            const newBuyAmount = sellAmountNum * limitPriceNum;
+            return formatCalculatedValue(newBuyAmount);
+          }
+          return '';
+        });
         setBuyAmounts(newAmounts);
         isUpdatingFromOtherInputRef.current = false;
       }
       
       lastEditedInputRef.current = null;
     }
-  }, [sellAmountNum, limitPrice]);
+  }, [sellAmountNum, limitPrice, buyTokens.length]);
 
   // When first buy amount changes, update sell amount based on limit price
   useEffect(() => {
@@ -619,6 +641,28 @@ export function LimitOrderForm({
     if (onCreateOrderClick) {
       onCreateOrderClick(sellToken, buyTokens, sellAmount, buyAmounts, expirationDays);
     }
+  };
+
+  const handleExpirationPreset = (days: number) => {
+    setExpirationDays(days);
+    // Calculate and set the date
+    const futureDate = new Date();
+    futureDate.setDate(futureDate.getDate() + Math.ceil(days));
+    setSelectedDate(futureDate);
+  };
+
+  const handleDateSelect = (date: Date | undefined) => {
+    if (!date) return;
+    
+    setSelectedDate(date);
+    const now = new Date();
+    const diffTime = date.getTime() - now.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays > 0) {
+      setExpirationDays(diffDays);
+    }
+    setShowDatePicker(false);
   };
 
   const handlePercentageClick = (percentage: number, direction: 'above' | 'below' = 'above') => {
@@ -651,9 +695,14 @@ export function LimitOrderForm({
       onLimitPriceChange(newPrice);
     }
     
-    const newBuyAmount = effectiveSellAmount * newPrice;
-    const newAmounts = [...buyAmounts];
-    newAmounts[0] = formatCalculatedValue(newBuyAmount);
+    // Update all buy amounts based on the new limit price
+    const newAmounts = buyAmounts.map((_, index) => {
+      if (buyTokens[index]) {
+        const newBuyAmount = effectiveSellAmount * newPrice;
+        return formatCalculatedValue(newBuyAmount);
+      }
+      return '';
+    });
     setBuyAmounts(newAmounts);
   };
 
@@ -724,6 +773,19 @@ export function LimitOrderForm({
   const handleSwapTokens = () => {
     // Can only swap if there's exactly one buy token
     if (buyTokens.length === 1 && sellToken && buyTokens[0]) {
+      // Calculate the percentage difference from market price before swap
+      let percentageDiff: number | null = null;
+      if (limitPrice && marketPrice && parseFloat(limitPrice) > 0 && marketPrice > 0) {
+        if (invertPriceDisplay) {
+          const invertedLimitPrice = 1 / parseFloat(limitPrice);
+          const invertedMarketPrice = 1 / marketPrice;
+          percentageDiff = ((invertedLimitPrice - invertedMarketPrice) / invertedMarketPrice) * 100;
+        } else {
+          percentageDiff = ((parseFloat(limitPrice) - marketPrice) / marketPrice) * 100;
+        }
+      }
+
+      // Swap tokens
       const tempToken = sellToken;
       setSellToken(buyTokens[0]);
       setBuyTokens([tempToken]);
@@ -732,6 +794,23 @@ export function LimitOrderForm({
       const tempAmount = sellAmount;
       setSellAmount(buyAmounts[0]);
       setBuyAmounts([tempAmount]);
+
+      // Calculate new market price (it will be inverted)
+      const newMarketPrice = marketPrice && marketPrice > 0 ? 1 / marketPrice : null;
+
+      // Apply the same percentage difference to the new market price
+      if (percentageDiff !== null && newMarketPrice) {
+        const newLimitPrice = newMarketPrice * (1 + percentageDiff / 100);
+        setLimitPrice(newLimitPrice.toFixed(8));
+        
+        // Notify parent of the new limit price
+        if (onLimitPriceChange) {
+          onLimitPriceChange(newLimitPrice);
+        }
+        
+        // Update price percentage display
+        setPricePercentage(percentageDiff);
+      }
     }
   };
 
@@ -949,13 +1028,13 @@ export function LimitOrderForm({
           className={`p-0 rounded-full transition-all ${
             buyTokens.length > 1 
               ? 'cursor-not-allowed opacity-30' 
-              : 'hover:bg-[#00D9FF]/10 hover:bg-red cursor-pointer'
+              : 'hover:border-[#00D9FF]/10 hover:bg-red cursor-pointer'
           } border-0 border-[#00D9FF]/50 ${
             buyTokens.length === 1 && 'hover:border-[#00D9FF]'
           }`}
           title={buyTokens.length > 1 ? "Cannot swap with multiple tokens" : "Swap tokens and amounts"}
         >
-          <ArrowLeftRight className={`w-5 h-5 text-[#00D9FF] ${
+          <ArrowLeftRight className={`w-5 h-5 text-[#00D9FF] rotate-90 ${
             buyTokens.length > 1 
               ? '' 
               : 'group-hover:text-white'
@@ -1018,7 +1097,7 @@ export function LimitOrderForm({
                       {index > 0 && (
                         <button
                           onClick={() => handleRemoveBuyToken(index)}
-                          className="p-3 bg-red-500/20 hover:bg-red-500/30 border-2 border-red-500/50 transition-colors"
+                          className="p-3 h-[50px] bg-red-500/20 hover:bg-red-500/30 border-2 border-red-500/50 transition-colors flex items-center justify-center"
                           title="Remove token"
                         >
                           <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1258,7 +1337,20 @@ export function LimitOrderForm({
 
       {/* Expiration */}
       <div className="mb-4">
-        <label className="text-[#00D9FF] text-sm mb-2 block font-semibold text-left">EXPIRATION (DAYS)</label>
+        <div className="flex items-center justify-between mb-2">
+          <label className="text-[#00D9FF] text-sm font-semibold">EXPIRATION (DAYS)</label>
+          {selectedDate && (
+            <span className="text-[#00D9FF]/50 text-xs">
+              {expirationDays <= 1 ? (
+                // Show UTC time for hour-based presets (1 day or less)
+                `${selectedDate.getUTCHours() % 12 || 12}${selectedDate.getUTCHours() >= 12 ? 'pm' : 'am'} UTC ${selectedDate.getUTCDate()} ${selectedDate.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' })} ${selectedDate.getUTCFullYear()}`
+              ) : (
+                // Show regular date for day-based presets
+                selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+              )}
+            </span>
+          )}
+        </div>
         <input
           type="number"
           value={expirationDays === 0 ? '' : expirationDays}
@@ -1266,14 +1358,136 @@ export function LimitOrderForm({
             const value = e.target.value;
             if (value === '') {
               setExpirationDays(0);
-            } else if (value.match(/^[1-9]\d*$/) && parseInt(value) > 0) {
-              setExpirationDays(Number(value));
+              setSelectedDate(undefined);
+            } else {
+              const numValue = parseFloat(value);
+              if (!isNaN(numValue) && numValue > 0) {
+                setExpirationDays(numValue);
+                // Calculate and set the date
+                const futureDate = new Date();
+                futureDate.setDate(futureDate.getDate() + Math.ceil(numValue));
+                setSelectedDate(futureDate);
+              }
             }
           }}
           placeholder="Enter days"
-          min="1"
+          min="0.01"
+          step="0.01"
           className="w-full bg-black border-2 border-[#00D9FF] p-3 text-[#00D9FF] placeholder-[#00D9FF]/30 focus:outline-none focus:border-[#00D9FF] focus:shadow-[0_0_15px_rgba(0,217,255,0.5)] transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
         />
+        
+        {/* Expiration Preset Buttons */}
+        <div className="mt-3 flex gap-2 w-full">
+          <button
+            onClick={() => handleExpirationPreset(0.04)} // 1 hour = 1/24 day
+            className="flex-1 py-1.5 text-xs bg-[#00D9FF]/10 text-[#00D9FF] border border-[#00D9FF]/30 hover:bg-[#00D9FF]/20 hover:border-[#00D9FF] transition-all h-[28px] flex items-center justify-center"
+          >
+            1h
+          </button>
+          <button
+            onClick={() => handleExpirationPreset(0.25)} // 6 hours
+            className="flex-1 py-1.5 text-xs bg-[#00D9FF]/10 text-[#00D9FF] border border-[#00D9FF]/30 hover:bg-[#00D9FF]/20 hover:border-[#00D9FF] transition-all h-[28px] flex items-center justify-center"
+          >
+            6h
+          </button>
+          <button
+            onClick={() => handleExpirationPreset(0.5)} // 12 hours
+            className="flex-1 py-1.5 text-xs bg-[#00D9FF]/10 text-[#00D9FF] border border-[#00D9FF]/30 hover:bg-[#00D9FF]/20 hover:border-[#00D9FF] transition-all h-[28px] flex items-center justify-center"
+          >
+            12h
+          </button>
+          <button
+            onClick={() => handleExpirationPreset(1)} // 24 hours
+            className="flex-1 py-1.5 text-xs bg-[#00D9FF]/10 text-[#00D9FF] border border-[#00D9FF]/30 hover:bg-[#00D9FF]/20 hover:border-[#00D9FF] transition-all h-[28px] flex items-center justify-center"
+          >
+            24h
+          </button>
+          <button
+            onClick={() => handleExpirationPreset(7)}
+            className="flex-1 py-1.5 text-xs bg-[#00D9FF]/10 text-[#00D9FF] border border-[#00D9FF]/30 hover:bg-[#00D9FF]/20 hover:border-[#00D9FF] transition-all h-[28px] flex items-center justify-center"
+          >
+            7d
+          </button>
+          <button
+            onClick={() => handleExpirationPreset(30)}
+            className="flex-1 py-1.5 text-xs bg-[#00D9FF]/10 text-[#00D9FF] border border-[#00D9FF]/30 hover:bg-[#00D9FF]/20 hover:border-[#00D9FF] transition-all h-[28px] flex items-center justify-center"
+          >
+            30d
+          </button>
+          <button
+            onClick={() => handleExpirationPreset(90)}
+            className="flex-1 py-1.5 text-xs bg-[#00D9FF]/10 text-[#00D9FF] border border-[#00D9FF]/30 hover:bg-[#00D9FF]/20 hover:border-[#00D9FF] transition-all h-[28px] flex items-center justify-center"
+          >
+            90d
+          </button>
+          
+          {/* Calendar Date Picker Button */}
+          <div className="relative date-picker-container flex-1">
+            <button
+              onClick={() => setShowDatePicker(!showDatePicker)}
+              className="w-full py-1.5 text-xs bg-[#00D9FF]/10 text-[#00D9FF] border border-[#00D9FF]/30 hover:bg-[#00D9FF]/20 hover:border-[#00D9FF] transition-all h-[28px] flex items-center justify-center"
+              title="Select specific date"
+            >
+              <CalendarIcon className="w-3 h-3" />
+            </button>
+            
+            {/* Calendar Popup */}
+            {showDatePicker && (
+              <div className="absolute top-full right-0 mt-2 z-[100] bg-black border-2 border-[#00D9FF] shadow-[0_0_20px_rgba(0,217,255,0.5)] rounded-md">
+                <style jsx global>{`
+                  .calendar-cyan .rdp {
+                    --rdp-cell-size: 40px;
+                    --rdp-accent-color: #00D9FF;
+                    --rdp-background-color: rgba(0, 217, 255, 0.1);
+                  }
+                  .calendar-cyan .rdp-months {
+                    color: #00D9FF;
+                  }
+                  .calendar-cyan .rdp-day_selected {
+                    background-color: #00D9FF !important;
+                    color: #000 !important;
+                    font-weight: bold;
+                  }
+                  .calendar-cyan .rdp-day {
+                    color: #00D9FF;
+                  }
+                  .calendar-cyan .rdp-day:hover:not(.rdp-day_selected) {
+                    background-color: rgba(0, 217, 255, 0.2);
+                  }
+                  .calendar-cyan .rdp-day_today {
+                    background-color: rgba(0, 217, 255, 0.2);
+                    font-weight: 600;
+                  }
+                  .calendar-cyan .rdp-day_outside {
+                    color: rgba(0, 217, 255, 0.3);
+                  }
+                  .calendar-cyan .rdp-day_disabled {
+                    color: rgba(0, 217, 255, 0.2);
+                  }
+                  .calendar-cyan .rdp-head_cell {
+                    color: rgba(0, 217, 255, 0.7);
+                  }
+                  .calendar-cyan .rdp-caption_label {
+                    color: #00D9FF;
+                  }
+                  .calendar-cyan button.rdp-nav_button {
+                    color: #00D9FF;
+                  }
+                  .calendar-cyan button.rdp-nav_button:hover {
+                    background-color: rgba(0, 217, 255, 0.2);
+                  }
+                `}</style>
+                <Calendar
+                  mode="single"
+                  selected={selectedDate}
+                  onSelect={handleDateSelect}
+                  disabled={(date: Date) => date < new Date()}
+                  className="calendar-cyan"
+                />
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Order Summary */}
@@ -1305,13 +1519,14 @@ export function LimitOrderForm({
             {buyTokens.filter((t, idx) => t && buyAmounts[idx] && buyAmounts[idx].trim() !== '').map((token, index) => {
               const amount = buyAmounts[buyTokens.indexOf(token)];
               if (!token || !amount || amount.trim() === '') return null;
+              const feeAmount = parseFloat(removeCommas(amount)) * 0.002;
               return (
                 <div key={`fee-${index}`} className="flex justify-between items-center">
                   <span className="text-[#00D9FF]/70">
                     {index === 0 ? 'Fee (0.2%):' : ''}
                   </span>
                   <span className="text-red-400 font-medium">
-                    -{formatBalanceDisplay((parseFloat(removeCommas(amount)) * 0.002).toFixed(4))} {formatTokenTicker(token.ticker)}
+                    -{formatBalanceDisplay(feeAmount.toString())} {formatTokenTicker(token.ticker)}
                   </span>
                 </div>
               );

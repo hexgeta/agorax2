@@ -8,7 +8,7 @@ import { CoinLogo } from '@/components/ui/CoinLogo';
 
 interface LimitOrderChartProps {
   sellTokenAddress?: string;
-  buyTokenAddress?: string;
+  buyTokenAddresses?: (string | undefined)[];
   limitOrderPrice?: number;
   invertPriceDisplay?: boolean;
   onLimitPriceChange?: (newPrice: number) => void;
@@ -16,7 +16,7 @@ interface LimitOrderChartProps {
   onDragStateChange?: (isDragging: boolean) => void;
 }
 
-export function LimitOrderChart({ sellTokenAddress, buyTokenAddress, limitOrderPrice, invertPriceDisplay = true, onLimitPriceChange, onCurrentPriceChange, onDragStateChange }: LimitOrderChartProps) {
+export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limitOrderPrice, invertPriceDisplay = true, onLimitPriceChange, onCurrentPriceChange, onDragStateChange }: LimitOrderChartProps) {
   const [currentPrice, setCurrentPrice] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -37,7 +37,8 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddress, limitOrderP
 
   // Default to PLS -> HEX if no tokens provided
   const sellToken = sellTokenAddress || '0x000000000000000000000000000000000000dead'; // PLS
-  const buyToken = buyTokenAddress || '0x2b591e99afe9f32eaa6214f7b7629768c40eeb39'; // HEX
+  // Use first buy token for price calculation
+  const buyToken = (buyTokenAddresses && buyTokenAddresses[0]) || '0x2b591e99afe9f32eaa6214f7b7629768c40eeb39'; // HEX
 
   useEffect(() => {
     fetchPriceData();
@@ -107,10 +108,21 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddress, limitOrderP
 
   const sellTokenInfo = TOKEN_CONSTANTS.find(t => t.a?.toLowerCase() === sellToken.toLowerCase());
   const buyTokenInfo = TOKEN_CONSTANTS.find(t => t.a?.toLowerCase() === buyToken.toLowerCase());
+  
+  // Get info for all buy tokens
+  const buyTokenInfos = buyTokenAddresses
+    .filter(addr => addr)
+    .map(addr => TOKEN_CONSTANTS.find(t => t.a?.toLowerCase() === addr?.toLowerCase()))
+    .filter(info => info);
 
   // When inverted, swap the display token info
   const displayBaseTokenInfo = invertPriceDisplay ? buyTokenInfo : sellTokenInfo;
   const displayQuoteTokenInfo = invertPriceDisplay ? sellTokenInfo : buyTokenInfo;
+  
+  // For multiple tokens, get all display tokens
+  const displayQuoteTokenInfos = invertPriceDisplay 
+    ? [sellTokenInfo].filter(Boolean)
+    : buyTokenInfos;
 
   // Calculate display prices (invert if needed)
   const displayCurrentPrice = currentPrice && invertPriceDisplay && currentPrice > 0
@@ -320,16 +332,22 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddress, limitOrderP
 
             {/* Current Price Line */}
             <div 
-              className="absolute w-full border-t-2 border-[#00D9FF] shadow-[0_0_15px_rgba(0,217,255,0.8)] transition-all duration-500 pointer-events-none"
+              className="absolute w-full pointer-events-none"
               style={{ 
                 bottom: `${currentPricePosition}%`,
+                height: '40px',
                 zIndex: currentPricePosition < (limitPricePosition || 0) ? 20 : 10,
-                transform: 'translateY(50%)'
+                transform: 'translateY(50%)',
+                transition: 'bottom 200ms'
               }}
             >
+              {/* Visible line */}
               <div 
-                className={`absolute left-16 flex items-center gap-2 bg-black/90 px-3 py-1 border border-[#00D9FF] min-w-[220px] ${
-                  limitPricePosition && limitPricePosition < currentPricePosition ? '-top-8' : '-bottom-8'
+                className="absolute top-1/2 -translate-y-1/2 w-full border-t-2 border-[#00D9FF] shadow-[0_0_15px_rgba(0,217,255,0.8)] transition-all duration-500 pointer-events-none"
+              />
+              <div 
+                className={`absolute right-0 flex items-center gap-2 bg-black/90 px-3 py-1 border border-[#00D9FF] w-[250px] ${
+                  limitPricePosition && limitPricePosition < currentPricePosition ? 'top-0 -translate-y-[calc(100%+0px)]' : 'bottom-0 translate-y-[calc(100%+0px)]'
                 }`}
               >
                 <span className="text-xs text-[#00D9FF]/70 whitespace-nowrap">Current Price:</span>
@@ -373,42 +391,57 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddress, limitOrderP
               >
                 {/* Visible line */}
                 <div 
-                  className={`absolute top-1/2 -translate-y-1/2 w-full border-t-2 border-dashed border-[#FF0080] ${isDragging ? 'shadow-[0_0_35px_rgba(255,0,128,1)] border-t-[3px]' : 'shadow-[0_0_15px_rgba(255,0,128,0.8)] hover:shadow-[0_0_25px_rgba(255,0,128,1)]'} pointer-events-none`}
+                  className={`absolute top-1/2 -translate-y-1/2 w-full border-t-2 border-1 border-[#FF0080] ${isDragging ? 'shadow-[0_0_35px_rgba(255,0,128,1)] border-t-[3px]' : 'shadow-[0_0_15px_rgba(255,0,128,0.8)] hover:shadow-[0_0_25px_rgba(255,0,128,1)]'} pointer-events-none`}
                   style={{
                     transition: isDragging ? 'none' : 'all 200ms'
                   }}
                 />
                 <div 
-                  className={`absolute right-4 flex items-center gap-2 bg-black/90 px-3 py-1 border border-[#FF0080] pointer-events-none min-w-[200px] ${
-                    limitPricePosition < currentPricePosition ? '-bottom-3' : '-top-3'
+                  className={`absolute right-0 flex flex-col gap-1 bg-black/90 px-3 py-1 border border-[#FF0080] pointer-events-none w-[250px] ${
+                    limitPricePosition < currentPricePosition ? 'bottom-0 translate-y-[calc(100%+0px)]' : 'top-0 -translate-y-[calc(100%+0px)]'
                   }`}
                 >
-                  <span className="text-xs text-[#FF0080]/70 whitespace-nowrap">Limit Price:</span>
-                  <span className="text-sm font-bold text-[#FF0080] min-w-[60px] text-right">
-                    <NumberFlow 
-                      value={priceToDisplay || 0} 
-                      format={{ 
-                        minimumSignificantDigits: 1,
-                        maximumSignificantDigits: 4 
-                      }}
-                    />
-                  </span>
-                  {displayQuoteTokenInfo && (
-                    <>
-                      <span className="text-xs text-[#FF0080]">
-                        {formatTokenTicker(displayQuoteTokenInfo.ticker)}
-                      </span>
-                      <img
-                        src={`/coin-logos/${displayQuoteTokenInfo.ticker}.svg`}
-                        alt={`${displayQuoteTokenInfo.ticker} logo`}
-                        className="w-[16px] h-[16px] object-contain"
-                        style={{ filter: 'brightness(0) saturate(100%) invert(47%) sepia(99%) saturate(6544%) hue-rotate(312deg) brightness(103%) contrast(103%)' }}
-                        onError={(e) => {
-                          e.currentTarget.src = '/coin-logos/default.svg';
-                        }}
-                      />
-                    </>
-                  )}
+                  {displayQuoteTokenInfos.length > 0 && displayQuoteTokenInfos.map((tokenInfo, index) => (
+                    <div key={index} className="flex items-center justify-between">
+                      {index === 0 && (
+                        <span className="text-xs text-[#FF0080]/70 whitespace-nowrap">
+                          Limit Price:
+                        </span>
+                      )}
+                      {index > 0 && (
+                        <span className="text-xs text-[#FF0080]/70 whitespace-nowrap">
+                          {/* Empty space to align with first row */}
+                        </span>
+                      )}
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-[#FF0080]">
+                          <NumberFlow 
+                            value={priceToDisplay || 0} 
+                            format={{ 
+                              minimumSignificantDigits: 1,
+                              maximumSignificantDigits: 4 
+                            }}
+                          />
+                        </span>
+                        {tokenInfo && (
+                          <>
+                            <span className="text-xs text-[#FF0080]">
+                              {formatTokenTicker(tokenInfo.ticker)}
+                            </span>
+                            <img
+                              src={`/coin-logos/${tokenInfo.ticker}.svg`}
+                              alt={`${tokenInfo.ticker} logo`}
+                              className="w-[16px] h-[16px] object-contain"
+                              style={{ filter: 'brightness(0) saturate(100%) invert(47%) sepia(99%) saturate(6544%) hue-rotate(312deg) brightness(103%) contrast(103%)' }}
+                              onError={(e) => {
+                                e.currentTarget.src = '/coin-logos/default.svg';
+                              }}
+                            />
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}

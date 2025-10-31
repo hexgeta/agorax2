@@ -98,24 +98,18 @@ function createClient(chainId: number) {
 
 // Helper function to fetch contract data
 async function fetchContractData(contractAddress: Address, chainId: number) {
-  console.log('🔧 fetchContractData starting', { contractAddress, chainId });
-  
   try {
     if (!contractAddress) {
-      console.error('❌ No contract address provided');
       throw new Error('No contract address provided');
     }
     
     // Create client only when needed (client-side only)
     const client = createClient(chainId);
-    console.log('✅ RPC client created');
     
     // Test basic connectivity first
     try {
-      const blockNumber = await client.getBlockNumber();
-      console.log('✅ RPC connection OK, block number:', blockNumber);
+      await client.getBlockNumber();
     } catch (rpcError) {
-      console.error('❌ RPC connection failed:', rpcError);
       throw rpcError;
     }
     
@@ -226,16 +220,8 @@ async function fetchContractData(contractAddress: Address, chainId: number) {
       cancelledOrders: cancelledOrders,
     };
     
-    console.log('✅ fetchContractData returning:', {
-      contractName,
-      orderCount: allOrders.length,
-      activeCount: activeOrders.length,
-      orderCounter: orderCounter?.toString()
-    });
-    
     return result;
   } catch (error) {
-    console.error('❌ fetchContractData error:', error);
     return {
       contractName: null,
       contractOwner: null,
@@ -270,47 +256,37 @@ export function useOpenPositions() {
   const [isClient, setIsClient] = useState(false);
 
   const fetchData = useCallback(async () => {
-    console.log('📊 useOpenPositions fetchData called', { isClient, isConnected, contractAddress, chainId });
-    
     if (!isClient) {
-      console.log('⏳ Waiting for client to initialize...');
       return;
     }
     
     // Don't fetch if wallet is not connected
     if (!isConnected) {
-      console.log('👛 Wallet not connected, skipping fetch');
       setIsLoading(false);
       return;
     }
     
     if (!contractAddress || !chainId) {
-      console.error('❌ Contract not deployed on chain', { contractAddress, chainId });
       setError(new Error('Contract not deployed on this chain'));
       setIsLoading(false);
       return;
     }
     
-    console.log('🚀 Starting data fetch for contract:', contractAddress, 'on chain:', chainId);
     setIsLoading(true);
     setError(null);
     
     try {
       const result = await fetchContractData(contractAddress as Address, chainId);
-      console.log('✅ Data fetched successfully:', result);
       setData(result);
       
       // If all data is null, there might be an issue
       if (!result.contractName && !result.contractOwner && !result.contractSymbol && !result.totalSupply && !result.orderCounter) {
-        console.error('❌ All contract calls returned null');
-        setError(new Error('All contract calls failed. Check console for details.'));
+        setError(new Error('All contract calls failed'));
       }
     } catch (err) {
-      console.error('❌ Error fetching contract data:', err);
       setError(err as Error);
     } finally {
       setIsLoading(false);
-      console.log('✅ Fetch complete');
     }
   }, [isClient, isConnected, contractAddress, chainId]);
 

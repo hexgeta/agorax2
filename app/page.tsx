@@ -42,7 +42,7 @@ export default function Home() {
   
   // Chart and form state
   const [sellTokenAddress, setSellTokenAddress] = useState<string | undefined>();
-  const [buyTokenAddress, setBuyTokenAddress] = useState<string | undefined>();
+  const [buyTokenAddresses, setBuyTokenAddresses] = useState<(string | undefined)[]>([]);
   const [limitOrderPrice, setLimitOrderPrice] = useState<number | undefined>();
   const [currentMarketPrice, setCurrentMarketPrice] = useState<number | undefined>();
   const [isDragging, setIsDragging] = useState(false);
@@ -136,7 +136,7 @@ export default function Home() {
                   <div className="lg:col-span-3">
                     <LimitOrderChart 
                       sellTokenAddress={sellTokenAddress}
-                      buyTokenAddress={buyTokenAddress}
+                      buyTokenAddresses={buyTokenAddresses}
                       limitOrderPrice={limitOrderPrice}
                       invertPriceDisplay={invertPriceDisplay}
                       onLimitPriceChange={(newPrice) => {
@@ -157,9 +157,9 @@ export default function Home() {
                       externalLimitPrice={limitOrderPrice}
                       externalMarketPrice={currentMarketPrice}
                       isDragging={isDragging}
-                      onTokenChange={(sell, buy) => {
+                      onTokenChange={(sell, buyTokens) => {
                         setSellTokenAddress(sell);
-                        setBuyTokenAddress(buy);
+                        setBuyTokenAddresses(buyTokens);
                       }}
                       onLimitPriceChange={(price) => {
                         setLimitOrderPrice(price);

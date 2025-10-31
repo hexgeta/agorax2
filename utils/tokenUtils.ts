@@ -52,10 +52,9 @@ function getTokenLogo(ticker: string): string {
 }
 
 // Create a map of token addresses to token info from TOKEN_CONSTANTS
-const TOKEN_MAP = new Map([
-  // Add tokens from TOKEN_CONSTANTS (only if they have an address)
-  ...TOKEN_CONSTANTS
-    .filter(token => token.a && token.a.trim() !== '')
+const TOKEN_MAP = new Map<string, { ticker: string; name: string; decimals: number; logo: string }>(
+  TOKEN_CONSTANTS
+    .filter((token): token is typeof token & { a: string } => token.a !== null && token.a.trim() !== '')
     .map(token => [
       token.a.toLowerCase(),
       {
@@ -64,15 +63,16 @@ const TOKEN_MAP = new Map([
         decimals: token.decimals,
         logo: getTokenLogo(token.ticker)
       }
-    ]),
-  // Add contract's native address mapping to PLS
-  ['0x000000000000000000000000000000000000dead', {
-    ticker: 'PLS',
-    name: 'Pulse',
-    decimals: 18,
-    logo: getTokenLogo('PLS')
-  }]
-]);
+    ] as [string, { ticker: string; name: string; decimals: number; logo: string }])
+);
+
+// Add contract's native address mapping to PLS
+TOKEN_MAP.set('0x000000000000000000000000000000000000dead', {
+  ticker: 'PLS',
+  name: 'Pulse',
+  decimals: 18,
+  logo: getTokenLogo('PLS')
+});
 
 
 // Function to get token info by address

@@ -13,10 +13,6 @@ export function useContractWhitelistRead() {
   const { chainId } = useAccount();
   const contractAddress = getContractAddress(chainId);
   
-  // Debug logging
-  console.log('🔍 useContractWhitelistRead - chainId:', chainId);
-  console.log('🔍 useContractWhitelistRead - contractAddress:', contractAddress);
-  
   // Get the total count of whitelisted tokens
   const { data: totalCount, isLoading: isLoadingCount, error: countError } = useContractRead({
     address: contractAddress as Address,
@@ -26,9 +22,6 @@ export function useContractWhitelistRead() {
       enabled: !!contractAddress,
     },
   })
-  
-  // Log results
-  console.log('🔍 viewCountWhitelisted result:', { totalCount, isLoadingCount, countError });
 
   // Get all whitelisted tokens (we'll fetch them in batches if needed)
   const { data: whitelistedData, isLoading: isLoadingWhitelist } = useContractRead({

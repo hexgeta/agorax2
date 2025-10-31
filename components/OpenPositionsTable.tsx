@@ -271,7 +271,7 @@ interface OpenPositionsTableProps {
 }
 
 export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ isMarketplaceMode = false }, ref) => {
-  const { fillOrExecuteOrder, cancelOrder, updateOrderInfo, updateOrderPrice, updateOrderExpirationTime, isWalletConnected } = useContractWhitelist();
+  const { fillOrExecuteOrder, cancelOrder, isWalletConnected } = useContractWhitelist();
   const { address, chainId } = useAccount();
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
@@ -915,6 +915,14 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
         throw new Error('No valid token amount found');
       }
 
+      if (!buyTokenInfo) {
+        throw new Error('Token information not found');
+      }
+
+      if (!publicClient) {
+        throw new Error('Public client not available');
+      }
+
       // Check if the buy token is native PLS and send value accordingly
       const value = isNativeToken(buyTokenInfo.address) ? buyAmount : undefined;
 
@@ -1074,6 +1082,15 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
       return;
     }
     
+    if (!publicClient) {
+      toast({
+        title: "Error",
+        description: "Public client not available",
+        variant: "destructive"
+      });
+      return;
+    }
+    
     setCancelingOrders(prev => new Set(prev).add(orderId));
     setCancelErrors(prev => ({ ...prev, [orderId]: '' }));
     setTransactionPending(true);
@@ -1188,75 +1205,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     setTransactionPending(true);
     
     try {
-      // Update order info (sell amount, buy tokens, amounts)
-      const sellTokenInfo = getTokenInfo(order.orderDetailsWithId.orderDetails.sellToken);
-      const newSellAmount = parseTokenAmount(editFormData.sellAmount, sellTokenInfo.decimals);
-      
-      const newBuyTokensIndex: bigint[] = [];
-      const newBuyAmounts: bigint[] = [];
-      
-      Object.entries(editFormData.buyAmounts).forEach(([tokenIndex, amount]) => {
-        if (amount && parseFloat(amount) > 0) {
-          const tokenInfo = getTokenInfoByIndex(Number(tokenIndex));
-          newBuyTokensIndex.push(BigInt(tokenIndex));
-          newBuyAmounts.push(parseTokenAmount(amount, tokenInfo.decimals));
-        }
-      });
-      
-      const txHash1 = await updateOrderInfo(
-        order.orderDetailsWithId.orderId,
-        newSellAmount,
-        newBuyTokensIndex,
-        newBuyAmounts
-      );
-      
-      
-      // Update expiration time
-      const newExpirationTime = Math.floor(new Date(editFormData.expirationTime).getTime() / 1000);
-      const txHash2 = await updateOrderExpirationTime(
-        order.orderDetailsWithId.orderId,
-        BigInt(newExpirationTime)
-      );
-      
-      
-      // Wait for both transactions to be confirmed with proper timeout handling
-      const [receipt1, receipt2] = await Promise.all([
-        waitForTransactionWithTimeout(
-          publicClient,
-          txHash1 as `0x${string}`,
-          TRANSACTION_TIMEOUTS.TRANSACTION
-        ),
-        waitForTransactionWithTimeout(
-          publicClient,
-          txHash2 as `0x${string}`,
-          TRANSACTION_TIMEOUTS.TRANSACTION
-        )
-      ]);
-      
-      
-      // Show success toast only after both transactions are confirmed
-      toast({
-        title: "Order Updated!",
-        description: "Your order details have been successfully updated.",
-        variant: "success",
-        action: (
-          <ToastAction
-            altText="View transaction"
-            onClick={() => window.open(`https://otter.pulsechain.com/tx/${txHash1}`, '_blank')}
-          >
-            View TX
-          </ToastAction>
-        ),
-      });
-      
-      // Navigate to "My Deals" > "Active" to show the updated order
-      setTokenFilter('maxi');
-      setOwnershipFilter('mine');
-      setStatusFilter('active');
-      setExpandedPositions(new Set());
-      
-      // Refresh the orders to show updated details
-      refetch();
+      // Note: Order updating is not supported in the current contract version
+      throw new Error('Order updating is not available in this contract version');
       
       // Clear form and close edit mode
       setEditingOrder(null);
@@ -1642,10 +1592,17 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
 
   // Separate count for MAXI tokens (always calculated independently)
   const maxiTokenOrders = useMemo(() => {
+    const MAXI_TOKENS = [
+      '0x0d86eb9f43c57f6ff3bc9e23d8f9d82503f0e84b', // pMAXI
+      '0x6b32022693210cd2cfc466b9ac0085de8fc34ea6', // pDECI
+      '0x3ec6435afe50db04d3e1c9f1f37e1bc3e92e8c82', // pLUCKY
+      '0x28de5c10def00e4c0e3851e5b3b0d1e88daaaa38', // pTRIO
+      '0xc2663d79e0a4e46c0f3ef11e28b60d74b93c2adf', // pBASE
+    ];
+    
     return allOrders.filter(order => {
       const sellTokenAddress = order.orderDetailsWithId.orderDetails.sellToken;
-      const sellTokenInfo = getTokenInfo(sellTokenAddress);
-      return sellTokenInfo.isMaxiToken;
+      return MAXI_TOKENS.includes(sellTokenAddress.toLowerCase());
     });
   }, [allOrders]);
 
@@ -1715,7 +1672,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
       className="w-full max-w-[1200px] mx-auto mb-8 mt-8"
     >
       {/* Level 3: Status Filter */}
-        <div className="flex flex-wrap justify-center sm:justify-start gap-3 mb-6">
+        <div className="flex flex-wrap justify-start gap-3 mb-6">
         <button
           onClick={() => {
             setStatusFilter('active');
@@ -1764,7 +1721,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
         </div>
 
       {/* Search Bar */}
-      <div className="mb-6">
+      <div className="mb-6 max-w-[700px]">
         <div className="relative w-full">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500" />
           <input
@@ -2390,7 +2347,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                 
                                 // Calculate total buy amount (what buyer will pay)
                                 let totalBuyAmount = 0;
-                                let primaryTokenInfo = null;
+                                let primaryTokenInfo: { ticker: string; name: string; decimals: number; logo: string; address: string; } | null = null;
                                 const buyTokensIndex = order.orderDetailsWithId.orderDetails.buyTokensIndex;
                                 const buyAmounts = order.orderDetailsWithId.orderDetails.buyAmounts;
                                 
@@ -2421,8 +2378,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                         <div className="flex justify-between">
                                           <span className="text-gray-400">Seller Receives:</span>
                                           <div className="flex items-center space-x-1">
-                                            <span className="text-white">{orderOwnerReceives.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })}</span>
-                                            {primaryTokenInfo && (
+                                                  <span className="text-white">{orderOwnerReceives.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })}</span>
+                                            {primaryTokenInfo !== null && (
                                               <>
                                                 <TokenLogo 
                                                   src={primaryTokenInfo.logo}
@@ -2438,7 +2395,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                           <span className="text-gray-400">Platform Fee (1%):</span>
                                           <div className="flex items-center space-x-1">
                                             <span className="text-white">{platformFee.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })}</span>
-                                            {primaryTokenInfo && (
+                                            {primaryTokenInfo !== null && (
                                               <>
                                                 <TokenLogo 
                                                   src={primaryTokenInfo.logo}
@@ -2455,7 +2412,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                             <span className="text-white font-bold">You Pay:</span>
                                             <div className="flex items-center space-x-1">
                                               <span className="text-white font-bold">{formatNumberWithCommas(formatTokenAmountDisplay(totalBuyAmount))}</span>
-                                              {primaryTokenInfo && (
+                                              {primaryTokenInfo !== null && (
                                                 <>
                                                   <TokenLogo 
                                                     src={primaryTokenInfo.logo}
@@ -2475,6 +2432,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                         
                                          {/* What you receive section */}
                                          {(() => {
+                                           if (!primaryTokenInfo) return null;
+                                           
                                            const sellTokenInfo = getTokenInfo(order.orderDetailsWithId.orderDetails.sellToken);
                                            const sellAmount = parseFloat(formatTokenAmount(order.orderDetailsWithId.orderDetails.sellAmount, sellTokenInfo.decimals));
                                            const buyAmount = parseFloat(formatTokenAmount(order.orderDetailsWithId.orderDetails.buyAmounts[0], primaryTokenInfo.decimals));

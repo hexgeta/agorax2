@@ -192,7 +192,6 @@ export function useNotifications() {
 
       setNotifications(logsWithTimestamps);
     } catch (error) {
-      console.error('Error fetching notifications:', error);
       setNotifications([]);
     } finally {
       setIsLoading(false);
