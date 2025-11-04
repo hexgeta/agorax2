@@ -141,18 +141,19 @@ export function formatTokenTicker(ticker: string): string {
 // This maps contract token indices to actual token addresses
 export function getTokenInfoByIndex(index: number) {
   // Map contract token indices to actual token addresses
-  // Based on the contract's whitelist order
+  // Based on the AgoraX contract's buy token whitelist order
   const contractTokenMap: Record<number, string> = {
-    0: '0x95b303987a60c71504d99aa1b13b4da07b0790ab', // PLSX - PulseX
-    1: '0xefd766ccb38eaf1dfd701853bfce31359239f305', // weDAI - Wrapped DAI from Eth
-    2: '0x000000000000000000000000000000000000dead', // PLS - Pulse
-    3: '0x2fa878ab3f87cc1c9737fc071108f904c0b0c95d', // INC - Incentive
-    4: '0x2b591e99afe9f32eaa6214f7b7629768c40eeb39', // HEX - HEX on Pls
-    5: '0x0deed1486bc52aa0d3e6f8849cec5add6598a162', // stPLS (Liquid Loans)
-    6: '0x02dcdd04e3f455d838cd1249292c58f3b79e3c3c', // weWETH - Wrapped WETH from Eth
-    7: '0x15d38573d2feeb82e7ad5187ab8c1d52810b1f07', // weUSDC - Wrapped USDC from Eth (INACTIVE)
-    8: '0x0cb6f5a34ad42ec934882a05265a7d5f59b51a2f', // weUSDT - Wrapped USDT from Eth (INACTIVE)
-    9: '0x115f3fa979a936167f9d208a7b7c4d85081e84bd', // 2PHUX - 2PHUX Governance Token
+    0: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE', // tPLS - Native Pulse
+    1: '0x2b591e99afE9f32eAA6214f7B7629768c40Eeb39', // HEX
+    2: '0x8a810ea8B121d08342E9e7696f4a9915cBE494B7', // tPLSX - PulseX
+    3: '0x826e4e896CC2f5B371Cd7Bb0bd929DB3e3DB67c0', // tDAI
+    4: '0x3819f64f282bf135d62168C1e513280dAF905e06', // HDRN - Hedron
+    5: '0xfc4913214444aF5c715cc9F7b52655e788A569ed', // ICSA
+    6: '0xe9f84d418B008888A992Ff8c6D22389C2C3504e0', // BASE
+    7: '0xF55cD1e399e1cc3D95303048897a680be3313308', // TRIO
+    8: '0x6B0956258fF7bd7645aa35369B55B61b8e6d6140', // LUCKY
+    9: '0x6b32022693210cD2Cfc466b9Ac0085DE8fC34eA6', // DECI
+    10: '0x0d86EB9f43C57f6FF3BC9E23D8F9d82503f0e84b', // MAXI
   };
   
   const address = contractTokenMap[index];

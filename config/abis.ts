@@ -48,13 +48,18 @@ export const AGORAX_ABI = [
     "stateMutability": "payable",
     "type": "function"
   },
-  // Cancel Order (same signature)
+  // Cancel Order (updated to require recipient)
   {
     "inputs": [
       {
         "internalType": "uint256",
         "name": "_orderId",
         "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "_recipient",
+        "type": "address"
       }
     ],
     "name": "cancelOrder",
@@ -86,24 +91,29 @@ export const AGORAX_ABI = [
     "stateMutability": "payable",
     "type": "function"
   },
-  // Redeem Order (same signature)
+  // Collect Proceeds (renamed from redeemOrder, now requires recipient)
   {
     "inputs": [
       {
         "internalType": "uint256",
         "name": "_orderId",
         "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "_recipient",
+        "type": "address"
       }
     ],
-    "name": "redeemOrder",
+    "name": "collectProceeds",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
   },
-  // Get Order Counter (same signature)
+  // Get Total Order Count (renamed from getOrderCounter)
   {
     "inputs": [],
-    "name": "getOrderCounter",
+    "name": "getTotalOrderCount",
     "outputs": [
       {
         "internalType": "uint256",
@@ -172,6 +182,11 @@ export const AGORAX_ABI = [
                 "type": "uint8"
               },
               {
+                "internalType": "uint256",
+                "name": "creationProtocolFee",
+                "type": "uint256"
+              },
+              {
                 "components": [
                   {
                     "internalType": "address",
@@ -233,6 +248,7 @@ export const AGORAX_ABI = [
           { "internalType": "uint256", "name": "redeemedPercentage", "type": "uint256" },
           { "internalType": "uint32", "name": "lastUpdateTime", "type": "uint32" },
           { "internalType": "enum AgoraX.OrderStatus", "name": "status", "type": "uint8" },
+          { "internalType": "uint256", "name": "creationProtocolFee", "type": "uint256" },
           {
             "components": [
               { "internalType": "address", "name": "sellToken", "type": "address" },
@@ -271,6 +287,7 @@ export const AGORAX_ABI = [
           { "internalType": "uint256", "name": "redeemedPercentage", "type": "uint256" },
           { "internalType": "uint32", "name": "lastUpdateTime", "type": "uint32" },
           { "internalType": "enum AgoraX.OrderStatus", "name": "status", "type": "uint8" },
+          { "internalType": "uint256", "name": "creationProtocolFee", "type": "uint256" },
           {
             "components": [
               { "internalType": "address", "name": "sellToken", "type": "address" },
@@ -309,6 +326,7 @@ export const AGORAX_ABI = [
           { "internalType": "uint256", "name": "redeemedPercentage", "type": "uint256" },
           { "internalType": "uint32", "name": "lastUpdateTime", "type": "uint32" },
           { "internalType": "enum AgoraX.OrderStatus", "name": "status", "type": "uint8" },
+          { "internalType": "uint256", "name": "creationProtocolFee", "type": "uint256" },
           {
             "components": [
               { "internalType": "address", "name": "sellToken", "type": "address" },
@@ -347,6 +365,7 @@ export const AGORAX_ABI = [
           { "internalType": "uint256", "name": "redeemedPercentage", "type": "uint256" },
           { "internalType": "uint32", "name": "lastUpdateTime", "type": "uint32" },
           { "internalType": "enum AgoraX.OrderStatus", "name": "status", "type": "uint8" },
+          { "internalType": "uint256", "name": "creationProtocolFee", "type": "uint256" },
           {
             "components": [
               { "internalType": "address", "name": "sellToken", "type": "address" },
@@ -393,13 +412,38 @@ export const AGORAX_ABI = [
     "stateMutability": "view",
     "type": "function"
   },
-  // Cancel All Expired Orders
+  // Cancel All Expired Orders (updated to require recipient)
   {
-    "inputs": [],
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_recipient",
+        "type": "address"
+      }
+    ],
     "name": "cancelAllExpiredOrders",
     "outputs": [
       { "internalType": "uint256[]", "name": "cancelledOrderIds", "type": "uint256[]" }
     ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  // Update Order Expiration
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_orderId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_newExpiration",
+        "type": "uint256"
+      }
+    ],
+    "name": "updateOrderExpiration",
+    "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
   },

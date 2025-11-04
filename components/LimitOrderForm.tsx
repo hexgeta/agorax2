@@ -2,18 +2,22 @@
 
 import { useState, useRef, useEffect, useMemo } from 'react';
 import NumberFlow from '@number-flow/react';
-import { useAccount, useBalance } from 'wagmi';
+import { useAccount, useBalance, usePublicClient } from 'wagmi';
 import { TOKEN_CONSTANTS } from '@/constants/crypto';
 import { useTokenPrices } from '@/hooks/crypto/useTokenPrices';
 import { formatEther, parseEther } from 'viem';
-import { formatTokenTicker } from '@/utils/tokenUtils';
+import { formatTokenTicker, parseTokenAmount, getTokenInfoByIndex } from '@/utils/tokenUtils';
 import { useTokenStats } from '@/hooks/crypto/useTokenStats';
 import { useTokenAccess } from '@/context/TokenAccessContext';
 import { PAYWALL_ENABLED, REQUIRED_PARTY_TOKENS, REQUIRED_TEAM_TOKENS, PAYWALL_TITLE, PAYWALL_DESCRIPTION } from '@/config/paywall';
 import PaywallModal from './PaywallModal';
-import { Lock, ArrowLeftRight, Calendar as CalendarIcon } from 'lucide-react';
+import { Lock, ArrowLeftRight, Calendar as CalendarIcon, Loader2 } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import { Calendar } from '@/components/ui/calendar';
+import { isNativeToken, useTokenApproval } from '@/utils/tokenApproval';
+import { useContractWhitelist } from '@/hooks/contracts/useContractWhitelist';
+import { waitForTransactionWithTimeout, TRANSACTION_TIMEOUTS } from '@/utils/transactionTimeout';
+import useToast from '@/hooks/use-toast';
 
 interface LimitOrderFormProps {
   onTokenChange?: (sellToken: string | undefined, buyTokens: (string | undefined)[]) => void;
@@ -145,6 +149,24 @@ export function LimitOrderForm({
     }
     return 7;
   });
+  const [expirationInput, setExpirationInput] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('limitOrderExpirationDays');
+      return saved || '7';
+    }
+    return '7';
+  });
+  
+  // Initialize selectedDate based on expirationInput on mount
+  useEffect(() => {
+    const numValue = parseFloat(expirationInput);
+    if (!isNaN(numValue) && numValue > 0) {
+      const futureDate = new Date();
+      const millisecondsToAdd = numValue * 24 * 60 * 60 * 1000;
+      futureDate.setTime(futureDate.getTime() + millisecondsToAdd);
+      setSelectedDate(futureDate);
+    }
+  }, []); // Only run on mount
   const [limitPrice, setLimitPrice] = useState(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('limitOrderPrice') || '';
@@ -172,8 +194,11 @@ export function LimitOrderForm({
   const [isBuyInputFocused, setIsBuyInputFocused] = useState<boolean[]>([false]);
   const [isSellInputFocused, setIsSellInputFocused] = useState(false);
   const [duplicateTokenError, setDuplicateTokenError] = useState<string | null>(null);
+  const [expirationError, setExpirationError] = useState<string | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+  const [isCreatingOrder, setIsCreatingOrder] = useState(false);
+  const [isApproving, setIsApproving] = useState(false);
   
   const sellDropdownRef = useRef<HTMLDivElement>(null);
   const buyDropdownRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -181,10 +206,34 @@ export function LimitOrderForm({
   const buySearchRefs = useRef<(HTMLInputElement | null)[]>([]);
   const buyInputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const sellInputRef = useRef<HTMLInputElement>(null);
+  const datePickerRef = useRef<HTMLDivElement>(null);
   const isInitialLoadRef = useRef<boolean>(true);
   const limitPriceSetByUserRef = useRef<boolean>(false);
   const lastEditedInputRef = useRef<'sell' | number | null>(null); // 'sell' or buy index
   const isUpdatingFromOtherInputRef = useRef<boolean>(false);
+  const previousSellTokenRef = useRef<TokenOption | null>(null);
+  const previousBuyTokenRef = useRef<TokenOption | null>(null);
+  const isTokenChangingRef = useRef<boolean>(false);
+
+  // Hooks for contract interaction
+  const publicClient = usePublicClient();
+  const { toast } = useToast();
+  const { placeOrder, contractAddress } = useContractWhitelist();
+  
+  // Token approval for sell token
+  const sellAmountWei = sellToken && sellAmount ? parseTokenAmount(removeCommas(sellAmount), sellToken.decimals) : 0n;
+  const needsApproval = Boolean(sellToken && !isNativeToken(sellToken.a) && sellAmountWei > 0n);
+
+  const {
+    allowance,
+    isApproving: isApprovingToken,
+    approveToken,
+    refetchAllowance,
+  } = useTokenApproval(
+    (sellToken?.a || '0x0000000000000000000000000000000000000000') as `0x${string}`,
+    (contractAddress || '0x0000000000000000000000000000000000000000') as `0x${string}`,
+    sellAmountWei
+  );
 
   // Use all tokens from TOKEN_CONSTANTS
   const availableTokens = TOKEN_CONSTANTS.filter(t => t.a && t.dexs);
@@ -244,19 +293,13 @@ export function LimitOrderForm({
   const [showPaywallModal, setShowPaywallModal] = useState(false);
 
   // Fetch sell token balance
+  // For native tokens (PLS), don't pass the token address
+  // For ERC20 tokens, pass the token address
   const { data: sellTokenBalance, isLoading: sellBalanceLoading } = useBalance({
     address: address,
-    token: sellToken?.a as `0x${string}` | undefined,
+    token: sellToken && !isNativeToken(sellToken.a) ? sellToken.a as `0x${string}` : undefined,
     query: {
-      enabled: !!address && !!sellToken && sellToken.a !== '0x000000000000000000000000000000000000dead',
-    }
-  });
-
-  // Fetch PLS balance if sell token is PLS
-  const { data: plsBalance, isLoading: plsBalanceLoading } = useBalance({
-    address: address,
-    query: {
-      enabled: !!address && sellToken?.a === '0x000000000000000000000000000000000000dead',
+      enabled: !!address && !!sellToken,
     }
   });
 
@@ -430,10 +473,11 @@ export function LimitOrderForm({
   }, [sellAmount]);
 
   useEffect(() => {
-    if (expirationDays) {
-      localStorage.setItem('limitOrderExpirationDays', expirationDays.toString());
+    if (expirationInput) {
+      localStorage.setItem('limitOrderExpirationDays', expirationInput);
     }
-  }, [expirationDays]);
+  }, [expirationInput]);
+
 
   useEffect(() => {
     if (limitPrice) {
@@ -516,30 +560,22 @@ export function LimitOrderForm({
       });
       
       // Close date picker if clicking outside
-      if (showDatePicker) {
-        const target = event.target as HTMLElement;
-        if (!target.closest('.date-picker-container')) {
-          setShowDatePicker(false);
-        }
+      if (datePickerRef.current && !datePickerRef.current.contains(event.target as Node)) {
+        setShowDatePicker(false);
       }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showBuyDropdowns, showDatePicker]);
+  }, [showBuyDropdowns]);
 
   const getTokenLogo = (ticker: string) => {
     return `/coin-logos/${ticker}.svg`;
   };
 
-  // Get actual balance and loading state
-  const actualBalance = sellToken?.a === '0x000000000000000000000000000000000000dead' 
-    ? plsBalance 
-    : sellTokenBalance;
-  
-  const isBalanceLoading = sellToken?.a === '0x000000000000000000000000000000000000dead'
-    ? plsBalanceLoading
-    : sellBalanceLoading;
+  // Get balance - now consolidated for both native and ERC20 tokens
+  const actualBalance = sellTokenBalance;
+  const isBalanceLoading = sellBalanceLoading;
 
   // Calculate USD values
   const sellTokenPrice = sellToken ? prices[sellToken.a]?.price || 0 : 0;
@@ -637,33 +673,329 @@ export function LimitOrderForm({
     }
   }, [buyAmountNum, limitPrice]);
 
-  const handleCreateOrder = () => {
-    if (onCreateOrderClick) {
-      onCreateOrderClick(sellToken, buyTokens, sellAmount, buyAmounts, expirationDays);
+  const handleCreateOrder = async () => {
+    // Capture address early to avoid closure issues
+    const userAddress = address;
+
+    if (!sellToken || !sellAmount || !buyTokens[0] || !buyAmounts[0] || !userAddress || !publicClient) {
+      toast({
+        title: "Error",
+        description: "Please fill in all required fields. Make sure your wallet is connected.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!isConnected) {
+      toast({
+        title: "Wallet Not Connected",
+        description: "Please connect your wallet to create an order",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!contractAddress) {
+      toast({
+        title: "Contract Not Available",
+        description: "Contract address not found for this network",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Check expiration error
+    if (expirationError) {
+      toast({
+        title: "Error",
+        description: expirationError,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setIsCreatingOrder(true);
+
+      console.log('Creating order with address:', userAddress);
+      console.log('Contract address:', contractAddress);
+
+      // Handle token approval if needed
+      if (needsApproval && allowance !== undefined && allowance < sellAmountWei) {
+        setIsApproving(true);
+        toast({
+          title: "Approval Required",
+          description: `Approving ${sellToken.ticker} for trading...`,
+        });
+
+        const approvalResult = await approveToken();
+        
+        if (!approvalResult) {
+          throw new Error('Token approval failed');
+        }
+
+        toast({
+          title: "Approval Successful",
+          description: `${sellToken.ticker} approved for trading`,
+          variant: "success",
+        });
+
+        await refetchAllowance();
+        setIsApproving(false);
+      }
+
+      // Prepare order parameters
+      const buyTokenIndices = buyTokens.map(token => {
+        if (!token) throw new Error('Buy token is null');
+        const index = TOKEN_CONSTANTS.findIndex(t => t.a?.toLowerCase() === token.a.toLowerCase());
+        if (index === -1) throw new Error(`Buy token ${token.ticker} not found in whitelist`);
+        return BigInt(index);
+      });
+
+      const buyAmountsWei = buyAmounts.map((amount, i) => {
+        const token = buyTokens[i];
+        if (!token) throw new Error('Buy token is null');
+        return parseTokenAmount(removeCommas(amount), token.decimals);
+      });
+
+      const sellAmountForOrder = parseTokenAmount(removeCommas(sellAmount), sellToken.decimals);
+      const expirationTime = BigInt(Math.floor(Date.now() / 1000) + (expirationDays * 24 * 60 * 60));
+
+      // Create the OrderDetails struct - must match ABI exactly
+      const orderDetails = {
+        sellToken: sellToken.a as `0x${string}`, // The actual token address, not index
+        sellAmount: sellAmountForOrder,
+        buyTokensIndex: buyTokenIndices,
+        buyAmounts: buyAmountsWei,
+        expirationTime: expirationTime,
+      };
+
+      toast({
+        title: "Creating Order",
+        description: "Please confirm the transaction in your wallet...",
+      });
+
+      console.log('📝 Order Details:', orderDetails);
+      console.log('💰 Value:', isNativeToken(sellToken.a) ? sellAmountForOrder : undefined);
+      console.log('👤 User Address (captured):', userAddress);
+      console.log('👤 User Address (from hook):', address);
+
+      // Place the order (pass value if native token)
+      const txHash = await placeOrder(
+        orderDetails,
+        isNativeToken(sellToken.a) ? sellAmountForOrder : undefined
+      );
+
+      if (!txHash) {
+        throw new Error('Transaction failed');
+      }
+
+      toast({
+        title: "Transaction Submitted",
+        description: "Waiting for confirmation...",
+      });
+
+      // Wait for transaction confirmation
+      await waitForTransactionWithTimeout(
+        publicClient,
+        txHash,
+        TRANSACTION_TIMEOUTS.TRANSACTION
+      );
+
+      toast({
+        title: "Order Created!",
+        description: `Successfully created limit order`,
+        variant: "success",
+        action: txHash ? (
+          <a 
+            href={`https://scan.v4.testnet.pulsechain.com/tx/${txHash}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[#00D9FF] hover:underline"
+          >
+            View Transaction
+          </a>
+        ) : undefined,
+      });
+
+      // Clear form
+      setSellAmount('');
+      setBuyAmounts(['']);
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('limitOrderSellAmount');
+        localStorage.removeItem('limitOrderBuyAmount');
+      }
+
+    } catch (error: any) {
+      console.error('Error creating order:', error);
+      toast({
+        title: "Error Creating Order",
+        description: error.message || "Failed to create order. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCreatingOrder(false);
+      setIsApproving(false);
     }
   };
 
   const handleExpirationPreset = (days: number) => {
+    const MIN_EXPIRATION_DAYS = 10 / 86400; // 10 seconds in days
+    
+    if (days < MIN_EXPIRATION_DAYS) {
+      setExpirationError(`Minimum expiration is 10 seconds (${MIN_EXPIRATION_DAYS.toFixed(8)} days)`);
+      return;
+    }
+    
+    setExpirationError(null);
     setExpirationDays(days);
-    // Calculate and set the date
+    setExpirationInput(days.toString());
+    // Calculate and set the date using milliseconds for accurate hour-based calculation
     const futureDate = new Date();
-    futureDate.setDate(futureDate.getDate() + Math.ceil(days));
+    const millisecondsToAdd = days * 24 * 60 * 60 * 1000; // Convert days to milliseconds
+    futureDate.setTime(futureDate.getTime() + millisecondsToAdd);
     setSelectedDate(futureDate);
   };
 
   const handleDateSelect = (date: Date | undefined) => {
     if (!date) return;
     
-    setSelectedDate(date);
     const now = new Date();
     const diffTime = date.getTime() - now.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    const diffSeconds = diffTime / 1000;
+    const MIN_EXPIRATION_SECONDS = 10;
+    
+    if (diffSeconds < MIN_EXPIRATION_SECONDS) {
+      setExpirationError(`Selected date must be at least ${MIN_EXPIRATION_SECONDS} seconds in the future`);
+      setShowDatePicker(false);
+      return;
+    }
+    
+    setExpirationError(null);
+    setSelectedDate(date);
+    const diffDays = diffTime / (1000 * 60 * 60 * 24);
     
     if (diffDays > 0) {
       setExpirationDays(diffDays);
+      setExpirationInput(diffDays.toString());
     }
     setShowDatePicker(false);
   };
+
+  // Handle token changes and maintain price relationship
+  useEffect(() => {
+    // Skip on initial load or if we're already in the middle of updating
+    if (isInitialLoadRef.current || isTokenChangingRef.current || !limitPriceSetByUserRef.current) {
+      // Update refs for next time
+      previousSellTokenRef.current = sellToken;
+      previousBuyTokenRef.current = buyTokens[0];
+      return;
+    }
+
+    const previousSellToken = previousSellTokenRef.current;
+    const previousBuyToken = previousBuyTokenRef.current;
+    const currentBuyToken = buyTokens[0];
+
+    // Check if either sell or buy token changed
+    const sellTokenChanged = previousSellToken?.a !== sellToken?.a;
+    const buyTokenChanged = previousBuyToken?.a !== currentBuyToken?.a;
+
+    if ((sellTokenChanged || buyTokenChanged) && sellToken && currentBuyToken) {
+      isTokenChangingRef.current = true;
+
+      // Get current and new market prices
+      const currentSellPrice = sellToken ? prices[sellToken.a]?.price || 0 : 0;
+      const currentBuyPrice = currentBuyToken ? prices[currentBuyToken.a]?.price || 0 : 0;
+
+      if (currentSellPrice > 0 && currentBuyPrice > 0) {
+        // Calculate new market price
+        const newMarketPrice = currentSellPrice / currentBuyPrice;
+
+        // If we have a stored price percentage, use it to calculate new amounts
+        if (pricePercentage !== null && pricePercentage !== undefined) {
+          // Calculate new limit price based on the percentage relationship
+          let newLimitPrice;
+          if (invertPriceDisplay) {
+            const invertedMarketPrice = 1 / newMarketPrice;
+            const newInvertedPrice = invertedMarketPrice * (1 + pricePercentage / 100);
+            newLimitPrice = 1 / newInvertedPrice;
+          } else {
+            newLimitPrice = newMarketPrice * (1 + pricePercentage / 100);
+          }
+
+          setLimitPrice(newLimitPrice.toFixed(8));
+
+          if (onLimitPriceChange) {
+            onLimitPriceChange(newLimitPrice);
+          }
+
+          // Recalculate buy amount based on new limit price and current sell amount
+          const sellAmt = sellAmount ? parseFloat(removeCommas(sellAmount)) : 0;
+          if (sellAmt > 0) {
+            const newBuyAmount = sellAmt * newLimitPrice;
+            const newAmounts = [...buyAmounts];
+            newAmounts[0] = formatCalculatedValue(newBuyAmount);
+            setBuyAmounts(newAmounts);
+            
+            // Save to localStorage
+            if (newAmounts[0]) {
+              localStorage.setItem('limitOrderBuyAmount', newAmounts[0]);
+            }
+          }
+        } else if (marketPrice > 0) {
+          // If no percentage stored, calculate current percentage from existing limit price
+          const currentLimitPriceNum = parseFloat(limitPrice);
+          if (currentLimitPriceNum > 0) {
+            let calculatedPercentage;
+            if (invertPriceDisplay) {
+              const invertedLimitPrice = 1 / currentLimitPriceNum;
+              const invertedMarketPrice = 1 / marketPrice;
+              calculatedPercentage = ((invertedLimitPrice - invertedMarketPrice) / invertedMarketPrice) * 100;
+            } else {
+              calculatedPercentage = ((currentLimitPriceNum - marketPrice) / marketPrice) * 100;
+            }
+
+            // Apply same percentage to new market price
+            let newLimitPrice;
+            if (invertPriceDisplay) {
+              const invertedNewMarketPrice = 1 / newMarketPrice;
+              const newInvertedPrice = invertedNewMarketPrice * (1 + calculatedPercentage / 100);
+              newLimitPrice = 1 / newInvertedPrice;
+            } else {
+              newLimitPrice = newMarketPrice * (1 + calculatedPercentage / 100);
+            }
+
+            setLimitPrice(newLimitPrice.toFixed(8));
+            setPricePercentage(calculatedPercentage);
+
+            if (onLimitPriceChange) {
+              onLimitPriceChange(newLimitPrice);
+            }
+
+            // Recalculate buy amount
+            const sellAmt = sellAmount ? parseFloat(removeCommas(sellAmount)) : 0;
+            if (sellAmt > 0) {
+              const newBuyAmount = sellAmt * newLimitPrice;
+              const newAmounts = [...buyAmounts];
+              newAmounts[0] = formatCalculatedValue(newBuyAmount);
+              setBuyAmounts(newAmounts);
+              
+              // Save to localStorage
+              if (newAmounts[0]) {
+                localStorage.setItem('limitOrderBuyAmount', newAmounts[0]);
+              }
+            }
+          }
+        }
+      }
+
+      isTokenChangingRef.current = false;
+    }
+
+    // Update refs for next comparison
+    previousSellTokenRef.current = sellToken;
+    previousBuyTokenRef.current = currentBuyToken;
+  }, [sellToken?.a, buyTokens[0]?.a, prices, pricePercentage, invertPriceDisplay, limitPrice, marketPrice, sellAmount, buyAmounts, onLimitPriceChange]);
 
   const handlePercentageClick = (percentage: number, direction: 'above' | 'below' = 'above') => {
     if (!marketPrice) return;
@@ -1097,7 +1429,7 @@ export function LimitOrderForm({
                       {index > 0 && (
                         <button
                           onClick={() => handleRemoveBuyToken(index)}
-                          className="p-3 h-[50px] bg-red-500/20 hover:bg-red-500/30 border-2 border-red-500/50 transition-colors flex items-center justify-center"
+                          className="p-3 h-[52px] bg-red-500/20 hover:bg-red-500/30 border-2 border-red-500/50 transition-colors flex items-center justify-center"
                           title="Remove token"
                         >
                           <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1342,8 +1674,16 @@ export function LimitOrderForm({
           {selectedDate && (
             <span className="text-[#00D9FF]/50 text-xs">
               {expirationDays <= 1 ? (
-                // Show UTC time for hour-based presets (1 day or less)
-                `${selectedDate.getUTCHours() % 12 || 12}${selectedDate.getUTCHours() >= 12 ? 'pm' : 'am'} UTC ${selectedDate.getUTCDate()} ${selectedDate.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' })} ${selectedDate.getUTCFullYear()}`
+                // Show UTC time and date for hour-based presets (1 day or less)
+                (() => {
+                  const hours = selectedDate.getUTCHours();
+                  const minutes = selectedDate.getUTCMinutes();
+                  const ampm = hours >= 12 ? 'pm' : 'am';
+                  const displayHours = hours % 12 || 12;
+                  const displayMinutes = minutes.toString().padStart(2, '0');
+                  const month = selectedDate.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' });
+                  return `${displayHours}:${displayMinutes}${ampm} UTC ${selectedDate.getUTCDate()} ${month} ${selectedDate.getUTCFullYear()}`;
+                })()
               ) : (
                 // Show regular date for day-based presets
                 selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -1351,35 +1691,91 @@ export function LimitOrderForm({
             </span>
           )}
         </div>
-        <input
-          type="number"
-          value={expirationDays === 0 ? '' : expirationDays}
-          onChange={(e) => {
-            const value = e.target.value;
-            if (value === '') {
-              setExpirationDays(0);
-              setSelectedDate(undefined);
-            } else {
+        <div className="relative">
+          <input
+            type="text"
+            inputMode="decimal"
+            value={expirationInput}
+            onChange={(e) => {
+              const value = e.target.value;
+              const MIN_EXPIRATION_SECONDS = 10;
+              const MIN_EXPIRATION_DAYS = MIN_EXPIRATION_SECONDS / 86400; // 10 seconds in days
+              
+              // Allow empty input
+              if (value === '') {
+                setExpirationInput('');
+                setExpirationDays(0);
+                setSelectedDate(undefined);
+                setExpirationError(null);
+                return;
+              }
+              
+              // Only allow valid decimal patterns
+              if (!value.match(/^\d*\.?\d*$/)) {
+                return; // Reject invalid input
+              }
+              
+              // Always update the input string to allow typing
+              setExpirationInput(value);
+              
+              // Try to parse and update the numeric value
               const numValue = parseFloat(value);
               if (!isNaN(numValue) && numValue > 0) {
-                setExpirationDays(numValue);
-                // Calculate and set the date
-                const futureDate = new Date();
-                futureDate.setDate(futureDate.getDate() + Math.ceil(numValue));
-                setSelectedDate(futureDate);
+                // Check minimum expiration
+                if (numValue < MIN_EXPIRATION_DAYS) {
+                  setExpirationError(`Minimum expiration is ${MIN_EXPIRATION_SECONDS} seconds (${MIN_EXPIRATION_DAYS.toFixed(8)} days)`);
+                  setExpirationDays(0);
+                  setSelectedDate(undefined);
+                } else {
+                  setExpirationError(null);
+                  setExpirationDays(numValue);
+                  // Calculate and set the date using milliseconds for accurate calculation
+                  const futureDate = new Date();
+                  const millisecondsToAdd = numValue * 24 * 60 * 60 * 1000;
+                  futureDate.setTime(futureDate.getTime() + millisecondsToAdd);
+                  setSelectedDate(futureDate);
+                }
+              } else {
+                // For partial entries like "0." keep the numeric value at 0
+                setExpirationError(null);
+                setExpirationDays(0);
+                setSelectedDate(undefined);
               }
-            }
-          }}
-          placeholder="Enter days"
-          min="0.01"
-          step="0.01"
-          className="w-full bg-black border-2 border-[#00D9FF] p-3 text-[#00D9FF] placeholder-[#00D9FF]/30 focus:outline-none focus:border-[#00D9FF] focus:shadow-[0_0_15px_rgba(0,217,255,0.5)] transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-        />
+            }}
+            placeholder="Enter days"
+            className="w-full bg-black border-2 border-[#00D9FF] p-3 text-[#00D9FF] placeholder-[#00D9FF]/30 focus:outline-none focus:border-[#00D9FF] focus:shadow-[0_0_15px_rgba(0,217,255,0.5)] transition-all"
+          />
+          {expirationDays > 0 && selectedDate && (
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[#00D9FF]/40 text-xs pointer-events-none">
+              {(() => {
+                const now = new Date();
+                const diffMs = selectedDate.getTime() - now.getTime();
+                const hoursLeft = Math.floor(diffMs / (1000 * 60 * 60));
+                const minutesLeft = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+                
+                if (hoursLeft < 24) {
+                  return `${hoursLeft}h ${minutesLeft}m left`;
+                } else {
+                  const daysLeft = Math.floor(hoursLeft / 24);
+                  const remainingHours = hoursLeft % 24;
+                  return `${daysLeft}d ${remainingHours}h left`;
+                }
+              })()}
+            </div>
+          )}
+        </div>
+        
+        {/* Expiration Error Message */}
+        {expirationError && (
+          <div className="mt-2 text-red-400 text-xs">
+            {expirationError}
+          </div>
+        )}
         
         {/* Expiration Preset Buttons */}
         <div className="mt-3 flex gap-2 w-full">
           <button
-            onClick={() => handleExpirationPreset(0.04)} // 1 hour = 1/24 day
+            onClick={() => handleExpirationPreset(1/24)} // 1 hour = 1/24 day
             className="flex-1 py-1.5 text-xs bg-[#00D9FF]/10 text-[#00D9FF] border border-[#00D9FF]/30 hover:bg-[#00D9FF]/20 hover:border-[#00D9FF] transition-all h-[28px] flex items-center justify-center"
           >
             1h
@@ -1422,7 +1818,7 @@ export function LimitOrderForm({
           </button>
           
           {/* Calendar Date Picker Button */}
-          <div className="relative date-picker-container flex-1">
+          <div ref={datePickerRef} className="relative date-picker-container flex-1">
             <button
               onClick={() => setShowDatePicker(!showDatePicker)}
               className="w-full py-1.5 text-xs bg-[#00D9FF]/10 text-[#00D9FF] border border-[#00D9FF]/30 hover:bg-[#00D9FF]/20 hover:border-[#00D9FF] transition-all h-[28px] flex items-center justify-center"
@@ -1433,56 +1829,22 @@ export function LimitOrderForm({
             
             {/* Calendar Popup */}
             {showDatePicker && (
-              <div className="absolute top-full right-0 mt-2 z-[100] bg-black border-2 border-[#00D9FF] shadow-[0_0_20px_rgba(0,217,255,0.5)] rounded-md">
-                <style jsx global>{`
-                  .calendar-cyan .rdp {
-                    --rdp-cell-size: 40px;
-                    --rdp-accent-color: #00D9FF;
-                    --rdp-background-color: rgba(0, 217, 255, 0.1);
-                  }
-                  .calendar-cyan .rdp-months {
-                    color: #00D9FF;
-                  }
-                  .calendar-cyan .rdp-day_selected {
-                    background-color: #00D9FF !important;
-                    color: #000 !important;
-                    font-weight: bold;
-                  }
-                  .calendar-cyan .rdp-day {
-                    color: #00D9FF;
-                  }
-                  .calendar-cyan .rdp-day:hover:not(.rdp-day_selected) {
-                    background-color: rgba(0, 217, 255, 0.2);
-                  }
-                  .calendar-cyan .rdp-day_today {
-                    background-color: rgba(0, 217, 255, 0.2);
-                    font-weight: 600;
-                  }
-                  .calendar-cyan .rdp-day_outside {
-                    color: rgba(0, 217, 255, 0.3);
-                  }
-                  .calendar-cyan .rdp-day_disabled {
-                    color: rgba(0, 217, 255, 0.2);
-                  }
-                  .calendar-cyan .rdp-head_cell {
-                    color: rgba(0, 217, 255, 0.7);
-                  }
-                  .calendar-cyan .rdp-caption_label {
-                    color: #00D9FF;
-                  }
-                  .calendar-cyan button.rdp-nav_button {
-                    color: #00D9FF;
-                  }
-                  .calendar-cyan button.rdp-nav_button:hover {
-                    background-color: rgba(0, 217, 255, 0.2);
-                  }
-                `}</style>
+              <div className="absolute top-full right-0 mt-2 z-[100] w-[440px] bg-black border-2 border-[#00D9FF] rounded-md">
                 <Calendar
                   mode="single"
                   selected={selectedDate}
                   onSelect={handleDateSelect}
                   disabled={(date: Date) => date < new Date()}
-                  className="calendar-cyan"
+                  classNames={{
+                    caption_label: "text-[#00D9FF]",
+                    nav_button: "text-[#00D9FF] border-[#00D9FF]/30 hover:bg-[#00D9FF]/20",
+                    head_cell: "text-[#00D9FF]/70",
+                    day: "text-[#00D9FF] hover:bg-[#00D9FF]/20",
+                    day_selected: "bg-[#00D9FF] text-black font-bold hover:bg-[#00D9FF] hover:text-black",
+                    day_today: "bg-[#00D9FF]/20 text-[#00D9FF] font-semibold",
+                    day_outside: "text-[#00D9FF]/20 opacity-40",
+                    day_disabled: "text-[#00D9FF]/10 opacity-20 cursor-not-allowed",
+                  }}
                 />
               </div>
             )}
@@ -1523,7 +1885,7 @@ export function LimitOrderForm({
               return (
                 <div key={`fee-${index}`} className="flex justify-between items-center">
                   <span className="text-[#00D9FF]/70">
-                    {index === 0 ? 'Fee (0.2%):' : ''}
+                    {index === 0 ? 'Your Max Fee (0.2%):' : ''}
                   </span>
                   <span className="text-red-400 font-medium">
                     -{formatBalanceDisplay(feeAmount.toString())} {formatTokenTicker(token.ticker)}
@@ -1860,10 +2222,12 @@ export function LimitOrderForm({
       ) : (
         <button
           onClick={handleCreateOrder}
-          disabled={!sellToken || !sellAmount || buyTokens.some(t => !t) || buyAmounts.some(a => !a || a.trim() === '') || !!duplicateTokenError}
-          className="w-full py-4 bg-[#00D9FF] text-black border-2 border-[#00D9FF] font-bold hover:bg-black hover:text-[#00D9FF] text-lg tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled={!sellToken || !sellAmount || buyTokens.some(t => !t) || buyAmounts.some(a => !a || a.trim() === '') || !!duplicateTokenError || !!expirationError || isCreatingOrder || isApproving}
+          className="w-full py-4 bg-[#00D9FF] text-black border-2 border-[#00D9FF] font-bold hover:bg-black hover:text-[#00D9FF] text-lg tracking-wider disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
-          CREATE LIMIT ORDER
+          {isApproving && <Loader2 className="w-5 h-5 animate-spin" />}
+          {isCreatingOrder && !isApproving && <Loader2 className="w-5 h-5 animate-spin" />}
+          {isApproving ? 'APPROVING...' : isCreatingOrder ? 'CREATING ORDER...' : 'CREATE LIMIT ORDER'}
         </button>
       )}
     </div>

@@ -1,249 +1,13 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: UNLICENSED
 
-// AgoraX is a limit order platform inspired by 0x and OTC contracts, written as an independent implementation under the MIT license.
-// Not affiliated with or endorsed by any outside parties.
+pragma solidity ^0.8.17;
 
-// Includes: OpenZeppelin 4.9.3 (Ownable2Step, IERC20, ERC20, ReentrancyGuard, SafeERC20 + Address), Whitelist, AgoraX
-
-pragma solidity ^0.8.9;
-
-// ========== CONTEXT ==========
-abstract contract Context {
-    function _msgSender() internal view virtual returns (address) {
-        return msg.sender;
-    }
-    function _msgData() internal view virtual returns (bytes calldata) {
-        return msg.data;
-    }
-}
-
-// ========== OWNABLE2STEP ==========
-abstract contract Ownable2Step is Context {
-    address private _owner;
-    address private _pendingOwner;
-
-    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
-    event PendingOwnershipTransfer(address indexed previousOwner, address indexed newOwner);
-
-    constructor(address initialOwner) {
-        _transferOwnership(initialOwner);
-    }
-
-    modifier onlyOwner() {
-        _checkOwner();
-        _;
-    }
-
-    function owner() public view virtual returns (address) {
-        return _owner;
-    }
-
-    function pendingOwner() public view virtual returns (address) {
-        return _pendingOwner;
-    }
-
-    function _checkOwner() internal view virtual {
-        require(owner() == _msgSender(), "Ownable2Step: caller is not the owner");
-    }
-
-    function transferOwnership(address newOwner) public virtual onlyOwner {
-        require(newOwner != address(0), "Ownable2Step: new owner is the zero address");
-        _pendingOwner = newOwner;
-        emit PendingOwnershipTransfer(owner(), newOwner);
-    }
-
-    function acceptOwnership() public virtual {
-        address sender = _msgSender();
-        require(sender == _pendingOwner, "Ownable2Step: caller is not the new owner");
-        _transferOwnership(sender);
-    }
-
-    function _transferOwnership(address newOwner) internal virtual {
-        address oldOwner = _owner;
-        _owner = newOwner;
-        emit OwnershipTransferred(oldOwner, newOwner);
-    }
-}
-
-// ========== IERC20 ==========
-interface IERC20 {
-    function totalSupply() external view returns (uint256);
-    function balanceOf(address account) external view returns (uint256);
-    function transfer(address to, uint256 amount) external returns (bool);
-    function allowance(address owner, address spender) external view returns (uint256);
-    function approve(address spender, uint256 amount) external returns (bool);
-    function transferFrom(address from, address to, uint256 amount) external returns (bool);
-    event Transfer(address indexed from, address indexed to, uint256 value);
-    event Approval(address indexed owner, address indexed spender, uint256 value);
-}
-
-// ========== ERC20 ==========
-abstract contract ERC20 is Context, IERC20 {
-    mapping(address => uint256) private _balances;
-    mapping(address => mapping(address => uint256)) private _allowances;
-    uint256 private _totalSupply;
-    string private _name;
-    string private _symbol;
-
-    constructor(string memory name_, string memory symbol_) {
-        _name = name_;
-        _symbol = symbol_;
-    }
-
-    function name() public view virtual returns (string memory) {
-        return _name;
-    }
-
-    function symbol() public view virtual returns (string memory) {
-        return _symbol;
-    }
-
-    function decimals() public view virtual returns (uint8) {
-        return 18;
-    }
-
-    function totalSupply() public view virtual override returns (uint256) {
-        return _totalSupply;
-    }
-
-    function balanceOf(address account) public view virtual override returns (uint256) {
-        return _balances[account];
-    }
-
-    function transfer(address to, uint256 amount) public virtual override returns (bool) {
-        address owner = _msgSender();
-        _transfer(owner, to, amount);
-        return true;
-    }
-
-    function allowance(address owner, address spender) public view virtual override returns (uint256) {
-        return _allowances[owner][spender];
-    }
-
-    function approve(address spender, uint256 amount) public virtual override returns (bool) {
-        address owner = _msgSender();
-        _approve(owner, spender, amount);
-        return true;
-    }
-
-    function transferFrom(address from, address to, uint256 amount) public virtual override returns (bool) {
-        address spender = _msgSender();
-        _spendAllowance(from, spender, amount);
-        _transfer(from, to, amount);
-        return true;
-    }
-
-    function _transfer(address from, address to, uint256 amount) internal virtual {
-        require(from != address(0), "ERC20: transfer from the zero address");
-        require(to != address(0), "ERC20: transfer to the zero address");
-        uint256 fromBalance = _balances[from];
-        require(fromBalance >= amount, "ERC20: transfer amount exceeds balance");
-        unchecked {
-            _balances[from] = fromBalance - amount;
-            _balances[to] += amount;
-        }
-        emit Transfer(from, to, amount);
-    }
-
-    function _mint(address account, uint256 amount) internal virtual {
-        require(account != address(0), "ERC20: mint to the zero address");
-        _totalSupply += amount;
-        unchecked {
-            _balances[account] += amount;
-        }
-        emit Transfer(address(0), account, amount);
-    }
-
-    function _burn(address account, uint256 amount) internal virtual {
-        require(account != address(0), "ERC20: burn from the zero address");
-        uint256 accountBalance = _balances[account];
-        require(accountBalance >= amount, "ERC20: burn amount exceeds balance");
-        unchecked {
-            _balances[account] = accountBalance - amount;
-            _totalSupply -= amount;
-        }
-        emit Transfer(account, address(0), amount);
-    }
-
-    function _approve(address owner, address spender, uint256 amount) internal virtual {
-        _allowances[owner][spender] = amount;
-        emit Approval(owner, spender, amount);
-    }
-
-    function _spendAllowance(address owner, address spender, uint256 amount) internal virtual {
-        uint256 currentAllowance = _allowances[owner][spender];
-        if (currentAllowance != type(uint256).max) {
-            require(currentAllowance >= amount, "ERC20: insufficient allowance");
-            unchecked {
-                _approve(owner, spender, currentAllowance - amount);
-            }
-        }
-    }
-}
-
-// ========== REENTRANCYGUARD ==========
-abstract contract ReentrancyGuard {
-    uint256 private constant _NOT_ENTERED = 1;
-    uint256 private constant _ENTERED = 2;
-    uint256 private _status;
-
-    constructor() {
-        _status = _NOT_ENTERED;
-    }
-
-    modifier nonReentrant() {
-        require(_status != _ENTERED, "ReentrancyGuard: reentrant call");
-        _status = _ENTERED;
-        _;
-        _status = _NOT_ENTERED;
-    }
-}
-
-// ========== SAFEERC20 + ADDRESS ==========
-library SafeERC20 {
-    using Address for address;
-
-    function safeTransfer(IERC20 token, address to, uint256 value) internal {
-        _callOptionalReturn(token, abi.encodeWithSelector(token.transfer.selector, to, value));
-    }
-
-    function safeTransferFrom(IERC20 token, address from, address to, uint256 value) internal {
-        _callOptionalReturn(token, abi.encodeWithSelector(token.transferFrom.selector, from, to, value));
-    }
-
-    function _callOptionalReturn(IERC20 token, bytes memory data) private {
-        bytes memory returndata = address(token).functionCall(data);
-        if (returndata.length > 0) {
-            require(abi.decode(returndata, (bool)), "SafeERC20: ERC20 operation did not succeed");
-        }
-    }
-}
-
-library Address {
-    function functionCall(address target, bytes memory data) internal returns (bytes memory) {
-        return functionCallWithValue(target, data, 0, "Address: low-level call failed");
-    }
-
-    function functionCallWithValue(address target, bytes memory data, uint256 value, string memory errorMessage) internal returns (bytes memory) {
-        require(address(this).balance >= value, "Address: insufficient balance for call");
-        (bool success, bytes memory returndata) = target.call{value: value}(data);
-        return _verifyCallResult(success, returndata, errorMessage);
-    }
-
-    function _verifyCallResult(bool success, bytes memory returndata, string memory errorMessage) private pure returns(bytes memory) {
-        if (success) {
-            return returndata;
-        } else {
-            if (returndata.length > 0) {
-                assembly {
-                    revert(add(32, returndata), mload(returndata))
-                }
-            } else {
-                revert(errorMessage);
-            }
-        }
-    }
-}
+import "@openzeppelin/contracts/access/Ownable2Step.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/utils/Address.sol";
 
 // ========== WHITELIST ==========
 abstract contract Whitelist is Ownable2Step {
@@ -277,13 +41,14 @@ abstract contract Whitelist is Ownable2Step {
         require(index > 0, "Whitelist: Address not found");
 
         uint256 realIndex = index - 1;
+        require(realIndex < whitelistedTokens.length, "Whitelist: Index out of bounds");
         require(whitelistedTokens[realIndex].isActive != _isActive, "Whitelist: Status already set");
 
         whitelistedTokens[realIndex].isActive = _isActive;
         emit TokenStatusChanged(_address, _isActive);
     }
 
-    /// @notice Returns if an address is actively whitelisted
+    /// @notice Checks if an address has been whitelisted
     /// @param _address Token address
     function isWhitelisted(address _address) public view returns (bool) {
         uint256 index = tokenIndexes[_address];
@@ -301,6 +66,14 @@ abstract contract Whitelist is Ownable2Step {
         require(_index < whitelistedTokens.length, "Whitelist: Invalid index");
         TokenInfo memory info = whitelistedTokens[_index];
         return (info.tokenAddress, info.isActive);
+    }
+
+    /// @notice Get whitelist index for a specific token
+    /// @param _address Token address
+    function getTokenWhitelistIndex(address _address) public view returns (uint256) {
+        uint256 index = tokenIndexes[_address];
+        require(index > 0, "Whitelist: Token not whitelisted");
+        return index - 1; // 0-based array index
     }
 
     /// @notice View whitelisted tokens, both active and inactive
@@ -349,7 +122,29 @@ abstract contract Whitelist is Ownable2Step {
     }
 }
 
-// ========== AGORAX MAIN CONTRACT ==========
+// AgoraX is a limit order platform inspired by 0x and OTC contracts, written as an independent implementation.
+// Not affiliated with or endorsed by any outside parties.
+
+//  ________________                                                                           ________________
+//  |              | ========================================================================= |              |
+//   (@^,^,^,^,^,@)                                                                             (@^,^,^,^,^,@)
+//     )`){o}(`(                                                                                  )`){o}(`(
+//     ,`,`,`,`,`                                                       ____                      ,`,`,`,`,`
+//     ==========            $$$$$$\                                   |$$ / $$\   $$\            ========== 
+//      ||||||||            $$  __$$\                                  |$ /  $$ |  $$ |            ||||||||
+//      ||||||||            $$ /  $$ | $$$$$$\   $$$$$$\   $$$$$$\  $$$$$$\  \$$\ $$  |            ||||||||
+//      ||||||||            $$$$$$$$ |$$  __$$\ $$  __$$\ $$  __$$\ \____$$\  \$$$$  /             ||||||||
+//      ||||||||            $$  __$$ |$$ /  $$ |$$ /  $$ |$$ |  \__|$$$$$$$ | $$  $$<              ||||||||
+//      ||||||||            $$ |  $$ |$$ |  $$ |$$ |  $$ |$$ |     $$  __$$ |$$  /\$$\             ||||||||
+//      ||||||||            $$ |  $$ |\$$$$$$$ |\$$$$$$  |$$ |     \$$$$$$$ |$$ /  $$ |            ||||||||
+//      ||||||||            \__|  \__| \____$$ | \______/ \__|      \_______|\__|  \__|            ||||||||
+//      ||||||||                      $$\   $$ |                                                   ||||||||
+//     ,________,                     \$$$$$$  |                                                  ,________, 
+//       )    (                        \______/                                                     )    ( 
+//     ,       `                                                                                  ,       `
+//   _/__________\_                                                                             _/__________\_
+//  |______________| ========================================================================= |______________|
+//  
 
 contract AgoraX is Ownable2Step, ERC20, ReentrancyGuard, Whitelist {
     using SafeERC20 for IERC20;
@@ -377,8 +172,9 @@ contract AgoraX is Ownable2Step, ERC20, ReentrancyGuard, Whitelist {
         uint256 orderId;
         uint256 remainingFillPercentage;
         uint256 redeemedPercentage;
-        uint32 lastUpdateTime;
+        uint32 lastUpdateTime; // Timestamp of when the order was last updated to trigger the cooldownPeriod
         OrderStatus status;
+        uint256 creationProtocolFee;
         OrderDetails orderDetails;
     }
 
@@ -394,8 +190,8 @@ contract AgoraX is Ownable2Step, ERC20, ReentrancyGuard, Whitelist {
     uint256 private orderCounter = 0;
     address private feeAddress; // Collects listingFee and protocolFee
     uint32 private cooldownPeriod; // MEV and flash-loan order protection in seconds 
-    uint256 public listingFee; // Fixed amount in PLS (1 PLS = 10^18)
-    uint256 public protocolFee; // Percentage in basis points (100 = 1%)
+    uint256 public listingFee; // Fixed per order amount in PLS (1 PLS = 10^18)
+    uint256 public protocolFee; // Percentage of proceeds in basis points (100 = 1%)
     
     uint256 public constant PERCENTAGE_DIVISOR = 10000;
     uint256 public constant DIVISOR = 10 ** 18;
@@ -406,13 +202,27 @@ contract AgoraX is Ownable2Step, ERC20, ReentrancyGuard, Whitelist {
 
     address public constant NATIVE_ADDRESS = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
-    event OrderPlaced(address indexed user, uint256 indexed orderId, address indexed sellToken);
+    // Track unique users with orders for findFillableOrders
+    address[] private allUsersWithOrders;
+    mapping(address => bool) private hasOrders;
+    mapping(address => uint256) private userIndexInList;
+
+    /// @dev Emitted when a cleanup batch starts
+    event UserListCleanupStarted(uint256 cursor, uint256 size, uint256 totalUsers);
+
+    /// @dev Emitted when a cleanup batch finishes
+    event UserListCleanupFinished(uint256 cursor, uint256 size, uint256 removedCount, uint256 remainingUsers);
+
+    event OrderPlaced(address indexed user, uint256 indexed orderId, address indexed sellToken, uint256 sellAmount, uint256[] buyTokensIndex, uint256[] buyAmounts, uint256 expirationTime);
     event OrderCancelled(address indexed user, uint256 indexed orderId);
-    event OrderUpdated(uint256 orderId);
+    event OrderUpdated(uint256 indexed orderId, uint256 newExpiration);
     event OrderFilled(address indexed buyer, uint256 indexed orderId, uint256 indexed buyTokenIndex);
-    event OrderRedeemed(address indexed user, uint256 indexed orderId);
+    event OrderProceedsCollected(address indexed user, uint256 indexed orderId);
     event Paused(address indexed owner, bool paused);
     event FeeAddressUpdated(address indexed oldAddress, address indexed newAddress);
+    event CooldownPeriodUpdated(uint32 oldPeriod, uint32 newPeriod);
+    event ListingFeeUpdated(uint256 oldFee, uint256 newFee);
+    event ProtocolFeeUpdated(uint256 oldFee, uint256 newFee);
 
     modifier validOrderId(uint256 _orderId) {
         require(_orderId <= orderCounter, "AgoraX: Invalid order ID");
@@ -442,8 +252,10 @@ contract AgoraX is Ownable2Step, ERC20, ReentrancyGuard, Whitelist {
         uint32 _cooldownPeriod,
         uint256 _listingFeesLimit,
         uint256 _protocolFeesLimit
-    ) Ownable2Step(msg.sender) ERC20("AgoraX", "AGX") {
+    ) ERC20("AgoraX", "AGX") Ownable(msg.sender) {
         require(_feeAddress != address(0), "AgoraX: Invalid fee address");
+        require(_listingFee <= _listingFeesLimit, "AgoraX: Listing fee exceeds limit");
+        require(_protocolFee <= _protocolFeesLimit, "AgoraX: Protocol fee exceeds limit");
         require(_listingFeesLimit > 0, "AgoraX: Listing fee limit must be > 0");
         require(_protocolFeesLimit <= PERCENTAGE_DIVISOR, "AgoraX: Protocol fee limit exceeds 100%");
         
@@ -482,38 +294,99 @@ contract AgoraX is Ownable2Step, ERC20, ReentrancyGuard, Whitelist {
         emit FeeAddressUpdated(oldAddress, _newFeeAddress);
     }
 
-    /// @notice Updates the cooldown period for filling orders
+    /// @notice Updates the cooldown period
     /// @param _newCoolDownPeriod The new cooldown period in seconds
     /// @dev Only callable by the owner
     function updateCoolDownPeriod(uint32 _newCoolDownPeriod) external onlyOwner {
+        emit CooldownPeriodUpdated(cooldownPeriod, _newCoolDownPeriod);
         cooldownPeriod = _newCoolDownPeriod;
     }
 
-    /// @notice Updates the listing fee for placing orders
+    /// @notice Updates the listing fee
     /// @param _newFee The new listing fee in PLS (1 PLS = 10^18)
     /// @dev Only callable by the owner
     function updateListingFee(uint256 _newFee) external onlyOwner {
         require(_newFee <= LISTING_FEES_LIMIT, "AgoraX: Listing fee exceeds limit");
+        emit ListingFeeUpdated(listingFee, _newFee);
         listingFee = _newFee;
     }
 
-    /// @notice Updates the protocol fee for filling orders
+    /// @notice Updates the protocol fee
     /// @param _newFee The new protocol fee in basis points (100 = 1%)
     /// @dev Only callable by the owner
     function updateProtocolFee(uint256 _newFee) external onlyOwner {
         require(_newFee <= PROTOCOL_FEES_LIMIT, "AgoraX: Protocol fee exceeds limit");
         require(_newFee <= PERCENTAGE_DIVISOR, "AgoraX: Protocol fee cannot exceed 100%");
+        emit ProtocolFeeUpdated(protocolFee, _newFee);
         protocolFee = _newFee;
     }
 
+    /// @notice Removes users with zero AGX balance from the active users list
+    /// @param cursor Starting index in allUsersWithOrders
+    /// @param size Max users to process in this call
+    /// @return nextCursor Next starting index for continued cleanup
+    function cleanInactiveUsers(uint256 cursor, uint256 size)
+        external
+        onlyOwner
+        returns (uint256 nextCursor)
+    {
+        uint256 total = allUsersWithOrders.length;
+        uint256 end = cursor + size;
+        if (end > total) end = total;
+
+        emit UserListCleanupStarted(cursor, size, total);
+
+        uint256 removed = 0;
+        for (uint256 i = end; i > cursor; ) {
+            unchecked { i--; }
+            address user = allUsersWithOrders[i];
+
+            if (balanceOf(user) == 0 && hasOrders[user]) {
+                // swap-and-pop
+                uint256 lastIdx = allUsersWithOrders.length - 1;
+                address lastUser = allUsersWithOrders[lastIdx];
+
+                allUsersWithOrders[i] = lastUser;
+                userIndexInList[lastUser] = i;
+                allUsersWithOrders.pop();
+
+                delete userIndexInList[user];
+                hasOrders[user] = false;
+
+                removed++;
+            }
+        }
+
+        emit UserListCleanupFinished(cursor, size, removed, allUsersWithOrders.length);
+        return end;
+    }
+
     /// @notice Places a new limit order
-    /// @param _orderDetails The details of the order (sell token, amount, buy tokens, etc.)
+    /// @notice Duplicate buy tokens not allowed within the same order
+    /// @param _orderDetails The details of the order ["sell token address", "sell amount", [buy token(s) index], ["buy amount(s)"], "expiration time"]
     function placeOrder(OrderDetails calldata _orderDetails) 
         external 
         payable 
         nonReentrant 
         whenNotPaused 
     {
+        require(_orderDetails.buyTokensIndex.length > 0, "AgoraX: At least one buy token required");
+        require(_orderDetails.buyTokensIndex.length <= 50, "AgoraX: Too many buy tokens");
+        require(_orderDetails.buyTokensIndex.length == _orderDetails.buyAmounts.length, "AgoraX: Array length mismatch");
+
+        // Prevents accidental duplicate buy tokens
+        {
+            for (uint256 i = 0; i < _orderDetails.buyTokensIndex.length; ) {
+                for (uint256 j = i + 1; j < _orderDetails.buyTokensIndex.length; ) {
+                    if (_orderDetails.buyTokensIndex[i] == _orderDetails.buyTokensIndex[j]) {
+                        revert("AgoraX: Duplicate buy tokens not allowed");
+                    }
+                    unchecked { ++j; }
+                }
+                unchecked { ++i; }
+            }
+        }
+
         _checkTokenAndAmount(_orderDetails.buyTokensIndex, _orderDetails.buyAmounts);
         
         require(msg.value >= listingFee, "AgoraX: Insufficient listing fee");
@@ -531,6 +404,7 @@ contract AgoraX is Ownable2Step, ERC20, ReentrancyGuard, Whitelist {
             redeemedPercentage: 0,
             lastUpdateTime: uint32(block.timestamp),
             status: OrderStatus.Active,
+            creationProtocolFee: protocolFee, // Records protocol fee current at time of order creation
             orderDetails: _orderDetails
         });
         
@@ -541,16 +415,15 @@ contract AgoraX is Ownable2Step, ERC20, ReentrancyGuard, Whitelist {
         });
         userDetailsByOrderId[orderCounter] = userOrderDetails;
         
-        _mint(msg.sender, _orderDetails.sellAmount);
 
         if (_orderDetails.sellToken == NATIVE_ADDRESS) {
-            require(remainingValue >= _orderDetails.sellAmount, "AgoraX: Insufficient PLS balance");
+            require(remainingValue >= _orderDetails.sellAmount, "AgoraX: Insufficient PLS message value");
             uint256 extra = remainingValue - _orderDetails.sellAmount;
             if (extra > 0) {
                 _sendNative(extra);
             }
         } else {
-            require(remainingValue == 0, "AgoraX: No PLS expected for ERC20 sell");
+            require(remainingValue == 0, "AgoraX: PLS message value too high. Exceeds expectations for an ERC20 order");
             uint256 sellTokenAmountBefore = IERC20(_orderDetails.sellToken).balanceOf(address(this));
             IERC20(_orderDetails.sellToken).safeTransferFrom(msg.sender, address(this), _orderDetails.sellAmount);
             uint256 sellTokenAmountAfter = IERC20(_orderDetails.sellToken).balanceOf(address(this));
@@ -560,22 +433,37 @@ contract AgoraX is Ownable2Step, ERC20, ReentrancyGuard, Whitelist {
             );
         }
 
-        emit OrderPlaced(msg.sender, orderCounter, _orderDetails.sellToken);
+        _mint(msg.sender, _orderDetails.sellAmount);
+
+        // Track unique user for findFillableOrders
+        if (!hasOrders[msg.sender]) {
+            userIndexInList[msg.sender] = allUsersWithOrders.length;
+            allUsersWithOrders.push(msg.sender);
+            hasOrders[msg.sender] = true;
+        }
+
+        emit OrderPlaced(msg.sender, orderCounter, _orderDetails.sellToken, _orderDetails.sellAmount, _orderDetails.buyTokensIndex, _orderDetails.buyAmounts, _orderDetails.expirationTime);
     }
 
-    /// @notice Cancels an existing order
+    /// @notice Cancels an existing order and sends proceeds (if any) to the specified recipient
     /// @param _orderId The ID of the order to cancel
-    function cancelOrder(uint256 _orderId) external nonReentrant validOrderId(_orderId) {
+    /// @param _recipient Address to send any accumulated proceeds to
+    function cancelOrder(uint256 _orderId, address _recipient) external nonReentrant validOrderId(_orderId) {
+        require(_recipient != address(0), "AgoraX: Invalid recipient");
         UserOrderDetails memory userOrderDetails = userDetailsByOrderId[_orderId];
         require(userOrderDetails.orderOwner == msg.sender, "AgoraX: Unauthorized");
 
-        _redeemOrder(_orderId);
-        
         OrderDetailsWithId storage orderDetailsWithId = orders[msg.sender][userOrderDetails.orderIndex];
         require(orderDetailsWithId.status != OrderStatus.Cancelled, "AgoraX: Order already cancelled");
 
         uint256 remainingFillPercentage = orderDetailsWithId.remainingFillPercentage;
         require(remainingFillPercentage > 0, "AgoraX: Order already completed");
+
+        // Collects proceeds from partial fills and sends to recipient
+        uint256 redeemable = DIVISOR - orderDetailsWithId.remainingFillPercentage - orderDetailsWithId.redeemedPercentage;
+        if (redeemable > 0) {
+            _collectProceeds(_orderId, _recipient);
+        }
         
         orderDetailsWithId.status = OrderStatus.Cancelled;
         uint256 refundAmount = (orderDetailsWithId.orderDetails.sellAmount * orderDetailsWithId.remainingFillPercentage) / DIVISOR;
@@ -590,13 +478,15 @@ contract AgoraX is Ownable2Step, ERC20, ReentrancyGuard, Whitelist {
         emit OrderCancelled(msg.sender, _orderId);
     }
 
-    /// @notice Cancels all expired orders for the caller
-    /// @return cancelledOrderIds Array of cancelled order IDs
-    function cancelAllExpiredOrders() 
+    /// @notice Cancels all active expired orders (up to 50) for the caller and sends proceeds (if any) to the specified recipient
+    /// @param _recipient Address to send any accumulated proceeds to
+    /// @return cancelledOrderIds Array of order IDs cancelled
+    function cancelAllExpiredOrders(address _recipient) 
         external 
         nonReentrant 
         returns (uint256[] memory cancelledOrderIds) 
     {
+        require(_recipient != address(0), "AgoraX: Invalid recipient");
         uint256 userOrdersLength = orders[msg.sender].length;
         uint256 cancelledCount = 0;
         
@@ -620,7 +510,10 @@ contract AgoraX is Ownable2Step, ERC20, ReentrancyGuard, Whitelist {
             if (order.status == OrderStatus.Active && 
                 order.orderDetails.expirationTime <= block.timestamp) {
                 uint256 orderId = order.orderId;
-                _redeemOrder(orderId); // Redeems partial fills
+                uint256 redeemable = DIVISOR - order.remainingFillPercentage - order.redeemedPercentage;
+                if (redeemable > 0) {
+                    _collectProceeds(orderId, _recipient); // Collects proceeds from any partially filled orders
+                }
                 
                 // Only cancel if there's something left to refund
                 if (order.remainingFillPercentage > 0) {
@@ -644,7 +537,7 @@ contract AgoraX is Ownable2Step, ERC20, ReentrancyGuard, Whitelist {
         return cancelledOrderIds;
     }
 
-    /// @notice Fills an order by providing buy tokens
+    /// @notice Fills an order by providing buy tokens at the ratio set by the order
     /// @param _orderId The ID of the order to fill
     /// @param _buyTokenIndexInOrder Index of the buy token in the order's buyTokensIndex array
     /// @param _buyAmount Amount of buy tokens to provide
@@ -661,7 +554,7 @@ contract AgoraX is Ownable2Step, ERC20, ReentrancyGuard, Whitelist {
 
         // Handle buy token transfer and fees
         if (_buyToken == NATIVE_ADDRESS) {
-            require(msg.value >= _buyAmount, "AgoraX: Insufficient PLS balance");
+            require(msg.value >= _buyAmount, "AgoraX: Insufficient PLS message value required to fill order");
             uint256 extraTokens = msg.value - _buyAmount;
             if (_fees > 0) {
                 _sendNativeToFeeAddress(_fees);
@@ -670,6 +563,7 @@ contract AgoraX is Ownable2Step, ERC20, ReentrancyGuard, Whitelist {
                 _sendNative(extraTokens);
             }
         } else {
+            require(msg.value == 0, "AgoraX: No PLS needed for an ERC20 fill");
             uint256 buyTokenAmountBefore = IERC20(_buyToken).balanceOf(address(this));
             IERC20(_buyToken).safeTransferFrom(msg.sender, address(this), _buyAmount);
             uint256 buyTokenAmountAfter = IERC20(_buyToken).balanceOf(address(this));
@@ -690,13 +584,15 @@ contract AgoraX is Ownable2Step, ERC20, ReentrancyGuard, Whitelist {
         }
     }
 
-    /// @notice Redeems an order, returning accumulated buy tokens and remaining sell tokens
-    /// @param _orderId The ID of the order to redeem
-    function redeemOrder(uint256 _orderId) public nonReentrant validOrderId(_orderId) {
-        _redeemOrder(_orderId);
+    /// @notice Collects accumulated buy tokens for an order that has been partially or completely filled and sends to the specified recipient
+    /// @param _orderId The ID of the order
+    /// @param _recipient Address to send proceeds to (recipient must be able to accept PLS proceeds, if any)
+    function collectProceeds(uint256 _orderId, address _recipient) public nonReentrant validOrderId(_orderId) {
+        require(_recipient != address(0), "AgoraX: Invalid recipient");
+        _collectProceeds(_orderId, _recipient);
     }
 
-    /// @notice Views open (active and not expired) orders for a user
+    /// @notice Views open (active and not expired) order IDs for a user
     /// @param _user The user's address
     /// @param _cursor Starting index for pagination
     /// @param _size Number of orders to return
@@ -711,7 +607,7 @@ contract AgoraX is Ownable2Step, ERC20, ReentrancyGuard, Whitelist {
         uint256 end = _cursor + _size > userOrdersLength ? userOrdersLength : _cursor + _size;
         uint256 openCount = 0;
         
-        // Count open (active and not expired) orders in range
+        // Count open (active and not expired) orders within specified range
         for (uint256 i = _cursor; i < end; i++) {
             if (orders[_user][i].status == OrderStatus.Active && 
                 orders[_user][i].orderDetails.expirationTime > block.timestamp) {
@@ -733,7 +629,7 @@ contract AgoraX is Ownable2Step, ERC20, ReentrancyGuard, Whitelist {
         return (openOrders, end);
     }
 
-    /// @notice Views expired (active but past expiration) orders for a user
+    /// @notice Views expired (active but past expiration) order IDs for a user
     /// @param _user The user's address
     /// @param _cursor Starting index for pagination
     /// @param _size Number of orders to return
@@ -770,7 +666,7 @@ contract AgoraX is Ownable2Step, ERC20, ReentrancyGuard, Whitelist {
         return (expiredOrders, end);
     }
 
-    /// @notice Views completed orders for a user
+    /// @notice Views completed order IDs for a user
     /// @param _user The user's address
     /// @param _cursor Starting index for pagination
     /// @param _size Number of orders to return
@@ -805,7 +701,7 @@ contract AgoraX is Ownable2Step, ERC20, ReentrancyGuard, Whitelist {
         return (completedOrders, end);
     }
 
-    /// @notice Views cancelled orders for a user
+    /// @notice Views cancelled order IDs for a user
     /// @param _user The user's address
     /// @param _cursor Starting index for pagination
     /// @param _size Number of orders to return
@@ -857,6 +753,93 @@ contract AgoraX is Ownable2Step, ERC20, ReentrancyGuard, Whitelist {
         return expiredCount;
     }
 
+    /// @notice Sets a new expiration time for an order
+    /// @param _orderId The order ID
+    /// @param _newExpiration New expiration timestamp
+    function updateOrderExpiration(uint256 _orderId, uint256 _newExpiration) external nonReentrant validOrderId(_orderId) {
+        UserOrderDetails memory userDetails = userDetailsByOrderId[_orderId];
+        require(userDetails.orderOwner == msg.sender, "AgoraX: Unauthorized");
+        
+        OrderDetailsWithId storage orderWithId = orders[msg.sender][userDetails.orderIndex];
+        require(orderWithId.status == OrderStatus.Active, "AgoraX: Order not active");
+        
+        bool wasExpired = (orderWithId.orderDetails.expirationTime <= block.timestamp);
+        
+        require(_newExpiration > block.timestamp, "AgoraX: New expiration time must be in the future");
+        
+        orderWithId.orderDetails.expirationTime = _newExpiration;
+        if (wasExpired) {
+            orderWithId.lastUpdateTime = uint32(block.timestamp);
+        }
+        emit OrderUpdated(_orderId, _newExpiration);
+    }
+
+    /// @notice Returns the current block timestamp in seconds (Unix format)
+    /// @return The current timestamp
+    function getCurrentTimestamp() external view returns (uint256) {
+        return block.timestamp;
+    }
+
+    /// @notice Finds fillable orders matching specified criteria
+    /// @param _sellToken Sell token to match
+    /// @param _minSellAmount Minimum remaining sell amount
+    /// @param cursor Starting index for pagination (over users)
+    /// @param size Max number of matching orders to return (up to 50)
+    /// @return orderIds Array of matching order IDs (sorted ascending)
+    /// @return nextCursor Next starting index for pagination
+    function findFillableOrders(
+        address _sellToken,
+        uint256 _minSellAmount,
+        uint256 cursor,
+        uint256 size
+    ) external view returns (uint256[] memory orderIds, uint256 nextCursor) {
+        require(size <= 50, "AgoraX: Size exceeds max (50)");
+
+        uint256 totalUsers = allUsersWithOrders.length;
+        uint256 startUser = cursor < totalUsers ? cursor : totalUsers;
+        uint256 endUser = startUser + 1000; // Scan stops if size matches
+        if (endUser > totalUsers) endUser = totalUsers;
+
+        uint256[] memory temp = new uint256[](size);
+        uint256 cnt = 0;
+        uint256 processed = 0;
+
+        for (uint256 u = startUser; u < endUser && cnt < size; ++u) {
+            address user = allUsersWithOrders[u];
+            OrderDetailsWithId[] storage userOrders = orders[user];
+
+            for (uint256 i = 0; i < userOrders.length && cnt < size; ++i) {
+                if (userOrders[i].status != OrderStatus.Active) continue;
+                if (userOrders[i].orderDetails.sellToken != _sellToken) continue;
+                if (userOrders[i].orderDetails.expirationTime <= block.timestamp) continue;
+
+                uint256 remainingSell = (userOrders[i].orderDetails.sellAmount * userOrders[i].remainingFillPercentage) / DIVISOR;
+
+                if (remainingSell < _minSellAmount) continue;
+
+                temp[cnt] = userOrders[i].orderId;
+                cnt++;
+            }
+            processed++;
+        }
+
+        orderIds = new uint256[](cnt);
+        for (uint256 i = 0; i < cnt; ++i) {
+            orderIds[i] = temp[i];
+        }
+
+        // Bubble sort ascending
+        for (uint256 i = 0; i < cnt - 1; ++i) {
+            for (uint256 j = 0; j < cnt - i - 1; ++j) {
+                if (orderIds[j] > orderIds[j + 1]) {
+                    (orderIds[j], orderIds[j + 1]) = (orderIds[j + 1], orderIds[j]);
+                }
+            }
+        }
+
+        nextCursor = startUser + processed;
+    }
+
     function _fillOrder(
         uint256 _orderId,
         uint256 _buyTokenIndexInOrder,
@@ -864,15 +847,16 @@ contract AgoraX is Ownable2Step, ERC20, ReentrancyGuard, Whitelist {
     ) internal returns (address _buyTokenAddress, address _sellTokenAddress, uint256 _soldAmount, uint256 _fees) {
         OrderDetailsWithId storage orderDetailsWithId;
         uint256 buyTokenIndex;
-
         {
             UserOrderDetails memory userOrderDetails = userDetailsByOrderId[_orderId];
             orderDetailsWithId = orders[userOrderDetails.orderOwner][userOrderDetails.orderIndex];
 
             require(
                 orderDetailsWithId.lastUpdateTime + cooldownPeriod < uint32(block.timestamp),
-                "AgoraX: Order in cooldown period"
+                "AgoraX: Order still in cooldown period"
             );
+
+            require(_buyTokenIndexInOrder < orderDetailsWithId.orderDetails.buyTokensIndex.length, "AgoraX: Invalid buy token index");
 
             buyTokenIndex = orderDetailsWithId.orderDetails.buyTokensIndex[_buyTokenIndexInOrder];
             (_buyTokenAddress, ) = getTokenInfoAt(buyTokenIndex);
@@ -880,8 +864,10 @@ contract AgoraX is Ownable2Step, ERC20, ReentrancyGuard, Whitelist {
             uint256 originalBuyAmount = orderDetailsWithId.orderDetails.buyAmounts[_buyTokenIndexInOrder];
             require(originalBuyAmount > 0, "AgoraX: Invalid buy amount");
             
+            require(_buyAmount <= originalBuyAmount, "AgoraX: Excessive buy amount");
+            
             uint256 percentage = (_buyAmount * DIVISOR) / originalBuyAmount;
-            require(orderDetailsWithId.remainingFillPercentage >= percentage, "AgoraX: Insufficient available");
+            require(orderDetailsWithId.remainingFillPercentage >= percentage, "AgoraX: Buy amount exceeds order availability");
 
             _soldAmount = (orderDetailsWithId.orderDetails.sellAmount * percentage) / DIVISOR;
             orderDetailsWithId.remainingFillPercentage -= percentage;
@@ -892,28 +878,47 @@ contract AgoraX is Ownable2Step, ERC20, ReentrancyGuard, Whitelist {
             }
         }
 
-        // Protocol fee collected as a percentage of proceeds
-        _fees = (_buyAmount * protocolFee) / PERCENTAGE_DIVISOR;
+        // Protocol fee collected as a percentage of proceeds (compares creationProtocolFee and current protocolFee and uses whichever is smallest)
+        uint256 effectiveFee = (orderDetailsWithId.creationProtocolFee < protocolFee) 
+            ? orderDetailsWithId.creationProtocolFee 
+            : protocolFee;
+        _fees = (_buyAmount * effectiveFee) / PERCENTAGE_DIVISOR;
         uint256 _newBoughtAmount = _buyAmount > _fees ? _buyAmount - _fees : 0;
         buyTransactionsByOrderId[_orderId][buyTokenIndex] += _newBoughtAmount;
 
         emit OrderFilled(msg.sender, _orderId, buyTokenIndex);
     }
 
-    function _redeemOrder(uint256 _orderId) internal {
+    function _collectProceeds(uint256 _orderId, address _recipient) internal {
         UserOrderDetails memory userOrderDetails = userDetailsByOrderId[_orderId];
         require(userOrderDetails.orderOwner == msg.sender, "AgoraX: Unauthorized");
         
         OrderDetailsWithId storage orderDetailsWithId = orders[msg.sender][userOrderDetails.orderIndex];
         uint256 redeemable = DIVISOR - orderDetailsWithId.remainingFillPercentage - orderDetailsWithId.redeemedPercentage;
         
-        require(redeemable > 0, "AgoraX: Nothing to redeem");
+        require(redeemable > 0, "AgoraX: Nothing to collect");
+
+        // Pre-check if recipient can accept PLS (if order has any PLS proceeds)
+        bool hasNative = false;
+        for (uint256 i = 0; i < orderDetailsWithId.orderDetails.buyTokensIndex.length; i++) {
+            uint256 currentBuyTokenIndex = orderDetailsWithId.orderDetails.buyTokensIndex[i];
+            (address currentBuyToken, ) = getTokenInfoAt(currentBuyTokenIndex);
+            uint256 boughtAmount = buyTransactionsByOrderId[_orderId][currentBuyTokenIndex];
+            if (boughtAmount > 0 && currentBuyToken == NATIVE_ADDRESS) {
+                hasNative = true;
+                break;
+            }
+        }
+        if (hasNative) {
+            (bool canReceive, ) = _recipient.call{value: 0}("");
+            require(canReceive, "AgoraX: Recipient does not accept PLS transfers");
+        }
 
         orderDetailsWithId.redeemedPercentage += redeemable;
         uint256 redeemAmount = (orderDetailsWithId.orderDetails.sellAmount * redeemable) / DIVISOR;
         _burn(msg.sender, redeemAmount);
 
-        // Return accumulated buy tokens
+        // Collects accumulated buy tokens
         for (uint256 i = 0; i < orderDetailsWithId.orderDetails.buyTokensIndex.length; i++) {
             uint256 currentBuyTokenIndex = orderDetailsWithId.orderDetails.buyTokensIndex[i];
             (address currentBuyToken, ) = getTokenInfoAt(currentBuyTokenIndex);
@@ -922,18 +927,17 @@ contract AgoraX is Ownable2Step, ERC20, ReentrancyGuard, Whitelist {
             if (boughtAmount > 0) {
                 buyTransactionsByOrderId[_orderId][currentBuyTokenIndex] = 0;
                 if (currentBuyToken == NATIVE_ADDRESS) {
-                    _sendNative(boughtAmount);
+                    _sendNativeToRecipient(boughtAmount, _recipient);
                 } else {
-                    IERC20(currentBuyToken).safeTransfer(msg.sender, boughtAmount);
+                    IERC20(currentBuyToken).safeTransfer(_recipient, boughtAmount);
                 }
             }
         }
 
-        emit OrderRedeemed(msg.sender, _orderId);
+        emit OrderProceedsCollected(msg.sender, _orderId);
     }
 
     function _checkTokenAndAmount(uint256[] calldata _tokensIndex, uint256[] calldata _amounts) internal view {
-        require(_tokensIndex.length == _amounts.length, "AgoraX: Array length mismatch");
         for (uint256 i = 0; i < _tokensIndex.length; i++) {
             (, bool active) = getTokenInfoAt(_tokensIndex[i]);
             require(active, "AgoraX: Inactive token");
@@ -951,16 +955,21 @@ contract AgoraX is Ownable2Step, ERC20, ReentrancyGuard, Whitelist {
         require(sent, "AgoraX: PLS fee transfer failed");
     }
 
-    // ========== VIEW FUNCTIONS ==========
+    function _sendNativeToRecipient(uint256 _amount, address _recipient) internal {
+        (bool sent, ) = payable(_recipient).call{value: _amount}("");
+        require(sent, "AgoraX: PLS transfer failed");
+    }
+
+    // ========== ADDITIONAL VIEW FUNCTIONS ==========
 
     /// @notice Returns the number of orders for a user
     /// @param _user The user's address
     /// @return The number of orders
-    function getUserOrdersLength(address _user) external view returns (uint256) {
+    function getUserOrderCount(address _user) external view returns (uint256) {
         return orders[_user].length;
     }
 
-    /// @notice Returns details of a specific order
+    /// @notice Returns the details of a specific order
     /// @param _orderId The ID of the order
     /// @return The complete order details
     function getOrderDetails(uint256 _orderId) external view validOrderId(_orderId) returns (CompleteOrderDetails memory) {
@@ -971,7 +980,7 @@ contract AgoraX is Ownable2Step, ERC20, ReentrancyGuard, Whitelist {
 
     /// @notice Returns the total number of orders created
     /// @return The order counter
-    function getOrderCounter() external view returns (uint256) {
+    function getTotalOrderCount() external view returns (uint256) {
         return orderCounter;
     }
 
@@ -981,7 +990,7 @@ contract AgoraX is Ownable2Step, ERC20, ReentrancyGuard, Whitelist {
         return feeAddress;
     }
 
-    /// @notice Returns the cooldown period for filling orders
+    /// @notice Returns the cooldown period for newly placed orders
     /// @return The cooldown period in seconds
     function getCooldownPeriod() external view returns (uint32) {
         return cooldownPeriod;
@@ -999,30 +1008,30 @@ contract AgoraX is Ownable2Step, ERC20, ReentrancyGuard, Whitelist {
         return protocolFee;
     }
 
-    /// @notice Returns the protocol fee format
-    /// @return Description of the protocol fee format
-    function getProtocolFeePercentage() external pure returns (string memory) {
-        return "Basis points (100 = 1%)";
+    /// @notice Current number of tracked users that have ever placed an order
+    /// @return Number of entries in the internal list
+    function trackedUserCount() external view returns (uint256) {
+        return allUsersWithOrders.length;
     }
 
     // ========== DISABLED ERC20 FUNCTIONS ==========
     /// @dev AGX receipt tokens are non-transferable - overrides parent implementation
-    function transfer(address, uint256) public virtual override returns (bool) {
+    function transfer(address, uint256) public pure override returns (bool) {
         revert("AGX: Transfer disabled");
     }
 
     /// @dev AGX receipt tokens cannot be approved - overrides parent implementation
-    function approve(address, uint256) public virtual override returns (bool) {
+    function approve(address, uint256) public pure override returns (bool) {
         revert("AGX: Approve disabled");
     }
 
     /// @dev AGX receipt tokens cannot be transferred from - overrides parent implementation
-    function transferFrom(address, address, uint256) public virtual override returns (bool) {
+    function transferFrom(address, address, uint256) public pure override returns (bool) {
         revert("AGX: TransferFrom disabled");
     }
 
     /// @dev AGX receipt tokens have no allowance - overrides parent implementation
-    function allowance(address, address) public view virtual override returns (uint256) {
+    function allowance(address, address) public pure override returns (uint256) {
         revert("AGX: Allowance disabled");
     }
 

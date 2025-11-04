@@ -268,7 +268,7 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
   }, []);
 
   return (
-    <div className="w-full h-full max-h-[calc(100vh-200px)] bg-black/80 backdrop-blur-sm border-2 border-[#00D9FF] p-6 shadow-[0_0_30px_rgba(0,217,255,0.3)] overflow-y-auto">
+    <div className="w-full h-full min-h-[500px] md:min-h-[600px] max-h-[calc(100vh-200px)] bg-black/80 backdrop-blur-sm border-2 border-[#00D9FF] p-6 shadow-[0_0_30px_rgba(0,217,255,0.3)] flex flex-col overflow-y-auto">
         {/* Token Pair Info */}
         {displayBaseTokenInfo && displayQuoteTokenInfo && (
         <div className="flex flex-col gap-4 mb-6">
@@ -296,11 +296,11 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
           <div className="text-[#00D9FF]/70">Loading price data...</div>
         </div>
       ) : currentPrice ? (
-        <div className="space-y-6">
+        <div className="space-y-6 flex-1 flex flex-col">
           {/* Visual Price Scale */}
           <div 
             ref={containerRef}
-            className="relative min-h-[400px] bg-black/40 border border-[#00D9FF]/20 rounded select-none"
+            className="relative flex-1 bg-black/40 rounded select-none"
           >
             {/* Y-axis tick marks */}
             {[-30, -25, -20, -15, -10, -5, 0, 5, 10, 15, 20, 25, 30].map((percentDiff) => {
@@ -320,12 +320,12 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                   style={{ bottom: `${position}%`, zIndex: 0, transform: 'translateY(50%)' }}
                 >
                   <div className="flex items-center gap-1 px-2 bg-black/80 rounded py-0.5">
-                    <div className="w-2 h-px bg-[#00D9FF]/30"></div>
+                    <div className="w-2 h-px bg-[#00D9FF]/70"></div>
                     <span className="text-xs text-[#00D9FF]/50 font-mono">
                       {percentDiff > 0 ? '+' : ''}{percentDiff}%
                     </span>
                   </div>
-                  <div className="flex-1 h-px border-t border-dashed border-[#00D9FF]/10"></div>
+                  <div className="flex-1 h-px border-t border-dashed border-[#00D9FF]/30"></div>
                 </div>
               );
             })}
@@ -346,33 +346,35 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                 className="absolute top-1/2 -translate-y-1/2 w-full border-t-2 border-[#00D9FF] shadow-[0_0_15px_rgba(0,217,255,0.8)] transition-all duration-500 pointer-events-none"
               />
               <div 
-                className={`absolute right-0 flex items-center gap-2 bg-black/90 px-3 py-1 border border-[#00D9FF] w-[250px] ${
-                  limitPricePosition && limitPricePosition < currentPricePosition ? 'top-0 -translate-y-[calc(100%+0px)]' : 'bottom-0 translate-y-[calc(100%+0px)]'
+                className={`absolute right-0 flex items-center justify-between bg-black/90 px-3 py-1 border border-[#00D9FF] w-[250px] ${
+                  limitPricePosition && limitPricePosition < currentPricePosition ? 'top-0 -translate-y-[calc(45%-0px)]' : 'bottom-0 translate-y-[calc(45%-0px)]'
                 }`}
               >
                 <span className="text-xs text-[#00D9FF]/70 whitespace-nowrap">Current Price:</span>
-                <span className="text-sm font-bold text-[#00D9FF] min-w-[60px] text-right">
-                  {displayCurrentPrice?.toLocaleString(undefined, {
-                    minimumSignificantDigits: 1,
-                    maximumSignificantDigits: 4
-                  }) || '0'}
-                </span>
-                {displayQuoteTokenInfo && (
-                  <>
-                    <span className="text-xs text-[#00D9FF]">
-                      {formatTokenTicker(displayQuoteTokenInfo.ticker)}
-                    </span>
-                    <img
-                      src={`/coin-logos/${displayQuoteTokenInfo.ticker}.svg`}
-                      alt={`${displayQuoteTokenInfo.ticker} logo`}
-                      className="w-[16px] h-[16px] object-contain"
-                      style={{ filter: 'brightness(0) saturate(100%) invert(68%) sepia(96%) saturate(2367%) hue-rotate(167deg) brightness(103%) contrast(101%)' }}
-                      onError={(e) => {
-                        e.currentTarget.src = '/coin-logos/default.svg';
-                      }}
-                    />
-                  </>
-                )}
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold text-[#00D9FF]">
+                    {displayCurrentPrice?.toLocaleString(undefined, {
+                      minimumSignificantDigits: 1,
+                      maximumSignificantDigits: 4
+                    }) || '0'}
+                  </span>
+                  {displayQuoteTokenInfo && (
+                    <>
+                      <span className="text-xs text-[#00D9FF]">
+                        {formatTokenTicker(displayQuoteTokenInfo.ticker)}
+                      </span>
+                      <img
+                        src={`/coin-logos/${displayQuoteTokenInfo.ticker}.svg`}
+                        alt={`${displayQuoteTokenInfo.ticker} logo`}
+                        className="w-[16px] h-[16px] object-contain"
+                        style={{ filter: 'brightness(0) saturate(100%) invert(68%) sepia(96%) saturate(2367%) hue-rotate(167deg) brightness(103%) contrast(101%)' }}
+                        onError={(e) => {
+                          e.currentTarget.src = '/coin-logos/default.svg';
+                        }}
+                      />
+                    </>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -398,7 +400,7 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                 />
                 <div 
                   className={`absolute right-0 flex flex-col gap-1 bg-black/90 px-3 py-1 border border-[#FF0080] pointer-events-none w-[250px] ${
-                    limitPricePosition < currentPricePosition ? 'bottom-0 translate-y-[calc(100%+0px)]' : 'top-0 -translate-y-[calc(100%+0px)]'
+                    limitPricePosition < currentPricePosition ? 'bottom-0 translate-y-[calc(45%-0px)]' : 'top-0 -translate-y-[calc(45%-0px)]'
                   }`}
                 >
                   {displayQuoteTokenInfos.length > 0 && displayQuoteTokenInfos.map((tokenInfo, index) => (

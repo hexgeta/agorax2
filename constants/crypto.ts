@@ -31,7 +31,7 @@ export const TOKEN_CONSTANTS = [{
   ticker: "PLS",
   decimals: 18,
   name: "Pulse",
-  isWhitelisted: false // Must be whitelisted in AgoraX contract
+  isWhitelisted: true // Must be whitelisted in AgoraX contract
 }, {
   chain: 369,
   a: "0x95b303987a60c71504d99aa1b13b4da07b0790ab",
@@ -188,14 +188,6 @@ export const TOKEN_CONSTANTS = [{
   ticker: "vPLS",
   decimals: 18,
   name: "Vouch Staked PLS"
-},
-{
-  chain: 369,
-  a: "0x21dCB2c16C3773A565AcB45f6c34348EC78a8385",
-  dexs: "0x9CB24fBC2f1454aF20e3c14b0d1f50c9376CfA82",
-  ticker: "stPLS",
-  decimals: 18,
-  name: "Project Pi Liquid Staking Token"
 },
 {
   chain: 369,
@@ -1219,100 +1211,7 @@ export const TOKEN_CONSTANTS = [{
   ticker: "PLS (Liquid Loans)",
   decimals: 18,
   name: "Deposited PLS on Liquid Loans"
-}, {
-  chain: 369,
-  a: "0x",
-  dexs: "0x1b45b9148791d3a104184cd5dfe5ce57193a3ee9",
-  ticker: "stPLSX (EARN)",
-  decimals: 18,
-  name: "Staked PulseX on PowerCity's EARN"
-}, {
-  chain: 369,
-  a: "0x",
-  dexs: "0xed77cbbb80e5a5c3a1fe664419d6f690766b5913",
-  ticker: "stEARN (EARN)",
-  decimals: 18,
-  name: "Staked EARN on PowerCity's EARN"
-}, {
-  chain: 369,
-  a: "0x",
-  dexs: "0xabb36512813194b12a82a319783dbb455652440a",
-  ticker: "stPXDC (EARN)",
-  decimals: 18,
-  name: "Staked PXDC on PowerCity's EARN"
-}, {
-  chain: 369,
-  a: "0x",
-  dexs: "0x476d63ab94b4e86614df0c3d5a27e9e22631d062",
-  ticker: "stHEX (FLEX)",
-  decimals: 8,
-  name: "Staked HEX on PowerCity's FLEX"
-}, {
-  chain: 369,
-  a: "0x",
-  dexs: "0xed77cbbb80e5a5c3a1fe664419d6f690766b5913",
-  ticker: "stFLEX (FLEX)",
-  decimals: 18,
-  name: "Staked FLEX PowerCity's FLEX"
-}, {
-  chain: 369,
-  a: "0x",
-  dexs: "0x9756f095dfa27d4c2eae0937a7b8a6603d99affb",
-  ticker: "stHEXDC (FLEX)",
-  decimals: 8,
-  name: "Staked HEXDC on PowerCity's FLEX"
-}, {
-  chain: 369,
-  a: "0x",
-  dexs: "0x55b4387ff2cf168801ec64ca8221e035fd07b81d",
-  ticker: "stTEAM",
-  decimals: 8,
-  name: "Staked Team on PulseChain"
-},
-{
-  chain: 369,
-  a: "0x",
-  dexs: "0x5f2d8624e6abea8f679a1095182f4bc84fe148e0",
-  ticker: "stMINT",
-  decimals: 18,
-  name: "Staked Mintra"
-}, {
-  chain: 369,
-  a: "0x",
-  dexs: "0x5f4cb14a7858bdb9066f9e4b561cdc1623807da0",
-  ticker: "stHDRN",
-  decimals: 9,
-  name: "Staked Hedron on Pls"
-}, {
-  chain: 1,
-  a: "0x",
-  dexs: "0x035a397725d3c9fc5ddd3e56066b7b64c749014e",
-  ticker: "steHDRN",
-  decimals: 9,
-  name: "Staked Hedron on Eth"
-  }, {
-    chain: 369,
-    a: "0x",
-    dexs: "0xe5bb65e7a384d2671c96cfe1ee9663f7b03a573e",
-    ticker: "stICSA",
-    decimals: 9,
-    name: "Staked ICSA on Pls"
-  }, {
-    chain: 1,
-    a: "0x",
-    dexs: "0xbaaf3b7a0b9de67de3097420d31800a885db6b41",
-    ticker: "steICSA",
-    decimals: 9,
-    name: "Staked ICSA on Eth"
-    },
-{
-  chain: 1,
-  a: "0x",
-  dexs: "",
-  ticker: "steCOM",
-  decimals: 12,
-  name: "Staked Communis on Eth"
-  },
+}, 
 {
     chain: 369,
     a: "0x5EE84583f67D5EcEa5420dBb42b462896E7f8D06",
@@ -1409,14 +1308,6 @@ export const TOKEN_CONSTANTS = [{
   decimals: 18,
     name: "Love.io"
   },
-  {
-    chain: 1,
-    a: "0xb55ee890426341fe45ee6dc788d2d93d25b59063",
-    dexs: "0x7bfa17e9d4296bf9697769a55b6654222e36097e",
-    ticker: "eLOVE",
-    decimals: 18,
-    name: "Love.io on Ethereum"
-    }, 
 {
     chain: 369,
     a: "0xcFCFfE432A48dB53F59c301422d2EdD77B2A88d7",

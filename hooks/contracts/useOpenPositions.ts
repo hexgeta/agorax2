@@ -150,7 +150,7 @@ async function fetchContractData(contractAddress: Address, chainId: number) {
       client.readContract({
         address: contractAddress,
         abi: CONTRACT_ABI,
-        functionName: 'getOrderCounter',
+        functionName: 'getTotalOrderCount',
       }).catch(err => {
         return null;
       })

@@ -8,9 +8,11 @@ import { CONTRACT_ABI } from '@/config/abis';
 const WRITE_FUNCTIONS = [
   'placeOrder',            // Create a new trading order (sell tokens for buy tokens)
   'cancelOrder',           // Cancel your order after you make it
-  'redeemOrder',           // Redeem tokens from a single executed order
+  'collectProceeds',       // Collect proceeds from filled orders
+  'redeemOrder',           // Redeem tokens from a single executed order (alias)
   'fillOrder',             // Fill/fulfill a single trading order
-  'cancelAllExpiredOrders' // Cancel all expired orders at once
+  'cancelAllExpiredOrders', // Cancel all expired orders at once
+  'updateOrderExpiration'  // Update expiration time of an order
 ] as const;
 
 type WhitelistedWriteFunction = typeof WRITE_FUNCTIONS[number];
@@ -87,18 +89,29 @@ export function useContractWhitelist() {
 
     // Execute the contract function
     try {
+      console.log('🔧 Executing write function:', {
+        functionName,
+        contractAddress,
+        userAddress: address,
+        isConnected,
+        args,
+        value
+      });
+
       const result = await writeContractAsync({
         address: contractAddress as Address,
         abi: CONTRACT_ABI,
         functionName,
         args: args as any,
         value,
+        // Let wagmi automatically use the connected wallet address from the connector
         // Add transaction metadata for better wallet display
         gas: 2000000n, // Set a reasonable gas limit
       });
 
       return result;
     } catch (error) {
+      console.error('❌ Write function error:', error);
       throw error;
     }
   };
@@ -145,17 +158,24 @@ export function useContractWhitelist() {
     placeOrder: (orderDetails: any, value?: bigint) => 
       executeWriteFunction('placeOrder', [orderDetails], value),
     
-    cancelOrder: (orderId: bigint) => 
-      executeWriteFunction('cancelOrder', [orderId]),
+    cancelOrder: (orderId: bigint, recipient?: string) => 
+      executeWriteFunction('cancelOrder', [orderId, recipient || address]),
     
-    redeemOrder: (orderId: bigint) => 
-      executeWriteFunction('redeemOrder', [orderId]),
+    collectProceeds: (orderId: bigint, recipient?: string) => 
+      executeWriteFunction('collectProceeds', [orderId, recipient || address]),
+    
+    // Alias for backwards compatibility
+    redeemOrder: (orderId: bigint, recipient?: string) => 
+      executeWriteFunction('collectProceeds', [orderId, recipient || address]),
     
     fillOrder: (orderId: bigint, buyTokenIndex: bigint, buyAmount: bigint, value?: bigint) => 
       executeWriteFunction('fillOrder', [orderId, buyTokenIndex, buyAmount], value),
     
-    cancelAllExpiredOrders: () => 
-      executeWriteFunction('cancelAllExpiredOrders', []),
+    cancelAllExpiredOrders: (recipient?: string) => 
+      executeWriteFunction('cancelAllExpiredOrders', [recipient || address]),
+    
+    updateOrderExpiration: (orderId: bigint, newExpiration: bigint) => 
+      executeWriteFunction('updateOrderExpiration', [orderId, newExpiration]),
     
     // Alias for backwards compatibility (fillOrder is the AgoraX function)
     fillOrExecuteOrder: (orderId: bigint, buyTokenIndex: bigint, buyAmount: bigint, value?: bigint) => 

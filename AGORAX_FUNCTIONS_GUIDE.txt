@@ -1,0 +1,888 @@
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║                      AGORAX SMART CONTRACT FUNCTIONS GUIDE                    ║
+║                          Complete Reference Document                          ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+
+═══════════════════════════════════════════════════════════════════════════════
+TABLE OF CONTENTS
+═══════════════════════════════════════════════════════════════════════════════
+1. WRITE FUNCTIONS (State-Changing)
+   1.1 User Functions
+   1.2 Owner Functions (Admin Only)
+   
+2. READ FUNCTIONS (View/Pure - No Gas Cost)
+   2.1 Order Query Functions
+   2.2 User Order Functions
+   2.3 System Information Functions
+   2.4 Token Whitelist Functions
+
+═══════════════════════════════════════════════════════════════════════════════
+SECTION 1: WRITE FUNCTIONS (STATE-CHANGING)
+═══════════════════════════════════════════════════════════════════════════════
+
+These functions modify the blockchain state and require gas fees.
+Most require the contract to NOT be paused (except owner admin functions).
+
+───────────────────────────────────────────────────────────────────────────────
+1.1 USER FUNCTIONS
+───────────────────────────────────────────────────────────────────────────────
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ placeOrder                                                                │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   Creates a new limit order to sell tokens in exchange for other tokens. │
+│   You deposit your sell tokens into the contract and specify what you    │
+│   want to receive in return. Multiple buy tokens can be specified.       │
+│                                                                           │
+│ PARAMETERS:                                                               │
+│   _orderDetails (OrderDetails struct):                                    │
+│     - sellToken: Address of token you're selling (use 0xEee...eE for PLS)│
+│     - sellAmount: Amount of tokens to sell (in wei/smallest unit)        │
+│     - buyTokensIndex: Array of whitelist indexes for tokens you want     │
+│     - buyAmounts: Array of amounts for each buy token                    │
+│     - expirationTime: Unix timestamp when order expires                  │
+│                                                                           │
+│ PAYABLE:                                                                  │
+│   YES - Must send listingFee in PLS                                       │
+│   If selling PLS: Also send sellAmount in addition to listingFee         │
+│   If selling ERC20: Only send listingFee                                 │
+│                                                                           │
+│ RETURNS:                                                                  │
+│   Nothing (emits OrderPlaced event with order ID)                         │
+│                                                                           │
+│ SPECIAL NOTES:                                                            │
+│   - Mints AGX receipt tokens equal to your sellAmount                    │
+│   - Max 50 buy tokens per order                                           │
+│   - No duplicate buy tokens allowed                                       │
+│   - All buy tokens must be whitelisted and active                        │
+│   - Expiration must be in the future                                      │
+│   - Contract must not be paused                                           │
+│                                                                           │
+│ EMITS: OrderPlaced(user, orderId, sellToken, sellAmount, ...)            │
+└───────────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ fillOrder                                                                 │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   Fills (executes) someone else's order by providing one of their        │
+│   requested buy tokens. You give them the buy token they want and        │
+│   receive their sell token at the rate they specified.                   │
+│                                                                           │
+│ PARAMETERS:                                                               │
+│   _orderId: The ID of the order you want to fill                         │
+│   _buyTokenIndexInOrder: Which buy token you're providing (0-indexed)    │
+│   _buyAmount: Amount of buy token you're providing                       │
+│                                                                           │
+│ PAYABLE:                                                                  │
+│   YES - If buy token is PLS, send the _buyAmount in the transaction      │
+│   If buy token is ERC20, send 0 PLS but approve contract first           │
+│                                                                           │
+│ RETURNS:                                                                  │
+│   Nothing (transfers sell tokens to you)                                  │
+│                                                                           │
+│ SPECIAL NOTES:                                                            │
+│   - Protocol fee is deducted from your buy token payment                 │
+│   - Uses the LOWER of creation fee or current fee (protects fillers)     │
+│   - Order must be active and not expired                                 │
+│   - Must wait for cooldown period to pass (MEV protection)               │
+│   - Can partially fill orders (don't need to fill 100%)                  │
+│   - You receive sell tokens immediately                                   │
+│   - Contract must not be paused                                           │
+│                                                                           │
+│ EMITS: OrderFilled(buyer, orderId, buyTokenIndex)                        │
+└───────────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ cancelOrder                                                               │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   Cancels your order and refunds any unfilled sell tokens. If the order  │
+│   was partially filled, it also collects those proceeds for you.         │
+│                                                                           │
+│ PARAMETERS:                                                               │
+│   _orderId: The ID of your order to cancel                               │
+│   _recipient: Address to send refunds and proceeds to                    │
+│                                                                           │
+│ PAYABLE: NO                                                               │
+│                                                                           │
+│ RETURNS:                                                                  │
+│   Nothing (transfers tokens to recipient)                                 │
+│                                                                           │
+│ SPECIAL NOTES:                                                            │
+│   - Only order owner can cancel their order                              │
+│   - Burns AGX tokens for the cancelled amount                            │
+│   - Automatically collects any partial fill proceeds                      │
+│   - Can't cancel already cancelled orders                                │
+│   - Can't cancel fully completed orders (use collectProceeds instead)    │
+│   - Recipient must be able to receive PLS if order has PLS proceeds      │
+│                                                                           │
+│ EMITS: OrderCancelled(user, orderId)                                      │
+│        OrderProceedsCollected(user, orderId) if proceeds > 0              │
+└───────────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ cancelAllExpiredOrders                                                    │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   Batch cancels all your active orders that have expired. More efficient │
+│   than cancelling them one by one. Collects proceeds from any that were  │
+│   partially filled.                                                       │
+│                                                                           │
+│ PARAMETERS:                                                               │
+│   _recipient: Address to send all refunds and proceeds to                │
+│                                                                           │
+│ PAYABLE: NO                                                               │
+│                                                                           │
+│ RETURNS:                                                                  │
+│   cancelledOrderIds: Array of order IDs that were cancelled              │
+│                                                                           │
+│ SPECIAL NOTES:                                                            │
+│   - Max 50 expired orders can be cancelled at once                       │
+│   - Only cancels YOUR orders (msg.sender)                                │
+│   - Only cancels orders that are both ACTIVE and EXPIRED                 │
+│   - Automatically collects proceeds from partially filled orders          │
+│   - Recipient must be able to receive PLS if any orders have PLS         │
+│   - Reverts if you have more than 50 expired orders                      │
+│                                                                           │
+│ EMITS: OrderCancelled(user, orderId) for each cancelled order            │
+│        OrderProceedsCollected(user, orderId) if proceeds collected        │
+└───────────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ collectProceeds                                                           │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   Collects accumulated buy tokens from your order that has been          │
+│   partially or fully filled. Use this to claim your earnings.            │
+│                                                                           │
+│ PARAMETERS:                                                               │
+│   _orderId: The ID of your order                                         │
+│   _recipient: Address to send the proceeds to                            │
+│                                                                           │
+│ PAYABLE: NO                                                               │
+│                                                                           │
+│ RETURNS:                                                                  │
+│   Nothing (transfers buy tokens to recipient)                             │
+│                                                                           │
+│ SPECIAL NOTES:                                                            │
+│   - Only order owner can collect proceeds                                │
+│   - Burns AGX tokens equal to the redeemed portion                       │
+│   - Can collect multiple times if order filled in multiple parts         │
+│   - Transfers all accumulated buy tokens at once                          │
+│   - Recipient must be able to receive PLS if any buy token is PLS        │
+│   - Reverts if nothing to collect (no new fills since last collect)      │
+│                                                                           │
+│ EMITS: OrderProceedsCollected(user, orderId)                             │
+└───────────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ updateOrderExpiration                                                     │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   Extends or changes the expiration time of your active order.           │
+│   Useful if you want to keep an order active longer.                     │
+│                                                                           │
+│ PARAMETERS:                                                               │
+│   _orderId: The ID of your order                                         │
+│   _newExpiration: New expiration Unix timestamp                          │
+│                                                                           │
+│ PAYABLE: NO                                                               │
+│                                                                           │
+│ RETURNS:                                                                  │
+│   Nothing                                                                 │
+│                                                                           │
+│ SPECIAL NOTES:                                                            │
+│   - Only order owner can update expiration                               │
+│   - Order must be active (not cancelled or completed)                    │
+│   - New expiration must be in the future                                 │
+│   - If order was expired, updates cooldown timer (MEV protection)        │
+│   - Doesn't change any other order parameters                            │
+│                                                                           │
+│ EMITS: OrderUpdated(orderId, newExpiration)                              │
+└───────────────────────────────────────────────────────────────────────────┘
+
+───────────────────────────────────────────────────────────────────────────────
+1.2 OWNER FUNCTIONS (ADMIN ONLY)
+───────────────────────────────────────────────────────────────────────────────
+
+These functions can only be called by the contract owner.
+Used for contract management and configuration.
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ pause                                                                     │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   Pauses the contract, preventing new orders and fills. Emergency stop.  │
+│                                                                           │
+│ ACCESS: Owner only                                                        │
+│ PARAMETERS: None                                                          │
+│ EMITS: Paused(owner, true)                                                │
+└───────────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ unpause                                                                   │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   Unpauses the contract, allowing normal operations to resume.           │
+│                                                                           │
+│ ACCESS: Owner only                                                        │
+│ PARAMETERS: None                                                          │
+│ EMITS: Paused(owner, false)                                               │
+└───────────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ updateFeeAddress                                                          │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   Changes the address that receives listing fees and protocol fees.      │
+│                                                                           │
+│ ACCESS: Owner only                                                        │
+│ PARAMETERS:                                                               │
+│   _newFeeAddress: The new fee collection address                         │
+│ EMITS: FeeAddressUpdated(oldAddress, newAddress)                         │
+└───────────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ updateCoolDownPeriod                                                      │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   Changes the cooldown period (in seconds) that new/updated orders       │
+│   must wait before they can be filled. MEV and flash loan protection.    │
+│                                                                           │
+│ ACCESS: Owner only                                                        │
+│ PARAMETERS:                                                               │
+│   _newCoolDownPeriod: New cooldown period in seconds (uint32)            │
+│ EMITS: CooldownPeriodUpdated(oldPeriod, newPeriod)                       │
+└───────────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ updateListingFee                                                          │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   Changes the fixed PLS fee required to create a new order.              │
+│                                                                           │
+│ ACCESS: Owner only                                                        │
+│ PARAMETERS:                                                               │
+│   _newFee: New listing fee in wei (1 PLS = 10^18 wei)                   │
+│ RESTRICTIONS:                                                             │
+│   - Cannot exceed LISTING_FEES_LIMIT (set at deployment)                 │
+│ EMITS: ListingFeeUpdated(oldFee, newFee)                                 │
+└───────────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ updateProtocolFee                                                         │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   Changes the percentage fee taken from fills (in basis points).         │
+│   100 basis points = 1%                                                   │
+│                                                                           │
+│ ACCESS: Owner only                                                        │
+│ PARAMETERS:                                                               │
+│   _newFee: New protocol fee in basis points (100 = 1%)                   │
+│ RESTRICTIONS:                                                             │
+│   - Cannot exceed PROTOCOL_FEES_LIMIT (set at deployment)                │
+│   - Cannot exceed 10000 (100%)                                            │
+│ EMITS: ProtocolFeeUpdated(oldFee, newFee)                                │
+│                                                                           │
+│ NOTE: Existing orders keep their creation fee, only new orders use new rate│
+└───────────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ addTokenAddress                                                           │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   Adds a token to the whitelist, making it available for orders.         │
+│                                                                           │
+│ ACCESS: Owner only                                                        │
+│ PARAMETERS:                                                               │
+│   _address: The token contract address to whitelist                      │
+│ EMITS: TokenWhitelisted(address)                                          │
+└───────────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ setTokenStatus                                                            │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   Activates or deactivates a whitelisted token. Deactivated tokens       │
+│   can't be used in new orders but existing orders still work.            │
+│                                                                           │
+│ ACCESS: Owner only                                                        │
+│ PARAMETERS:                                                               │
+│   _address: The token address                                            │
+│   _isActive: true to activate, false to deactivate                       │
+│ EMITS: TokenStatusChanged(address, isActive)                             │
+└───────────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ cleanInactiveUsers                                                        │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   Removes users with zero AGX balance from the internal tracking list.   │
+│   Helps optimize the findFillableOrders function performance.            │
+│                                                                           │
+│ ACCESS: Owner only                                                        │
+│ PARAMETERS:                                                               │
+│   cursor: Starting index (use 0 first time)                              │
+│   size: Max users to process (batch processing)                          │
+│ RETURNS:                                                                  │
+│   nextCursor: Next starting index for continued cleanup                   │
+│ EMITS: UserListCleanupStarted(...), UserListCleanupFinished(...)         │
+└───────────────────────────────────────────────────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════════════
+SECTION 2: READ FUNCTIONS (VIEW/PURE - NO GAS COST)
+═══════════════════════════════════════════════════════════════════════════
+
+These functions only read data and don't modify state.
+They cost no gas when called externally.
+
+───────────────────────────────────────────────────────────────────────────────
+2.1 ORDER QUERY FUNCTIONS
+───────────────────────────────────────────────────────────────────────────────
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ getOrderDetails                                                           │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   Gets complete information about a specific order by its ID.             │
+│                                                                           │
+│ PARAMETERS:                                                               │
+│   _orderId: The order ID to query                                        │
+│                                                                           │
+│ RETURNS: CompleteOrderDetails struct containing:                         │
+│   userDetails:                                                            │
+│     - orderIndex: Position in owner's order array                        │
+│     - orderOwner: Address of order creator                               │
+│   orderDetailsWithId:                                                     │
+│     - orderId: The order ID                                              │
+│     - remainingFillPercentage: % not yet filled (DIVISOR = 100%)         │
+│     - redeemedPercentage: % already collected by owner                   │
+│     - lastUpdateTime: Last modification timestamp                        │
+│     - status: Active(0), Cancelled(1), or Completed(2)                   │
+│     - creationProtocolFee: Protocol fee rate when order was created      │
+│     - orderDetails:                                                       │
+│       * sellToken: Token being sold                                      │
+│       * sellAmount: Original sell amount                                 │
+│       * buyTokensIndex: Array of buy token whitelist indexes             │
+│       * buyAmounts: Array of buy token amounts                           │
+│       * expirationTime: When order expires                               │
+└───────────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ getTotalOrderCount                                                        │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   Returns the total number of orders ever created on the platform.       │
+│   Each order gets a sequential ID starting from 1.                       │
+│                                                                           │
+│ PARAMETERS: None                                                          │
+│ RETURNS: uint256 - Total order count                                     │
+└───────────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ getCurrentTimestamp                                                       │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   Returns the current blockchain timestamp in Unix format (seconds).     │
+│   Useful for checking expiration times and debugging.                    │
+│                                                                           │
+│ PARAMETERS: None                                                          │
+│ RETURNS: uint256 - Current block.timestamp                               │
+└───────────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ findFillableOrders                                                        │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   Searches for active, non-expired orders selling a specific token       │
+│   with at least a minimum amount remaining. Great for finding orders     │
+│   to fill. Scans multiple users efficiently.                             │
+│                                                                           │
+│ PARAMETERS:                                                               │
+│   _sellToken: Token address to search for                                │
+│   _minSellAmount: Minimum remaining sell amount                          │
+│   cursor: Starting user index (use 0 first time)                         │
+│   size: Max orders to return (max 50)                                    │
+│                                                                           │
+│ RETURNS:                                                                  │
+│   orderIds: Array of matching order IDs (sorted ascending)               │
+│   nextCursor: Next user index for continued searching                    │
+│                                                                           │
+│ USAGE EXAMPLE:                                                            │
+│   Want to find PLS orders? Call with:                                    │
+│   - _sellToken = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE              │
+│   - _minSellAmount = 1000000000000000000 (1 PLS minimum)                │
+│   - cursor = 0                                                           │
+│   - size = 50                                                            │
+│                                                                           │
+│   If more results exist, call again with returned nextCursor.            │
+└───────────────────────────────────────────────────────────────────────────┘
+
+───────────────────────────────────────────────────────────────────────────────
+2.2 USER ORDER FUNCTIONS
+───────────────────────────────────────────────────────────────────────────────
+
+All these functions support pagination with cursor and size parameters.
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ getUserOrderCount                                                         │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   Returns total number of orders (all statuses) for a user.              │
+│                                                                           │
+│ PARAMETERS:                                                               │
+│   _user: User address                                                    │
+│ RETURNS: uint256 - Total order count for user                            │
+└───────────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ viewUserOpenOrders                                                        │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   Gets a user's ACTIVE and NOT EXPIRED orders.                           │
+│   These are orders currently available for filling.                      │
+│                                                                           │
+│ PARAMETERS:                                                               │
+│   _user: User address                                                    │
+│   _cursor: Starting index (0 for first page)                             │
+│   _size: Number of orders to return                                      │
+│                                                                           │
+│ RETURNS:                                                                  │
+│   orders: Array of OrderDetailsWithId                                     │
+│   end: Next cursor position                                              │
+└───────────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ viewUserExpiredOrders                                                     │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   Gets a user's orders that are ACTIVE but EXPIRED.                      │
+│   These orders need to be cancelled to recover funds.                    │
+│                                                                           │
+│ PARAMETERS:                                                               │
+│   _user: User address                                                    │
+│   _cursor: Starting index                                                │
+│   _size: Number of orders to return                                      │
+│                                                                           │
+│ RETURNS:                                                                  │
+│   orders: Array of OrderDetailsWithId                                     │
+│   end: Next cursor position                                              │
+└───────────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ viewUserCompletedOrders                                                   │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   Gets a user's fully filled orders (100% filled).                       │
+│   Proceeds may still need to be collected.                               │
+│                                                                           │
+│ PARAMETERS:                                                               │
+│   _user: User address                                                    │
+│   _cursor: Starting index                                                │
+│   _size: Number of orders to return                                      │
+│                                                                           │
+│ RETURNS:                                                                  │
+│   orders: Array of OrderDetailsWithId                                     │
+│   end: Next cursor position                                              │
+└───────────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ viewUserCancelledOrders                                                   │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   Gets a user's cancelled orders (historical record).                    │
+│                                                                           │
+│ PARAMETERS:                                                               │
+│   _user: User address                                                    │
+│   _cursor: Starting index                                                │
+│   _size: Number of orders to return                                      │
+│                                                                           │
+│ RETURNS:                                                                  │
+│   orders: Array of OrderDetailsWithId                                     │
+│   end: Next cursor position                                              │
+└───────────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ getUserExpiredOrdersCount                                                 │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   Counts how many expired orders a user has. Useful to check before      │
+│   calling cancelAllExpiredOrders (max 50 allowed).                       │
+│                                                                           │
+│ PARAMETERS:                                                               │
+│   _user: User address                                                    │
+│                                                                           │
+│ RETURNS: uint256 - Count of expired orders                               │
+└───────────────────────────────────────────────────────────────────────────┘
+
+───────────────────────────────────────────────────────────────────────────────
+2.3 SYSTEM INFORMATION FUNCTIONS
+───────────────────────────────────────────────────────────────────────────────
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ getFeeAddress                                                             │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   Returns the address that receives all listing and protocol fees.       │
+│                                                                           │
+│ PARAMETERS: None                                                          │
+│ RETURNS: address - Fee collection address                                │
+└───────────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ getCooldownPeriod                                                         │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   Returns the cooldown period in seconds. New orders must wait this      │
+│   long before they can be filled (MEV protection).                       │
+│                                                                           │
+│ PARAMETERS: None                                                          │
+│ RETURNS: uint32 - Cooldown period in seconds                             │
+└───────────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ getListingFee                                                             │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   Returns the current listing fee in wei (1 PLS = 10^18 wei).           │
+│   This fee must be paid when creating orders.                            │
+│                                                                           │
+│ PARAMETERS: None                                                          │
+│ RETURNS: uint256 - Listing fee in wei                                    │
+└───────────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ getProtocolFee                                                            │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   Returns the current protocol fee in basis points (100 = 1%).           │
+│   This fee is deducted from fills. Note: Existing orders keep their      │
+│   creation fee, only new orders use this rate.                           │
+│                                                                           │
+│ PARAMETERS: None                                                          │
+│ RETURNS: uint256 - Protocol fee in basis points                          │
+└───────────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ listingFee (public variable)                                             │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   Direct access to listing fee. Same as getListingFee().                 │
+│                                                                           │
+│ RETURNS: uint256 - Listing fee in wei                                    │
+└───────────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ protocolFee (public variable)                                            │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   Direct access to protocol fee. Same as getProtocolFee().               │
+│                                                                           │
+│ RETURNS: uint256 - Protocol fee in basis points                          │
+└───────────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ paused (public variable)                                                 │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   Indicates if contract is currently paused. When true, no new orders    │
+│   or fills are allowed (but cancels and collections still work).         │
+│                                                                           │
+│ RETURNS: bool - true if paused, false if active                          │
+└───────────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ trackedUserCount                                                          │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   Returns the number of users tracked in the internal list.              │
+│   Used by findFillableOrders for efficient searching.                    │
+│                                                                           │
+│ PARAMETERS: None                                                          │
+│ RETURNS: uint256 - Number of tracked users                               │
+└───────────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ PERCENTAGE_DIVISOR (constant)                                            │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   The divisor used for percentage calculations. Always 10000.            │
+│   This means fees are in basis points (100 = 1%, 10000 = 100%).         │
+│                                                                           │
+│ RETURNS: uint256 - 10000                                                 │
+└───────────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ DIVISOR (constant)                                                       │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   The divisor used for fill percentage calculations. Always 10^18.       │
+│   This gives high precision for partial fills.                           │
+│                                                                           │
+│ RETURNS: uint256 - 1000000000000000000 (10^18)                           │
+└───────────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ PROTOCOL_FEES_LIMIT (immutable)                                          │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   Maximum protocol fee that can ever be set. Configured at deployment    │
+│   and cannot be changed. Protects users from excessive fees.             │
+│                                                                           │
+│ RETURNS: uint256 - Max protocol fee in basis points                      │
+└───────────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ LISTING_FEES_LIMIT (immutable)                                           │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   Maximum listing fee that can ever be set. Configured at deployment     │
+│   and cannot be changed. Protects users from excessive fees.             │
+│                                                                           │
+│ RETURNS: uint256 - Max listing fee in wei                                │
+└───────────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ NATIVE_ADDRESS (constant)                                                │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   Special address used to represent native PLS token in orders.          │
+│   Always 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE                       │
+│                                                                           │
+│ RETURNS: address - The native token identifier                           │
+└───────────────────────────────────────────────────────────────────────────┘
+
+───────────────────────────────────────────────────────────────────────────────
+2.4 TOKEN WHITELIST FUNCTIONS
+───────────────────────────────────────────────────────────────────────────────
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ isWhitelisted                                                             │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   Checks if a token address is whitelisted AND active.                   │
+│   Only returns true if token can be used in new orders.                  │
+│                                                                           │
+│ PARAMETERS:                                                               │
+│   _address: Token address to check                                       │
+│                                                                           │
+│ RETURNS: bool - true if whitelisted and active, false otherwise          │
+└───────────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ viewCountWhitelisted                                                      │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   Returns total number of whitelisted tokens (active + inactive).        │
+│                                                                           │
+│ PARAMETERS: None                                                          │
+│ RETURNS: uint256 - Total whitelisted token count                         │
+└───────────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ getTokenInfoAt                                                            │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   Gets token address and status at a specific whitelist index.           │
+│   Indexes start at 0 and are used in order buyTokensIndex arrays.        │
+│                                                                           │
+│ PARAMETERS:                                                               │
+│   _index: Whitelist index (0-based)                                      │
+│                                                                           │
+│ RETURNS:                                                                  │
+│   tokenAddress: The token contract address                               │
+│   isActive: Whether token is currently active                            │
+└───────────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ getTokenWhitelistIndex                                                    │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   Gets the whitelist index for a specific token address.                 │
+│   Useful when you know the token but need its index for an order.        │
+│                                                                           │
+│ PARAMETERS:                                                               │
+│   _address: Token address                                                │
+│                                                                           │
+│ RETURNS: uint256 - Whitelist index (0-based)                             │
+│ REVERTS: If token is not whitelisted                                     │
+└───────────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ viewWhitelisted                                                           │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   Gets a paginated list of ALL whitelisted tokens (active + inactive).   │
+│                                                                           │
+│ PARAMETERS:                                                               │
+│   cursor: Starting index (0 for first page)                              │
+│   size: Number of tokens to return                                       │
+│                                                                           │
+│ RETURNS:                                                                  │
+│   tokens: Array of TokenInfo structs (address + isActive)                │
+│   nextCursor: Next starting index                                        │
+└───────────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ viewActiveWhitelisted                                                     │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   Gets a paginated list of ONLY ACTIVE whitelisted tokens.               │
+│   These are the tokens that can be used in new orders.                   │
+│                                                                           │
+│ PARAMETERS:                                                               │
+│   cursor: Starting index in full whitelist (0 for first page)            │
+│   size: Number of tokens to return                                       │
+│                                                                           │
+│ RETURNS:                                                                  │
+│   tokens: Array of token addresses (active only)                         │
+│   nextCursor: Next starting index in full whitelist                      │
+└───────────────────────────────────────────────────────────────────────────┘
+
+───────────────────────────────────────────────────────────────────────────────
+2.5 ERC20 TOKEN FUNCTIONS (AGX Receipt Token)
+───────────────────────────────────────────────────────────────────────────────
+
+AgoraX mints AGX tokens as receipts when you create orders. These tokens are
+non-transferable and are burned when orders are cancelled or proceeds collected.
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ name                                                                      │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION: Returns the token name                                      │
+│ RETURNS: "AgoraX"                                                         │
+└───────────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ symbol                                                                    │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION: Returns the token symbol                                    │
+│ RETURNS: "AGX"                                                            │
+└───────────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ decimals                                                                  │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION: Returns the token decimals                                  │
+│ RETURNS: 18                                                               │
+└───────────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ balanceOf                                                                 │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   Returns AGX token balance for an address. Your balance equals the      │
+│   total amount of tokens you have in active/unfilled orders.             │
+│                                                                           │
+│ PARAMETERS:                                                               │
+│   account: Address to check                                              │
+│ RETURNS: uint256 - AGX token balance                                     │
+└───────────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ totalSupply                                                               │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   Returns total AGX tokens in existence. Equals the total value of       │
+│   all active orders' remaining fill amounts across all users.            │
+│                                                                           │
+│ RETURNS: uint256 - Total AGX supply                                      │
+└───────────────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│ transfer, transferFrom, approve, allowance                                │
+├───────────────────────────────────────────────────────────────────────────┤
+│ DESCRIPTION:                                                              │
+│   AGX tokens are NON-TRANSFERABLE. All standard ERC20 transfer           │
+│   functions are disabled and will revert if called.                      │
+│                                                                           │
+│ REVERTS: Always (transfers disabled)                                     │
+└───────────────────────────────────────────────────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════════════
+IMPORTANT CONCEPTS AND CONSTANTS
+═══════════════════════════════════════════════════════════════════════════
+
+ORDER STATUS ENUM:
+  0 = Active - Order is live and can be filled
+  1 = Cancelled - Order was cancelled by owner
+  2 = Completed - Order was 100% filled
+
+NATIVE TOKEN ADDRESS:
+  Use 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE for PLS (native token)
+
+PERCENTAGE CALCULATIONS:
+  - Protocol fees: basis points (10000 = 100%, 100 = 1%)
+  - Fill percentages: 10^18 = 100% (high precision)
+
+FEE PROTECTION:
+  - Orders lock in the protocol fee at creation time
+  - If protocol fee increases later, your order still uses the old lower fee
+  - If protocol fee decreases, fillers benefit from the lower fee
+  - The contract always uses whichever is smaller
+
+COOLDOWN PERIOD:
+  - Newly placed orders wait before they can be filled
+  - Updated orders (expiration extended after expiry) also wait
+  - Prevents MEV attacks and flash loan exploits
+  - Only applies to fills, not cancellations
+
+PAGINATION:
+  - Most view functions support cursor/size pagination
+  - Always start with cursor = 0
+  - Use returned nextCursor for subsequent calls
+  - Useful for large result sets
+
+═══════════════════════════════════════════════════════════════════════════
+COMMON WORKFLOWS
+═══════════════════════════════════════════════════════════════════════════
+
+CREATING AN ORDER:
+1. Call getTokenWhitelistIndex() to get token indexes
+2. Approve contract if selling ERC20 (not needed for PLS)
+3. Call getListingFee() to see required fee
+4. Call placeOrder() with msg.value = listingFee + sellAmount (if PLS)
+5. Receive OrderPlaced event with your order ID
+
+FILLING AN ORDER:
+1. Call findFillableOrders() to discover orders
+2. Call getOrderDetails() to see order specifics
+3. Approve contract if providing ERC20 (not needed for PLS)
+4. Call fillOrder() with amount you want to provide
+5. Receive sell tokens immediately
+
+CANCELLING AN ORDER:
+1. Call getUserExpiredOrdersCount() to count expired orders
+2. If < 50: Call cancelAllExpiredOrders() for efficiency
+3. If ≥ 50: Call cancelOrder() multiple times
+4. Receive refunds and any accumulated proceeds
+
+COLLECTING PROCEEDS:
+1. Call getOrderDetails() to see redeemedPercentage vs filled amount
+2. If there's uncollected proceeds, call collectProceeds()
+3. Receive all accumulated buy tokens at once
+
+═══════════════════════════════════════════════════════════════════════════
+SECURITY NOTES
+═══════════════════════════════════════════════════════════════════════════
+
+✓ ReentrancyGuard protects all state-changing functions
+✓ Cooldown period prevents MEV and flash loan attacks
+✓ Fee limits set at deployment prevent excessive fees
+✓ AGX tokens are non-transferable (can't be sold/traded)
+✓ SafeERC20 used for all token transfers
+✓ Owner uses Ownable2Step (prevents accidental ownership loss)
+✓ Contract can be paused in emergencies
+✓ Orders lock in protocol fee (protection from fee increases)
+
+═══════════════════════════════════════════════════════════════════════════
+END OF DOCUMENTATION
+═══════════════════════════════════════════════════════════════════════════
+
+For questions or support, refer to the AgoraX documentation or contact
+the development team.
+
+Last Updated: Based on AgoraX.sol contract version with Whitelist integration
+

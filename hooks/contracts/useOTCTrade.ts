@@ -35,7 +35,7 @@ export function useOTCTrade() {
   const { data: ordersCount } = useContractRead({
     address: contractAddress as Address,
     abi: CONTRACT_ABI,
-    functionName: 'getOrderCounter',
+    functionName: 'getTotalOrderCount',
     query: {
       enabled: !!contractAddress,
     },

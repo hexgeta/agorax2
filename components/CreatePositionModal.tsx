@@ -21,6 +21,7 @@ import { useTokenAccess } from '@/context/TokenAccessContext';
 import { PAYWALL_ENABLED, REQUIRED_PARTY_TOKENS, REQUIRED_TEAM_TOKENS, PAYWALL_TITLE, PAYWALL_DESCRIPTION } from '@/config/paywall';
 import { validateAmount, validateAmountStrict, removeCommas, sanitizeAmount } from '@/utils/amountValidation';
 import { waitForTransactionWithTimeout, TRANSACTION_TIMEOUTS } from '@/utils/transactionTimeout';
+import useToast from '@/hooks/use-toast';
 
 // Helper function to find the highest version of a token in tokenStats
 // e.g. if API has eBASE, eBASE2, eBASE3, it returns "eBASE3"
@@ -122,6 +123,9 @@ export function CreatePositionModal({
   onOrderCreated
 }: CreatePositionModalProps) {
   const [showPaywallModal, setShowPaywallModal] = useState(false);
+  
+  // Toast notifications
+  const { toast } = useToast();
 
   // Token-gating - use centralized validation
   const { hasTokenAccess, partyBalance, teamBalance, isChecking: checkingTokenBalance } = useTokenAccess();
@@ -191,6 +195,12 @@ export function CreatePositionModal({
 
             // Check if approval is now complete
             if (tokenNeedsApproval === false || isApproved === true) {
+              // Show success toast for approval
+              toast({
+                title: "Token Approved!",
+                description: `${sellToken.ticker} has been approved. Creating your order...`,
+                variant: "success",
+              });
               handleCreateDeal();
               return;
             }

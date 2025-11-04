@@ -168,10 +168,8 @@ export default function Home() {
                         setInvertPriceDisplay(inverted);
                       }}
                       onCreateOrderClick={(sellToken, buyTokens, sellAmount, buyAmounts, expirationDays) => {
-                        // Open the CreatePositionModal with prefilled values
-                        setShowCreateModal(true);
-                        // TODO: Prefill the modal with these values
-                        // sellToken, buyTokens (array), sellAmount, buyAmounts (array), expirationDays
+                        // Order creation is now handled directly in the form
+                        // No need to open the modal
                       }}
                     />
                   </div>

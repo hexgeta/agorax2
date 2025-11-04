@@ -271,7 +271,7 @@ interface OpenPositionsTableProps {
 }
 
 export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ isMarketplaceMode = false }, ref) => {
-  const { fillOrExecuteOrder, cancelOrder, isWalletConnected } = useContractWhitelist();
+  const { fillOrExecuteOrder, cancelOrder, collectProceeds, cancelAllExpiredOrders, updateOrderExpiration, isWalletConnected } = useContractWhitelist();
   const { address, chainId } = useAccount();
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
@@ -321,7 +321,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
   // Level 2: Ownership filter - set based on mode
   const [ownershipFilter, setOwnershipFilter] = useState<'mine' | 'non-mine'>(isMarketplaceMode ? 'non-mine' : 'mine');
   // Level 3: Status filter
-  const [statusFilter, setStatusFilter] = useState<'active' | 'completed' | 'inactive' | 'cancelled' | 'order-history'>('active');
+  const [statusFilter, setStatusFilter] = useState<'active' | 'expired' | 'completed' | 'cancelled' | 'order-history'>('active');
   // Search filter
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isClient, setIsClient] = useState(false);
@@ -366,6 +366,14 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
   // State for canceling orders
   const [cancelingOrders, setCancelingOrders] = useState<Set<string>>(new Set());
   const [cancelErrors, setCancelErrors] = useState<{[orderId: string]: string}>({});
+  
+  // State for collecting proceeds
+  const [collectingOrders, setCollectingOrders] = useState<Set<string>>(new Set());
+  const [collectErrors, setCollectErrors] = useState<{[orderId: string]: string}>({});
+  
+  // State for batch cancelling expired orders
+  const [isCancellingAll, setIsCancellingAll] = useState(false);
+  const [cancelAllError, setCancelAllError] = useState<string>('');
   
   // State for editing orders
   const [editingOrder, setEditingOrder] = useState<string | null>(null);
@@ -1055,10 +1063,18 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
       fetchPurchaseHistory();
       
     } catch (error: any) {
+      const errorMsg = simplifyErrorMessage(error) || 'Failed to execute order. Please try again.';
       setExecuteErrors(prev => ({
         ...prev,
-        [orderId]: simplifyErrorMessage(error) || 'Failed to execute order. Please try again.'
+        [orderId]: errorMsg
       }));
+      
+      // Show error toast
+      toast({
+        title: "Fill Order Failed",
+        description: errorMsg,
+        variant: "destructive",
+      });
     } finally {
       setExecutingOrders(prev => {
         const newSet = new Set(prev);
@@ -1150,16 +1166,203 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
       });
       
     } catch (error: any) {
+      const errorMsg = simplifyErrorMessage(error) || 'Failed to cancel order';
       setCancelErrors(prev => ({ 
         ...prev, 
-        [orderId]: simplifyErrorMessage(error) || 'Failed to cancel order' 
+        [orderId]: errorMsg
       }));
+      
+      // Show error toast
+      toast({
+        title: "Cancel Order Failed",
+        description: errorMsg,
+        variant: "destructive",
+      });
     } finally {
       setCancelingOrders(prev => {
         const newSet = new Set(prev);
         newSet.delete(orderId);
         return newSet;
       });
+      setTransactionPending(false);
+    }
+  };
+
+  const handleCollectProceeds = async (order: any) => {
+    const orderId = order.orderDetailsWithId.orderId.toString();
+    
+    if (collectingOrders.has(orderId)) {
+      return;
+    }
+    
+    if (!publicClient) {
+      toast({
+        title: "Error",
+        description: "Public client not available",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setCollectingOrders(prev => new Set(prev).add(orderId));
+    setCollectErrors(prev => ({ ...prev, [orderId]: '' }));
+    setTransactionPending(true);
+    
+    try {
+      const txHash = await collectProceeds(order.orderDetailsWithId.orderId);
+      
+      // Wait for transaction confirmation
+      const receipt = await waitForTransactionWithTimeout(
+        publicClient,
+        txHash as `0x${string}`,
+        TRANSACTION_TIMEOUTS.TRANSACTION
+      );
+      
+      // Show success toast
+      toast({
+        title: "Proceeds Collected!",
+        description: "Your earnings have been transferred to your wallet.",
+        variant: "success",
+        action: (
+          <ToastAction
+            altText="View transaction"
+            onClick={() => window.open(`https://otter.pulsechain.com/tx/${txHash}`, '_blank')}
+          >
+            View TX
+          </ToastAction>
+        ),
+      });
+      
+      // Refresh the orders to show updated status
+      refetch();
+      fetchPurchaseHistory();
+      
+      // Clear any previous errors
+      setCollectErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[orderId];
+        return newErrors;
+      });
+      
+    } catch (error: any) {
+      const errorMsg = simplifyErrorMessage(error) || 'Failed to collect proceeds';
+      setCollectErrors(prev => ({ 
+        ...prev, 
+        [orderId]: errorMsg
+      }));
+      
+      // Show error toast
+      toast({
+        title: "Collection Failed",
+        description: errorMsg,
+        variant: "destructive",
+      });
+    } finally {
+      setCollectingOrders(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(orderId);
+        return newSet;
+      });
+      setTransactionPending(false);
+    }
+  };
+
+  const handleCancelAllExpired = async () => {
+    if (isCancellingAll) {
+      return;
+    }
+    
+    if (!publicClient) {
+      toast({
+        title: "Error",
+        description: "Public client not available",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Count expired orders
+    const expiredOrders = allOrders?.filter(order => 
+      order.orderDetailsWithId.status === 0 && // Active
+      order.orderDetailsWithId.orderDetails.expirationTime <= BigInt(Math.floor(Date.now() / 1000))
+    ) || [];
+    
+    if (expiredOrders.length === 0) {
+      toast({
+        title: "No Expired Orders",
+        description: "You don't have any expired orders to cancel.",
+        variant: "info",
+      });
+      return;
+    }
+    
+    if (expiredOrders.length > 50) {
+      toast({
+        title: "Too Many Expired Orders",
+        description: `You have ${expiredOrders.length} expired orders. The contract can only cancel 50 at a time. Please try again after this batch completes.`,
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setIsCancellingAll(true);
+    setCancelAllError('');
+    setTransactionPending(true);
+    
+    try {
+      const txHash = await cancelAllExpiredOrders();
+      
+      // Wait for transaction confirmation
+      const receipt = await waitForTransactionWithTimeout(
+        publicClient,
+        txHash as `0x${string}`,
+        TRANSACTION_TIMEOUTS.TRANSACTION
+      );
+      
+      // Show success toast
+      toast({
+        title: "All Expired Orders Cancelled!",
+        description: `Successfully cancelled ${expiredOrders.length} expired order(s). Tokens have been returned to your wallet.`,
+        variant: "success",
+        action: (
+          <ToastAction
+            altText="View transaction"
+            onClick={() => window.open(`https://otter.pulsechain.com/tx/${txHash}`, '_blank')}
+          >
+            View TX
+          </ToastAction>
+        ),
+      });
+      
+      // Navigate to cancelled tab
+      const firstOrder = expiredOrders[0];
+      const sellTokenAddress = firstOrder.orderDetailsWithId.orderDetails.sellToken;
+      const isMaxiDeal = maxiTokenAddresses.some(addr => 
+        addr.toLowerCase() === sellTokenAddress.toLowerCase()
+      );
+      
+      setTokenFilter(isMaxiDeal ? 'maxi' : 'non-maxi');
+      setOwnershipFilter('mine');
+      setStatusFilter('cancelled');
+      setExpandedPositions(new Set());
+      
+      // Refresh the orders
+      refetch();
+      
+      setCancelAllError('');
+      
+    } catch (error: any) {
+      const errorMsg = simplifyErrorMessage(error) || 'Failed to cancel expired orders';
+      setCancelAllError(errorMsg);
+      
+      // Show error toast
+      toast({
+        title: "Batch Cancel Failed",
+        description: errorMsg,
+        variant: "destructive",
+      });
+    } finally {
+      setIsCancellingAll(false);
       setTransactionPending(false);
     }
   };
@@ -1200,17 +1403,57 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     
     if (updatingOrders.has(orderId)) return;
     
+    if (!publicClient) {
+      toast({
+        title: "Error",
+        description: "Public client not available",
+        variant: "destructive"
+      });
+      return;
+    }
+    
     setUpdatingOrders(prev => new Set(prev).add(orderId));
     setUpdateErrors(prev => ({ ...prev, [orderId]: '' }));
     setTransactionPending(true);
     
     try {
-      // Note: Order updating is not supported in the current contract version
-      throw new Error('Order updating is not available in this contract version');
+      // Get the new expiration time from edit form
+      const newExpiration = BigInt(editFormData.expirationTime);
+      
+      // Call updateOrderExpiration
+      const txHash = await updateOrderExpiration(
+        order.orderDetailsWithId.orderId,
+        newExpiration
+      );
+      
+      // Wait for transaction confirmation
+      const receipt = await waitForTransactionWithTimeout(
+        publicClient,
+        txHash as `0x${string}`,
+        TRANSACTION_TIMEOUTS.TRANSACTION
+      );
+      
+      // Show success toast
+      toast({
+        title: "Order Updated!",
+        description: "Your order expiration has been updated successfully.",
+        variant: "success",
+        action: (
+          <ToastAction
+            altText="View transaction"
+            onClick={() => window.open(`https://otter.pulsechain.com/tx/${txHash}`, '_blank')}
+          >
+            View TX
+          </ToastAction>
+        ),
+      });
       
       // Clear form and close edit mode
       setEditingOrder(null);
       setEditFormData({ sellAmount: '', buyAmounts: {}, expirationTime: '' });
+      
+      // Refresh orders
+      refetch();
       
       // Clear any previous errors
       setUpdateErrors(prev => {
@@ -1220,10 +1463,18 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
       });
       
     } catch (error: any) {
+      const errorMsg = simplifyErrorMessage(error) || 'Failed to update order';
       setUpdateErrors(prev => ({ 
         ...prev, 
-        [orderId]: simplifyErrorMessage(error) || 'Failed to update order' 
+        [orderId]: errorMsg
       }));
+      
+      // Show error toast
+      toast({
+        title: "Update Failed",
+        description: errorMsg,
+        variant: "destructive",
+      });
     } finally {
       setUpdatingOrders(prev => {
         const newSet = new Set(prev);
@@ -1261,16 +1512,16 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
             Number(order.orderDetailsWithId.orderDetails.expirationTime) >= Math.floor(Date.now() / 1000)
           );
         break;
+      case 'expired':
+        filteredOrders = orders.filter(order => 
+          order.orderDetailsWithId.status === 0 && 
+          Number(order.orderDetailsWithId.orderDetails.expirationTime) < Math.floor(Date.now() / 1000)
+        );
+        break;
       case 'completed':
         filteredOrders = orders.filter(order => 
           order.orderDetailsWithId.status === 2
         );
-        break;
-        case 'inactive':
-          filteredOrders = orders.filter(order => 
-            order.orderDetailsWithId.status === 0 && 
-            Number(order.orderDetailsWithId.orderDetails.expirationTime) < Math.floor(Date.now() / 1000)
-          );
         break;
       case 'cancelled':
         filteredOrders = orders.filter(order => 
@@ -1534,7 +1785,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     }
   };
 
-  const getLevel3Orders = (tokenType: 'maxi' | 'non-maxi', ownership: 'mine' | 'non-mine', status: 'active' | 'completed' | 'inactive' | 'cancelled' | 'order-history') => {
+  const getLevel3Orders = (tokenType: 'maxi' | 'non-maxi', ownership: 'mine' | 'non-mine', status: 'active' | 'expired' | 'completed' | 'cancelled' | 'order-history') => {
     const level2Orders = getLevel2Orders(tokenType, ownership);
     switch (status) {
       case 'active':
@@ -1542,13 +1793,13 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
           order.orderDetailsWithId.status === 0 && 
           Number(order.orderDetailsWithId.orderDetails.expirationTime) >= Math.floor(Date.now() / 1000)
         );
-      case 'completed':
-        return level2Orders.filter(order => order.orderDetailsWithId.status === 2);
-      case 'inactive':
+      case 'expired':
         return level2Orders.filter(order => 
           order.orderDetailsWithId.status === 0 && 
           Number(order.orderDetailsWithId.orderDetails.expirationTime) < Math.floor(Date.now() / 1000)
         );
+      case 'completed':
+        return level2Orders.filter(order => order.orderDetailsWithId.status === 2);
       case 'cancelled':
         return level2Orders.filter(order => order.orderDetailsWithId.status === 1);
       case 'order-history':
@@ -1688,20 +1939,42 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
         </button>
         <button
           onClick={() => {
-            setStatusFilter('inactive');
+            setStatusFilter('expired');
             clearExpandedPositions();
           }}
           className={`px-3 md:px-4 py-2  transition-all duration-100 border whitespace-nowrap text-sm md:text-base ${
-            statusFilter === 'inactive'
+            statusFilter === 'expired'
               ? 'bg-[#00D9FF]/20 text-[#00D9FF] border-[#00D9FF]'
               : 'bg-gray-800/50 text-gray-300 border-gray-600 hover:bg-gray-700/50'
           }`}
         >
-          Inactive ({
-            getLevel3Orders(tokenFilter, ownershipFilter, 'completed').length +
-            getLevel3Orders(tokenFilter, ownershipFilter, 'inactive').length +
-            getLevel3Orders(tokenFilter, ownershipFilter, 'cancelled').length
-          })
+          Expired ({getLevel3Orders(tokenFilter, ownershipFilter, 'expired').length})
+        </button>
+        <button
+          onClick={() => {
+            setStatusFilter('completed');
+            clearExpandedPositions();
+          }}
+          className={`px-3 md:px-4 py-2  transition-all duration-100 border whitespace-nowrap text-sm md:text-base ${
+            statusFilter === 'completed'
+              ? 'bg-[#00D9FF]/20 text-[#00D9FF] border-[#00D9FF]'
+              : 'bg-gray-800/50 text-gray-300 border-gray-600 hover:bg-gray-700/50'
+          }`}
+        >
+          Completed ({getLevel3Orders(tokenFilter, ownershipFilter, 'completed').length})
+        </button>
+        <button
+          onClick={() => {
+            setStatusFilter('cancelled');
+            clearExpandedPositions();
+          }}
+          className={`px-3 md:px-4 py-2  transition-all duration-100 border whitespace-nowrap text-sm md:text-base ${
+            statusFilter === 'cancelled'
+              ? 'bg-[#00D9FF]/20 text-[#00D9FF] border-[#00D9FF]'
+              : 'bg-gray-800/50 text-gray-300 border-gray-600 hover:bg-gray-700/50'
+          }`}
+        >
+          Cancelled ({getLevel3Orders(tokenFilter, ownershipFilter, 'cancelled').length})
         </button>
         {!isMarketplaceMode && (
           <button
@@ -1720,16 +1993,48 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
         )}
         </div>
 
+      {/* Cancel All Expired Button - Show only in Expired tab for My Deals */}
+      {ownershipFilter === 'mine' && statusFilter === 'expired' && (() => {
+        const expiredCount = getLevel3Orders(tokenFilter, ownershipFilter, 'expired').length;
+        
+        return expiredCount > 0 && (
+          <div className="mb-4 flex items-center gap-4">
+            <button
+              onClick={handleCancelAllExpired}
+              disabled={isCancellingAll}
+              className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {isCancellingAll ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Cancelling...
+                </>
+              ) : (
+                <>
+                  Cancel All Expired ({expiredCount})
+                </>
+              )}
+            </button>
+            {cancelAllError && (
+              <div className="text-red-400 text-sm">
+                {cancelAllError}
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
       {/* Search Bar */}
-      <div className="mb-6 max-w-[700px]">
-        <div className="relative w-full">
+      <div className="mb-6">
+        <div className="relative inline-block">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500" />
           <input
             type="text"
             placeholder="Search"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-black border-2 border-[#00D9FF]  text-[#00D9FF] placeholder-[#00D9FF]/30 focus:outline-none focus:border-[#00D9FF] focus:bg-black/10 transition-colors shadow-[0_0_10px_rgba(0,217,255,0.3)]"
+            style={{ width: 'calc(100vw - 2rem)' }}
+            className="max-w-[480px] pl-10 pr-4 py-2 bg-black border-2 border-[#00D9FF]  text-[#00D9FF] placeholder-[#00D9FF]/30 focus:outline-none focus:border-[#00D9FF] focus:bg-black/10 transition-colors shadow-[0_0_10px_rgba(0,217,255,0.3)]"
           />
         </div>
       </div>
@@ -1832,7 +2137,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
               
               {/* COLUMN 8: Actions / Order ID */}
               <div className="text-sm font-medium text-center text-[#00D9FF]/60">
-                {(statusFilter === 'inactive' || statusFilter === 'completed') ? 'Order ID' : ''}
+                {(statusFilter === 'expired' || statusFilter === 'completed' || statusFilter === 'cancelled') ? 'Order ID' : ''}
             </div>
             </div>
 
@@ -2222,7 +2527,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                   
                   {/* COLUMN 8: Actions / Order ID Content */}
                     <div className="text-center min-w-0">
-                      {(statusFilter === 'inactive' || statusFilter === 'completed' || statusFilter === 'cancelled') ? (
+                      {(statusFilter === 'expired' || statusFilter === 'completed' || statusFilter === 'cancelled') ? (
                         <div className="text-gray-400 mt-1.5 text-sm">{order.orderDetailsWithId.orderId.toString()}</div>
                       ) : (
                         <>
@@ -2509,7 +2814,23 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                             {/* Owner Actions - Only show for user's own orders */}
                             {address && order.userDetails.orderOwner.toLowerCase() === address.toLowerCase() && (
                               <div className="mt-3 pt-3 border-t border-[#00D9FF]/30">
-                                <div className="flex gap-2">
+                                <div className="flex gap-2 flex-wrap">
+                                  {/* Collect Proceeds Button - Show if order has been filled */}
+                                  {(() => {
+                                    const DIVISOR = BigInt(10 ** 18);
+                                    const filled = DIVISOR - order.orderDetailsWithId.remainingFillPercentage;
+                                    const hasProceeds = filled > order.orderDetailsWithId.redeemedPercentage;
+                                    return hasProceeds && (
+                                      <button
+                                        onClick={() => handleCollectProceeds(order)}
+                                        disabled={collectingOrders.has(order.orderDetailsWithId.orderId.toString())}
+                                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                                      >
+                                        {collectingOrders.has(order.orderDetailsWithId.orderId.toString()) ? 'Collecting...' : 'Collect Proceeds'}
+                                      </button>
+                                    );
+                                  })()}
+                                  
                                   {/* Cancel Button */}
                                   <button
                                     onClick={() => handleCancelOrder(order)}
@@ -2524,7 +2845,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                   <button
                                     onClick={() => handleEditOrder(order)}
                                     disabled={order.orderDetailsWithId.status !== 0}
-                                    className="hidden px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                                   >
                                     Edit Order
                                   </button>
