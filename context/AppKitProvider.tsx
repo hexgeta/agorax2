@@ -12,10 +12,10 @@ const queryClient = new QueryClient()
 
 // Set up metadata
 const metadata = {
-  name: 'AgoráX - OTC Platform',
-  description: 'Over-the-counter trading platform for pooled HEX stake tokens',
-  url: 'https://otc.lookintomaxi.com',
-  icons: ['https://otc.lookintomaxi.com/favicon.png']
+  name: 'AgoráX - Peer-to-peer Trading on PulseChain',
+  description: 'AgoráX is a limit order DEX for trading tokens on PulseChain at the best rates. Low fees & no slippage.',
+  url: 'https://agorax2.lookintomaxi.com',
+  icons: ['https://agorax2.lookintomaxi.com/favicon.png']
 }
 
 // Create the modal

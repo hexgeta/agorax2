@@ -1666,9 +1666,26 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
               askingUsdValue = tokenValues.length > 0 ? Math.min(...tokenValues) : 0;
             }
             
-            if (sellUsdValue > 0 && askingUsdValue > 0 && sellTokenAmount > 0 && sellTokenPrice > 0) {
-              const limitPricePerToken = askingUsdValue / sellTokenAmount;
-              return ((limitPricePerToken - sellTokenPrice) / sellTokenPrice) * 100;
+            // Use first buy token for price comparison
+            const buyTokensIndex = a.orderDetailsWithId.orderDetails.buyTokensIndex;
+            const buyAmounts = a.orderDetailsWithId.orderDetails.buyAmounts;
+            
+            if (buyTokensIndex && buyAmounts && Array.isArray(buyTokensIndex) && Array.isArray(buyAmounts) && buyTokensIndex.length > 0) {
+              const firstBuyTokenIndex = Number(buyTokensIndex[0]);
+              const firstBuyTokenInfo = getTokenInfoByIndex(firstBuyTokenIndex);
+              const firstBuyAmount = buyAmounts[0];
+              
+              const buyAmountToUse = isCompletedOrCancelled
+                ? firstBuyAmount
+                : (firstBuyAmount * BigInt(Math.floor(remainingPercentage * 1e18))) / BigInt(1e18);
+              
+              const buyTokenAmount = parseFloat(formatTokenAmount(buyAmountToUse, firstBuyTokenInfo.decimals));
+              const buyTokenMarketPrice = getTokenPrice(firstBuyTokenInfo.address, tokenPrices);
+              
+              if (sellUsdValue > 0 && buyTokenAmount > 0 && buyTokenMarketPrice > 0) {
+                const limitBuyTokenPrice = sellUsdValue / buyTokenAmount;
+                return ((limitBuyTokenPrice - buyTokenMarketPrice) / buyTokenMarketPrice) * 100;
+              }
             }
             return -Infinity; // Orders without percentage go to the end
           })();
@@ -1688,30 +1705,26 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
             const sellTokenPrice = getTokenPrice(sellTokenAddress, tokenPrices);
             const sellUsdValue = sellTokenAmount * sellTokenPrice;
             
-            // Calculate minimum asking USD value
-            let askingUsdValue = 0;
+            // Use first buy token for price comparison
             const buyTokensIndex = b.orderDetailsWithId.orderDetails.buyTokensIndex;
             const buyAmounts = b.orderDetailsWithId.orderDetails.buyAmounts;
             
-            if (buyTokensIndex && buyAmounts && Array.isArray(buyTokensIndex) && Array.isArray(buyAmounts)) {
-              const tokenValues: number[] = [];
-              buyTokensIndex.forEach((tokenIndex: bigint, idx: number) => {
-                const tokenInfo = getTokenInfoByIndex(Number(tokenIndex));
-                const originalAmount = buyAmounts[idx];
-                const buyAmountToUse = isCompletedOrCancelled
-                  ? originalAmount
-                  : (originalAmount * BigInt(Math.floor(remainingPercentage * 1e18))) / BigInt(1e18);
-                const tokenAmount = parseFloat(formatTokenAmount(buyAmountToUse, tokenInfo.decimals));
-                const tokenPrice = getTokenPrice(tokenInfo.address, tokenPrices);
-                const usdValue = tokenAmount * tokenPrice;
-                tokenValues.push(usdValue);
-              });
-              askingUsdValue = tokenValues.length > 0 ? Math.min(...tokenValues) : 0;
-            }
-            
-            if (sellUsdValue > 0 && askingUsdValue > 0 && sellTokenAmount > 0 && sellTokenPrice > 0) {
-              const limitPricePerToken = askingUsdValue / sellTokenAmount;
-              return ((limitPricePerToken - sellTokenPrice) / sellTokenPrice) * 100;
+            if (buyTokensIndex && buyAmounts && Array.isArray(buyTokensIndex) && Array.isArray(buyAmounts) && buyTokensIndex.length > 0) {
+              const firstBuyTokenIndex = Number(buyTokensIndex[0]);
+              const firstBuyTokenInfo = getTokenInfoByIndex(firstBuyTokenIndex);
+              const firstBuyAmount = buyAmounts[0];
+              
+              const buyAmountToUse = isCompletedOrCancelled
+                ? firstBuyAmount
+                : (firstBuyAmount * BigInt(Math.floor(remainingPercentage * 1e18))) / BigInt(1e18);
+              
+              const buyTokenAmount = parseFloat(formatTokenAmount(buyAmountToUse, firstBuyTokenInfo.decimals));
+              const buyTokenMarketPrice = getTokenPrice(firstBuyTokenInfo.address, tokenPrices);
+              
+              if (sellUsdValue > 0 && buyTokenAmount > 0 && buyTokenMarketPrice > 0) {
+                const limitBuyTokenPrice = sellUsdValue / buyTokenAmount;
+                return ((limitBuyTokenPrice - buyTokenMarketPrice) / buyTokenMarketPrice) * 100;
+              }
             }
             return -Infinity; // Orders without percentage go to the end
           })();
@@ -2209,21 +2222,34 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                 }
                 
                 // Calculate how much below/above market the seller is pricing their token
-                // Shows the percentage difference - negative when below market, positive when above
+                // Matches the form's calculation using USD-based comparison
                 let percentageDifference = null;
                 let isBelowMarket = false;
-                if (sellUsdValue > 0 && askingUsdValue > 0 && sellTokenAmount > 0) {
-                  // Limit price per sell token (in USD) - what they're asking for their token
-                  const limitPricePerToken = askingUsdValue / sellTokenAmount;
-                  // Market price per sell token (in USD)
-                  const marketPricePerToken = sellTokenPrice;
+                
+                // Calculate the effective price per buy token (first buy token)
+                if (buyTokensIndex && buyAmounts && Array.isArray(buyTokensIndex) && Array.isArray(buyAmounts) && buyTokensIndex.length > 0) {
+                  const firstBuyTokenIndex = Number(buyTokensIndex[0]);
+                  const firstBuyTokenInfo = getTokenInfoByIndex(firstBuyTokenIndex);
+                  const firstBuyAmount = buyAmounts[0];
                   
-                  if (marketPricePerToken > 0 && limitPricePerToken > 0) {
+                  const buyAmountToUse = isCompletedOrCancelled
+                    ? firstBuyAmount
+                    : (firstBuyAmount * BigInt(Math.floor(remainingPercentage * 1e18))) / BigInt(1e18);
+                  
+                  const buyTokenAmount = parseFloat(formatTokenAmount(buyAmountToUse, firstBuyTokenInfo.decimals));
+                  const buyTokenMarketPrice = getTokenPrice(firstBuyTokenInfo.address, tokenPrices);
+                  
+                  if (sellUsdValue > 0 && buyTokenAmount > 0 && buyTokenMarketPrice > 0) {
+                    // Price per buy token in this order = how much USD of sell token you're giving per buy token
+                    const limitBuyTokenPrice = sellUsdValue / buyTokenAmount;
+                    // Market price of buy token
+                    const marketBuyTokenPrice = buyTokenMarketPrice;
+                    
                     // (limitPrice - marketPrice) / marketPrice
-                    // Negative = selling below market (discount)
-                    // Positive = selling above market (premium)
-                    percentageDifference = ((limitPricePerToken - marketPricePerToken) / marketPricePerToken) * 100;
-                    isBelowMarket = percentageDifference < 0; // negative means below market
+                    // Negative = buying below market (paying less per buy token = discount)
+                    // Positive = buying above market (paying more per buy token = premium)
+                    percentageDifference = ((limitBuyTokenPrice - marketBuyTokenPrice) / marketBuyTokenPrice) * 100;
+                    isBelowMarket = percentageDifference < 0;
                   }
                 }
                 

@@ -11,20 +11,20 @@ import { headers } from 'next/headers'
 export const revalidate = 2592000; // 30 days in seconds
 
 export const metadata = {
-  title: 'AgoráX - OTC Platform for Pooled HEX Stake Tokens',
-  description: 'AgoráX is an OTC platform for trading pooled HEX stake tokens. Trade your HEX stakes with other users in a secure, decentralized environment.',
-  metadataBase: new URL('https://otc.lookintomaxi.com'),
+  title: 'AgoráX - The best place to trade on PulseChain.',
+  description: 'AgoráX is a limit order DEX for trading tokens on PulseChain at the best rates. Low fees & no slippage.',
+  metadataBase: new URL('https://agorax2.lookintomaxi.com'),
   openGraph: {
-    title: 'AgoráX - Peer-to-peer OTC Pooled HEX Stake Trading',
-    description: 'Peer-to-peer OTC pooled HEX stake trading. At scale. On your own terms.',
-    url: 'https://otc.lookintomaxi.com',
+    title: 'AgoráX - Peer-to-peer Trading on PulseChain',
+    description: 'AgoráX is a limit order DEX for trading tokens on PulseChain at the best rates. Low fees & no slippage.',
+    url: 'https://agorax2.lookintomaxi.com',
     siteName: 'AgoráX',
     images: [
       {
         url: '/opengraph-image.png',
         width: 1200,
         height: 630,
-        alt: 'AgoráX - OTC Platform for Pooled HEX Stake Tokens',
+        alt: 'AgoráX - Peer-to-peer Trading on PulseChain',
       },
     ],
     locale: 'en_US',
@@ -32,8 +32,8 @@ export const metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'AgoráX - Peer-to-peer OTC Pooled HEX Stake Trading',
-    description: 'Peer-to-peer OTC pooled HEX stake trading. At scale. On your own terms.',
+    title: 'AgoráX - Peer-to-peer Trading on PulseChain',
+    description: 'AgoráX is a limit order DEX for trading tokens on PulseChain at the best rates. Low fees & no slippage.',
     images: ['/opengraph-image.png'],
   },
   icons: {
@@ -70,7 +70,7 @@ export default async function RootLayout({
       <head>
         <FontLoader weight="regular" priority={true} />
         <FontLoader weight="bold" />
-        <script defer data-domain="otc.lookintomaxi.com" src="https://plausible.io/js/script.js"></script>
+        <script defer data-domain="agorax2.lookintomaxi.com" src="https://plausible.io/js/script.js"></script>
       </head>
       <body className="min-h-screen bg-black text-white">
         <AppKitProvider cookies={cookies}>
