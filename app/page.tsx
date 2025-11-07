@@ -3,7 +3,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAccount } from 'wagmi';
 import { OpenPositionsTable } from '@/components/OpenPositionsTable';
-import { CreatePositionModal } from '@/components/CreatePositionModal';
 import { WhitelistDebugger } from '@/components/WhitelistDebugger';
 import { DisclaimerDialog } from '@/components/DisclaimerDialog';
 import { LogoPreloader } from '@/components/LogoPreloader';
@@ -14,7 +13,6 @@ import { ToastAction } from '@/components/ui/toast';
 import { Loader2 } from 'lucide-react';
 
 export default function Home() {
-  const [showCreateModal, setShowCreateModal] = useState(false);
   const [isTransactionLoading, setIsTransactionLoading] = useState(false);
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const { isConnected, isConnecting } = useAccount();
@@ -171,6 +169,12 @@ export default function Home() {
                         // Order creation is now handled directly in the form
                         // No need to open the modal
                       }}
+                      onOrderCreated={() => {
+                        // Refresh the positions table when a new order is created
+                        if (openPositionsTableRef.current?.refreshAndNavigateToMyActiveOrders) {
+                          openPositionsTableRef.current.refreshAndNavigateToMyActiveOrders();
+                        }
+                      }}
                     />
                   </div>
                 </div>
@@ -190,42 +194,6 @@ export default function Home() {
           </div>
         </div>
       )}
-
-      {/* Create Position Modal */}
-      <CreatePositionModal 
-        isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        onTransactionStart={() => setIsTransactionLoading(true)}
-        onTransactionEnd={() => setIsTransactionLoading(false)}
-        onTransactionSuccess={(message, txHash) => {
-          toast({
-            title: "Transaction Successful!",
-            description: message || "Your order has been created successfully.",
-            variant: "success",
-            action: txHash ? (
-              <ToastAction
-                altText="View transaction"
-                onClick={() => window.open(`https://otter.pulsechain.com/tx/${txHash}`, '_blank')}
-              >
-                View TX
-              </ToastAction>
-            ) : undefined,
-          });
-        }}
-        onTransactionError={(error) => {
-          toast({
-            title: "Transaction Failed",
-            description: error || "An error occurred while creating your order.",
-            variant: "destructive",
-          });
-        }}
-        onOrderCreated={(sellToken, buyToken) => {
-          // Refresh the orders table and navigate to "My Deals" > "Active"
-          if (openPositionsTableRef.current) {
-            openPositionsTableRef.current.refreshAndNavigateToMyActiveOrders(sellToken, buyToken);
-          }
-        }}
-      />
       </main>
     </>
   );

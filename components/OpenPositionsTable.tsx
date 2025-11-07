@@ -336,7 +336,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
   
   // Sorting state
   const [sortField, setSortField] = useState<SortField>('date');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   
   // Expanded positions state
   const [expandedPositions, setExpandedPositions] = useState<Set<string>>(new Set());
@@ -1028,14 +1028,16 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
         title: "Order Fulfilled!",
         description: "You have successfully completed this trade.",
         variant: "success",
-        action: (
-          <ToastAction
-            altText="View transaction"
-            onClick={() => window.open(`https://otter.pulsechain.com/tx/${txHash}`, '_blank')}
+        action: txHash ? (
+          <a 
+            href={`https://otter.pulsechain.com/tx/${txHash}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-white hover:underline font-medium"
           >
-            View TX
-          </ToastAction>
-        ),
+            View Tx
+          </a>
+        ) : undefined,
       });
       
       // Clear the inputs for this order
@@ -1128,14 +1130,16 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
         title: "Order Cancelled!",
         description: "Your order has been cancelled and tokens returned.",
         variant: "success",
-        action: (
-          <ToastAction
-            altText="View transaction"
-            onClick={() => window.open(`https://otter.pulsechain.com/tx/${txHash}`, '_blank')}
+        action: txHash ? (
+          <a 
+            href={`https://otter.pulsechain.com/tx/${txHash}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-white hover:underline font-medium"
           >
-            View TX
-          </ToastAction>
-        ),
+            View Tx
+          </a>
+        ) : undefined,
       });
       
       // Determine if this is a MAXI deal
@@ -1223,14 +1227,16 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
         title: "Proceeds Collected!",
         description: "Your earnings have been transferred to your wallet.",
         variant: "success",
-        action: (
-          <ToastAction
-            altText="View transaction"
-            onClick={() => window.open(`https://otter.pulsechain.com/tx/${txHash}`, '_blank')}
+        action: txHash ? (
+          <a 
+            href={`https://otter.pulsechain.com/tx/${txHash}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-white hover:underline font-medium"
           >
-            View TX
-          </ToastAction>
-        ),
+            View Tx
+          </a>
+        ) : undefined,
       });
       
       // Refresh the orders to show updated status
@@ -1324,14 +1330,16 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
         title: "All Expired Orders Cancelled!",
         description: `Successfully cancelled ${expiredOrders.length} expired order(s). Tokens have been returned to your wallet.`,
         variant: "success",
-        action: (
-          <ToastAction
-            altText="View transaction"
-            onClick={() => window.open(`https://otter.pulsechain.com/tx/${txHash}`, '_blank')}
+        action: txHash ? (
+          <a 
+            href={`https://otter.pulsechain.com/tx/${txHash}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-white hover:underline font-medium"
           >
-            View TX
-          </ToastAction>
-        ),
+            View Tx
+          </a>
+        ) : undefined,
       });
       
       // Navigate to cancelled tab
@@ -1438,14 +1446,16 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
         title: "Order Updated!",
         description: "Your order expiration has been updated successfully.",
         variant: "success",
-        action: (
-          <ToastAction
-            altText="View transaction"
-            onClick={() => window.open(`https://otter.pulsechain.com/tx/${txHash}`, '_blank')}
+        action: txHash ? (
+          <a 
+            href={`https://otter.pulsechain.com/tx/${txHash}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-white hover:underline font-medium"
           >
-            View TX
-          </ToastAction>
-        ),
+            View Tx
+          </a>
+        ) : undefined,
       });
       
       // Clear form and close edit mode
@@ -1620,8 +1630,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
           comparison = aCurrentPrice - bCurrentPrice;
           break;
         case 'otcVsMarket':
-          // Calculate OTC vs Market percentage for order A
-          const aOtcPercentage = (() => {
+          // Calculate limit price vs market percentage for order A
+          const aLimitPercentage = (() => {
             const sellTokenAddress = a.orderDetailsWithId.orderDetails.sellToken;
             const sellTokenInfo = getTokenInfo(sellTokenAddress);
             const rawRemainingPercentage = getRemainingPercentage(a.orderDetailsWithId);
@@ -1656,14 +1666,15 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
               askingUsdValue = tokenValues.length > 0 ? Math.min(...tokenValues) : 0;
             }
             
-            if (sellUsdValue > 0 && askingUsdValue > 0) {
-              return ((sellUsdValue - askingUsdValue) / sellUsdValue) * 100;
+            if (sellUsdValue > 0 && askingUsdValue > 0 && sellTokenAmount > 0 && sellTokenPrice > 0) {
+              const limitPricePerToken = askingUsdValue / sellTokenAmount;
+              return ((limitPricePerToken - sellTokenPrice) / sellTokenPrice) * 100;
             }
             return -Infinity; // Orders without percentage go to the end
           })();
           
-          // Calculate OTC vs Market percentage for order B
-          const bOtcPercentage = (() => {
+          // Calculate limit price vs market percentage for order B
+          const bLimitPercentage = (() => {
             const sellTokenAddress = b.orderDetailsWithId.orderDetails.sellToken;
             const sellTokenInfo = getTokenInfo(sellTokenAddress);
             const rawRemainingPercentage = getRemainingPercentage(b.orderDetailsWithId);
@@ -1698,13 +1709,14 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
               askingUsdValue = tokenValues.length > 0 ? Math.min(...tokenValues) : 0;
             }
             
-            if (sellUsdValue > 0 && askingUsdValue > 0) {
-              return ((sellUsdValue - askingUsdValue) / sellUsdValue) * 100;
+            if (sellUsdValue > 0 && askingUsdValue > 0 && sellTokenAmount > 0 && sellTokenPrice > 0) {
+              const limitPricePerToken = askingUsdValue / sellTokenAmount;
+              return ((limitPricePerToken - sellTokenPrice) / sellTokenPrice) * 100;
             }
             return -Infinity; // Orders without percentage go to the end
           })();
           
-          comparison = aOtcPercentage - bOtcPercentage;
+          comparison = aLimitPercentage - bLimitPercentage;
           break;
       }
       
@@ -2082,7 +2094,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                   sortField === 'sellAmount' ? 'text-[#00D9FF]' : 'text-[#00D9FF]/60'
                 }`}
               >
-                            {statusFilter === 'completed' ? 'Sold' : 'For Sale'} {sortField === 'sellAmount' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                            {statusFilter === 'completed' ? 'Sold' : 'For sale'} {sortField === 'sellAmount' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
               </button>
               
               {/* COLUMN 2: Asking For */}
@@ -2092,7 +2104,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                   sortField === 'askingFor' ? 'text-[#00D9FF]' : 'text-[#00D9FF]/60'
                 }`}
               >
-                            {statusFilter === 'completed' ? 'Bought' : 'Asking For'} {sortField === 'askingFor' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                            {statusFilter === 'completed' ? 'Bought' : 'Asking for'} {sortField === 'askingFor' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
               </button>
               
               {/* COLUMN 3: Fill Status % */}
@@ -2102,7 +2114,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                   sortField === 'progress' ? 'text-[#00D9FF]' : 'text-[#00D9FF]/60'
                 }`}
               >
-                Fill Status % {sortField === 'progress' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                Fill status % {sortField === 'progress' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
               </button>
               
               {/* COLUMN 4: OTC % */}
@@ -2112,7 +2124,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                   sortField === 'otcVsMarket' ? 'text-[#00D9FF]' : 'text-[#00D9FF]/60'
                 }`}
               >
-                OTC vs Market Price {sortField === 'otcVsMarket' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                Limit order position {sortField === 'otcVsMarket' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
               </button>
               
               {/* COLUMN 5: Status */}
@@ -2196,12 +2208,23 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                   askingUsdValue = tokenValues.length > 0 ? Math.min(...tokenValues) : 0;
                 }
                 
-                // Calculate how much smaller the ask is than the offer as a %
+                // Calculate how much below/above market the seller is pricing their token
+                // Shows the percentage difference - negative when below market, positive when above
                 let percentageDifference = null;
-                let isAboveAsking = false;
-                if (sellUsdValue > 0 && askingUsdValue > 0) {
-                  percentageDifference = ((sellUsdValue - askingUsdValue) / sellUsdValue) * 100;
-                  isAboveAsking = percentageDifference > 0; // positive means ask is smaller than offer (discount)
+                let isBelowMarket = false;
+                if (sellUsdValue > 0 && askingUsdValue > 0 && sellTokenAmount > 0) {
+                  // Limit price per sell token (in USD) - what they're asking for their token
+                  const limitPricePerToken = askingUsdValue / sellTokenAmount;
+                  // Market price per sell token (in USD)
+                  const marketPricePerToken = sellTokenPrice;
+                  
+                  if (marketPricePerToken > 0 && limitPricePerToken > 0) {
+                    // (limitPrice - marketPrice) / marketPrice
+                    // Negative = selling below market (discount)
+                    // Positive = selling above market (premium)
+                    percentageDifference = ((limitPricePerToken - marketPricePerToken) / marketPricePerToken) * 100;
+                    isBelowMarket = percentageDifference < 0; // negative means below market
+                  }
                 }
                 
                 // Calculate backing price discount - simple USD comparison like market price column
@@ -2429,29 +2452,27 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                   </div>
                   
                   {/* COLUMN 3: Fill Status % Content */}
-                  <div className="flex flex-col items-center space-y-2  mt-0.5 min-w-0">
+                  <div className="flex flex-col items-center space-y-1  mt-0.5 min-w-0">
                     {(() => {
                       const fillPercentage = 100 - ((Number(getRemainingPercentage(order.orderDetailsWithId)) / 1e18) * 100);
-                      
+
                       return (
                         <span className={`text-xs ${fillPercentage === 0 ? 'text-gray-500' : 'text-[#00D9FF]'}`}>
                           {formatPercentage(fillPercentage)}
-                    </span>
+                        </span>
                       );
                     })()}
-                    <div className="w-[60px] h-1 bg-gray-500  overflow-hidden relative">
+                    <div className="w-[60px] h-2 bg-gray-500 rounded-full overflow-hidden relative">
                       {(() => {
                         const fillPercentage = 100 - ((Number(getRemainingPercentage(order.orderDetailsWithId)) / 1e18) * 100);
-                        
+
                         return (
-                          <div 
-                            className={`h-full  transition-all duration-300 ${
-                              fillPercentage === 0 ? 'bg-gray-500' : 'bg-[#00D9FF]'
-                            }`}
-                        style={{ 
-                              width: `${fillPercentage}%` 
-                        }}
-                      />
+                          <div
+                            className={`h-full transition-all duration-300 ${fillPercentage === 0 ? 'bg-gray-500' : 'bg-[#00D9FF]'} rounded-full`}
+                            style={{
+                              width: `${fillPercentage}%`
+                            }}
+                          />
                         );
                       })()}
                     </div>
@@ -2462,14 +2483,15 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                     <div className="text-sm">
                       {percentageDifference !== null ? (
                         <span className={`font-medium ${
-                          isAboveAsking 
-                            ? 'text-red-400'    // Red discount - getting more value than paying for
-                            : 'text-green-400'  // Green premium - paying more than getting
+                          isBelowMarket 
+                            ? 'text-red-400'    // Red - below market (discount)
+                            : 'text-green-400'  // Green - above market (premium)
                         }`}>
-                          {isAboveAsking 
-                            ? `-${Math.abs(percentageDifference).toLocaleString('en-US', { maximumFractionDigits: 0 })}%`
-                            : `+${Math.abs(percentageDifference).toLocaleString('en-US', { maximumFractionDigits: 0 })}%`
-                          }
+                          {percentageDifference.toLocaleString('en-US', { 
+                            maximumFractionDigits: 1, 
+                            minimumFractionDigits: 1,
+                            signDisplay: 'always'
+                          })}%
                         </span>
                       ) : (
                         <span className="text-gray-500">--</span>
@@ -2477,7 +2499,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                     </div>
                     {percentageDifference !== null && (
                       <div className="text-xs text-gray-400 mt-0">
-                        {isAboveAsking ? 'discount' : 'premium'}
+                        {isBelowMarket ? 'below market' : 'above market'}
                       </div>
                     )}
                     {/* Add backing price stats as second row */}

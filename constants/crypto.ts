@@ -23,6 +23,10 @@ export interface TokenConfig {
 // AgoraX uses 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE for native PLS
 // (Different from Bistro's 0x000000000000000000000000000000000000dEaD)
 // ===================================
+// TESTNET NOTE: These tokens are used for both mainnet (369) and testnet (943)
+// The native PLS token address is the same across chains (standard placeholder)
+// tPLS on testnet uses the same address as PLS - just different symbol in UI
+// ===================================
 
 export const TOKEN_CONSTANTS = [{
   chain: 369,

@@ -89,13 +89,13 @@ export function useContractWhitelist() {
 
     // Execute the contract function
     try {
-      console.log('🔧 Executing write function:', {
+      console.log('🔧 Calling contract function:', {
         functionName,
         contractAddress,
+        chainId,
         userAddress: address,
-        isConnected,
-        args,
-        value
+        argsCount: args.length,
+        value: value?.toString(),
       });
 
       const result = await writeContractAsync({
@@ -109,9 +109,22 @@ export function useContractWhitelist() {
         gas: 2000000n, // Set a reasonable gas limit
       });
 
+      console.log('✅ Contract call successful:', result);
       return result;
-    } catch (error) {
-      console.error('❌ Write function error:', error);
+    } catch (error: any) {
+      console.error('❌ Contract function error:', {
+        function: functionName,
+        error: error?.message,
+        shortMessage: error?.shortMessage,
+        code: error?.code,
+        data: error?.data,
+        cause: error?.cause?.message,
+      });
+      
+      // Re-throw with more context
+      if (error?.message) {
+        throw new Error(error.message);
+      }
       throw error;
     }
   };

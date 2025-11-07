@@ -16,8 +16,8 @@ import { PRIORITY_TOKEN_ADDRESSES } from '@/utils/tokenUtils';
  * - Works with browser cache (30-day TTL set in next.config.js)
  * - Optional service worker support for offline caching
  * 
- * Priority tokens (~29 total) are loaded in the first batch, matching PRIORITY_TOKEN_ORDER
- * from CreatePositionModal.tsx for optimal user experience.
+ * Priority tokens (~29 total) are loaded in the first batch, matching PRIORITY_TOKEN_ADDRESSES
+ * from tokenUtils.ts for optimal user experience.
  */
 
 // Set to true to enable service worker for offline logo caching

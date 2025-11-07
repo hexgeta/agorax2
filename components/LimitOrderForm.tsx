@@ -6,7 +6,7 @@ import { useAccount, useBalance, usePublicClient } from 'wagmi';
 import { TOKEN_CONSTANTS } from '@/constants/crypto';
 import { useTokenPrices } from '@/hooks/crypto/useTokenPrices';
 import { formatEther, parseEther } from 'viem';
-import { formatTokenTicker, parseTokenAmount, getTokenInfoByIndex } from '@/utils/tokenUtils';
+import { formatTokenTicker, parseTokenAmount, getTokenInfoByIndex, getContractWhitelistIndex } from '@/utils/tokenUtils';
 import { useTokenStats } from '@/hooks/crypto/useTokenStats';
 import { useTokenAccess } from '@/context/TokenAccessContext';
 import { PAYWALL_ENABLED, REQUIRED_PARTY_TOKENS, REQUIRED_TEAM_TOKENS, PAYWALL_TITLE, PAYWALL_DESCRIPTION } from '@/config/paywall';
@@ -27,6 +27,7 @@ interface LimitOrderFormProps {
   externalMarketPrice?: number;
   isDragging?: boolean;
   onCreateOrderClick?: (sellToken: TokenOption | null, buyTokens: (TokenOption | null)[], sellAmount: string, buyAmounts: string[], expirationDays: number) => void;
+  onOrderCreated?: () => void;
 }
 
 interface TokenOption {
@@ -132,8 +133,9 @@ export function LimitOrderForm({
   externalMarketPrice,
   isDragging = false,
   onCreateOrderClick,
+  onOrderCreated,
 }: LimitOrderFormProps) {
-  const { isConnected, address } = useAccount();
+  const { isConnected, address, chainId } = useAccount();
   const [sellToken, setSellToken] = useState<TokenOption | null>(null);
   const [buyTokens, setBuyTokens] = useState<(TokenOption | null)[]>([null]); // Array of buy tokens
   const [sellAmount, setSellAmount] = useState(() => {
@@ -167,6 +169,7 @@ export function LimitOrderForm({
       setSelectedDate(futureDate);
     }
   }, []); // Only run on mount
+  
   const [limitPrice, setLimitPrice] = useState(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('limitOrderPrice') || '';
@@ -196,6 +199,9 @@ export function LimitOrderForm({
   const [duplicateTokenError, setDuplicateTokenError] = useState<string | null>(null);
   const [expirationError, setExpirationError] = useState<string | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  
+  // Listing fee state
+  const [listingFee, setListingFee] = useState<bigint>(0n);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
@@ -235,6 +241,35 @@ export function LimitOrderForm({
     sellAmountWei
   );
 
+  // Fetch listing fee from contract
+  useEffect(() => {
+    const fetchListingFee = async () => {
+      if (!publicClient || !contractAddress) return;
+      
+      try {
+        const fee = await publicClient.readContract({
+          address: contractAddress as `0x${string}`,
+          abi: [
+            {
+              name: 'getListingFee',
+              type: 'function',
+              stateMutability: 'view',
+              inputs: [],
+              outputs: [{ name: '', type: 'uint256' }],
+            },
+          ],
+          functionName: 'getListingFee',
+        }) as bigint;
+        setListingFee(fee);
+      } catch (error) {
+        console.warn('Could not fetch listing fee:', error);
+        setListingFee(0n);
+      }
+    };
+    
+    fetchListingFee();
+  }, [publicClient, contractAddress]);
+
   // Use all tokens from TOKEN_CONSTANTS
   const availableTokens = TOKEN_CONSTANTS.filter(t => t.a && t.dexs);
 
@@ -257,6 +292,10 @@ export function LimitOrderForm({
     const searchQuery = buySearchQueries[index] || '';
     return availableTokens.filter(token => {
       if (!token.a) return false;
+      
+      // Only include tokens that are in the contract whitelist
+      const whitelistIndex = getContractWhitelistIndex(token.a);
+      if (whitelistIndex === -1) return false;
       
       // Exclude if it's the sell token
       if (sellToken && sellToken.a && token.a.toLowerCase() === sellToken.a.toLowerCase()) {
@@ -601,15 +640,16 @@ export function LimitOrderForm({
       setLimitPrice(externalLimitPrice.toString());
       
       if (sellAmountNum > 0) {
+        // Capture current buyTokens to avoid closure issues
+        const currentBuyTokens = buyTokens;
         // Update all buy amounts based on the new limit price
-        const newAmounts = buyAmounts.map((_, index) => {
-          if (buyTokens[index]) {
+        setBuyAmounts((prevAmounts) => prevAmounts.map((_, index) => {
+          if (currentBuyTokens[index]) {
             const newBuyAmount = sellAmountNum * externalLimitPrice;
             return formatCalculatedValue(newBuyAmount);
           }
           return '';
-        });
-        setBuyAmounts(newAmounts);
+        }));
       }
       
       if (marketPrice > 0) {
@@ -624,7 +664,8 @@ export function LimitOrderForm({
         setPricePercentage(percentageAboveMarket);
       }
     }
-  }, [externalLimitPrice, sellAmountNum, marketPrice, invertPriceDisplay, buyTokens.length]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [externalLimitPrice, sellAmountNum, marketPrice, invertPriceDisplay]);
 
   // When sell amount changes, update buy amount based on limit price
   useEffect(() => {
@@ -637,21 +678,23 @@ export function LimitOrderForm({
       const limitPriceNum = parseFloat(limitPrice);
       if (limitPriceNum > 0) {
         isUpdatingFromOtherInputRef.current = true;
+        // Capture current buyTokens to avoid closure issues
+        const currentBuyTokens = buyTokens;
         // Update all buy amounts based on the new sell amount and limit price
-        const newAmounts = buyAmounts.map((_, index) => {
-          if (buyTokens[index]) {
+        setBuyAmounts((prevAmounts) => prevAmounts.map((_, index) => {
+          if (currentBuyTokens[index]) {
             const newBuyAmount = sellAmountNum * limitPriceNum;
             return formatCalculatedValue(newBuyAmount);
           }
           return '';
-        });
-        setBuyAmounts(newAmounts);
+        }));
         isUpdatingFromOtherInputRef.current = false;
       }
       
       lastEditedInputRef.current = null;
     }
-  }, [sellAmountNum, limitPrice, buyTokens.length]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sellAmountNum, limitPrice]);
 
   // When first buy amount changes, update sell amount based on limit price
   useEffect(() => {
@@ -717,9 +760,6 @@ export function LimitOrderForm({
     try {
       setIsCreatingOrder(true);
 
-      console.log('Creating order with address:', userAddress);
-      console.log('Contract address:', contractAddress);
-
       // Handle token approval if needed
       if (needsApproval && allowance !== undefined && allowance < sellAmountWei) {
         setIsApproving(true);
@@ -744,12 +784,21 @@ export function LimitOrderForm({
         setIsApproving(false);
       }
 
-      // Prepare order parameters
-      const buyTokenIndices = buyTokens.map(token => {
+      // Prepare order parameters - Get whitelist indices
+      console.log('🔍 Getting whitelist indices for buy tokens...');
+      const buyTokenIndices = buyTokens.map((token) => {
         if (!token) throw new Error('Buy token is null');
-        const index = TOKEN_CONSTANTS.findIndex(t => t.a?.toLowerCase() === token.a.toLowerCase());
-        if (index === -1) throw new Error(`Buy token ${token.ticker} not found in whitelist`);
-        return BigInt(index);
+        
+        console.log(`  Looking up ${token.ticker} at address: ${token.a}`);
+        
+        const whitelistIndex = getContractWhitelistIndex(token.a);
+        if (whitelistIndex === -1) {
+          console.error(`  ❌ ${token.ticker} (${token.a}) not in whitelist`);
+          throw new Error(`Token ${token.ticker} is not whitelisted. Available tokens: tPLS, HEX, tPLSX, tDAI, HDRN, ICSA, BASE, TRIO, LUCKY, DECI, MAXI`);
+        }
+        
+        console.log(`  ✅ ${token.ticker} is at whitelist index: ${whitelistIndex}`);
+        return BigInt(whitelistIndex);
       });
 
       const buyAmountsWei = buyAmounts.map((amount, i) => {
@@ -775,16 +824,55 @@ export function LimitOrderForm({
         description: "Please confirm the transaction in your wallet...",
       });
 
-      console.log('📝 Order Details:', orderDetails);
-      console.log('💰 Value:', isNativeToken(sellToken.a) ? sellAmountForOrder : undefined);
-      console.log('👤 User Address (captured):', userAddress);
-      console.log('👤 User Address (from hook):', address);
+      // Get listing fee from contract
+      let listingFee = 0n;
+      try {
+        listingFee = await publicClient.readContract({
+          address: contractAddress as `0x${string}`,
+          abi: [
+            {
+              name: 'getListingFee',
+              type: 'function',
+              stateMutability: 'view',
+              inputs: [],
+              outputs: [{ name: '', type: 'uint256' }],
+            },
+          ],
+          functionName: 'getListingFee',
+        }) as bigint;
+        console.log('💰 Listing fee:', listingFee.toString(), 'wei');
+      } catch (error) {
+        console.warn('⚠️ Could not fetch listing fee, defaulting to 0:', error);
+      }
+
+      // Calculate total value to send
+      // - If selling native PLS: msg.value = sellAmount + listingFee
+      // - If selling ERC20: msg.value = listingFee only (token transferred separately)
+      const valueToSend = isNativeToken(sellToken.a) 
+        ? sellAmountForOrder + listingFee 
+        : listingFee;
+
+      // Log order details for debugging
+      console.log('📝 Submitting Order:', {
+        sellToken: sellToken.ticker,
+        sellTokenAddress: orderDetails.sellToken,
+        sellAmount: orderDetails.sellAmount.toString(),
+        buyTokenIndices: orderDetails.buyTokensIndex.map(i => i.toString()),
+        buyAmounts: orderDetails.buyAmounts.map(a => a.toString()),
+        expirationTime: orderDetails.expirationTime.toString(),
+        valueToSend: valueToSend?.toString() || 'undefined',
+        listingFee: listingFee.toString(),
+        chainId,
+        contractAddress,
+      });
 
       // Place the order (pass value if native token)
       const txHash = await placeOrder(
         orderDetails,
-        isNativeToken(sellToken.a) ? sellAmountForOrder : undefined
+        valueToSend
       );
+      
+      console.log('✅ Transaction Hash:', txHash);
 
       if (!txHash) {
         throw new Error('Transaction failed');
@@ -811,9 +899,9 @@ export function LimitOrderForm({
             href={`https://scan.v4.testnet.pulsechain.com/tx/${txHash}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-[#00D9FF] hover:underline"
+            className="text-white hover:underline font-medium"
           >
-            View Transaction
+            View Tx
           </a>
         ) : undefined,
       });
@@ -826,11 +914,64 @@ export function LimitOrderForm({
         localStorage.removeItem('limitOrderBuyAmount');
       }
 
+      // Trigger table refresh
+      if (onOrderCreated) {
+        onOrderCreated();
+      }
+
     } catch (error: any) {
-      console.error('Error creating order:', error);
+      console.error('❌ Error creating order:', error);
+      
+      // Extract detailed error information
+      let errorMessage = "Failed to create order. Please try again.";
+      let errorDetails = "";
+      
+      if (error?.message) {
+        errorMessage = error.message;
+        
+        // Check for contract revert first (most important)
+        if (error.message.includes('reverted on-chain') || error.message.includes('Transaction reverted')) {
+          errorMessage = "Contract Error: Transaction Reverted";
+          errorDetails = "The smart contract rejected this transaction. This could be due to: insufficient token balance, tokens not whitelisted on testnet, or invalid order parameters.";
+        }
+        // Extract revert reason if available
+        else if (error.message.includes('execution reverted:')) {
+          const revertMatch = error.message.match(/execution reverted: (.+?)(?:\n|$)/);
+          if (revertMatch) {
+            errorMessage = "Contract Reverted";
+            errorDetails = `Reason: ${revertMatch[1]}`;
+          }
+        }
+        // Check for common errors
+        else if (error.message.includes('insufficient funds')) {
+          errorMessage = "Insufficient Funds";
+          errorDetails = "You don't have enough balance to cover the amount + gas fees";
+        } else if (error.message.includes('user rejected') || error.message.includes('User rejected')) {
+          errorMessage = "Transaction Cancelled";
+          errorDetails = "You rejected the transaction in your wallet";
+        } else if (error.message.includes('nonce')) {
+          errorMessage = "Transaction Nonce Error";
+          errorDetails = "Try resetting your wallet or waiting a moment";
+        } else if (error.message.includes('gas')) {
+          errorMessage = "Gas Estimation Failed";
+          errorDetails = "The transaction may fail. Check token approvals and contract state";
+        }
+      }
+      
+      // Log full error details for debugging
+      console.error('Full error details:', {
+        message: error?.message,
+        code: error?.code,
+        data: error?.data,
+        cause: error?.cause,
+        shortMessage: error?.shortMessage,
+        details: error?.details,
+        reason: error?.reason,
+      });
+      
       toast({
-        title: "Error Creating Order",
-        description: error.message || "Failed to create order. Please try again.",
+        title: errorMessage,
+        description: errorDetails,
         variant: "destructive",
       });
     } finally {
@@ -1219,7 +1360,7 @@ export function LimitOrderForm({
                       e.currentTarget.src = '/coin-logos/default.svg';
                     }}
                   />
-                  <span className="text-[#00D9FF] font-medium">{formatTokenTicker(sellToken.ticker)}</span>
+                  <span className="text-[#00D9FF] font-medium">{formatTokenTicker(sellToken.ticker, chainId)}</span>
                 </>
               ) : (
                 <span className="text-[#00D9FF]/50">Select token</span>
@@ -1269,7 +1410,7 @@ export function LimitOrderForm({
                     }}
                   />
                   <div>
-                    <div className="text-[#00D9FF] font-medium">{formatTokenTicker(token.ticker)}</div>
+                    <div className="text-[#00D9FF] font-medium">{formatTokenTicker(token.ticker, chainId)}</div>
                     <div className="text-[#00D9FF]/70 text-xs">{token.name}</div>
                   </div>
                 </button>
@@ -1414,7 +1555,7 @@ export function LimitOrderForm({
                                   e.currentTarget.src = '/coin-logos/default.svg';
                                 }}
                               />
-                              <span className="text-[#00D9FF] font-medium">{formatTokenTicker(buyToken.ticker)}</span>
+                              <span className="text-[#00D9FF] font-medium">{formatTokenTicker(buyToken.ticker, chainId)}</span>
                             </>
                           ) : (
                             <span className="text-[#00D9FF]/50">Select token</span>
@@ -1475,7 +1616,7 @@ export function LimitOrderForm({
                                   }}
                                 />
                                 <div>
-                                  <div className="text-[#00D9FF] font-medium">{formatTokenTicker(token.ticker)}</div>
+                                  <div className="text-[#00D9FF] font-medium">{formatTokenTicker(token.ticker, chainId)}</div>
                                   <div className="text-[#00D9FF]/70 text-xs">{token.name}</div>
                                 </div>
                               </button>
@@ -1578,7 +1719,7 @@ export function LimitOrderForm({
                     onInvertPriceDisplayChange?.(newInverted);
                   }}
                   className="p-1 text-[#FF0080] hover:text-white transition-colors"
-                  title={`Show price in ${invertPriceDisplay ? formatTokenTicker(buyTokens[0].ticker) : formatTokenTicker(sellToken.ticker)}`}
+                  title={`Show price in ${invertPriceDisplay ? formatTokenTicker(buyTokens[0].ticker, chainId) : formatTokenTicker(sellToken.ticker, chainId)}`}
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
@@ -1624,7 +1765,7 @@ export function LimitOrderForm({
             </div>
             {sellToken && buyTokens[0] && limitPrice && parseFloat(limitPrice) > 0 && (
               <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[#FF0080]/70 text-sm font-medium pointer-events-none">
-                {invertPriceDisplay ? formatTokenTicker(sellToken.ticker) : formatTokenTicker(buyTokens[0].ticker)}
+                {invertPriceDisplay ? formatTokenTicker(sellToken.ticker, chainId) : formatTokenTicker(buyTokens[0].ticker, chainId)}
               </div>
             )}
           </div>
@@ -1776,43 +1917,71 @@ export function LimitOrderForm({
         <div className="mt-3 flex gap-2 w-full">
           <button
             onClick={() => handleExpirationPreset(1/24)} // 1 hour = 1/24 day
-            className="flex-1 py-1.5 text-xs bg-[#00D9FF]/10 text-[#00D9FF] border border-[#00D9FF]/30 hover:bg-[#00D9FF]/20 hover:border-[#00D9FF] transition-all h-[28px] flex items-center justify-center"
+            className={`flex-1 py-1.5 text-xs border transition-all h-[28px] flex items-center justify-center ${
+              expirationInput === (1/24).toString() 
+                ? 'bg-[#00D9FF]/20 border-[#00D9FF] text-[#00D9FF]'
+                : 'bg-[#00D9FF]/10 text-[#00D9FF] border-[#00D9FF]/30 hover:bg-[#00D9FF]/20 hover:border-[#00D9FF]'
+            }`}
           >
             1h
           </button>
           <button
             onClick={() => handleExpirationPreset(0.25)} // 6 hours
-            className="flex-1 py-1.5 text-xs bg-[#00D9FF]/10 text-[#00D9FF] border border-[#00D9FF]/30 hover:bg-[#00D9FF]/20 hover:border-[#00D9FF] transition-all h-[28px] flex items-center justify-center"
+            className={`flex-1 py-1.5 text-xs border transition-all h-[28px] flex items-center justify-center ${
+              expirationInput === '0.25' 
+                ? 'bg-[#00D9FF]/20 border-[#00D9FF] text-[#00D9FF]'
+                : 'bg-[#00D9FF]/10 text-[#00D9FF] border-[#00D9FF]/30 hover:bg-[#00D9FF]/20 hover:border-[#00D9FF]'
+            }`}
           >
             6h
           </button>
           <button
             onClick={() => handleExpirationPreset(0.5)} // 12 hours
-            className="flex-1 py-1.5 text-xs bg-[#00D9FF]/10 text-[#00D9FF] border border-[#00D9FF]/30 hover:bg-[#00D9FF]/20 hover:border-[#00D9FF] transition-all h-[28px] flex items-center justify-center"
+            className={`flex-1 py-1.5 text-xs border transition-all h-[28px] flex items-center justify-center ${
+              expirationInput === '0.5' 
+                ? 'bg-[#00D9FF]/20 border-[#00D9FF] text-[#00D9FF]'
+                : 'bg-[#00D9FF]/10 text-[#00D9FF] border-[#00D9FF]/30 hover:bg-[#00D9FF]/20 hover:border-[#00D9FF]'
+            }`}
           >
             12h
           </button>
           <button
             onClick={() => handleExpirationPreset(1)} // 24 hours
-            className="flex-1 py-1.5 text-xs bg-[#00D9FF]/10 text-[#00D9FF] border border-[#00D9FF]/30 hover:bg-[#00D9FF]/20 hover:border-[#00D9FF] transition-all h-[28px] flex items-center justify-center"
+            className={`flex-1 py-1.5 text-xs border transition-all h-[28px] flex items-center justify-center ${
+              expirationInput === '1' 
+                ? 'bg-[#00D9FF]/20 border-[#00D9FF] text-[#00D9FF]'
+                : 'bg-[#00D9FF]/10 text-[#00D9FF] border-[#00D9FF]/30 hover:bg-[#00D9FF]/20 hover:border-[#00D9FF]'
+            }`}
           >
             24h
           </button>
           <button
             onClick={() => handleExpirationPreset(7)}
-            className="flex-1 py-1.5 text-xs bg-[#00D9FF]/10 text-[#00D9FF] border border-[#00D9FF]/30 hover:bg-[#00D9FF]/20 hover:border-[#00D9FF] transition-all h-[28px] flex items-center justify-center"
+            className={`flex-1 py-1.5 text-xs border transition-all h-[28px] flex items-center justify-center ${
+              expirationInput === '7' 
+                ? 'bg-[#00D9FF]/20 border-[#00D9FF] text-[#00D9FF]'
+                : 'bg-[#00D9FF]/10 text-[#00D9FF] border-[#00D9FF]/30 hover:bg-[#00D9FF]/20 hover:border-[#00D9FF]'
+            }`}
           >
             7d
           </button>
           <button
             onClick={() => handleExpirationPreset(30)}
-            className="flex-1 py-1.5 text-xs bg-[#00D9FF]/10 text-[#00D9FF] border border-[#00D9FF]/30 hover:bg-[#00D9FF]/20 hover:border-[#00D9FF] transition-all h-[28px] flex items-center justify-center"
+            className={`flex-1 py-1.5 text-xs border transition-all h-[28px] flex items-center justify-center ${
+              expirationInput === '30' 
+                ? 'bg-[#00D9FF]/20 border-[#00D9FF] text-[#00D9FF]'
+                : 'bg-[#00D9FF]/10 text-[#00D9FF] border-[#00D9FF]/30 hover:bg-[#00D9FF]/20 hover:border-[#00D9FF]'
+            }`}
           >
             30d
           </button>
           <button
             onClick={() => handleExpirationPreset(90)}
-            className="flex-1 py-1.5 text-xs bg-[#00D9FF]/10 text-[#00D9FF] border border-[#00D9FF]/30 hover:bg-[#00D9FF]/20 hover:border-[#00D9FF] transition-all h-[28px] flex items-center justify-center"
+            className={`flex-1 py-1.5 text-xs border transition-all h-[28px] flex items-center justify-center ${
+              expirationInput === '90' 
+                ? 'bg-[#00D9FF]/20 border-[#00D9FF] text-[#00D9FF]'
+                : 'bg-[#00D9FF]/10 text-[#00D9FF] border-[#00D9FF]/30 hover:bg-[#00D9FF]/20 hover:border-[#00D9FF]'
+            }`}
           >
             90d
           </button>
@@ -1854,24 +2023,47 @@ export function LimitOrderForm({
 
       {/* Order Summary */}
       {sellAmount && sellToken && parseFloat(removeCommas(sellAmount)) > 0 && !duplicateTokenError && (
-        <div className="mb-6 pb-6 border-b-2 border-[#00D9FF]/30">
+        <div className="mb-6">
           <h3 className="text-[#00D9FF] font-semibold mb-3 text-sm text-left">ORDER SUMMARY</h3>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between items-center">
               <span className="text-[#00D9FF]/70">Your Offer:</span>
-              <span className="text-[#00D9FF] font-medium">{formatBalanceDisplay(removeCommas(sellAmount))} {formatTokenTicker(sellToken.ticker)}</span>
+              <span className="text-[#00D9FF] font-medium">{formatBalanceDisplay(removeCommas(sellAmount))} {formatTokenTicker(sellToken.ticker, chainId)}</span>
             </div>
+            
+            {/* Listing Fee - always required, paid in native PLS */}
+            {listingFee > 0n && (
+              <div className="flex justify-between items-center">
+                <span className="text-[#00D9FF]/70">Listing Fee (in {formatTokenTicker('PLS', chainId)}):</span>
+                <span className="text-red-400 font-medium">
+                  +{parseFloat(formatEther(listingFee)).toString()} {formatTokenTicker('PLS', chainId)}
+                </span>
+              </div>
+            )}
+
+            {/* You Pay - only show when selling native PLS */}
+            {isNativeToken(sellToken.a) && listingFee > 0n && (
+              <div className="flex justify-between items-center pt-0">
+                <span className="text-[#00D9FF]">You Pay:</span>
+                <span className="text-[#00D9FF] font-medium">
+                  {(parseFloat(removeCommas(sellAmount)) + parseFloat(formatEther(listingFee))).toLocaleString('en-US', {
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 8
+                  })} {formatTokenTicker(sellToken.ticker, chainId)}
+                </span>
+              </div>
+            )}
             
             {buyTokens.map((token, index) => {
               const amount = buyAmounts[index];
               if (!token || !amount || amount.trim() === '') return null;
               return (
-                <div key={`ask-${index}`} className="flex justify-between items-center">
+                <div key={`ask-${index}`} className="flex justify-between items-center border-t border-[#00D9FF]/30 pt-2">
                   <span className="text-[#00D9FF]/70">
                     {index === 0 ? `Your Ask${buyTokens.filter((t, idx) => t && buyAmounts[idx] && buyAmounts[idx].trim() !== '').length > 1 ? ' (Either of)' : ''}:` : ''}
                   </span>
                   <span className="text-[#00D9FF] font-medium">
-                    {formatBalanceDisplay(removeCommas(amount))} {formatTokenTicker(token.ticker)}
+                    {formatBalanceDisplay(removeCommas(amount))} {formatTokenTicker(token.ticker, chainId)}
                   </span>
                 </div>
               );
@@ -1885,16 +2077,16 @@ export function LimitOrderForm({
               return (
                 <div key={`fee-${index}`} className="flex justify-between items-center">
                   <span className="text-[#00D9FF]/70">
-                    {index === 0 ? 'Your Max Fee (0.2%):' : ''}
+                    {index === 0 ? 'Their Max Fee (0.2%):' : ''}
                   </span>
                   <span className="text-red-400 font-medium">
-                    -{formatBalanceDisplay(feeAmount.toString())} {formatTokenTicker(token.ticker)}
+                    -{formatBalanceDisplay(feeAmount.toString())} {formatTokenTicker(token.ticker, chainId)}
                   </span>
                 </div>
               );
             })}
 
-            <div className="border-t border-[#00D9FF]/20 pt-2">
+            <div className="pt-0">
               {buyTokens.filter((t, idx) => t && buyAmounts[idx] && buyAmounts[idx].trim() !== '').map((token, index) => {
                 const filteredBuyTokens = buyTokens.filter((t, idx) => t && buyAmounts[idx] && buyAmounts[idx].trim() !== '');
                 const amount = buyAmounts[buyTokens.indexOf(token)];
@@ -1906,7 +2098,7 @@ export function LimitOrderForm({
                       {index === 0 ? `You Receive${filteredBuyTokens.length > 1 ? ' (Either of)' : ''}:` : ''}
                     </span>
                     <span className="text-[#00D9FF] font-bold">
-                      {formatBalanceDisplay(amountAfterFee.toFixed(6))} {formatTokenTicker(token.ticker)}
+                      {formatBalanceDisplay(amountAfterFee.toFixed(6))} {formatTokenTicker(token.ticker, chainId)}
                     </span>
                   </div>
                 );
@@ -2003,7 +2195,7 @@ export function LimitOrderForm({
 
                   return (
                     <div key="sell-stats" className="space-y-2 text-sm">
-                      <h4 className="text-[#00D9FF] font-medium mb-3 text-left">{formatTokenTicker(sellToken.ticker)} Stats</h4>
+                      <h4 className="text-[#00D9FF] font-medium mb-3 text-left">{formatTokenTicker(sellToken.ticker, chainId)} Stats</h4>
                       <div className="flex justify-between">
                         <span className="text-[#00D9FF]/70">Progress:</span>
                         <span className="text-[#00D9FF]">{(sellStats.dates.progressPercentage * 100).toFixed(1)}%</span>
@@ -2126,7 +2318,7 @@ export function LimitOrderForm({
 
                   return (
                     <div key={`buy-stats-${buyIndex}`} className="space-y-2 text-sm border-t border-[#00D9FF]/30 pt-4 first:border-t-0 first:pt-0">
-                      <h4 className="text-[#00D9FF] font-medium mb-3 text-left">{formatTokenTicker(buyToken.ticker)} Stats</h4>
+                      <h4 className="text-[#00D9FF] font-medium mb-3 text-left">{formatTokenTicker(buyToken.ticker, chainId)} Stats</h4>
                       <div className="flex justify-between">
                         <span className="text-[#00D9FF]/70">Progress:</span>
                         <span className="text-[#00D9FF]">{(buyStats.dates.progressPercentage * 100).toFixed(1)}%</span>

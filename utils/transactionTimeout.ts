@@ -11,10 +11,10 @@ import type { PublicClient, Hash } from 'viem';
  * Configuration for transaction timeouts
  */
 export const TRANSACTION_TIMEOUTS = {
-  APPROVAL: 60_000, // 60 seconds for token approvals
-  TRANSACTION: 60_000, // 60 seconds for standard transactions
-  COMPLEX_TRANSACTION: 120_000, // 2 minutes for complex operations
-  APPROVAL_VERIFICATION: 90_000, // 90 seconds for approval state verification (increased for PulseChain)
+  APPROVAL: 120_000, // 2 minutes for token approvals (longer for testnet)
+  TRANSACTION: 180_000, // 3 minutes for standard transactions (longer for testnet)
+  COMPLEX_TRANSACTION: 300_000, // 5 minutes for complex operations
+  APPROVAL_VERIFICATION: 120_000, // 2 minutes for approval state verification
 } as const;
 
 /**
@@ -32,22 +32,34 @@ export async function waitForTransactionWithTimeout(
   timeout: number = TRANSACTION_TIMEOUTS.TRANSACTION
 ) {
   try {
+    console.log(`⏳ Waiting for transaction receipt... (timeout: ${timeout / 1000}s)`);
+    console.log(`📍 Transaction hash: ${hash}`);
+    
     const receipt = await publicClient.waitForTransactionReceipt({
       hash,
       timeout,
+      confirmations: 1, // Only wait for 1 confirmation on testnet
+    });
+
+    console.log(`✅ Transaction receipt received:`, {
+      status: receipt.status,
+      blockNumber: receipt.blockNumber.toString(),
+      gasUsed: receipt.gasUsed.toString(),
     });
 
     // Check if transaction was successful
     if (receipt.status === 'reverted') {
-      throw new Error('Transaction failed. Please check the transaction details and try again.');
+      throw new Error('Transaction reverted on-chain. The contract rejected the transaction.');
     }
 
     return receipt;
   } catch (error: any) {
+    console.error('❌ Error waiting for transaction:', error);
+    
     // Handle timeout specifically
     if (error.message?.includes('timeout') || error.message?.includes('timed out')) {
       throw new Error(
-        `Transaction timed out after ${timeout / 1000} seconds. The transaction may still be pending. Please check your wallet or block explorer.`
+        `Transaction is taking longer than expected (${timeout / 1000}s). It may still be pending. Check the block explorer: https://scan.v4.testnet.pulsechain.com/tx/${hash}`
       );
     }
 

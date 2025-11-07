@@ -16,7 +16,7 @@ const Footer = () => {
               AgoráX {CURRENT_YEAR}
             </h3>
             <p className="text-sm text-[#00D9FF]/70">
-              PulseChain OTC Trading
+              The best place to trade on PulseChain
             </p>
           </div>
 
