@@ -16,9 +16,8 @@ export function FontLoader({
       rel="preload"
       href={fontPath}
       as="font"
-      type="font/truetype"
+      type="font/ttf"
       crossOrigin="anonymous"
-      fetchPriority={priority ? 'high' : 'auto'}
     />
   )
 } 
