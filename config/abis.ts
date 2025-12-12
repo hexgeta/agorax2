@@ -7,40 +7,38 @@
 
 // AgoraX Contract ABI
 export const AGORAX_ABI = [
-  // Place Order (same signature)
+  // Place Order - AgoraX_final.sol version (individual parameters)
   {
     "inputs": [
-      {
-        "components": [
           {
             "internalType": "address",
-            "name": "sellToken",
+        "name": "_sellToken",
             "type": "address"
           },
           {
             "internalType": "uint256",
-            "name": "sellAmount",
+        "name": "_sellAmount",
             "type": "uint256"
           },
           {
             "internalType": "uint256[]",
-            "name": "buyTokensIndex",
+        "name": "_buyTokensIndex",
             "type": "uint256[]"
           },
           {
             "internalType": "uint256[]",
-            "name": "buyAmounts",
+        "name": "_buyAmounts",
             "type": "uint256[]"
           },
           {
-            "internalType": "uint256",
-            "name": "expirationTime",
-            "type": "uint256"
-          }
-        ],
-        "internalType": "struct AgoraX.OrderDetails",
-        "name": "_orderDetails",
-        "type": "tuple"
+        "internalType": "uint64",
+        "name": "_expirationTime",
+        "type": "uint64"
+      },
+      {
+        "internalType": "bool",
+        "name": "_allOrNothing",
+        "type": "bool"
       }
     ],
     "name": "placeOrder",
@@ -53,7 +51,7 @@ export const AGORAX_ABI = [
     "inputs": [
       {
         "internalType": "uint256",
-        "name": "_orderId",
+        "name": "_orderID",
         "type": "uint256"
       },
       {
@@ -72,7 +70,7 @@ export const AGORAX_ABI = [
     "inputs": [
       {
         "internalType": "uint256",
-        "name": "_orderId",
+        "name": "_orderID",
         "type": "uint256"
       },
       {
@@ -96,7 +94,7 @@ export const AGORAX_ABI = [
     "inputs": [
       {
         "internalType": "uint256",
-        "name": "_orderId",
+        "name": "_orderID",
         "type": "uint256"
       },
       {
@@ -108,6 +106,31 @@ export const AGORAX_ABI = [
     "name": "collectProceeds",
     "outputs": [],
     "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  // View Collectable Proceeds (NEW in AgoraX_final.sol)
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_orderID",
+        "type": "uint256"
+      }
+    ],
+    "name": "viewCollectableProceeds",
+    "outputs": [
+      {
+        "internalType": "address[]",
+        "name": "buyTokens",
+        "type": "address[]"
+      },
+      {
+        "internalType": "uint256[]",
+        "name": "buyAmounts",
+        "type": "uint256[]"
+      }
+    ],
+    "stateMutability": "view",
     "type": "function"
   },
   // Get Total Order Count (renamed from getOrderCounter)
@@ -129,7 +152,7 @@ export const AGORAX_ABI = [
     "inputs": [
       {
         "internalType": "uint256",
-        "name": "_orderId",
+        "name": "_orderID",
         "type": "uint256"
       }
     ],
@@ -158,23 +181,23 @@ export const AGORAX_ABI = [
             "components": [
               {
                 "internalType": "uint256",
-                "name": "orderId",
+                "name": "orderID",
                 "type": "uint256"
               },
               {
                 "internalType": "uint256",
-                "name": "remainingFillPercentage",
+                "name": "remainingSellAmount",
                 "type": "uint256"
               },
               {
                 "internalType": "uint256",
-                "name": "redeemedPercentage",
+                "name": "redeemedSellAmount",
                 "type": "uint256"
               },
               {
-                "internalType": "uint32",
+                "internalType": "uint64",
                 "name": "lastUpdateTime",
-                "type": "uint32"
+                "type": "uint64"
               },
               {
                 "internalType": "enum AgoraX.OrderStatus",
@@ -209,9 +232,14 @@ export const AGORAX_ABI = [
                     "type": "uint256[]"
                   },
                   {
-                    "internalType": "uint256",
+                    "internalType": "uint64",
                     "name": "expirationTime",
-                    "type": "uint256"
+                    "type": "uint64"
+                  },
+                  {
+                    "internalType": "bool",
+                    "name": "allOrNothing",
+                    "type": "bool"
                   }
                 ],
                 "internalType": "struct AgoraX.OrderDetails",
@@ -219,8 +247,8 @@ export const AGORAX_ABI = [
                 "type": "tuple"
               }
             ],
-            "internalType": "struct AgoraX.OrderDetailsWithId",
-            "name": "orderDetailsWithId",
+            "internalType": "struct AgoraX.OrderDetailsWithID",
+            "name": "orderDetailsWithID",
             "type": "tuple"
           }
         ],
@@ -243,10 +271,10 @@ export const AGORAX_ABI = [
     "outputs": [
       {
         "components": [
-          { "internalType": "uint256", "name": "orderId", "type": "uint256" },
-          { "internalType": "uint256", "name": "remainingFillPercentage", "type": "uint256" },
-          { "internalType": "uint256", "name": "redeemedPercentage", "type": "uint256" },
-          { "internalType": "uint32", "name": "lastUpdateTime", "type": "uint32" },
+          { "internalType": "uint256", "name": "orderID", "type": "uint256" },
+          { "internalType": "uint256", "name": "remainingSellAmount", "type": "uint256" },
+          { "internalType": "uint256", "name": "redeemedSellAmount", "type": "uint256" },
+          { "internalType": "uint64", "name": "lastUpdateTime", "type": "uint64" },
           { "internalType": "enum AgoraX.OrderStatus", "name": "status", "type": "uint8" },
           { "internalType": "uint256", "name": "creationProtocolFee", "type": "uint256" },
           {
@@ -255,14 +283,15 @@ export const AGORAX_ABI = [
               { "internalType": "uint256", "name": "sellAmount", "type": "uint256" },
               { "internalType": "uint256[]", "name": "buyTokensIndex", "type": "uint256[]" },
               { "internalType": "uint256[]", "name": "buyAmounts", "type": "uint256[]" },
-              { "internalType": "uint256", "name": "expirationTime", "type": "uint256" }
+              { "internalType": "uint64", "name": "expirationTime", "type": "uint64" },
+              { "internalType": "bool", "name": "allOrNothing", "type": "bool" }
             ],
             "internalType": "struct AgoraX.OrderDetails",
             "name": "orderDetails",
             "type": "tuple"
           }
         ],
-        "internalType": "struct AgoraX.OrderDetailsWithId[]",
+        "internalType": "struct AgoraX.OrderDetailsWithID[]",
         "name": "",
         "type": "tuple[]"
       },
@@ -282,10 +311,10 @@ export const AGORAX_ABI = [
     "outputs": [
       {
         "components": [
-          { "internalType": "uint256", "name": "orderId", "type": "uint256" },
-          { "internalType": "uint256", "name": "remainingFillPercentage", "type": "uint256" },
-          { "internalType": "uint256", "name": "redeemedPercentage", "type": "uint256" },
-          { "internalType": "uint32", "name": "lastUpdateTime", "type": "uint32" },
+          { "internalType": "uint256", "name": "orderID", "type": "uint256" },
+          { "internalType": "uint256", "name": "remainingSellAmount", "type": "uint256" },
+          { "internalType": "uint256", "name": "redeemedSellAmount", "type": "uint256" },
+          { "internalType": "uint64", "name": "lastUpdateTime", "type": "uint64" },
           { "internalType": "enum AgoraX.OrderStatus", "name": "status", "type": "uint8" },
           { "internalType": "uint256", "name": "creationProtocolFee", "type": "uint256" },
           {
@@ -294,14 +323,15 @@ export const AGORAX_ABI = [
               { "internalType": "uint256", "name": "sellAmount", "type": "uint256" },
               { "internalType": "uint256[]", "name": "buyTokensIndex", "type": "uint256[]" },
               { "internalType": "uint256[]", "name": "buyAmounts", "type": "uint256[]" },
-              { "internalType": "uint256", "name": "expirationTime", "type": "uint256" }
+              { "internalType": "uint64", "name": "expirationTime", "type": "uint64" },
+              { "internalType": "bool", "name": "allOrNothing", "type": "bool" }
             ],
             "internalType": "struct AgoraX.OrderDetails",
             "name": "orderDetails",
             "type": "tuple"
           }
         ],
-        "internalType": "struct AgoraX.OrderDetailsWithId[]",
+        "internalType": "struct AgoraX.OrderDetailsWithID[]",
         "name": "",
         "type": "tuple[]"
       },
@@ -321,10 +351,10 @@ export const AGORAX_ABI = [
     "outputs": [
       {
         "components": [
-          { "internalType": "uint256", "name": "orderId", "type": "uint256" },
-          { "internalType": "uint256", "name": "remainingFillPercentage", "type": "uint256" },
-          { "internalType": "uint256", "name": "redeemedPercentage", "type": "uint256" },
-          { "internalType": "uint32", "name": "lastUpdateTime", "type": "uint32" },
+          { "internalType": "uint256", "name": "orderID", "type": "uint256" },
+          { "internalType": "uint256", "name": "remainingSellAmount", "type": "uint256" },
+          { "internalType": "uint256", "name": "redeemedSellAmount", "type": "uint256" },
+          { "internalType": "uint64", "name": "lastUpdateTime", "type": "uint64" },
           { "internalType": "enum AgoraX.OrderStatus", "name": "status", "type": "uint8" },
           { "internalType": "uint256", "name": "creationProtocolFee", "type": "uint256" },
           {
@@ -333,14 +363,15 @@ export const AGORAX_ABI = [
               { "internalType": "uint256", "name": "sellAmount", "type": "uint256" },
               { "internalType": "uint256[]", "name": "buyTokensIndex", "type": "uint256[]" },
               { "internalType": "uint256[]", "name": "buyAmounts", "type": "uint256[]" },
-              { "internalType": "uint256", "name": "expirationTime", "type": "uint256" }
+              { "internalType": "uint64", "name": "expirationTime", "type": "uint64" },
+              { "internalType": "bool", "name": "allOrNothing", "type": "bool" }
             ],
             "internalType": "struct AgoraX.OrderDetails",
             "name": "orderDetails",
             "type": "tuple"
           }
         ],
-        "internalType": "struct AgoraX.OrderDetailsWithId[]",
+        "internalType": "struct AgoraX.OrderDetailsWithID[]",
         "name": "",
         "type": "tuple[]"
       },
@@ -360,10 +391,10 @@ export const AGORAX_ABI = [
     "outputs": [
       {
         "components": [
-          { "internalType": "uint256", "name": "orderId", "type": "uint256" },
-          { "internalType": "uint256", "name": "remainingFillPercentage", "type": "uint256" },
-          { "internalType": "uint256", "name": "redeemedPercentage", "type": "uint256" },
-          { "internalType": "uint32", "name": "lastUpdateTime", "type": "uint32" },
+          { "internalType": "uint256", "name": "orderID", "type": "uint256" },
+          { "internalType": "uint256", "name": "remainingSellAmount", "type": "uint256" },
+          { "internalType": "uint256", "name": "redeemedSellAmount", "type": "uint256" },
+          { "internalType": "uint64", "name": "lastUpdateTime", "type": "uint64" },
           { "internalType": "enum AgoraX.OrderStatus", "name": "status", "type": "uint8" },
           { "internalType": "uint256", "name": "creationProtocolFee", "type": "uint256" },
           {
@@ -372,14 +403,15 @@ export const AGORAX_ABI = [
               { "internalType": "uint256", "name": "sellAmount", "type": "uint256" },
               { "internalType": "uint256[]", "name": "buyTokensIndex", "type": "uint256[]" },
               { "internalType": "uint256[]", "name": "buyAmounts", "type": "uint256[]" },
-              { "internalType": "uint256", "name": "expirationTime", "type": "uint256" }
+              { "internalType": "uint64", "name": "expirationTime", "type": "uint64" },
+              { "internalType": "bool", "name": "allOrNothing", "type": "bool" }
             ],
             "internalType": "struct AgoraX.OrderDetails",
             "name": "orderDetails",
             "type": "tuple"
           }
         ],
-        "internalType": "struct AgoraX.OrderDetailsWithId[]",
+        "internalType": "struct AgoraX.OrderDetailsWithID[]",
         "name": "",
         "type": "tuple[]"
       },
@@ -433,13 +465,13 @@ export const AGORAX_ABI = [
     "inputs": [
       {
         "internalType": "uint256",
-        "name": "_orderId",
+        "name": "_orderID",
         "type": "uint256"
       },
       {
-        "internalType": "uint256",
+        "internalType": "uint64",
         "name": "_newExpiration",
-        "type": "uint256"
+        "type": "uint64"
       }
     ],
     "name": "updateOrderExpiration",

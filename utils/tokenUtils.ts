@@ -1,4 +1,5 @@
 import { TOKEN_CONSTANTS } from '@/constants/crypto';
+import logoManifest from '@/constants/logo-manifest.json';
 
 // ===================================
 // PRIORITY TOKEN ORDER
@@ -35,20 +36,22 @@ export const PRIORITY_TOKEN_ADDRESSES = [
 function getTokenLogo(ticker: string): string {
   // Special case mappings for tokens that use different logos
   const specialCases: Record<string, string> = {
-    'WPLS': '/coin-logos/PLS.svg', // Wrapped PLS uses PLS logo
-    'DAI': '/coin-logos/weDAI.svg', // DAI uses weDAI logo
-    'eDAI': '/coin-logos/EDAI.svg',
+    'WPLS': 'PLS', // Wrapped PLS uses PLS logo
+    'DAI': 'weDAI', // DAI uses weDAI logo
+    'eDAI': 'EDAI',
   };
   
   // Check special cases first
-  if (specialCases[ticker]) {
-    return specialCases[ticker];
+  const lookupTicker = specialCases[ticker] || ticker;
+  
+  // Look up the actual format from manifest (no 404s!)
+  const format = (logoManifest as Record<string, string>)[lookupTicker];
+  if (format) {
+    return `/coin-logos/${lookupTicker}.${format}`;
   }
   
-  // For all other tokens, automatically try to load logo based on ticker name
-  // This will try to load /coin-logos/TICKER.svg for each token
-  // If the file doesn't exist, the onError handler in the component will fall back to default.svg
-  return `/coin-logos/${ticker}.svg`;
+  // Fallback to default if not in manifest
+  return '/coin-logos/default.svg';
 }
 
 // Create a map of token addresses to token info from TOKEN_CONSTANTS

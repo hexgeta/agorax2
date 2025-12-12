@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAccount, usePublicClient } from 'wagmi';
 import { parseAbiItem } from 'viem';
+import { getContractAddress } from '@/config/testing';
 
 const LAST_SEEN_KEY = 'notifications_last_seen';
 const READ_NOTIFICATIONS_KEY = 'notifications_read';
@@ -15,13 +16,13 @@ export interface OrderNotification {
 }
 
 export function useNotifications() {
-  const { address } = useAccount();
+  const { address, chainId } = useAccount();
   const publicClient = usePublicClient();
   const [notifications, setNotifications] = useState<OrderNotification[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Get OTC contract address from environment
-  const OTC_CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_OTC_CONTRACT_ADDRESS as `0x${string}`;
+  // Get AgoraX contract address for current chain
+  const AGORAX_CONTRACT_ADDRESS = getContractAddress(chainId) as `0x${string}` | undefined;
 
   // Get last seen timestamp from localStorage
   const getLastSeenTimestamp = useCallback(() => {
@@ -95,7 +96,7 @@ export function useNotifications() {
 
   // Fetch all order-related events
   const fetchNotifications = useCallback(async () => {
-    if (!address || !publicClient || !OTC_CONTRACT_ADDRESS) {
+    if (!address || !publicClient || !AGORAX_CONTRACT_ADDRESS) {
       setNotifications([]);
       setIsLoading(false);
       return;
@@ -108,7 +109,7 @@ export function useNotifications() {
 
       // Fetch all user-created orders first to identify sells
       const orderPlacedLogs = await publicClient.getLogs({
-        address: OTC_CONTRACT_ADDRESS,
+        address: AGORAX_CONTRACT_ADDRESS,
         event: parseAbiItem('event OrderPlaced(address indexed user, uint256 orderId)'),
         args: {
           user: address
@@ -120,7 +121,7 @@ export function useNotifications() {
 
       // PART 1: OrderExecuted events where the user is the buyer
       const buyerLogs = await publicClient.getLogs({
-        address: OTC_CONTRACT_ADDRESS,
+        address: AGORAX_CONTRACT_ADDRESS,
         event: parseAbiItem('event OrderExecuted(address indexed user, uint256 orderId)'),
         args: {
           user: address
@@ -132,7 +133,7 @@ export function useNotifications() {
       let sellerLogs: any[] = [];
       if (userCreatedOrderIds.length > 0) {
         const allExecutedLogs = await publicClient.getLogs({
-          address: OTC_CONTRACT_ADDRESS,
+          address: AGORAX_CONTRACT_ADDRESS,
           event: parseAbiItem('event OrderExecuted(address indexed user, uint256 orderId)'),
           fromBlock: 'earliest'
         });
@@ -148,7 +149,7 @@ export function useNotifications() {
 
       // PART 3: OrderUpdated events
       const updatedLogs = await publicClient.getLogs({
-        address: OTC_CONTRACT_ADDRESS,
+        address: AGORAX_CONTRACT_ADDRESS,
         event: parseAbiItem('event OrderUpdated(uint256 orderId)'),
         fromBlock: 'earliest'
       });
@@ -196,7 +197,7 @@ export function useNotifications() {
     } finally {
       setIsLoading(false);
     }
-  }, [address, publicClient, OTC_CONTRACT_ADDRESS, getLastSeenTimestamp, getReadNotifications]);
+  }, [address, publicClient, chainId, AGORAX_CONTRACT_ADDRESS, getLastSeenTimestamp, getReadNotifications]);
 
   // Fetch notifications on mount and when wallet changes
   useEffect(() => {

@@ -26,9 +26,9 @@ import { getContractAddress } from '@/config/testing';
 type SortField = 'sellAmount' | 'askingFor' | 'progress' | 'owner' | 'status' | 'date' | 'backingPrice' | 'currentPrice' | 'otcVsMarket';
 type SortDirection = 'asc' | 'desc';
 
-// Helper function to get remaining percentage (works for both Bistro and AgoraX)
-const getRemainingPercentage = (orderDetailsWithId: any): bigint => {
-  return orderDetailsWithId.remainingFillPercentage || orderDetailsWithId.remainingExecutionPercentage || 0n;
+// Helper function to get remaining sell amount (AgoraX_final.sol)
+const getRemainingSellAmount = (orderDetailsWithID: any): bigint => {
+  return orderDetailsWithID.remainingSellAmount || 0n;
 };
 
 // Copy to clipboard function
@@ -221,32 +221,28 @@ const maxiTokenAddresses = [
   '0xb39490b46d02146f59e80c6061bb3e56b824d672', // pBASE
 ];
 
-// Cache to remember which logos have failed to load
+// Track which logos have failed to load to avoid repeat 404s
 const failedLogos = new Set<string>();
-// Cache to remember which format works for each symbol (svg or png)
-const formatCache = new Map<string, 'svg' | 'png'>();
 
 // Simplified TokenLogo component that always shows fallback for missing logos
 function TokenLogo({ src, alt, className }: { src: string; alt: string; className: string }) {
+  // Check cache first - don't even try to render if we know it will fail
+  if (src.includes('default.svg') || failedLogos.has(src)) {
+    return (
+      <CircleDollarSign 
+        className={`${className} text-white`}
+      />
+    );
+  }
+
   const [hasError, setHasError] = useState(false);
-  const [isClient, setIsClient] = useState(false);
-  
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
 
   const handleError = useCallback(() => {
+    failedLogos.add(src);
       setHasError(true);
-  }, []);
+  }, [src]);
 
-  // Debug logging for logo loading
-  useEffect(() => {
-    if (alt === 'DARK' || alt === 'BRIBE' || alt === 'OG' || alt === 'MAXI') {
-    }
-  }, [alt, src, hasError, isClient]);
-
-  // If it's already the default.svg or has error, show Lucide icon fallback
-  if (src.includes('default.svg') || hasError || !isClient) {
+  if (hasError) {
     return (
       <CircleDollarSign 
         className={`${className} text-white`}
@@ -385,6 +381,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
   const [updatingOrders, setUpdatingOrders] = useState<Set<string>>(new Set());
   const [updateErrors, setUpdateErrors] = useState<{[orderId: string]: string}>({});
   
+  // Efficient querying: Pass address for user orders, undefined for marketplace (all orders)
   const { 
     contractName, 
     contractOwner, 
@@ -398,16 +395,16 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     isLoading, 
     error,
     refetch
-  } = useOpenPositions();
+  } = useOpenPositions(isMarketplaceMode ? undefined : address);
 
   // Get unique sell token addresses for price fetching
   const sellTokenAddresses = allOrders ? [...new Set(allOrders.map(order => 
-    order.orderDetailsWithId.orderDetails.sellToken
+    order.orderDetailsWithID.orderDetails.sellToken
   ))] : [];
   
   // Get unique buy token addresses for price fetching
   const buyTokenAddresses = allOrders ? [...new Set(allOrders.flatMap(order => {
-    const buyTokensIndex = order.orderDetailsWithId.orderDetails.buyTokensIndex;
+    const buyTokensIndex = order.orderDetailsWithID.orderDetails.buyTokensIndex;
     if (buyTokensIndex && Array.isArray(buyTokensIndex)) {
       return buyTokensIndex.map((tokenIndex: bigint) => {
         const tokenInfo = getTokenInfoByIndex(Number(tokenIndex));
@@ -428,8 +425,9 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
   
   // Check if we have valid price data for all tokens
   const hasValidPriceData = useMemo(() => {
-    return tokenPrices && allTokenAddresses.length > 0 && 
-           allTokenAddresses.some(address => tokenPrices[address]?.price > 0);
+    // If no tokens to fetch prices for, consider it valid (no orders = valid state)
+    if (allTokenAddresses.length === 0) return true;
+    return tokenPrices && allTokenAddresses.some(address => tokenPrices[address]?.price > 0);
   }, [tokenPrices, allTokenAddresses]);
   
   // Overall loading state - only for initial load
@@ -501,13 +499,13 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
 
   // Navigate to marketplace and expand specific order
   const navigateToMarketplaceOrder = (order: any) => {
-    const orderId = order.orderDetailsWithId.orderId.toString();
+    const orderId = order.orderDetailsWithID.orderID.toString();
     
     // Determine if this is a MAXI deal
-    const sellTokenAddress = order.orderDetailsWithId.orderDetails.sellToken;
+    const sellTokenAddress = order.orderDetailsWithID.orderDetails.sellToken;
     const isMaxiDeal = maxiTokenAddresses.some(addr => 
       addr.toLowerCase() === sellTokenAddress.toLowerCase()
-    ) || order.orderDetailsWithId.orderDetails.buyTokensIndex.some((tokenIndex: bigint) => {
+    ) || order.orderDetailsWithID.orderDetails.buyTokensIndex.some((tokenIndex: bigint) => {
       const tokenInfo = getTokenInfoByIndex(Number(tokenIndex));
       return maxiTokenAddresses.some(addr => 
         addr.toLowerCase() === tokenInfo.address.toLowerCase()
@@ -559,7 +557,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
           order.userDetails.orderOwner.toLowerCase() === address.toLowerCase()
         );
         const userCreatedOrderIds = userCreatedOrders.map(order => 
-          order.orderDetailsWithId.orderId.toString()
+          order.orderDetailsWithID.orderID.toString()
         );
         
         // Query ALL OrderExecuted events for those order IDs (no user filter)
@@ -573,7 +571,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
           
           // Filter to only include events for user's created orders and exclude their own purchases
           sellerLogs = sellerLogs.filter(log => {
-            const orderId = log.args.orderId?.toString();
+            const orderId = log.args.orderID?.toString();
             const buyer = log.args.user?.toLowerCase();
             return orderId && 
                    userCreatedOrderIds.includes(orderId) && 
@@ -582,7 +580,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
         }
 
         // Extract order IDs that the user has purchased (buyer perspective)
-        const orderIds = new Set(buyerLogs.map(log => log.args.orderId?.toString()).filter((id): id is string => Boolean(id)));
+        const orderIds = new Set(buyerLogs.map(log => log.args.orderID?.toString()).filter((id): id is string => Boolean(id)));
         setPurchasedOrderIds(orderIds);
         
         // Now get the actual purchase amounts by analyzing the transaction receipts
@@ -600,7 +598,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
         const allLogs = [...buyerLogs, ...sellerLogs];
         
         for (const log of allLogs) {
-          const orderId = log.args.orderId?.toString();
+          const orderId = log.args.orderID?.toString();
           if (!orderId) continue;
           
           try {
@@ -726,8 +724,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
   // Handle input change for offer amounts
   const handleOfferInputChange = (orderId: string, tokenAddress: string, value: string, order: any) => {
     // Find the maximum allowed amount for this token
-    const buyTokensIndex = order.orderDetailsWithId.orderDetails.buyTokensIndex;
-    const buyAmounts = order.orderDetailsWithId.orderDetails.buyAmounts;
+    const buyTokensIndex = order.orderDetailsWithID.orderDetails.buyTokensIndex;
+    const buyAmounts = order.orderDetailsWithID.orderDetails.buyAmounts;
     
     let maxAllowedAmount = '';
     let tokenIndex = -1;
@@ -789,9 +787,9 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
 
   // Handle percentage fill
   const handlePercentageFill = (order: any, percentage: number) => {
-    const orderId = order.orderDetailsWithId.orderId.toString();
-    const buyTokensIndex = order.orderDetailsWithId.orderDetails.buyTokensIndex;
-    const buyAmounts = order.orderDetailsWithId.orderDetails.buyAmounts;
+    const orderId = order.orderDetailsWithID.orderID.toString();
+    const buyTokensIndex = order.orderDetailsWithID.orderDetails.buyTokensIndex;
+    const buyAmounts = order.orderDetailsWithID.orderDetails.buyAmounts;
     
     if (!buyTokensIndex || !Array.isArray(buyTokensIndex)) {
       return;
@@ -804,7 +802,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     const newInputs: {[tokenAddress: string]: string} = {};
     
     // Fill each token with the specified percentage of its remaining amount
-    const remainingPercentage = Number(getRemainingPercentage(order.orderDetailsWithId)) / 1e18;
+    const remainingPercentage = Number(getRemainingPercentage(order.orderDetailsWithID)) / 1e18;
     
     buyTokensIndex.forEach((tokenIndex: bigint, idx: number) => {
       const tokenInfo = getTokenInfoByIndex(Number(tokenIndex));
@@ -831,8 +829,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
 
   // Handle clear all inputs
   const handleClearInputs = (order: any) => {
-    const orderId = order.orderDetailsWithId.orderId.toString();
-    const buyTokensIndex = order.orderDetailsWithId.orderDetails.buyTokensIndex;
+    const orderId = order.orderDetailsWithID.orderID.toString();
+    const buyTokensIndex = order.orderDetailsWithID.orderDetails.buyTokensIndex;
     
     if (!buyTokensIndex || !Array.isArray(buyTokensIndex)) {
       return;
@@ -856,7 +854,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
 
   // Handle executing an order
   const handleExecuteOrder = async (order: any) => {
-    const orderId = order.orderDetailsWithId.orderId.toString();
+    const orderId = order.orderDetailsWithID.orderID.toString();
     
     if (!isWalletConnected) {
       setExecuteErrors(prev => ({
@@ -898,8 +896,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     try {
       // For now, we'll execute with the first token that has an input
       // In a real implementation, you might want to handle multiple tokens
-      const buyTokensIndex = order.orderDetailsWithId.orderDetails.buyTokensIndex;
-      const buyAmounts = order.orderDetailsWithId.orderDetails.buyAmounts;
+      const buyTokensIndex = order.orderDetailsWithID.orderDetails.buyTokensIndex;
+      const buyAmounts = order.orderDetailsWithID.orderDetails.buyAmounts;
       
       let tokenIndexToExecute = -1;
       let buyAmount = BigInt(0);
@@ -1006,7 +1004,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
       // Set executing state before execution
       setExecutingOrders(prev => new Set(prev).add(orderId));
 
-      // Execute/Fill the order (works for both Bistro and AgoraX)
+      // Execute/Fill the order
       const txHash = await fillOrExecuteOrder(
         BigInt(orderId),
         BigInt(tokenIndexToExecute),
@@ -1044,10 +1042,10 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
       handleClearInputs(order);
       
       // Determine if this is a MAXI deal
-      const sellTokenAddress = order.orderDetailsWithId.orderDetails.sellToken;
+      const sellTokenAddress = order.orderDetailsWithID.orderDetails.sellToken;
       const isMaxiDeal = maxiTokenAddresses.some(addr => 
         addr.toLowerCase() === sellTokenAddress.toLowerCase()
-      ) || order.orderDetailsWithId.orderDetails.buyTokensIndex.some((tokenIndex: bigint) => {
+      ) || order.orderDetailsWithID.orderDetails.buyTokensIndex.some((tokenIndex: bigint) => {
         const tokenInfo = getTokenInfoByIndex(Number(tokenIndex));
         return maxiTokenAddresses.some(addr => 
           addr.toLowerCase() === tokenInfo.address.toLowerCase()
@@ -1093,7 +1091,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
   };
 
   const handleCancelOrder = async (order: any) => {
-    const orderId = order.orderDetailsWithId.orderId.toString();
+    const orderId = order.orderDetailsWithID.orderID.toString();
     
     
     if (cancelingOrders.has(orderId)) {
@@ -1114,7 +1112,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     setTransactionPending(true);
     
     try {
-      const txHash = await cancelOrder(order.orderDetailsWithId.orderId);
+      const txHash = await cancelOrder(order.orderDetailsWithID.orderID);
       
       
       // Wait for transaction confirmation with proper timeout handling
@@ -1143,10 +1141,10 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
       });
       
       // Determine if this is a MAXI deal
-      const sellTokenAddress = order.orderDetailsWithId.orderDetails.sellToken;
+      const sellTokenAddress = order.orderDetailsWithID.orderDetails.sellToken;
       const isMaxiDeal = maxiTokenAddresses.some(addr => 
         addr.toLowerCase() === sellTokenAddress.toLowerCase()
-      ) || order.orderDetailsWithId.orderDetails.buyTokensIndex.some((tokenIndex: bigint) => {
+      ) || order.orderDetailsWithID.orderDetails.buyTokensIndex.some((tokenIndex: bigint) => {
         const tokenInfo = getTokenInfoByIndex(Number(tokenIndex));
         return maxiTokenAddresses.some(addr => 
           addr.toLowerCase() === tokenInfo.address.toLowerCase()
@@ -1193,7 +1191,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
   };
 
   const handleCollectProceeds = async (order: any) => {
-    const orderId = order.orderDetailsWithId.orderId.toString();
+    const orderId = order.orderDetailsWithID.orderID.toString();
     
     if (collectingOrders.has(orderId)) {
       return;
@@ -1213,7 +1211,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     setTransactionPending(true);
     
     try {
-      const txHash = await collectProceeds(order.orderDetailsWithId.orderId);
+      const txHash = await collectProceeds(order.orderDetailsWithID.orderID);
       
       // Wait for transaction confirmation
       const receipt = await waitForTransactionWithTimeout(
@@ -1289,8 +1287,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     
     // Count expired orders
     const expiredOrders = allOrders?.filter(order => 
-      order.orderDetailsWithId.status === 0 && // Active
-      order.orderDetailsWithId.orderDetails.expirationTime <= BigInt(Math.floor(Date.now() / 1000))
+      order.orderDetailsWithID.status === 0 && // Active
+      order.orderDetailsWithID.orderDetails.expirationTime <= BigInt(Math.floor(Date.now() / 1000))
     ) || [];
     
     if (expiredOrders.length === 0) {
@@ -1344,7 +1342,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
       
       // Navigate to cancelled tab
       const firstOrder = expiredOrders[0];
-      const sellTokenAddress = firstOrder.orderDetailsWithId.orderDetails.sellToken;
+      const sellTokenAddress = firstOrder.orderDetailsWithID.orderDetails.sellToken;
       const isMaxiDeal = maxiTokenAddresses.some(addr => 
         addr.toLowerCase() === sellTokenAddress.toLowerCase()
       );
@@ -1376,27 +1374,27 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
   };
 
   const handleEditOrder = (order: any) => {
-    const orderId = order.orderDetailsWithId.orderId.toString();
+    const orderId = order.orderDetailsWithID.orderID.toString();
     setEditingOrder(orderId);
     
     // Initialize form data with current order values
-    const sellTokenInfo = getTokenInfo(order.orderDetailsWithId.orderDetails.sellToken);
+    const sellTokenInfo = getTokenInfo(order.orderDetailsWithID.orderDetails.sellToken);
     const sellAmount = formatTokenAmount(
-      order.orderDetailsWithId.orderDetails.sellAmount,
+      order.orderDetailsWithID.orderDetails.sellAmount,
       sellTokenInfo.decimals
     );
     
     const buyAmounts: {[tokenIndex: string]: string} = {};
-    order.orderDetailsWithId.orderDetails.buyTokensIndex.forEach((tokenIndex: bigint, i: number) => {
+    order.orderDetailsWithID.orderDetails.buyTokensIndex.forEach((tokenIndex: bigint, i: number) => {
       const tokenInfo = getTokenInfoByIndex(Number(tokenIndex));
       const amount = formatTokenAmount(
-        order.orderDetailsWithId.orderDetails.buyAmounts[i],
+        order.orderDetailsWithID.orderDetails.buyAmounts[i],
         tokenInfo.decimals
       );
       buyAmounts[tokenIndex.toString()] = amount;
     });
     
-    const expirationDate = new Date(order.orderDetailsWithId.orderDetails.expirationTime * 1000);
+    const expirationDate = new Date(order.orderDetailsWithID.orderDetails.expirationTime * 1000);
     const expirationTime = expirationDate.toISOString().slice(0, 16); // YYYY-MM-DDTHH:MM format
     
     setEditFormData({
@@ -1407,7 +1405,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
   };
 
   const handleSaveOrder = async (order: any) => {
-    const orderId = order.orderDetailsWithId.orderId.toString();
+    const orderId = order.orderDetailsWithID.orderID.toString();
     
     if (updatingOrders.has(orderId)) return;
     
@@ -1430,7 +1428,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
       
       // Call updateOrderExpiration
       const txHash = await updateOrderExpiration(
-        order.orderDetailsWithId.orderId,
+        order.orderDetailsWithID.orderID,
         newExpiration
       );
       
@@ -1518,24 +1516,24 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     switch (statusFilter) {
       case 'active':
           filteredOrders = orders.filter(order => 
-            order.orderDetailsWithId.status === 0 && 
-            Number(order.orderDetailsWithId.orderDetails.expirationTime) >= Math.floor(Date.now() / 1000)
+            order.orderDetailsWithID.status === 0 && 
+            Number(order.orderDetailsWithID.orderDetails.expirationTime) >= Math.floor(Date.now() / 1000)
           );
         break;
       case 'expired':
         filteredOrders = orders.filter(order => 
-          order.orderDetailsWithId.status === 0 && 
-          Number(order.orderDetailsWithId.orderDetails.expirationTime) < Math.floor(Date.now() / 1000)
+          order.orderDetailsWithID.status === 0 && 
+          Number(order.orderDetailsWithID.orderDetails.expirationTime) < Math.floor(Date.now() / 1000)
         );
         break;
       case 'completed':
         filteredOrders = orders.filter(order => 
-          order.orderDetailsWithId.status === 2
+          order.orderDetailsWithID.status === 2
         );
         break;
       case 'cancelled':
         filteredOrders = orders.filter(order => 
-          order.orderDetailsWithId.status === 1
+          order.orderDetailsWithID.status === 1
         );
         break;
       default:
@@ -1547,11 +1545,11 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
       const query = searchQuery.toLowerCase().trim();
       filteredOrders = filteredOrders.filter(order => {
         // Get sell token info
-        const sellTokenInfo = getTokenInfo(order.orderDetailsWithId.orderDetails.sellToken);
+        const sellTokenInfo = getTokenInfo(order.orderDetailsWithID.orderDetails.sellToken);
         const sellTicker = sellTokenInfo.ticker.toLowerCase();
         
         // Get buy token info(s)
-        const buyTokensMatch = order.orderDetailsWithId.orderDetails.buyTokensIndex.some(tokenIndex => {
+        const buyTokensMatch = order.orderDetailsWithID.orderDetails.buyTokensIndex.some(tokenIndex => {
           const buyTokenInfo = getTokenInfoByIndex(Number(tokenIndex));
           const buyTicker = buyTokenInfo.ticker.toLowerCase();
           return buyTicker.includes(query);
@@ -1568,12 +1566,12 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
       
       switch (sortField) {
         case 'sellAmount':
-          const aSellTokenAddress = a.orderDetailsWithId.orderDetails.sellToken;
-          const bSellTokenAddress = b.orderDetailsWithId.orderDetails.sellToken;
+          const aSellTokenAddress = a.orderDetailsWithID.orderDetails.sellToken;
+          const bSellTokenAddress = b.orderDetailsWithID.orderDetails.sellToken;
           const aSellTokenInfo = getTokenInfo(aSellTokenAddress);
           const bSellTokenInfo = getTokenInfo(bSellTokenAddress);
-          const aTokenAmount = parseFloat(formatTokenAmount(a.orderDetailsWithId.orderDetails.sellAmount, aSellTokenInfo.decimals));
-          const bTokenAmount = parseFloat(formatTokenAmount(b.orderDetailsWithId.orderDetails.sellAmount, bSellTokenInfo.decimals));
+          const aTokenAmount = parseFloat(formatTokenAmount(a.orderDetailsWithID.orderDetails.sellAmount, aSellTokenInfo.decimals));
+          const bTokenAmount = parseFloat(formatTokenAmount(b.orderDetailsWithID.orderDetails.sellAmount, bSellTokenInfo.decimals));
           const aTokenPrice = getTokenPrice(aSellTokenAddress, tokenPrices);
           const bTokenPrice = getTokenPrice(bSellTokenAddress, tokenPrices);
           const aUsdValue = aTokenAmount * aTokenPrice;
@@ -1581,33 +1579,33 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
           comparison = aUsdValue - bUsdValue;
           break;
         case 'askingFor':
-          const aAsking = a.orderDetailsWithId.orderDetails.buyTokensIndex.length;
-          const bAsking = b.orderDetailsWithId.orderDetails.buyTokensIndex.length;
+          const aAsking = a.orderDetailsWithID.orderDetails.buyTokensIndex.length;
+          const bAsking = b.orderDetailsWithID.orderDetails.buyTokensIndex.length;
           comparison = aAsking - bAsking;
           break;
         case 'progress':
-          const aProgress = 100 - ((Number(getRemainingPercentage(a.orderDetailsWithId)) / 1e18) * 100);
-          const bProgress = 100 - ((Number(getRemainingPercentage(b.orderDetailsWithId)) / 1e18) * 100);
+          const aProgress = 100 - ((Number(getRemainingPercentage(a.orderDetailsWithID)) / 1e18) * 100);
+          const bProgress = 100 - ((Number(getRemainingPercentage(b.orderDetailsWithID)) / 1e18) * 100);
           comparison = aProgress - bProgress;
           break;
         case 'owner':
           comparison = a.userDetails.orderOwner.localeCompare(b.userDetails.orderOwner);
           break;
         case 'status':
-          comparison = a.orderDetailsWithId.status - b.orderDetailsWithId.status;
+          comparison = a.orderDetailsWithID.status - b.orderDetailsWithID.status;
           break;
         case 'date':
-          comparison = Number(a.orderDetailsWithId.orderDetails.expirationTime) - Number(b.orderDetailsWithId.orderDetails.expirationTime);
+          comparison = Number(a.orderDetailsWithID.orderDetails.expirationTime) - Number(b.orderDetailsWithID.orderDetails.expirationTime);
           break;
         case 'backingPrice':
           const aBackingPrice = (() => {
-            const sellTokenInfo = getTokenInfo(a.orderDetailsWithId.orderDetails.sellToken);
+            const sellTokenInfo = getTokenInfo(a.orderDetailsWithID.orderDetails.sellToken);
             const sellTokenKey = sellTokenInfo.ticker.startsWith('e') ? `e${sellTokenInfo.ticker.slice(1)}` : `p${sellTokenInfo.ticker}`;
             const sellTokenStat = Array.isArray(tokenStats) ? tokenStats.find(stat => stat.token.ticker === sellTokenKey) : null;
             return sellTokenStat?.token?.backingPerToken || 0;
           })();
           const bBackingPrice = (() => {
-            const sellTokenInfo = getTokenInfo(b.orderDetailsWithId.orderDetails.sellToken);
+            const sellTokenInfo = getTokenInfo(b.orderDetailsWithID.orderDetails.sellToken);
             const sellTokenKey = sellTokenInfo.ticker.startsWith('e') ? `e${sellTokenInfo.ticker.slice(1)}` : `p${sellTokenInfo.ticker}`;
             const sellTokenStat = Array.isArray(tokenStats) ? tokenStats.find(stat => stat.token.ticker === sellTokenKey) : null;
             return sellTokenStat?.token?.backingPerToken || 0;
@@ -1616,13 +1614,13 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
           break;
         case 'currentPrice':
           const aCurrentPrice = (() => {
-            const sellTokenInfo = getTokenInfo(a.orderDetailsWithId.orderDetails.sellToken);
+            const sellTokenInfo = getTokenInfo(a.orderDetailsWithID.orderDetails.sellToken);
             const sellTokenKey = sellTokenInfo.ticker.startsWith('e') ? `e${sellTokenInfo.ticker.slice(1)}` : `p${sellTokenInfo.ticker}`;
             const sellTokenStat = Array.isArray(tokenStats) ? tokenStats.find(stat => stat.token.ticker === sellTokenKey) : null;
             return sellTokenStat?.token?.priceHEX || 0;
           })();
           const bCurrentPrice = (() => {
-            const sellTokenInfo = getTokenInfo(b.orderDetailsWithId.orderDetails.sellToken);
+            const sellTokenInfo = getTokenInfo(b.orderDetailsWithID.orderDetails.sellToken);
             const sellTokenKey = sellTokenInfo.ticker.startsWith('e') ? `e${sellTokenInfo.ticker.slice(1)}` : `p${sellTokenInfo.ticker}`;
             const sellTokenStat = Array.isArray(tokenStats) ? tokenStats.find(stat => stat.token.ticker === sellTokenKey) : null;
             return sellTokenStat?.token?.priceHEX || 0;
@@ -1632,12 +1630,12 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
         case 'otcVsMarket':
           // Calculate limit price vs market percentage for order A
           const aLimitPercentage = (() => {
-            const sellTokenAddress = a.orderDetailsWithId.orderDetails.sellToken;
+            const sellTokenAddress = a.orderDetailsWithID.orderDetails.sellToken;
             const sellTokenInfo = getTokenInfo(sellTokenAddress);
-            const rawRemainingPercentage = getRemainingPercentage(a.orderDetailsWithId);
+            const rawRemainingPercentage = getRemainingPercentage(a.orderDetailsWithID);
             const remainingPercentage = Number(rawRemainingPercentage) / 1e18;
-            const originalSellAmount = a.orderDetailsWithId.orderDetails.sellAmount;
-            const isCompletedOrCancelled = a.orderDetailsWithId.status === 2 || a.orderDetailsWithId.status === 1;
+            const originalSellAmount = a.orderDetailsWithID.orderDetails.sellAmount;
+            const isCompletedOrCancelled = a.orderDetailsWithID.status === 2 || a.orderDetailsWithID.status === 1;
             const sellAmountToUse = isCompletedOrCancelled 
               ? originalSellAmount 
               : (originalSellAmount * BigInt(Math.floor(remainingPercentage * 1e18))) / BigInt(1e18);
@@ -1645,37 +1643,16 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
             const sellTokenPrice = getTokenPrice(sellTokenAddress, tokenPrices);
             const sellUsdValue = sellTokenAmount * sellTokenPrice;
             
-            // Calculate minimum asking USD value
-            let askingUsdValue = 0;
-            const buyTokensIndex = a.orderDetailsWithId.orderDetails.buyTokensIndex;
-            const buyAmounts = a.orderDetailsWithId.orderDetails.buyAmounts;
-            
-            if (buyTokensIndex && buyAmounts && Array.isArray(buyTokensIndex) && Array.isArray(buyAmounts)) {
-              const tokenValues: number[] = [];
-              buyTokensIndex.forEach((tokenIndex: bigint, idx: number) => {
-                const tokenInfo = getTokenInfoByIndex(Number(tokenIndex));
-                const originalAmount = buyAmounts[idx];
-                const buyAmountToUse = isCompletedOrCancelled
-                  ? originalAmount
-                  : (originalAmount * BigInt(Math.floor(remainingPercentage * 1e18))) / BigInt(1e18);
-                const tokenAmount = parseFloat(formatTokenAmount(buyAmountToUse, tokenInfo.decimals));
-                const tokenPrice = getTokenPrice(tokenInfo.address, tokenPrices);
-                const usdValue = tokenAmount * tokenPrice;
-                tokenValues.push(usdValue);
-              });
-              askingUsdValue = tokenValues.length > 0 ? Math.min(...tokenValues) : 0;
-            }
-            
-            // Use first buy token for price comparison
-            const buyTokensIndex = a.orderDetailsWithId.orderDetails.buyTokensIndex;
-            const buyAmounts = a.orderDetailsWithId.orderDetails.buyAmounts;
+            // Get buy tokens data for calculations
+            const buyTokensIndex = a.orderDetailsWithID.orderDetails.buyTokensIndex;
+            const buyAmounts = a.orderDetailsWithID.orderDetails.buyAmounts;
             
             if (buyTokensIndex && buyAmounts && Array.isArray(buyTokensIndex) && Array.isArray(buyAmounts) && buyTokensIndex.length > 0) {
               const firstBuyTokenIndex = Number(buyTokensIndex[0]);
               const firstBuyTokenInfo = getTokenInfoByIndex(firstBuyTokenIndex);
               const firstBuyAmount = buyAmounts[0];
               
-              const buyAmountToUse = isCompletedOrCancelled
+                const buyAmountToUse = isCompletedOrCancelled
                 ? firstBuyAmount
                 : (firstBuyAmount * BigInt(Math.floor(remainingPercentage * 1e18))) / BigInt(1e18);
               
@@ -1692,12 +1669,12 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
           
           // Calculate limit price vs market percentage for order B
           const bLimitPercentage = (() => {
-            const sellTokenAddress = b.orderDetailsWithId.orderDetails.sellToken;
+            const sellTokenAddress = b.orderDetailsWithID.orderDetails.sellToken;
             const sellTokenInfo = getTokenInfo(sellTokenAddress);
-            const rawRemainingPercentage = getRemainingPercentage(b.orderDetailsWithId);
+            const rawRemainingPercentage = getRemainingPercentage(b.orderDetailsWithID);
             const remainingPercentage = Number(rawRemainingPercentage) / 1e18;
-            const originalSellAmount = b.orderDetailsWithId.orderDetails.sellAmount;
-            const isCompletedOrCancelled = b.orderDetailsWithId.status === 2 || b.orderDetailsWithId.status === 1;
+            const originalSellAmount = b.orderDetailsWithID.orderDetails.sellAmount;
+            const isCompletedOrCancelled = b.orderDetailsWithID.status === 2 || b.orderDetailsWithID.status === 1;
             const sellAmountToUse = isCompletedOrCancelled 
               ? originalSellAmount 
               : (originalSellAmount * BigInt(Math.floor(remainingPercentage * 1e18))) / BigInt(1e18);
@@ -1706,15 +1683,15 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
             const sellUsdValue = sellTokenAmount * sellTokenPrice;
             
             // Use first buy token for price comparison
-            const buyTokensIndex = b.orderDetailsWithId.orderDetails.buyTokensIndex;
-            const buyAmounts = b.orderDetailsWithId.orderDetails.buyAmounts;
+            const buyTokensIndex = b.orderDetailsWithID.orderDetails.buyTokensIndex;
+            const buyAmounts = b.orderDetailsWithID.orderDetails.buyAmounts;
             
             if (buyTokensIndex && buyAmounts && Array.isArray(buyTokensIndex) && Array.isArray(buyAmounts) && buyTokensIndex.length > 0) {
               const firstBuyTokenIndex = Number(buyTokensIndex[0]);
               const firstBuyTokenInfo = getTokenInfoByIndex(firstBuyTokenIndex);
               const firstBuyAmount = buyAmounts[0];
               
-              const buyAmountToUse = isCompletedOrCancelled
+                const buyAmountToUse = isCompletedOrCancelled
                 ? firstBuyAmount
                 : (firstBuyAmount * BigInt(Math.floor(remainingPercentage * 1e18))) / BigInt(1e18);
               
@@ -1758,8 +1735,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
   };
 
   const getStatusText = (order: any) => {
-    const status = order.orderDetailsWithId.status;
-    const expirationTime = Number(order.orderDetailsWithId.orderDetails.expirationTime);
+    const status = order.orderDetailsWithID.status;
+    const expirationTime = Number(order.orderDetailsWithID.orderDetails.expirationTime);
     const currentTime = Math.floor(Date.now() / 1000);
     
     if (status === 0 && expirationTime < currentTime) {
@@ -1775,8 +1752,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
   };
 
   const getStatusColor = (order: any) => {
-    const status = order.orderDetailsWithId.status;
-    const expirationTime = Number(order.orderDetailsWithId.orderDetails.expirationTime);
+    const status = order.orderDetailsWithID.status;
+    const expirationTime = Number(order.orderDetailsWithID.orderDetails.expirationTime);
     const currentTime = Math.floor(Date.now() / 1000);
     
     if (status === 0 && expirationTime < currentTime) {
@@ -1815,41 +1792,41 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     switch (status) {
       case 'active':
         return level2Orders.filter(order => 
-          order.orderDetailsWithId.status === 0 && 
-          Number(order.orderDetailsWithId.orderDetails.expirationTime) >= Math.floor(Date.now() / 1000)
+          order.orderDetailsWithID.status === 0 && 
+          Number(order.orderDetailsWithID.orderDetails.expirationTime) >= Math.floor(Date.now() / 1000)
         );
       case 'expired':
         return level2Orders.filter(order => 
-          order.orderDetailsWithId.status === 0 && 
-          Number(order.orderDetailsWithId.orderDetails.expirationTime) < Math.floor(Date.now() / 1000)
+          order.orderDetailsWithID.status === 0 && 
+          Number(order.orderDetailsWithID.orderDetails.expirationTime) < Math.floor(Date.now() / 1000)
         );
       case 'completed':
-        return level2Orders.filter(order => order.orderDetailsWithId.status === 2);
+        return level2Orders.filter(order => order.orderDetailsWithID.status === 2);
       case 'cancelled':
-        return level2Orders.filter(order => order.orderDetailsWithId.status === 1);
+        return level2Orders.filter(order => order.orderDetailsWithID.status === 1);
       case 'order-history':
         // For order history, count transactions (not unique orders) with token filter applied
         if (ownership === 'mine') {
           const filteredTransactions = purchaseTransactions.filter(transaction => {
             const baseOrder = allOrders.find(order => 
-              order.orderDetailsWithId.orderId.toString() === transaction.orderId
+              order.orderDetailsWithID.orderID.toString() === transaction.orderID
             );
             if (!baseOrder) return false;
             
             // Apply token filter
             if (tokenType === 'maxi') {
-              const sellToken = baseOrder.orderDetailsWithId.orderDetails.sellToken.toLowerCase();
+              const sellToken = baseOrder.orderDetailsWithID.orderDetails.sellToken.toLowerCase();
               const sellTokenInList = maxiTokenAddresses.some(addr => sellToken === addr.toLowerCase());
-              const buyTokensInList = baseOrder.orderDetailsWithId.orderDetails.buyTokensIndex.some((buyTokenIndex: bigint) => {
+              const buyTokensInList = baseOrder.orderDetailsWithID.orderDetails.buyTokensIndex.some((buyTokenIndex: bigint) => {
                 const buyTokenInfo = getTokenInfoByIndex(Number(buyTokenIndex));
                 const buyTokenAddress = buyTokenInfo?.address?.toLowerCase() || '';
                 return maxiTokenAddresses.some(addr => buyTokenAddress === addr.toLowerCase());
               });
               return sellTokenInList || buyTokensInList;
             } else if (tokenType === 'non-maxi') {
-              const sellToken = baseOrder.orderDetailsWithId.orderDetails.sellToken.toLowerCase();
+              const sellToken = baseOrder.orderDetailsWithID.orderDetails.sellToken.toLowerCase();
               const sellTokenInList = maxiTokenAddresses.some(addr => sellToken === addr.toLowerCase());
-              const buyTokensInList = baseOrder.orderDetailsWithId.orderDetails.buyTokensIndex.some((buyTokenIndex: bigint) => {
+              const buyTokensInList = baseOrder.orderDetailsWithID.orderDetails.buyTokensIndex.some((buyTokenIndex: bigint) => {
                 const buyTokenInfo = getTokenInfoByIndex(Number(buyTokenIndex));
                 const buyTokenAddress = buyTokenInfo?.address?.toLowerCase() || '';
                 return maxiTokenAddresses.some(addr => buyTokenAddress === addr.toLowerCase());
@@ -1877,7 +1854,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     ];
     
     return allOrders.filter(order => {
-      const sellTokenAddress = order.orderDetailsWithId.orderDetails.sellToken;
+      const sellTokenAddress = order.orderDetailsWithID.orderDetails.sellToken;
       return MAXI_TOKENS.includes(sellTokenAddress.toLowerCase());
     });
   }, [allOrders]);
@@ -1912,7 +1889,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
         <div className="bg-white/5 p-6 rounded-lg border-2 border-white/10">
           <h2 className="text-xl font-bold mb-4">AgoráX Contract Information</h2>
           <div className="text-red-500">
-            <p className="font-semibold mb-2">Unable to connect to the AgoráX Bistro contract</p>
+            <p className="font-semibold mb-2">Unable to connect to the AgoráX contract</p>
             <p className="text-sm mb-2">Error: {error.message}</p>
             <p className="text-sm text-gray-400 mb-2">
               Contract Address: {OTC_CONTRACT_ADDRESS || 'Not deployed on this chain'}
@@ -2171,7 +2148,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
               className={`space-y-1 ${expandedPositions.size > 0 ? 'pt-0' : ''}`}
             >
               {displayOrders.map((order, index) => {
-                const orderId = order.orderDetailsWithId.orderId.toString();
+                const orderId = order.orderDetailsWithID.orderID.toString();
                 const isExpanded = expandedPositions.has(orderId);
                 const hasAnyExpanded = expandedPositions.size > 0;
                 const shouldShow = !hasAnyExpanded || isExpanded;
@@ -2180,14 +2157,14 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                 if (!shouldShow) return null;
                 
                 // Calculate USD values for percentage calculation
-                const sellTokenAddress = order.orderDetailsWithId.orderDetails.sellToken;
+                const sellTokenAddress = order.orderDetailsWithID.orderDetails.sellToken;
                 const sellTokenInfo = getTokenInfo(sellTokenAddress);
-                const rawRemainingPercentage = getRemainingPercentage(order.orderDetailsWithId);
+                const rawRemainingPercentage = getRemainingPercentage(order.orderDetailsWithID);
                 const remainingPercentage = Number(rawRemainingPercentage) / 1e18;
-                const originalSellAmount = order.orderDetailsWithId.orderDetails.sellAmount;
+                const originalSellAmount = order.orderDetailsWithID.orderDetails.sellAmount;
                 
                 // For completed/cancelled orders, use original amounts; for active, use remaining
-                const isCompletedOrCancelled = order.orderDetailsWithId.status === 2 || order.orderDetailsWithId.status === 1;
+                const isCompletedOrCancelled = order.orderDetailsWithID.status === 2 || order.orderDetailsWithID.status === 1;
                 const sellAmountToUse = isCompletedOrCancelled 
                   ? originalSellAmount 
                   : (originalSellAmount * BigInt(Math.floor(remainingPercentage * 1e18))) / BigInt(1e18);
@@ -2198,8 +2175,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                 
                 // Calculate minimum asking USD value (buyer can choose any token, so use the cheapest)
                 let askingUsdValue = 0;
-                const buyTokensIndex = order.orderDetailsWithId.orderDetails.buyTokensIndex;
-                const buyAmounts = order.orderDetailsWithId.orderDetails.buyAmounts;
+                const buyTokensIndex = order.orderDetailsWithID.orderDetails.buyTokensIndex;
+                const buyAmounts = order.orderDetailsWithID.orderDetails.buyAmounts;
                 
                 if (buyTokensIndex && buyAmounts && Array.isArray(buyTokensIndex) && Array.isArray(buyAmounts)) {
                   const tokenValues: number[] = [];
@@ -2240,14 +2217,9 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                   const buyTokenMarketPrice = getTokenPrice(firstBuyTokenInfo.address, tokenPrices);
                   
                   if (sellUsdValue > 0 && buyTokenAmount > 0 && buyTokenMarketPrice > 0) {
-                    // Price per buy token in this order = how much USD of sell token you're giving per buy token
                     const limitBuyTokenPrice = sellUsdValue / buyTokenAmount;
-                    // Market price of buy token
                     const marketBuyTokenPrice = buyTokenMarketPrice;
                     
-                    // (limitPrice - marketPrice) / marketPrice
-                    // Negative = buying below market (paying less per buy token = discount)
-                    // Positive = buying above market (paying more per buy token = premium)
                     percentageDifference = ((limitBuyTokenPrice - marketBuyTokenPrice) / marketBuyTokenPrice) * 100;
                     isBelowMarket = percentageDifference < 0;
                   }
@@ -2342,14 +2314,14 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                     {/* COLUMN 1: Token For Sale Content */}
                     <div className="flex flex-col items-start space-y-1 min-w-0 overflow-hidden">
                     {(() => {
-                      const formattedAmount = formatTokenAmount(order.orderDetailsWithId.orderDetails.sellAmount, sellTokenInfo.decimals);
+                      const formattedAmount = formatTokenAmount(order.orderDetailsWithID.orderDetails.sellAmount, sellTokenInfo.decimals);
                       // For completed orders, show original amounts; for others, show remaining amounts
-                      const isCompleted = statusFilter === 'completed' || order.orderDetailsWithId.status === 1;
+                      const isCompleted = statusFilter === 'completed' || order.orderDetailsWithID.status === 1;
                       
                       let tokenAmount: number;
                       if (isCompleted) {
                         // Use original amount for completed orders
-                        tokenAmount = parseFloat(formatTokenAmount(order.orderDetailsWithId.orderDetails.sellAmount, sellTokenInfo.decimals));
+                        tokenAmount = parseFloat(formatTokenAmount(order.orderDetailsWithID.orderDetails.sellAmount, sellTokenInfo.decimals));
                       } else {
                         // Use remaining amount for active orders
                         tokenAmount = sellTokenAmount;
@@ -2374,13 +2346,13 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                           <div className="w-1/2 h-px bg-[#00D9FF]/10 my-2"></div>
                   <div className="flex items-center space-x-2">
                     <TokenLogo 
-                      src={getTokenInfo(order.orderDetailsWithId.orderDetails.sellToken).logo}
-                              alt={formatTokenTicker(getTokenInfo(order.orderDetailsWithId.orderDetails.sellToken).ticker)}
+                      src={getTokenInfo(order.orderDetailsWithID.orderDetails.sellToken).logo}
+                              alt={formatTokenTicker(getTokenInfo(order.orderDetailsWithID.orderDetails.sellToken).ticker)}
                       className="w-6 h-6 "
                     />
                             <div className="flex flex-col">
                     <span className="text-[#00D9FF] text-sm font-medium whitespace-nowrap">
-                                {formatTokenTicker(getTokenInfo(order.orderDetailsWithId.orderDetails.sellToken).ticker)}
+                                {formatTokenTicker(getTokenInfo(order.orderDetailsWithID.orderDetails.sellToken).ticker)}
                     </span>
                               <span className="text-[#00D9FF]/60 text-xs whitespace-nowrap">
                                 {formatTokenAmountDisplay(tokenAmount)}
@@ -2397,7 +2369,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                   <div className="flex flex-col items-start space-y-1 min-w-0 overflow-hidden">
                     {(() => {
                       // For completed orders, recalculate total USD using original amounts
-                      const isCompleted = statusFilter === 'completed' || order.orderDetailsWithId.status === 1;
+                      const isCompleted = statusFilter === 'completed' || order.orderDetailsWithID.status === 1;
                       let totalUsdValue = askingUsdValue; // Default to pre-calculated value
                       
                       if (isCompleted) {
@@ -2429,8 +2401,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                             const originalAmount = buyAmounts[idx];
                               // For completed orders, show original amounts; for others, show remaining amounts
                               // Check if we're in completed filter section - if so, always use original amounts
-                              const isCompleted = statusFilter === 'completed' || order.orderDetailsWithId.status === 1;
-                            const remainingPercentage = Number(getRemainingPercentage(order.orderDetailsWithId)) / 1e18;
+                              const isCompleted = statusFilter === 'completed' || order.orderDetailsWithID.status === 1;
+                            const remainingPercentage = Number(getRemainingPercentage(order.orderDetailsWithID)) / 1e18;
                             
                             // Debug: Log status for completed orders (only once per order)
                             if (statusFilter === 'completed' && idx === 0) {
@@ -2480,25 +2452,25 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                   {/* COLUMN 3: Fill Status % Content */}
                   <div className="flex flex-col items-center space-y-1  mt-0.5 min-w-0">
                     {(() => {
-                      const fillPercentage = 100 - ((Number(getRemainingPercentage(order.orderDetailsWithId)) / 1e18) * 100);
-
+                      const fillPercentage = 100 - ((Number(getRemainingPercentage(order.orderDetailsWithID)) / 1e18) * 100);
+                      
                       return (
                         <span className={`text-xs ${fillPercentage === 0 ? 'text-gray-500' : 'text-[#00D9FF]'}`}>
                           {formatPercentage(fillPercentage)}
-                        </span>
+                    </span>
                       );
                     })()}
                     <div className="w-[60px] h-2 bg-gray-500 rounded-full overflow-hidden relative">
                       {(() => {
-                        const fillPercentage = 100 - ((Number(getRemainingPercentage(order.orderDetailsWithId)) / 1e18) * 100);
-
+                        const fillPercentage = 100 - ((Number(getRemainingPercentage(order.orderDetailsWithID)) / 1e18) * 100);
+                        
                         return (
-                          <div
+                          <div 
                             className={`h-full transition-all duration-300 ${fillPercentage === 0 ? 'bg-gray-500' : 'bg-[#00D9FF]'} rounded-full`}
-                            style={{
-                              width: `${fillPercentage}%`
-                            }}
-                          />
+                        style={{ 
+                              width: `${fillPercentage}%` 
+                        }}
+                      />
                         );
                       })()}
                     </div>
@@ -2558,9 +2530,9 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                     <span className={`px-3 py-2 rounded-full text-sm font-medium border ${
                       getStatusText(order) === 'Inactive'
                         ? 'bg-yellow-500/20 text-yellow-400 border-yellow-400'
-                        : order.orderDetailsWithId.status === 0 
+                        : order.orderDetailsWithID.status === 0 
                         ? 'bg-green-500/20 text-green-400 border-green-400' 
-                        : order.orderDetailsWithId.status === 1
+                        : order.orderDetailsWithID.status === 1
                         ? 'bg-red-500/20 text-red-400 border-red-400'
                         : 'bg-blue-500/20 text-blue-400 border-blue-400'
                     }`}>
@@ -2570,32 +2542,32 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                   
                   {/* COLUMN 7: Expires Content */}
                   <div className="text-gray-400 text-sm text-center min-w-0 mt-1.5">
-                    {formatTimestamp(Number(order.orderDetailsWithId.orderDetails.expirationTime))}
+                    {formatTimestamp(Number(order.orderDetailsWithID.orderDetails.expirationTime))}
                   </div>
                   
                   {/* COLUMN 8: Actions / Order ID Content */}
                     <div className="text-center min-w-0">
                       {(statusFilter === 'expired' || statusFilter === 'completed' || statusFilter === 'cancelled') ? (
-                        <div className="text-gray-400 mt-1.5 text-sm">{order.orderDetailsWithId.orderId.toString()}</div>
+                        <div className="text-gray-400 mt-1.5 text-sm">{order.orderDetailsWithID.orderID.toString()}</div>
                       ) : (
                         <>
-                      {ownershipFilter === 'mine' && order.orderDetailsWithId.status === 0 ? (
+                      {ownershipFilter === 'mine' && order.orderDetailsWithID.status === 0 ? (
                           <button
                             onClick={() => handleCancelOrder(order)}
-                            disabled={cancelingOrders.has(order.orderDetailsWithId.orderId.toString())}
+                            disabled={cancelingOrders.has(order.orderDetailsWithID.orderID.toString())}
                             className="p-2 -mt-1.5 rounded hover:bg-gray-700/50 transition-colors disabled:opacity-50"
                           >
-                            {cancelingOrders.has(order.orderDetailsWithId.orderId.toString()) ? (
+                            {cancelingOrders.has(order.orderDetailsWithID.orderID.toString()) ? (
                               <Loader2 className="w-5 h-5 text-red-400 animate-spin mx-auto" />
                             ) : (
                               <Trash2 className="w-5 h-5 text-red-400 hover:text-red-300 mx-auto" />
                             )}
                       </button>
-                      ) : ownershipFilter === 'non-mine' && order.orderDetailsWithId.status === 0 && statusFilter === 'active' ? (
+                      ) : ownershipFilter === 'non-mine' && order.orderDetailsWithID.status === 0 && statusFilter === 'active' ? (
                           <button
-                            onClick={() => togglePositionExpansion(order.orderDetailsWithId.orderId.toString())}
+                            onClick={() => togglePositionExpansion(order.orderDetailsWithID.orderID.toString())}
                           className={`flex items-center gap-1 ml-4 px-4 py-2 text-xs rounded-full transition-colors ${
-                            expandedPositions.has(order.orderDetailsWithId.orderId.toString())
+                            expandedPositions.has(order.orderDetailsWithID.orderID.toString())
                               ? 'bg-transparent border border-white text-white hover:bg-white/10'
                               : 'bg-white text-black hover:bg-gray-200'
                           }`}
@@ -2603,7 +2575,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                             <span>Buy</span>
                             <ChevronDown 
                               className={`w-3 h-3 transition-transform duration-200 ${
-                                expandedPositions.has(order.orderDetailsWithId.orderId.toString()) ? '' : 'rotate-180'
+                                expandedPositions.has(order.orderDetailsWithID.orderID.toString()) ? '' : 'rotate-180'
                               }`}
                             />
                           </button>
@@ -2616,7 +2588,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                   </div>
                   
                   {/* Expandable Actions Shelf */}
-                    {expandedPositions.has(order.orderDetailsWithId.orderId.toString()) && (
+                    {expandedPositions.has(order.orderDetailsWithID.orderID.toString()) && (
                       <div
                         className="col-span-full  mt-2 border-2 border-[#00D9FF] bg-black/60 backdrop-blur-sm w-full shadow-[0_0_20px_rgba(0,217,255,0.3)]"
                       >
@@ -2628,9 +2600,9 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                             <div className="mt-3 pt-3 border-t border-[#00D9FF]/30">
                               <h5 className="text-white font-medium text-xs mb-2">You pay:</h5>
                               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                                {order.orderDetailsWithId.orderDetails.buyTokensIndex.map((tokenIndex: bigint, idx: number) => {
+                                {order.orderDetailsWithID.orderDetails.buyTokensIndex.map((tokenIndex: bigint, idx: number) => {
                                   const tokenInfo = getTokenInfoByIndex(Number(tokenIndex));
-                                  const orderId = order.orderDetailsWithId.orderId.toString();
+                                  const orderId = order.orderDetailsWithID.orderID.toString();
                                   const currentAmount = offerInputs[orderId]?.[tokenInfo.address] || '';
                                   
                                   return (
@@ -2694,15 +2666,15 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                               
                               {/* Fee Breakdown */}
                               {(() => {
-                                const orderId = order.orderDetailsWithId.orderId.toString();
+                                const orderId = order.orderDetailsWithID.orderID.toString();
                                 const currentInputs = offerInputs[orderId];
                                 if (!currentInputs) return null;
                                 
                                 // Calculate total buy amount (what buyer will pay)
                                 let totalBuyAmount = 0;
                                 let primaryTokenInfo: { ticker: string; name: string; decimals: number; logo: string; address: string; } | null = null;
-                                const buyTokensIndex = order.orderDetailsWithId.orderDetails.buyTokensIndex;
-                                const buyAmounts = order.orderDetailsWithId.orderDetails.buyAmounts;
+                                const buyTokensIndex = order.orderDetailsWithID.orderDetails.buyTokensIndex;
+                                const buyAmounts = order.orderDetailsWithID.orderDetails.buyAmounts;
                                 
                                 if (buyTokensIndex && buyAmounts && Array.isArray(buyTokensIndex) && Array.isArray(buyAmounts)) {
                                   buyTokensIndex.forEach((tokenIndex: bigint, idx: number) => {
@@ -2787,9 +2759,9 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                          {(() => {
                                            if (!primaryTokenInfo) return null;
                                            
-                                           const sellTokenInfo = getTokenInfo(order.orderDetailsWithId.orderDetails.sellToken);
-                                           const sellAmount = parseFloat(formatTokenAmount(order.orderDetailsWithId.orderDetails.sellAmount, sellTokenInfo.decimals));
-                                           const buyAmount = parseFloat(formatTokenAmount(order.orderDetailsWithId.orderDetails.buyAmounts[0], primaryTokenInfo.decimals));
+                                           const sellTokenInfo = getTokenInfo(order.orderDetailsWithID.orderDetails.sellToken);
+                                           const sellAmount = parseFloat(formatTokenAmount(order.orderDetailsWithID.orderDetails.sellAmount, sellTokenInfo.decimals));
+                                           const buyAmount = parseFloat(formatTokenAmount(order.orderDetailsWithID.orderDetails.buyAmounts[0], primaryTokenInfo.decimals));
                                            
                                            // Calculate the exchange rate: sellAmount / buyAmount
                                            const exchangeRate = sellAmount / buyAmount;
@@ -2820,18 +2792,18 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                               })()}
 
                               {/* Error Display */}
-                              {executeErrors[order.orderDetailsWithId.orderId.toString()] && (
+                              {executeErrors[order.orderDetailsWithID.orderID.toString()] && (
                                 <div className="mt-4 p-3 bg-red-900/20 border border-red-500/30 rounded-lg">
-                                  <p className="text-red-400 text-sm">{executeErrors[order.orderDetailsWithId.orderId.toString()]}</p>
+                                  <p className="text-red-400 text-sm">{executeErrors[order.orderDetailsWithID.orderID.toString()]}</p>
                                 </div>
                               )}
 
                               {/* Submit Section */}
                               <div className="mt-4 pt-3 border-t border-[#00D9FF]/30">
                                 {(() => {
-                                  const orderId = order.orderDetailsWithId.orderId.toString();
+                                  const orderId = order.orderDetailsWithID.orderID.toString();
                                   const currentInputs = offerInputs[orderId];
-                                  const buyTokensIndex = order.orderDetailsWithId.orderDetails.buyTokensIndex;
+                                  const buyTokensIndex = order.orderDetailsWithID.orderDetails.buyTokensIndex;
                                   
                                   const hasNativeTokenInput = currentInputs && buyTokensIndex.some((tokenIndex: bigint) => {
                                     const tokenInfo = getTokenInfoByIndex(Number(tokenIndex));
@@ -2852,7 +2824,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                             </div>
                             
                             <div className="text-xs text-gray-500 mt-4">
-                              Order ID: {order.orderDetailsWithId.orderId.toString()}
+                              Order ID: {order.orderDetailsWithID.orderID.toString()}
                             </div>
                             
                             <div className="text-xs text-gray-500 mt-1">
@@ -2865,16 +2837,16 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                 <div className="flex gap-2 flex-wrap">
                                   {/* Collect Proceeds Button - Show if order has been filled */}
                                   {(() => {
-                                    const DIVISOR = BigInt(10 ** 18);
-                                    const filled = DIVISOR - order.orderDetailsWithId.remainingFillPercentage;
-                                    const hasProceeds = filled > order.orderDetailsWithId.redeemedPercentage;
+                                    const sellAmount = order.orderDetailsWithID.orderDetails.sellAmount;
+                                    const filled = sellAmount - order.orderDetailsWithID.remainingSellAmount;
+                                    const hasProceeds = filled > order.orderDetailsWithID.redeemedSellAmount;
                                     return hasProceeds && (
                                       <button
                                         onClick={() => handleCollectProceeds(order)}
-                                        disabled={collectingOrders.has(order.orderDetailsWithId.orderId.toString())}
+                                        disabled={collectingOrders.has(order.orderDetailsWithID.orderID.toString())}
                                         className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                                       >
-                                        {collectingOrders.has(order.orderDetailsWithId.orderId.toString()) ? 'Collecting...' : 'Collect Proceeds'}
+                                        {collectingOrders.has(order.orderDetailsWithID.orderID.toString()) ? 'Collecting...' : 'Collect Proceeds'}
                                       </button>
                                     );
                                   })()}
@@ -2882,17 +2854,17 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                   {/* Cancel Button */}
                                   <button
                                     onClick={() => handleCancelOrder(order)}
-                                    disabled={cancelingOrders.has(order.orderDetailsWithId.orderId.toString()) || 
-                                             order.orderDetailsWithId.status !== 0}
+                                    disabled={cancelingOrders.has(order.orderDetailsWithID.orderID.toString()) || 
+                                             order.orderDetailsWithID.status !== 0}
                                     className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                                   >
-                                    {cancelingOrders.has(order.orderDetailsWithId.orderId.toString()) ? 'Canceling...' : 'Cancel Order'}
+                                    {cancelingOrders.has(order.orderDetailsWithID.orderID.toString()) ? 'Canceling...' : 'Cancel Order'}
                                   </button>
                                   
                                   {/* Edit Button */}
                                   <button
                                     onClick={() => handleEditOrder(order)}
-                                    disabled={order.orderDetailsWithId.status !== 0}
+                                    disabled={order.orderDetailsWithID.status !== 0}
                                     className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                                   >
                                     Edit Order
@@ -2900,16 +2872,16 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                 </div>
                                 
                                 {/* Cancel Error Display */}
-                                {cancelErrors[order.orderDetailsWithId.orderId.toString()] && (
+                                {cancelErrors[order.orderDetailsWithID.orderID.toString()] && (
                                   <div className="mt-2 p-2 bg-red-900/20 border border-red-500/30 rounded-lg">
-                                    <p className="text-red-400 text-xs">{cancelErrors[order.orderDetailsWithId.orderId.toString()]}</p>
+                                    <p className="text-red-400 text-xs">{cancelErrors[order.orderDetailsWithID.orderID.toString()]}</p>
                                   </div>
                                 )}
                                 
                                 {/* Update Error Display */}
-                                {updateErrors[order.orderDetailsWithId.orderId.toString()] && (
+                                {updateErrors[order.orderDetailsWithID.orderID.toString()] && (
                                   <div className="mt-2 p-2 bg-red-900/20 border border-red-500/30 rounded-lg">
-                                    <p className="text-red-400 text-xs">{updateErrors[order.orderDetailsWithId.orderId.toString()]}</p>
+                                    <p className="text-red-400 text-xs">{updateErrors[order.orderDetailsWithID.orderID.toString()]}</p>
                                   </div>
                                 )}
                               </div>
@@ -3004,7 +2976,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
               </button>
               <button
                 onClick={() => {
-                  const order = allOrders?.find(o => o.orderDetailsWithId.orderId.toString() === editingOrder);
+                  const order = allOrders?.find(o => o.orderDetailsWithID.orderID.toString() === editingOrder);
                   if (order) handleSaveOrder(order);
                 }}
                 disabled={updatingOrders.has(editingOrder)}

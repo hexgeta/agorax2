@@ -11,9 +11,9 @@ import { PAYWALL_ENABLED, REQUIRED_PARTY_TOKENS, REQUIRED_TEAM_TOKENS, PAYWALL_T
 import { getContractAddress } from '@/config/testing';
 import PaywallModal from './PaywallModal';
 
-// Helper function to get remaining percentage (works for both Bistro and AgoraX)
-const getRemainingPercentage = (orderDetailsWithId: any): bigint => {
-  return orderDetailsWithId.remainingFillPercentage || orderDetailsWithId.remainingExecutionPercentage || 0n;
+// Helper function to get remaining percentage
+const getRemainingPercentage = (orderDetailsWithID: any): bigint => {
+  return orderDetailsWithID.remainingFillPercentage || orderDetailsWithID.remainingExecutionPercentage || 0n;
 };
 
 // Helper function to find the highest version of a token in tokenStats
@@ -40,21 +40,28 @@ const getHighestTokenVersion = (tokenStats: Record<string, any>, prefix: string,
   return highestKey;
 };
 
+// Track which logos have failed to load to avoid repeat 404s
+const failedLogosHistory = new Set<string>();
+
 // Simplified TokenLogo component that always shows fallback for missing logos
 function TokenLogo({ src, alt, className }: { src: string; alt: string; className: string }) {
+  // Check cache first - don't even try to render if we know it will fail
+  if (src.includes('default.svg') || failedLogosHistory.has(src)) {
+    return (
+      <CircleDollarSign 
+        className={`${className} text-[#00D9FF]`}
+      />
+    );
+  }
+
   const [hasError, setHasError] = useState(false);
-  const [isClient, setIsClient] = useState(false);
-  
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
 
   const handleError = useCallback(() => {
+    failedLogosHistory.add(src);
       setHasError(true);
-  }, []);
+  }, [src]);
 
-  // If it's already the default.svg or has error, show Lucide icon fallback
-  if (src.includes('default.svg') || hasError || !isClient) {
+  if (hasError) {
     return (
       <CircleDollarSign 
         className={`${className} text-[#00D9FF]`}
@@ -164,8 +171,8 @@ const formatTimestamp = (timestamp: number) => {
 };
 
 const getStatusText = (order: any) => {
-  const status = order.orderDetailsWithId.status;
-  const expirationTime = Number(order.orderDetailsWithId.orderDetails.expirationTime);
+  const status = order.orderDetailsWithID.status;
+  const expirationTime = Number(order.orderDetailsWithID.orderDetails.expirationTime);
   const currentTime = Math.floor(Date.now() / 1000);
   
   if (status === 0 && expirationTime < currentTime) {
@@ -181,8 +188,8 @@ const getStatusText = (order: any) => {
 };
 
 const getStatusColor = (order: any) => {
-  const status = order.orderDetailsWithId.status;
-  const expirationTime = Number(order.orderDetailsWithId.orderDetails.expirationTime);
+  const status = order.orderDetailsWithID.status;
+  const expirationTime = Number(order.orderDetailsWithID.orderDetails.expirationTime);
   const currentTime = Math.floor(Date.now() / 1000);
   
   if (status === 0 && expirationTime < currentTime) {
@@ -249,7 +256,7 @@ export default function OrderHistoryTable({
       .map(transaction => {
         // Find the base order to get order details
         const baseOrder = allOrders.find(order => 
-          order.orderDetailsWithId.orderId.toString() === transaction.orderId
+          order.orderDetailsWithID.orderID.toString() === transaction.orderID
         );
         
         if (!baseOrder) {
@@ -258,18 +265,18 @@ export default function OrderHistoryTable({
         
         // Apply token filter
         if (tokenFilter === 'maxi') {
-          const sellToken = baseOrder.orderDetailsWithId.orderDetails.sellToken.toLowerCase();
+          const sellToken = baseOrder.orderDetailsWithID.orderDetails.sellToken.toLowerCase();
           const sellTokenInList = maxiTokenAddresses.some(addr => sellToken === addr.toLowerCase());
-          const buyTokensInList = baseOrder.orderDetailsWithId.orderDetails.buyTokensIndex.some((buyTokenIndex: bigint) => {
+          const buyTokensInList = baseOrder.orderDetailsWithID.orderDetails.buyTokensIndex.some((buyTokenIndex: bigint) => {
             const buyTokenInfo = getTokenInfoByIndex(Number(buyTokenIndex));
             const buyTokenAddress = buyTokenInfo?.address?.toLowerCase() || '';
             return maxiTokenAddresses.some(addr => buyTokenAddress === addr.toLowerCase());
           });
           if (!(sellTokenInList || buyTokensInList)) return null;
         } else if (tokenFilter === 'non-maxi') {
-          const sellToken = baseOrder.orderDetailsWithId.orderDetails.sellToken.toLowerCase();
+          const sellToken = baseOrder.orderDetailsWithID.orderDetails.sellToken.toLowerCase();
           const sellTokenInList = maxiTokenAddresses.some(addr => sellToken === addr.toLowerCase());
-          const buyTokensInList = baseOrder.orderDetailsWithId.orderDetails.buyTokensIndex.some((buyTokenIndex: bigint) => {
+          const buyTokensInList = baseOrder.orderDetailsWithID.orderDetails.buyTokensIndex.some((buyTokenIndex: bigint) => {
             const buyTokenInfo = getTokenInfoByIndex(Number(buyTokenIndex));
             const buyTokenAddress = buyTokenInfo?.address?.toLowerCase() || '';
             return maxiTokenAddresses.some(addr => buyTokenAddress === addr.toLowerCase());
@@ -329,8 +336,8 @@ export default function OrderHistoryTable({
           const aSellTokenInfo = getTokenInfo(a.transaction.sellToken);
           const bSellTokenInfo = getTokenInfo(b.transaction.sellToken);
           
-          const aOriginalSellAmount = Number(formatTokenAmount(a.baseOrder.orderDetailsWithId.orderDetails.sellAmount, aSellTokenInfo.decimals));
-          const bOriginalSellAmount = Number(formatTokenAmount(b.baseOrder.orderDetailsWithId.orderDetails.sellAmount, bSellTokenInfo.decimals));
+          const aOriginalSellAmount = Number(formatTokenAmount(a.baseOrder.orderDetailsWithID.orderDetails.sellAmount, aSellTokenInfo.decimals));
+          const bOriginalSellAmount = Number(formatTokenAmount(b.baseOrder.orderDetailsWithID.orderDetails.sellAmount, bSellTokenInfo.decimals));
           
           const aUserShare = (a.transaction.sellAmount / aOriginalSellAmount) * 100;
           const bUserShare = (b.transaction.sellAmount / bOriginalSellAmount) * 100;
@@ -351,19 +358,19 @@ export default function OrderHistoryTable({
             if (!sellTokenInfo) return -Infinity;
             
             const baseOrder = allOrders.find(order => 
-              order.orderDetailsWithId.orderId.toString() === row.transaction.orderId
+              order.orderDetailsWithID.orderID.toString() === row.transaction.orderID
             );
             if (!baseOrder) return -Infinity;
             
             // Use original order amounts
-            const originalSellAmount = baseOrder.orderDetailsWithId.orderDetails.sellAmount;
+            const originalSellAmount = baseOrder.orderDetailsWithID.orderDetails.sellAmount;
             const originalSellAmountNum = parseFloat(formatTokenAmount(originalSellAmount, sellTokenInfo.decimals));
             const sellPrice = getTokenPrice(row.transaction.sellToken, tokenPrices);
             const originalSellAmountUSD = originalSellAmountNum * sellPrice;
             
             // Calculate original buy amounts in USD
-            const originalBuyAmounts = baseOrder.orderDetailsWithId.orderDetails.buyAmounts;
-            const originalBuyTokensIndex = baseOrder.orderDetailsWithId.orderDetails.buyTokensIndex;
+            const originalBuyAmounts = baseOrder.orderDetailsWithID.orderDetails.buyAmounts;
+            const originalBuyTokensIndex = baseOrder.orderDetailsWithID.orderDetails.buyTokensIndex;
             const originalBuyAmountsUSD = originalBuyTokensIndex.map((tokenIndex: bigint, idx: number) => {
               const tokenInfo = getTokenInfoByIndex(Number(tokenIndex));
               const amount = parseFloat(formatTokenAmount(originalBuyAmounts[idx], tokenInfo.decimals));
@@ -486,8 +493,8 @@ export default function OrderHistoryTable({
         const hasMultipleTokens = buyTokenEntries.length > 1;
 
         // Calculate fill percentages from base order
-        const originalSellAmount = baseOrder.orderDetailsWithId.orderDetails.sellAmount;
-        const remainingExecutionPercentage = getRemainingPercentage(baseOrder.orderDetailsWithId);
+        const originalSellAmount = baseOrder.orderDetailsWithID.orderDetails.sellAmount;
+        const remainingExecutionPercentage = getRemainingPercentage(baseOrder.orderDetailsWithID);
         
         // Convert to numbers for percentage calculation
         const originalSellAmountNum = Number(formatTokenAmount(originalSellAmount, sellTokenInfo.decimals));
@@ -502,8 +509,8 @@ export default function OrderHistoryTable({
           : 0;
 
         // Calculate OTC vs Market Price using ORIGINAL order amounts (not transaction amounts)
-        const originalBuyAmounts = baseOrder.orderDetailsWithId.orderDetails.buyAmounts;
-        const originalBuyTokensIndex = baseOrder.orderDetailsWithId.orderDetails.buyTokensIndex;
+        const originalBuyAmounts = baseOrder.orderDetailsWithID.orderDetails.buyAmounts;
+        const originalBuyTokensIndex = baseOrder.orderDetailsWithID.orderDetails.buyTokensIndex;
         const originalSellAmountUSD = originalSellAmountNum * sellPrice;
         
         // Calculate original buy amounts in USD
@@ -846,9 +853,9 @@ export default function OrderHistoryTable({
                 <span className={`px-3 py-1 rounded-full text-sm font-medium border w-[110px] ${
                   getStatusText(baseOrder) === 'Inactive'
                     ? 'bg-yellow-500/20 text-yellow-400 border-yellow-400'
-                    : baseOrder.orderDetailsWithId.status === 0 
+                    : baseOrder.orderDetailsWithID.status === 0 
                     ? 'bg-green-500/20 text-green-400 border-green-400' 
-                    : baseOrder.orderDetailsWithId.status === 1
+                    : baseOrder.orderDetailsWithID.status === 1
                     ? 'bg-red-500/20 text-red-400 border-red-400'
                     : 'bg-blue-500/20 text-blue-400 border-blue-400'
                 }`}>
@@ -877,7 +884,7 @@ export default function OrderHistoryTable({
             <div className="text-center min-w-0">
               <div className="flex flex-col items-center gap-1">
                 {/* Only show "Buy More" for active orders where user was the buyer */}
-                {!isSellTransaction && baseOrder.orderDetailsWithId.status === 0 && getStatusText(baseOrder) === 'Active' && (
+                {!isSellTransaction && baseOrder.orderDetailsWithID.status === 0 && getStatusText(baseOrder) === 'Active' && (
                   <button
                     onClick={() => onNavigateToMarketplace(baseOrder)}
                     className="px-3 py-2 bg-white text-black text-xs rounded-full hover:bg-gray-200 transition-colors font-medium"
@@ -896,7 +903,7 @@ export default function OrderHistoryTable({
                   </button>
                 )}
                 <span className="text-gray-600 text-xs mt-1">
-                  Order ID: {transaction.orderId}
+                  Order ID: {transaction.orderID}
                 </span>
               </div>
             </div>

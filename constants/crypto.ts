@@ -16,12 +16,14 @@ export interface TokenConfig {
 }
 
 // ===================================
-// WHITELISTED TOKENS (AgoraX Contract: 0x321b52b7f55ea307e9ca87891d52cc92f37905cf)
-// Last verified: 2025-10-25 via RPC
-// Note: Tokens must be whitelisted in the AgoraX contract to be tradable
+// WHITELISTED TOKENS
+// AgoraX Mainnet: 0xc8a47F14b1833310E2aC72e4C397b5b14a9FEf8B (Chain ID 369)
+// 
+// NOTE: Whitelist is now DYNAMICALLY loaded from the contract via useContractWhitelistRead hook
+// This list provides UI metadata (ticker, name, logo, decimals) for tokens
+// Actual tradable tokens are determined by the on-chain whitelist (active status)
 // ===================================
 // AgoraX uses 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE for native PLS
-// (Different from Bistro's 0x000000000000000000000000000000000000dEaD)
 // ===================================
 // TESTNET NOTE: These tokens are used for both mainnet (369) and testnet (943)
 // The native PLS token address is the same across chains (standard placeholder)

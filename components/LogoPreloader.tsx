@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { TOKEN_CONSTANTS } from '@/constants/crypto';
 import { PRIORITY_TOKEN_ADDRESSES } from '@/utils/tokenUtils';
+import logoManifest from '@/constants/logo-manifest.json';
 
 /**
  * LogoPreloader - Preloads all token logos in the background after page load
@@ -87,8 +88,15 @@ export function LogoPreloader() {
         const batch = tickers.slice(startIndex, endIndex);
         
         batch.forEach(ticker => {
+          // Look up exact format from manifest (no 404s!)
+          const format = (logoManifest as Record<string, string>)[ticker];
+          if (!format) {
+            loadedCount++;
+            return; // Skip if not in manifest
+          }
+          
           const img = new Image();
-          img.src = `/coin-logos/${ticker}.svg`;
+          img.src = `/coin-logos/${ticker}.${format}`;
           
           // Track loaded count
           img.onload = () => {
@@ -99,7 +107,7 @@ export function LogoPreloader() {
             }
           };
           
-          // Silently fail for missing logos (they'll use default.svg)
+          // Shouldn't fail since we're using manifest, but handle it anyway
           img.onerror = () => {
             loadedCount++;
           };

@@ -5,7 +5,6 @@ import { CONTRACT_ABI } from '@/config/abis'
 
 export interface WhitelistedToken {
   tokenAddress: Address
-  isActive: boolean
   index: number
 }
 
@@ -13,42 +12,27 @@ export function useContractWhitelistRead() {
   const { chainId } = useAccount();
   const contractAddress = getContractAddress(chainId);
   
-  // Get the total count of whitelisted tokens
-  const { data: totalCount, isLoading: isLoadingCount, error: countError } = useContractRead({
+  // Get all active whitelisted tokens directly from contract
+  // Using viewActiveWhitelisted which returns only active tokens (no filtering needed)
+  const { data: activeWhitelistData, isLoading } = useContractRead({
     address: contractAddress as Address,
     abi: CONTRACT_ABI,
-    functionName: 'viewCountWhitelisted',
+    functionName: 'viewActiveWhitelisted',
+    args: [0n, 1000n], // Start from 0, fetch up to 1000 (will return all available)
     query: {
       enabled: !!contractAddress,
     },
   })
 
-  // Get all whitelisted tokens (we'll fetch them in batches if needed)
-  const { data: whitelistedData, isLoading: isLoadingWhitelist } = useContractRead({
-    address: contractAddress as Address,
-    abi: CONTRACT_ABI,
-    functionName: 'viewWhitelisted',
-    args: [0n, totalCount || 100n], // Start from 0, fetch up to totalCount or 100
-    query: {
-      enabled: !!contractAddress && !!totalCount && totalCount > 0n,
-    },
-  })
-
-  // Process the whitelisted data to include indices
-  const whitelistedTokens: WhitelistedToken[] = whitelistedData?.[0]?.map((token, index) => ({
-    tokenAddress: token.tokenAddress,
-    isActive: token.isActive,
+  // Process the active token addresses to include indices
+  const activeTokens: WhitelistedToken[] = activeWhitelistData?.[0]?.map((tokenAddress, index) => ({
+    tokenAddress: tokenAddress as Address,
     index: index
   })) || []
 
-  // Get only active tokens
-  const activeTokens = whitelistedTokens.filter(token => token.isActive)
-
   return {
-    totalCount: totalCount ? Number(totalCount) : 0,
-    whitelistedTokens,
     activeTokens,
-    isLoading: isLoadingCount || isLoadingWhitelist,
+    isLoading,
   }
 }
 

@@ -93,7 +93,7 @@ export default function Home() {
       <main className="flex min-h-screen flex-col items-center">
         {/* Hero Section */}
       <div className="w-full px-2 md:px-8 mt-24 mb-0 bg-black">
-        <div className="max-w-[1200px] mx-auto text-center">
+        <div className="max-w-[1200px] mx-auto">
           {/* Loading State */}
           {(isInitializing || isConnecting) && (
             <div className="flex flex-col items-center justify-center py-20">
@@ -103,14 +103,14 @@ export default function Home() {
           
           {/* Not Connected State */}
           {!isInitializing && !isConnecting && !isConnected && (
-            <>
+            <div className="text-center">
               <h2 className="text-3xl md:text-5xl md:leading-[90px] font-bold text-white mb-0">
                 The best place to trade on PulseChain
               </h2>
               <p className="text-md md:text-xl text-gray-400 max-w-2xl mx-auto mb-6 mt-4 md:mt-0 flex items-center justify-center">
                 Low fees. Fast execution. On your own terms.
               </p>
-            </>
+            </div>
           )}
           
           {/* Connected State */}
@@ -128,10 +128,10 @@ export default function Home() {
               )}
               
               {/* Chart and Form Section */}
-              <div className="w-full max-w-[1200px] mx-auto mt-8">
-                <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-                  {/* Chart - Takes up 3 columns */}
-                  <div className="lg:col-span-3">
+              <div className="w-full mt-8">
+                <div className="flex flex-col lg:grid lg:grid-cols-5 gap-4">
+                  {/* Chart - Full width on mobile, 3 columns on desktop */}
+                  <div className="w-full lg:col-span-3 min-h-[400px]">
                     <LimitOrderChart 
                       sellTokenAddress={sellTokenAddress}
                       buyTokenAddresses={buyTokenAddresses}
@@ -149,8 +149,8 @@ export default function Home() {
                     />
                   </div>
                   
-                  {/* Order Form - Takes up 2 columns */}
-                  <div className="lg:col-span-2">
+                  {/* Order Form - Full width on mobile, 2 columns on desktop */}
+                  <div className="w-full lg:col-span-2">
                     <LimitOrderForm
                       externalLimitPrice={limitOrderPrice}
                       externalMarketPrice={currentMarketPrice}

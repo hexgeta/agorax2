@@ -5,6 +5,8 @@ import NumberFlow from '@number-flow/react';
 import { TOKEN_CONSTANTS } from '@/constants/crypto';
 import { formatTokenTicker } from '@/utils/tokenUtils';
 import { CoinLogo } from '@/components/ui/CoinLogo';
+import { TokenLogo } from '@/components/TokenLogo';
+import logoManifest from '@/constants/logo-manifest.json';
 
 interface LimitOrderChartProps {
   sellTokenAddress?: string;
@@ -268,7 +270,7 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
   }, []);
 
   return (
-    <div className="w-full h-full min-h-[500px] md:min-h-[600px] max-h-[calc(100vh-200px)] bg-black/80 backdrop-blur-sm border-2 border-[#00D9FF] p-6 shadow-[0_0_30px_rgba(0,217,255,0.3)] flex flex-col overflow-y-auto">
+    <div className="w-full h-full min-h-[400px] max-h-[calc(100vh-200px)] bg-black/80 backdrop-blur-sm border-2 border-[#00D9FF] p-6 shadow-[0_0_30px_rgba(0,217,255,0.3)] flex flex-col overflow-y-auto">
         {/* Token Pair Info */}
         {displayBaseTokenInfo && displayQuoteTokenInfo && (
         <div className="flex flex-col gap-4 mb-6">
@@ -276,9 +278,15 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
             <h3 className="text-2xl font-bold text-[#00D9FF]">
                 <span className="flex items-center gap-2">
                   <img 
-                    src={`/coin-logos/${displayBaseTokenInfo.ticker}.svg`} 
+                    src={(() => {
+                      const format = (logoManifest as Record<string, string>)[displayBaseTokenInfo.ticker];
+                      return format ? `/coin-logos/${displayBaseTokenInfo.ticker}.${format}` : '/coin-logos/default.svg';
+                    })()}
                     alt={`${displayBaseTokenInfo.ticker} logo`} 
                     className="w-6 h-6 inline-block"
+                    onError={(e) => {
+                      e.currentTarget.src = '/coin-logos/default.svg';
+                    }}
                   />
                   {formatTokenTicker(displayBaseTokenInfo.ticker)} Price
                 </span>
@@ -363,14 +371,10 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                       <span className="text-xs text-[#00D9FF]">
                         {formatTokenTicker(displayQuoteTokenInfo.ticker)}
                       </span>
-                      <img
-                        src={`/coin-logos/${displayQuoteTokenInfo.ticker}.svg`}
-                        alt={`${displayQuoteTokenInfo.ticker} logo`}
+                      <TokenLogo
+                        ticker={displayQuoteTokenInfo.ticker}
                         className="w-[16px] h-[16px] object-contain"
                         style={{ filter: 'brightness(0) saturate(100%) invert(68%) sepia(96%) saturate(2367%) hue-rotate(167deg) brightness(103%) contrast(101%)' }}
-                        onError={(e) => {
-                          e.currentTarget.src = '/coin-logos/default.svg';
-                        }}
                       />
                     </>
                   )}
@@ -430,14 +434,10 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                             <span className="text-xs text-[#FF0080]">
                               {formatTokenTicker(tokenInfo.ticker)}
                             </span>
-                            <img
-                              src={`/coin-logos/${tokenInfo.ticker}.svg`}
-                              alt={`${tokenInfo.ticker} logo`}
+                            <TokenLogo
+                              ticker={tokenInfo.ticker}
                               className="w-[16px] h-[16px] object-contain"
                               style={{ filter: 'brightness(0) saturate(100%) invert(47%) sepia(99%) saturate(6544%) hue-rotate(312deg) brightness(103%) contrast(103%)' }}
-                              onError={(e) => {
-                                e.currentTarget.src = '/coin-logos/default.svg';
-                              }}
                             />
                           </>
                         )}

@@ -8,20 +8,28 @@ import { useTokenPrices } from '@/hooks/crypto/useTokenPrices';
 import { getTokenInfo, getTokenInfoByIndex, formatTokenTicker, formatTokenAmount } from '@/utils/tokenUtils';
 import { CircleDollarSign } from 'lucide-react';
 
+// Track which logos have failed to load to avoid repeat 404s
+const failedLogosNotif = new Set<string>();
+
 // Simplified TokenLogo component
 function TokenLogo({ src, alt, className }: { src: string; alt: string; className: string }) {
+  // Check cache first - don't even try to render if we know it will fail
+  if (src.includes('default.svg') || failedLogosNotif.has(src)) {
+    return (
+      <CircleDollarSign 
+        className={`${className} text-white`}
+      />
+    );
+  }
+
   const [hasError, setHasError] = useState(false);
-  const [isClient, setIsClient] = useState(false);
-  
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
 
   const handleError = useCallback(() => {
+    failedLogosNotif.add(src);
       setHasError(true);
-  }, []);
+  }, [src]);
 
-  if (src.includes('default.svg') || hasError || !isClient) {
+  if (hasError) {
     return (
       <CircleDollarSign 
         className={`${className} text-white`}
@@ -55,18 +63,18 @@ export function NotificationBell() {
     const currentTime = Math.floor(Date.now() / 1000);
     return notifications.filter(notif => {
       const baseOrder = allOrders.find((order: any) => 
-        order.orderDetailsWithId.orderId.toString() === notif.orderId
+        order.orderDetailsWithID.orderID.toString() === notif.orderID
       );
       
       // If order not found, filter it out
       if (!baseOrder) return false;
       
       // Check if token info exists
-      const sellTokenInfo = getTokenInfo(baseOrder.orderDetailsWithId.orderDetails.sellToken);
+      const sellTokenInfo = getTokenInfo(baseOrder.orderDetailsWithID.orderDetails.sellToken);
       if (!sellTokenInfo) return false;
       
-      const status = baseOrder.orderDetailsWithId.status;
-      const expirationTime = Number(baseOrder.orderDetailsWithId.orderDetails.expirationTime);
+      const status = baseOrder.orderDetailsWithID.status;
+      const expirationTime = Number(baseOrder.orderDetailsWithID.orderDetails.expirationTime);
       const isInactive = status === 0 && expirationTime < currentTime;
       
       return !isInactive;
@@ -83,9 +91,9 @@ export function NotificationBell() {
     if (!allOrders || allOrders.length === 0) return [];
     const addresses = new Set<string>();
     allOrders.forEach((order: any) => {
-      addresses.add(order.orderDetailsWithId.orderDetails.sellToken);
+      addresses.add(order.orderDetailsWithID.orderDetails.sellToken);
       // Add buy tokens
-      order.orderDetailsWithId.orderDetails.buyTokensIndex.forEach((tokenIndex: bigint) => {
+      order.orderDetailsWithID.orderDetails.buyTokensIndex.forEach((tokenIndex: bigint) => {
         const tokenInfo = getTokenInfoByIndex(Number(tokenIndex));
         if (tokenInfo) addresses.add(tokenInfo.address);
       });
@@ -184,8 +192,8 @@ export function NotificationBell() {
   };
 
   const getStatusText = (order: any) => {
-    const status = order.orderDetailsWithId.status;
-    const expirationTime = Number(order.orderDetailsWithId.orderDetails.expirationTime);
+    const status = order.orderDetailsWithID.status;
+    const expirationTime = Number(order.orderDetailsWithID.orderDetails.expirationTime);
     const currentTime = Math.floor(Date.now() / 1000);
     
     if (status === 0 && expirationTime < currentTime) {
@@ -259,25 +267,25 @@ export function NotificationBell() {
                 {activeNotifications.map((notif, index) => {
                   const notificationId = notif.txHash;
                   const baseOrder = allOrders?.find((order: any) => 
-                    order.orderDetailsWithId.orderId.toString() === notif.orderId
+                    order.orderDetailsWithID.orderID.toString() === notif.orderID
                   );
 
                   if (!baseOrder) return null;
 
-                  const sellTokenInfo = getTokenInfo(baseOrder.orderDetailsWithId.orderDetails.sellToken);
+                  const sellTokenInfo = getTokenInfo(baseOrder.orderDetailsWithID.orderDetails.sellToken);
                   if (!sellTokenInfo) return null;
 
                   // For filled transactions, show ALL BUY tokens received
                   // For other transactions, show the SELL token
                   const displayTokens: Array<{ info: any; amount: number }> = [];
                   
-                  if (notif.type === 'filled' && baseOrder.orderDetailsWithId.orderDetails.buyTokensIndex.length > 0) {
+                  if (notif.type === 'filled' && baseOrder.orderDetailsWithID.orderDetails.buyTokensIndex.length > 0) {
                     // Get all buy tokens
-                    for (let i = 0; i < baseOrder.orderDetailsWithId.orderDetails.buyTokensIndex.length; i++) {
-                      const tokenInfo = getTokenInfoByIndex(Number(baseOrder.orderDetailsWithId.orderDetails.buyTokensIndex[i]));
-                      if (tokenInfo && baseOrder.orderDetailsWithId.orderDetails.buyAmounts[i]) {
+                    for (let i = 0; i < baseOrder.orderDetailsWithID.orderDetails.buyTokensIndex.length; i++) {
+                      const tokenInfo = getTokenInfoByIndex(Number(baseOrder.orderDetailsWithID.orderDetails.buyTokensIndex[i]));
+                      if (tokenInfo && baseOrder.orderDetailsWithID.orderDetails.buyAmounts[i]) {
                         const amount = parseFloat(formatTokenAmount(
-                          baseOrder.orderDetailsWithId.orderDetails.buyAmounts[i], 
+                          baseOrder.orderDetailsWithID.orderDetails.buyAmounts[i], 
                           tokenInfo.decimals
                         ));
                         displayTokens.push({ info: tokenInfo, amount });
@@ -286,7 +294,7 @@ export function NotificationBell() {
                   } else {
                     // For non-filled notifications, show sell token
                     const amount = parseFloat(formatTokenAmount(
-                      baseOrder.orderDetailsWithId.orderDetails.sellAmount, 
+                      baseOrder.orderDetailsWithID.orderDetails.sellAmount, 
                       sellTokenInfo.decimals
                     ));
                     displayTokens.push({ info: sellTokenInfo, amount });

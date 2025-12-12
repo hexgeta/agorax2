@@ -4,14 +4,21 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "node scripts/generate-logo-manifest.js && next build",
     "start": "next start",
     "lint": "next lint",
     "compile": "hardhat compile",
     "deploy:testnet": "hardhat run scripts/deploy.ts --network pulsechainTestnet",
     "deploy:mainnet": "hardhat run scripts/deploy.ts --network pulsechain",
     "test": "hardhat test",
-    "check-whitelist": "node scripts/check-whitelist.js"
+    "check-whitelist": "node scripts/check-whitelist.js",
+    "clean-logs": "node scripts/remove-console-logs.js",
+    "clean-logs:apply": "node scripts/remove-console-logs.js --apply",
+    "generate-logos": "node scripts/generate-logo-manifest.js",
+    "clean-logos": "node scripts/remove-duplicate-logos.js",
+    "clean-logos:remove": "node scripts/remove-duplicate-logos.js --remove",
+    "remove-png-duplicates": "node scripts/remove-png-with-svg.js",
+    "remove-png-duplicates:remove": "node scripts/remove-png-with-svg.js --remove"
   },
   "dependencies": {
     "@number-flow/react": "^0.5.10",

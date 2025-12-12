@@ -1,15 +1,20 @@
 /**
  * Check Whitelist Script
  * 
- * This script queries the OTC contract to retrieve the current whitelist of tokens.
- * Use this to verify if the whitelist in constants/crypto.ts matches the on-chain data.
+ * This script queries the AgoraX contract to retrieve the current whitelist of tokens.
+ * Use this to verify the on-chain whitelist state.
  * 
  * Usage: node scripts/check-whitelist.js
+ * 
+ * The script uses NEXT_PUBLIC_AGORAX_SMART_CONTRACT from .env.local
+ * Or defaults to mainnet: 0xc8a47F14b1833310E2aC72e4C397b5b14a9FEf8B
  */
 
+require('dotenv').config({ path: '.env.local' });
 const { ethers } = require("ethers");
 
-const OTC_CONTRACT_ADDRESS = '0x342DF6d98d06f03a20Ae6E2c456344Bb91cE33a2';
+// Use env variable or default to mainnet contract
+const AGORAX_CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_AGORAX_SMART_CONTRACT || '0xc8a47F14b1833310E2aC72e4C397b5b14a9FEf8B';
 
 const WHITELIST_ABI = [
   {
@@ -70,15 +75,16 @@ const WHITELIST_ABI = [
 
 async function main() {
   console.log('═══════════════════════════════════════════════════════');
-  console.log('  OTC Contract Whitelist Verification');
-  console.log('  Contract: ' + OTC_CONTRACT_ADDRESS);
+  console.log('  AgoraX Contract Whitelist Verification');
+  console.log('  Contract: ' + AGORAX_CONTRACT_ADDRESS);
+  console.log('  Network: PulseChain Mainnet');
   console.log('═══════════════════════════════════════════════════════\n');
   
   // Connect to PulseChain RPC
   const provider = new ethers.JsonRpcProvider('https://rpc.pulsechain.com');
   
   // Create contract instance
-  const contract = new ethers.Contract(OTC_CONTRACT_ADDRESS, WHITELIST_ABI, provider);
+  const contract = new ethers.Contract(AGORAX_CONTRACT_ADDRESS, WHITELIST_ABI, provider);
   
   try {
     console.log('⏳ Querying whitelist from contract...\n');

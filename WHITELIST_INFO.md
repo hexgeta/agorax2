@@ -1,30 +1,33 @@
-# OTC Contract Whitelist Information
+# AgoraX Contract Whitelist Information
 
 ## Overview
 
-This document provides information about the whitelisted tokens on the OTC contract and how to verify/update them.
+This document provides information about the whitelisted tokens on the AgoraX contract and how to dynamically fetch them from the blockchain.
 
 ## Contract Address
 
-**OTC Contract:** `0x342DF6d98d06f03a20Ae6E2c456344Bb91cE33a2`
+**AgoraX Mainnet Contract:** `0xc8a47F14b1833310E2aC72e4C397b5b14a9FEf8B`
+**Network:** PulseChain Mainnet (Chain ID: 369)
 
-## Current Whitelisted Tokens (as of 2025-10-10)
+The contract address is configured via the environment variable `NEXT_PUBLIC_AGORAX_SMART_CONTRACT` in `.env.local`.
 
-### ✅ Active Tokens (8)
+## Dynamic Whitelist System
 
-1. **PLSX** (PulseX) - `0x95B303987A60C71504D99Aa1b13B4DA07b0790ab`
-2. **weDAI** (Wrapped DAI from Eth) - `0xefD766cCb38EaF1dfd701853BFCe31359239F305`
-3. **PLS** (Pulse) - `0x000000000000000000000000000000000000dEaD`
-4. **INC** (Incentive) - `0x2fa878Ab3F87CC1C9737Fc071108F904c0B0C95d`
-5. **HEX** (HEX on Pls) - `0x2b591e99afE9f32eAA6214f7B7629768c40Eeb39`
-6. **USDL** - `0x0dEEd1486bc52aA0d3E6f8849cEC5adD6598A162`
-7. **weWETH** (Wrapped WETH from Eth) - `0x02DcdD04e3F455D838cd1249292C58f3B79e3C3C`
-8. **2PHUX** (2PHUX Governance Token) - `0x115f3Fa979a936167f9D208a7B7c4d85081e84BD`
+**Important:** The whitelist is now **dynamically loaded from the contract**. The UI automatically fetches the current whitelist using the `useContractWhitelistRead` hook, so tokens will appear/disappear based on the on-chain whitelist state.
 
-### ❌ Inactive Tokens (2)
+**Current Status:** As of December 2025, the mainnet contract has **103 active whitelisted tokens**.
 
-- **weUSDC** (Wrapped USDC from Eth) - `0x15D38573d2feeb82e7ad5187aB8c1D52810B1f07`
-- **weUSDT** (Wrapped USDT from Eth) - `0x0Cb6F5a34ad42ec934882A05265A7d5F59b51A2f`
+### How the Whitelist Works
+
+1. The contract owner can add tokens via `addTokenAddress(address)`
+2. The contract owner can activate/deactivate tokens via `setTokenStatus(address, bool)`
+3. The frontend queries `viewWhitelisted(cursor, size)` to get all tokens
+4. Only **active** tokens are available for trading in the UI
+
+### Important Limits
+
+- **Total Whitelist Size:** No hard limit in contract (frontend fetches all dynamically)
+- **Max Buy Tokens Per Order:** 50 (you can only select up to 50 different buy tokens when creating a single order)
 
 ## Checking the Whitelist
 
@@ -44,71 +47,94 @@ This will query the contract via RPC and display all whitelisted tokens with the
 
 ## Using Whitelisted Tokens in Code
 
-The `constants/crypto.ts` file has been updated with `isWhitelisted` flags for each token. You can use the following helpers:
+The whitelist is dynamically fetched from the contract using React hooks:
 
-### Get All Whitelisted Tokens
+### Get Active Whitelisted Tokens
 
 ```typescript
-import { WHITELISTED_TOKENS } from "@/constants/crypto";
+import { useContractWhitelistRead } from "@/hooks/contracts/useContractWhitelistRead";
 
-// Returns an array of only whitelisted tokens
-const whitelistedTokens = WHITELISTED_TOKENS;
+// In your component
+const { activeTokens, whitelistedTokens, isLoading } =
+  useContractWhitelistRead();
+
+// activeTokens = only currently active tokens
+// whitelistedTokens = all tokens (including inactive)
+// isLoading = loading state
 ```
 
-### Check if a Token is Whitelisted
+### Frontend Implementation
+
+The `LimitOrderForm` component automatically filters `TOKEN_CONSTANTS` to only show tokens that are:
+
+1. In `TOKEN_CONSTANTS` (for UI metadata like ticker, name, logo)
+2. AND in the contract's active whitelist (verified via address)
 
 ```typescript
-import { isTokenWhitelisted } from "@/constants/crypto";
+// Example from LimitOrderForm.tsx
+const { activeTokens } = useContractWhitelistRead();
 
-// Check by address (case-insensitive)
-const isWhitelisted = isTokenWhitelisted(
-  "0x95B303987A60C71504D99Aa1b13B4DA07b0790ab"
-);
-```
-
-### Filter by Whitelist Status
-
-```typescript
-import { TOKEN_CONSTANTS } from "@/constants/crypto";
-
-// Get all whitelisted tokens
-const whitelisted = TOKEN_CONSTANTS.filter(
-  (token) => token.isWhitelisted === true
+const whitelistedAddresses = new Set(
+  activeTokens.map((token) => token.tokenAddress.toLowerCase())
 );
 
-// Get all non-whitelisted tokens
-const notWhitelisted = TOKEN_CONSTANTS.filter((token) => !token.isWhitelisted);
+const availableTokens = TOKEN_CONSTANTS.filter((t) => {
+  if (!t.a || !t.dexs) return false;
+  return whitelistedAddresses.has(t.a.toLowerCase());
+});
 ```
 
 ## Updating the Whitelist
 
-When the contract whitelist is updated by the dev:
+### On-Chain Updates (Contract Owner Only)
 
-1. Run `npm run check-whitelist` to get the current on-chain whitelist
-2. Update `constants/crypto.ts`:
-   - Add/update `isWhitelisted: true` for active tokens
-   - Add/update `isWhitelisted: false` for inactive tokens
-   - Update the comment block at the top of `TOKEN_CONSTANTS` array with the new list
-3. Test the application to ensure token selection works correctly
+The contract owner can update the whitelist using these functions:
+
+- `addTokenAddress(address)` - Add a new token to whitelist
+- `setTokenStatus(address, bool)` - Activate/deactivate a token
+
+### Frontend Updates
+
+**No code changes needed!** The whitelist automatically updates in the UI when:
+
+1. The contract owner modifies the whitelist on-chain
+2. Users refresh the page or reconnect their wallet
+3. The `useContractWhitelistRead` hook refetches data
+
+### Viewing Current Whitelist
+
+To check the current whitelist state:
+
+```bash
+npm run check-whitelist
+```
+
+Or query the contract directly via etherscan/block explorer
 
 ## Important Notes
 
-- The whitelist is controlled by the smart contract, not by this application
-- Only tokens marked as `isWhitelisted: true` can be used for creating OTC positions
-- The contract owner can add/remove tokens from the whitelist at any time
-- Always verify against the contract before making assumptions about which tokens are whitelisted
+- The whitelist is **entirely controlled by the smart contract**
+- The frontend **automatically reads** from the contract - no manual updates needed
+- Only **active** tokens can be used for creating limit orders
+- The contract owner can add/remove/activate/deactivate tokens at any time
+- Token metadata (name, ticker, logo) comes from `TOKEN_CONSTANTS` in `constants/crypto.ts`
+- Token availability comes from the contract's whitelist
 
-## Previous Tokens Removed from Whitelist
+## Adding New Tokens to TOKEN_CONSTANTS
 
-The following tokens were previously thought to be whitelisted but are NOT in the current contract whitelist:
+If a token is whitelisted on-chain but not in `TOKEN_CONSTANTS`:
 
-- PCOCK
-- HTT3000
-- HTT5000
-- HTT7000
-- ALAMO
-- BRIAH
-- weHEX
-- WPLS
+1. Add the token to `constants/crypto.ts` with proper metadata:
 
-These tokens exist in the constants but should not be used for OTC trading unless re-added to the contract whitelist.
+```typescript
+{
+  chain: 369,
+  a: "0x...",  // Token address
+  dexs: "0x...",  // DEX pair address (if available)
+  ticker: "SYMBOL",
+  decimals: 18,
+  name: "Token Name"
+}
+```
+
+2. The token will automatically appear in the UI if it's active in the contract whitelist

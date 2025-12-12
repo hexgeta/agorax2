@@ -6,16 +6,19 @@ import { useAccount, useBalance, usePublicClient } from 'wagmi';
 import { TOKEN_CONSTANTS } from '@/constants/crypto';
 import { useTokenPrices } from '@/hooks/crypto/useTokenPrices';
 import { formatEther, parseEther } from 'viem';
+import logoManifest from '@/constants/logo-manifest.json';
 import { formatTokenTicker, parseTokenAmount, getTokenInfoByIndex, getContractWhitelistIndex } from '@/utils/tokenUtils';
 import { useTokenStats } from '@/hooks/crypto/useTokenStats';
 import { useTokenAccess } from '@/context/TokenAccessContext';
 import { PAYWALL_ENABLED, REQUIRED_PARTY_TOKENS, REQUIRED_TEAM_TOKENS, PAYWALL_TITLE, PAYWALL_DESCRIPTION } from '@/config/paywall';
 import PaywallModal from './PaywallModal';
+import { TokenLogo } from '@/components/TokenLogo';
 import { Lock, ArrowLeftRight, Calendar as CalendarIcon, Loader2 } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import { Calendar } from '@/components/ui/calendar';
 import { isNativeToken, useTokenApproval } from '@/utils/tokenApproval';
 import { useContractWhitelist } from '@/hooks/contracts/useContractWhitelist';
+import { useContractWhitelistRead } from '@/hooks/contracts/useContractWhitelistRead';
 import { waitForTransactionWithTimeout, TRANSACTION_TIMEOUTS } from '@/utils/transactionTimeout';
 import useToast from '@/hooks/use-toast';
 
@@ -136,8 +139,20 @@ export function LimitOrderForm({
   onOrderCreated,
 }: LimitOrderFormProps) {
   const { isConnected, address, chainId } = useAccount();
-  const [sellToken, setSellToken] = useState<TokenOption | null>(null);
-  const [buyTokens, setBuyTokens] = useState<(TokenOption | null)[]>([null]); // Array of buy tokens
+  
+  // Default tokens: PLS for sell, PLSX for buy
+  const getDefaultSellToken = (): TokenOption | null => {
+    const pls = TOKEN_CONSTANTS.find(t => t.a === '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE');
+    return pls ? { a: pls.a, ticker: pls.ticker, name: pls.name, decimals: pls.decimals } : null;
+  };
+  
+  const getDefaultBuyToken = (): TokenOption | null => {
+    const hex = TOKEN_CONSTANTS.find(t => t.a === '0x2b591e99afE9f32eAA6214f7B7629768c40Eeb39');
+    return hex ? { a: hex.a, ticker: hex.ticker, name: hex.name, decimals: hex.decimals } : null;
+  };
+  
+  const [sellToken, setSellToken] = useState<TokenOption | null>(getDefaultSellToken());
+  const [buyTokens, setBuyTokens] = useState<(TokenOption | null)[]>([getDefaultBuyToken()]); // Array of buy tokens
   const [sellAmount, setSellAmount] = useState(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('limitOrderSellAmount') || '';
@@ -226,6 +241,9 @@ export function LimitOrderForm({
   const { toast } = useToast();
   const { placeOrder, contractAddress } = useContractWhitelist();
   
+  // Get whitelisted tokens from the contract
+  const { activeTokens, isLoading: isLoadingWhitelist } = useContractWhitelistRead();
+  
   // Token approval for sell token
   const sellAmountWei = sellToken && sellAmount ? parseTokenAmount(removeCommas(sellAmount), sellToken.decimals) : 0n;
   const needsApproval = Boolean(sellToken && !isNativeToken(sellToken.a) && sellAmountWei > 0n);
@@ -262,7 +280,7 @@ export function LimitOrderForm({
         }) as bigint;
         setListingFee(fee);
       } catch (error) {
-        console.warn('Could not fetch listing fee:', error);
+        
         setListingFee(0n);
       }
     };
@@ -270,8 +288,16 @@ export function LimitOrderForm({
     fetchListingFee();
   }, [publicClient, contractAddress]);
 
-  // Use all tokens from TOKEN_CONSTANTS
-  const availableTokens = TOKEN_CONSTANTS.filter(t => t.a && t.dexs);
+  // Filter TOKEN_CONSTANTS to only include whitelisted tokens from the contract
+  const whitelistedAddresses = new Set(
+    activeTokens.map(token => token.tokenAddress.toLowerCase())
+  );
+  
+  const availableTokens = TOKEN_CONSTANTS.filter(t => {
+    if (!t.a || !t.dexs) return false;
+    // Only include tokens that are in the contract whitelist
+    return whitelistedAddresses.has(t.a.toLowerCase());
+  });
 
   // Filter tokens based on search queries and exclude already selected tokens
   const filteredSellTokens = availableTokens.filter(token => {
@@ -293,9 +319,7 @@ export function LimitOrderForm({
     return availableTokens.filter(token => {
       if (!token.a) return false;
       
-      // Only include tokens that are in the contract whitelist
-      const whitelistIndex = getContractWhitelistIndex(token.a);
-      if (whitelistIndex === -1) return false;
+      // Tokens are already filtered to be in whitelist via availableTokens
       
       // Exclude if it's the sell token
       if (sellToken && sellToken.a && token.a.toLowerCase() === sellToken.a.toLowerCase()) {
@@ -517,7 +541,6 @@ export function LimitOrderForm({
     }
   }, [expirationInput]);
 
-
   useEffect(() => {
     if (limitPrice) {
       localStorage.setItem('limitOrderPrice', limitPrice);
@@ -609,7 +632,8 @@ export function LimitOrderForm({
   }, [showBuyDropdowns]);
 
   const getTokenLogo = (ticker: string) => {
-    return `/coin-logos/${ticker}.svg`;
+    const format = (logoManifest as Record<string, string>)[ticker];
+    return format ? `/coin-logos/${ticker}.${format}` : '/coin-logos/default.svg';
   };
 
   // Get balance - now consolidated for both native and ERC20 tokens
@@ -785,19 +809,14 @@ export function LimitOrderForm({
       }
 
       // Prepare order parameters - Get whitelist indices
-      console.log('🔍 Getting whitelist indices for buy tokens...');
       const buyTokenIndices = buyTokens.map((token) => {
         if (!token) throw new Error('Buy token is null');
-        
-        console.log(`  Looking up ${token.ticker} at address: ${token.a}`);
-        
+
         const whitelistIndex = getContractWhitelistIndex(token.a);
         if (whitelistIndex === -1) {
-          console.error(`  ❌ ${token.ticker} (${token.a}) not in whitelist`);
-          throw new Error(`Token ${token.ticker} is not whitelisted. Available tokens: tPLS, HEX, tPLSX, tDAI, HDRN, ICSA, BASE, TRIO, LUCKY, DECI, MAXI`);
+          throw new Error(`Token ${token.ticker} is not whitelisted`);
         }
-        
-        console.log(`  ✅ ${token.ticker} is at whitelist index: ${whitelistIndex}`);
+
         return BigInt(whitelistIndex);
       });
 
@@ -809,15 +828,6 @@ export function LimitOrderForm({
 
       const sellAmountForOrder = parseTokenAmount(removeCommas(sellAmount), sellToken.decimals);
       const expirationTime = BigInt(Math.floor(Date.now() / 1000) + (expirationDays * 24 * 60 * 60));
-
-      // Create the OrderDetails struct - must match ABI exactly
-      const orderDetails = {
-        sellToken: sellToken.a as `0x${string}`, // The actual token address, not index
-        sellAmount: sellAmountForOrder,
-        buyTokensIndex: buyTokenIndices,
-        buyAmounts: buyAmountsWei,
-        expirationTime: expirationTime,
-      };
 
       toast({
         title: "Creating Order",
@@ -831,18 +841,17 @@ export function LimitOrderForm({
           address: contractAddress as `0x${string}`,
           abi: [
             {
-              name: 'getListingFee',
+              name: 'listingFee',
               type: 'function',
               stateMutability: 'view',
               inputs: [],
               outputs: [{ name: '', type: 'uint256' }],
             },
           ],
-          functionName: 'getListingFee',
+          functionName: 'listingFee',
         }) as bigint;
-        console.log('💰 Listing fee:', listingFee.toString(), 'wei');
       } catch (error) {
-        console.warn('⚠️ Could not fetch listing fee, defaulting to 0:', error);
+        // Silently fail - will use 0n as fallback
       }
 
       // Calculate total value to send
@@ -852,27 +861,20 @@ export function LimitOrderForm({
         ? sellAmountForOrder + listingFee 
         : listingFee;
 
-      // Log order details for debugging
-      console.log('📝 Submitting Order:', {
-        sellToken: sellToken.ticker,
-        sellTokenAddress: orderDetails.sellToken,
-        sellAmount: orderDetails.sellAmount.toString(),
-        buyTokenIndices: orderDetails.buyTokensIndex.map(i => i.toString()),
-        buyAmounts: orderDetails.buyAmounts.map(a => a.toString()),
-        expirationTime: orderDetails.expirationTime.toString(),
-        valueToSend: valueToSend?.toString() || 'undefined',
-        listingFee: listingFee.toString(),
-        chainId,
-        contractAddress,
-      });
+      // Order details prepared for submission
 
-      // Place the order (pass value if native token)
+      // Place the order with individual parameters (AgoraX_final.sol format)
       const txHash = await placeOrder(
-        orderDetails,
-        valueToSend
+        sellToken.a as `0x${string}`,  // _sellToken
+        sellAmountForOrder,              // _sellAmount
+        buyTokenIndices,                 // _buyTokensIndex
+        buyAmountsWei,                   // _buyAmounts
+        expirationTime,                  // _expirationTime
+        false,                           // _allOrNothing (default to false)
+        valueToSend                      // msg.value
       );
       
-      console.log('✅ Transaction Hash:', txHash);
+      
 
       if (!txHash) {
         throw new Error('Transaction failed');
@@ -920,7 +922,7 @@ export function LimitOrderForm({
       }
 
     } catch (error: any) {
-      console.error('❌ Error creating order:', error);
+      
       
       // Extract detailed error information
       let errorMessage = "Failed to create order. Please try again.";
@@ -959,15 +961,7 @@ export function LimitOrderForm({
       }
       
       // Log full error details for debugging
-      console.error('Full error details:', {
-        message: error?.message,
-        code: error?.code,
-        data: error?.data,
-        cause: error?.cause,
-        shortMessage: error?.shortMessage,
-        details: error?.details,
-        reason: error?.reason,
-      });
+      
       
       toast({
         title: errorMessage,
@@ -1136,7 +1130,7 @@ export function LimitOrderForm({
     // Update refs for next comparison
     previousSellTokenRef.current = sellToken;
     previousBuyTokenRef.current = currentBuyToken;
-  }, [sellToken?.a, buyTokens[0]?.a, prices, pricePercentage, invertPriceDisplay, limitPrice, marketPrice, sellAmount, buyAmounts, onLimitPriceChange]);
+  }, [sellToken?.a, buyTokens[0]?.a, prices, invertPriceDisplay, marketPrice, sellAmount, onLimitPriceChange]);
 
   const handlePercentageClick = (percentage: number, direction: 'above' | 'below' = 'above') => {
     if (!marketPrice) return;
@@ -1338,7 +1332,7 @@ export function LimitOrderForm({
 
   return (
     <>
-    <div className="bg-black/80 backdrop-blur-sm border-2 border-[#00D9FF] p-6 h-full shadow-[0_0_30px_rgba(0,217,255,0.3)] overflow-y-auto max-h-[calc(100vh-200px)]">
+    <div className="w-full bg-black/80 backdrop-blur-sm border-2 border-[#00D9FF] p-6 h-full shadow-[0_0_30px_rgba(0,217,255,0.3)] overflow-y-auto max-h-[calc(100vh-200px)]">
       {/* Sell Section */}
       <div className="mb-4">
         <label className="text-[#00D9FF] text-sm mb-2 block font-semibold text-left">SELL</label>
@@ -1352,14 +1346,7 @@ export function LimitOrderForm({
             <div className="flex items-center space-x-3">
               {sellToken ? (
                 <>
-                  <img
-                    src={getTokenLogo(sellToken.ticker)}
-                    alt={sellToken.ticker}
-                    className="w-6 h-6"
-                    onError={(e) => {
-                      e.currentTarget.src = '/coin-logos/default.svg';
-                    }}
-                  />
+                  <TokenLogo ticker={sellToken.ticker} className="w-6 h-6" />
                   <span className="text-[#00D9FF] font-medium">{formatTokenTicker(sellToken.ticker, chainId)}</span>
                 </>
               ) : (
@@ -1401,14 +1388,7 @@ export function LimitOrderForm({
                   }}
                   className="w-full p-3 flex items-center space-x-3 hover:bg-[#00D9FF]/10 transition-all text-left border-b border-[#00D9FF]/20 last:border-b-0"
                 >
-                  <img
-                    src={getTokenLogo(token.ticker)}
-                    alt={token.ticker}
-                    className="w-6 h-6"
-                    onError={(e) => {
-                      e.currentTarget.src = '/coin-logos/default.svg';
-                    }}
-                  />
+                  <TokenLogo ticker={token.ticker} className="w-6 h-6" />
                   <div>
                     <div className="text-[#00D9FF] font-medium">{formatTokenTicker(token.ticker, chainId)}</div>
                     <div className="text-[#00D9FF]/70 text-xs">{token.name}</div>
@@ -1547,14 +1527,7 @@ export function LimitOrderForm({
                         <div className="flex items-center space-x-3">
                           {buyToken ? (
                             <>
-                              <img
-                                src={getTokenLogo(buyToken.ticker)}
-                                alt={buyToken.ticker}
-                                className="w-6 h-6"
-                                onError={(e) => {
-                                  e.currentTarget.src = '/coin-logos/default.svg';
-                                }}
-                              />
+                              <TokenLogo ticker={buyToken.ticker} className="w-6 h-6" />
                               <span className="text-[#00D9FF] font-medium">{formatTokenTicker(buyToken.ticker, chainId)}</span>
                             </>
                           ) : (
@@ -1607,14 +1580,7 @@ export function LimitOrderForm({
                                 onClick={() => handleBuyTokenSelect(token, index)}
                                 className="w-full p-3 flex items-center space-x-3 hover:bg-[#00D9FF]/10 transition-all text-left border-b border-[#00D9FF]/20 last:border-b-0"
                               >
-                                <img
-                                  src={getTokenLogo(token.ticker)}
-                                  alt={token.ticker}
-                                  className="w-6 h-6"
-                                  onError={(e) => {
-                                    e.currentTarget.src = '/coin-logos/default.svg';
-                                  }}
-                                />
+                                <TokenLogo ticker={token.ticker} className="w-6 h-6" />
                                 <div>
                                   <div className="text-[#00D9FF] font-medium">{formatTokenTicker(token.ticker, chainId)}</div>
                                   <div className="text-[#00D9FF]/70 text-xs">{token.name}</div>
@@ -1683,7 +1649,7 @@ export function LimitOrderForm({
                       <svg className="w-5 h-5 text-[#00D9FF]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                       </svg>
-                      <span className="text-[#00D9FF] text-sm">Add another token</span>
+                      <span className="text-[#00D9FF] text-sm">Add alternative token</span>
                     </button>
                   ) : (
                     <div className="mt-3 w-full py-2 text-center text-gray-500 text-sm">
@@ -2032,25 +1998,23 @@ export function LimitOrderForm({
             </div>
             
             {/* Listing Fee - always required, paid in native PLS */}
-            {listingFee > 0n && (
               <div className="flex justify-between items-center">
-                <span className="text-[#00D9FF]/70">Listing Fee (in {formatTokenTicker('PLS', chainId)}):</span>
+              <span className="text-[#00D9FF]/70">Listing Fee (in {formatTokenTicker('PLS', chainId)}):</span>
                 <span className="text-red-400 font-medium">
-                  +{parseFloat(formatEther(listingFee)).toString()} {formatTokenTicker('PLS', chainId)}
+                +{parseFloat(formatEther(listingFee)).toString()} {formatTokenTicker('PLS', chainId)}
                 </span>
               </div>
-            )}
 
             {/* You Pay - only show when selling native PLS */}
-            {isNativeToken(sellToken.a) && listingFee > 0n && (
+            {isNativeToken(sellToken.a) && (
               <div className="flex justify-between items-center pt-0">
                 <span className="text-[#00D9FF]">You Pay:</span>
                 <span className="text-[#00D9FF] font-medium">
-                  {(parseFloat(removeCommas(sellAmount)) + parseFloat(formatEther(listingFee))).toLocaleString('en-US', {
-                    minimumFractionDigits: 0,
-                    maximumFractionDigits: 8
+                    {(parseFloat(removeCommas(sellAmount)) + parseFloat(formatEther(listingFee))).toLocaleString('en-US', {
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 8
                   })} {formatTokenTicker(sellToken.ticker, chainId)}
-                </span>
+                  </span>
               </div>
             )}
             

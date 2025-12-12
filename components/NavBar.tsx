@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { ConnectButton } from './ConnectButton';
 import { ChainSwitcher } from './ChainSwitcher';
-import { NotificationBell } from './NotificationBell';
+// import { NotificationBell } from './NotificationBell';
 
 const NavBar = () => {
   return (
@@ -17,21 +17,21 @@ const NavBar = () => {
               AgoráX
             </Link>
             {/* Notification Bell - Mobile only (next to logo) */}
-            <div className="md:hidden">
+            {/* <div className="md:hidden">
               <NotificationBell />
-            </div>
+            </div> */}
           </div>
           
           {/* Bottom row on mobile: Buttons / Right side on desktop */}
           <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2 md:gap-4">
                         {/* Notification Bell - Desktop only (with other buttons) */}
-                        <div className="hidden md:block">
+                        {/* <div className="hidden md:block">
               <NotificationBell />
-            </div>
+            </div> */}
             {/* Navigation Links */}
             <Link 
               href="/marketplace" 
-              className="text-[#00D9FF] hover:text-[#00D9FF]/80 transition-colors font-medium text-sm md:text-base mx-4"
+              className="text-[#00D9FF] hover:text-[#00D9FF]/80 transition-colors font-medium text-sm md:text-base px-4 py-2 cursor-pointer"
             >
               Marketplace
             </Link>

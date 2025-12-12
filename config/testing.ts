@@ -8,7 +8,7 @@
  */
 
 // 🔧 TOGGLE THIS TO ENABLE/DISABLE TESTING MODE
-export const TESTING_MODE = true;
+export const TESTING_MODE = false;
 
 // Chain configurations
 export const PULSECHAIN_TESTNET_CHAIN_ID = 943;
@@ -16,19 +16,21 @@ export const PULSECHAIN_CHAIN_ID = 369;
 export const ETHEREUM_CHAIN_ID = 1;
 
 // Get contract address from environment variables
-// AgoraX deployed at: 0x321b52b7f55ea307e9ca87891d52cc92f37905cf (PLS Testnet)
+// AgoraX Mainnet: 0xc8a47F14b1833310E2aC72e4C397b5b14a9FEf8B (PLS Mainnet Chain ID 369)
+// AgoraX Testnet: 0x321b52b7f55ea307e9ca87891d52cc92f37905cf (PLS Testnet Chain ID 943)
 const AGORAX_CONTRACT = process.env.NEXT_PUBLIC_AGORAX_SMART_CONTRACT || '';
 
-// Debug: Log contract address on load
-if (typeof window !== 'undefined') {
-  console.log('🔍 AgoraX Contract Address:', AGORAX_CONTRACT);
-  console.log('🔍 Environment Variable:', process.env.NEXT_PUBLIC_AGORAX_SMART_CONTRACT);
-}
+// Debug: Log contract address on load (only once)
+// Removed console log for performance
+// Contract address is loaded from NEXT_PUBLIC_AGORAX_SMART_CONTRACT
 
 // AgoraX Smart Contract addresses per chain
 export const CONTRACT_ADDRESSES = {
   [PULSECHAIN_CHAIN_ID]: AGORAX_CONTRACT, // PulseChain Mainnet
   [PULSECHAIN_TESTNET_CHAIN_ID]: AGORAX_CONTRACT, // PulseChain Testnet v4
+  [ETHEREUM_CHAIN_ID]: AGORAX_CONTRACT, // Ethereum (using same address)
+  137: AGORAX_CONTRACT, // Polygon
+  42161: AGORAX_CONTRACT, // Arbitrum
 } as const;
 
 // Testnet configuration with multiple RPC fallbacks
@@ -115,14 +117,15 @@ export function getChainDisplayName(chainId: number | undefined): string {
  * Gets the AgoraX contract address for the current chain
  * Returns undefined if chain is not supported
  */
+const loggedErrors = new Set<number>();
 export function getContractAddress(chainId: number | undefined): string | undefined {
   if (!chainId) return undefined;
   const address = CONTRACT_ADDRESSES[chainId as keyof typeof CONTRACT_ADDRESSES];
   
-  // Return undefined if address is empty string
+  // Return undefined if address is empty string (only log once per chain)
   if (!address || address === '') {
-    console.error('❌ No contract address configured for chain', chainId);
-    console.error('❌ Please set NEXT_PUBLIC_AGORAX_SMART_CONTRACT in .env.local');
+    // Silently return empty string if no contract configured
+    // Contract address should be set via NEXT_PUBLIC_AGORAX_SMART_CONTRACT
     return undefined;
   }
   

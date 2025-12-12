@@ -32,8 +32,8 @@ export async function waitForTransactionWithTimeout(
   timeout: number = TRANSACTION_TIMEOUTS.TRANSACTION
 ) {
   try {
-    console.log(`⏳ Waiting for transaction receipt... (timeout: ${timeout / 1000}s)`);
-    console.log(`📍 Transaction hash: ${hash}`);
+    `);
+    
     
     const receipt = await publicClient.waitForTransactionReceipt({
       hash,
@@ -41,9 +41,7 @@ export async function waitForTransactionWithTimeout(
       confirmations: 1, // Only wait for 1 confirmation on testnet
     });
 
-    console.log(`✅ Transaction receipt received:`, {
-      status: receipt.status,
-      blockNumber: receipt.blockNumber.toString(),
+    ,
       gasUsed: receipt.gasUsed.toString(),
     });
 
@@ -54,7 +52,7 @@ export async function waitForTransactionWithTimeout(
 
     return receipt;
   } catch (error: any) {
-    console.error('❌ Error waiting for transaction:', error);
+    
     
     // Handle timeout specifically
     if (error.message?.includes('timeout') || error.message?.includes('timed out')) {

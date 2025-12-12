@@ -29,7 +29,6 @@ const READ_FUNCTIONS = [
   'getOrderCounter',            // Get the total number of orders created
   'getAdminWalletAddress',      // Get the admin wallet address
   'getUniswapAnchorViewAddress', // Get the Uniswap anchor view contract address
-  'getBistroStakingAddress',    // Get the Bistro staking contract address
   'getBeanTokenAddress',        // Get the Bean token contract address
   'getRedeemFees',              // Get the current redeem fees percentage
   'getDiscountInRedeemFees',    // Get the discount percentage for redeem fees
@@ -89,13 +88,7 @@ export function useContractWhitelist() {
 
     // Execute the contract function
     try {
-      console.log('🔧 Calling contract function:', {
-        functionName,
-        contractAddress,
-        chainId,
-        userAddress: address,
-        argsCount: args.length,
-        value: value?.toString(),
+      ,
       });
 
       const result = await writeContractAsync({
@@ -109,17 +102,10 @@ export function useContractWhitelist() {
         gas: 2000000n, // Set a reasonable gas limit
       });
 
-      console.log('✅ Contract call successful:', result);
+      
       return result;
     } catch (error: any) {
-      console.error('❌ Contract function error:', {
-        function: functionName,
-        error: error?.message,
-        shortMessage: error?.shortMessage,
-        code: error?.code,
-        data: error?.data,
-        cause: error?.cause?.message,
-      });
+      
       
       // Re-throw with more context
       if (error?.message) {
@@ -168,8 +154,16 @@ export function useContractWhitelist() {
     contractAddress,
     
     // Individual function wrappers for convenience
-    placeOrder: (orderDetails: any, value?: bigint) => 
-      executeWriteFunction('placeOrder', [orderDetails], value),
+    placeOrder: (
+      sellToken: string,
+      sellAmount: bigint,
+      buyTokensIndex: bigint[],
+      buyAmounts: bigint[],
+      expirationTime: bigint,
+      allOrNothing: boolean,
+      value?: bigint
+    ) => 
+      executeWriteFunction('placeOrder', [sellToken, sellAmount, buyTokensIndex, buyAmounts, expirationTime, allOrNothing], value),
     
     cancelOrder: (orderId: bigint, recipient?: string) => 
       executeWriteFunction('cancelOrder', [orderId, recipient || address]),
