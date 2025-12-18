@@ -247,7 +247,9 @@ export default function OrderHistoryTable({
 
   // Build display rows from transactions
   const displayRows = useMemo(() => {
-    if (purchaseTransactions.length === 0) return [];
+    if (purchaseTransactions.length === 0) {
+      return [];
+    }
 
     const rows = purchaseTransactions
       .map(transaction => {

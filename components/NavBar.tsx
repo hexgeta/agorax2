@@ -52,6 +52,16 @@ const NavBar = () => {
             >
               Marketplace
             </Link>
+            <Link 
+              href="/stats" 
+              className={`transition-colors font-medium text-sm md:text-base px-4 py-2 cursor-pointer ${
+                pathname === '/stats' 
+                  ? 'text-white underline underline-offset-4' 
+                  : 'text-[#00D9FF] hover:text-[#00D9FF]/80'
+              }`}
+            >
+              Stats
+            </Link>
             
             {/* Only show chain switcher in testing mode */}
             {TESTING_MODE && <ChainSwitcher isCheckingConnection={false} />}

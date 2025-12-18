@@ -562,50 +562,54 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
 
   // Function to fetch purchase history - extracted so it can be called manually
   const fetchPurchaseHistory = useCallback(async () => {
-      if (!address || !publicClient) {
-        console.log('⚠️ Cannot fetch purchase history:', { address: !!address, publicClient: !!publicClient });
+      if (!publicClient) {
         return;
       }
       
-      console.log('🔄 Fetching purchase history...', { allOrders: allOrders?.length || 0 });
+      // In marketplace mode, fetch ALL transactions; otherwise fetch user-specific
+      const fetchAllTransactions = isMarketplaceMode;
 
       try {
-        // PART 1: Query OrderFilled events where the user is the buyer
+        // PART 1: Query OrderFilled events
         const buyerLogs = await publicClient.getLogs({
           address: OTC_CONTRACT_ADDRESS,
           event: parseAbiItem('event OrderFilled(address indexed buyer, uint256 indexed orderID, uint256 indexed buyTokenIndex, uint256 buyAmount)'),
-          args: {
-            buyer: address // Current connected wallet as buyer
+          args: fetchAllTransactions ? {} : {
+            buyer: address // Current connected wallet as buyer (or all if marketplace)
           },
           fromBlock: 'earliest' // Query from the beginning - could be optimized with a specific block range
         });
 
         // PART 2: Query OrderFilled events where the user is the seller (order creator)
-        // First, find all orders created by the connected wallet
-        const userCreatedOrders = allOrders.filter(order => 
-          order.userDetails.orderOwner.toLowerCase() === address.toLowerCase()
-        );
-        const userCreatedOrderIds = userCreatedOrders.map(order => 
-          order.orderDetailsWithID.orderID.toString()
-        );
-        
-        // Query ALL OrderFilled events for those order IDs (no buyer filter)
+        // Skip this in marketplace mode since we already have all transactions
         let sellerLogs: any[] = [];
-        if (userCreatedOrderIds.length > 0) {
-          sellerLogs = await publicClient.getLogs({
-            address: OTC_CONTRACT_ADDRESS,
-            event: parseAbiItem('event OrderFilled(address indexed buyer, uint256 indexed orderID, uint256 indexed buyTokenIndex, uint256 buyAmount)'),
-            fromBlock: 'earliest'
-          });
+        
+        if (!fetchAllTransactions && address) {
+          // First, find all orders created by the connected wallet
+          const userCreatedOrders = allOrders.filter(order => 
+            order.userDetails.orderOwner.toLowerCase() === address.toLowerCase()
+          );
+          const userCreatedOrderIds = userCreatedOrders.map(order => 
+            order.orderDetailsWithID.orderID.toString()
+          );
           
-          // Filter to only include events for user's created orders and exclude their own purchases
-          sellerLogs = sellerLogs.filter(log => {
-            const orderId = log.args.orderID?.toString();
-            const buyer = log.args.buyer?.toLowerCase();
-            return orderId && 
-                   userCreatedOrderIds.includes(orderId) && 
-                   buyer !== address.toLowerCase(); // Exclude own purchases from seller view
-          });
+          // Query ALL OrderFilled events for those order IDs (no buyer filter)
+          if (userCreatedOrderIds.length > 0) {
+            sellerLogs = await publicClient.getLogs({
+              address: OTC_CONTRACT_ADDRESS,
+              event: parseAbiItem('event OrderFilled(address indexed buyer, uint256 indexed orderID, uint256 indexed buyTokenIndex, uint256 buyAmount)'),
+              fromBlock: 'earliest'
+            });
+            
+            // Filter to only include events for user's created orders and exclude their own purchases
+            sellerLogs = sellerLogs.filter(log => {
+              const orderId = log.args.orderID?.toString();
+              const buyer = log.args.buyer?.toLowerCase();
+              return orderId && 
+                     userCreatedOrderIds.includes(orderId) && 
+                     buyer !== address.toLowerCase(); // Exclude own purchases from seller view
+            });
+          }
         }
 
         // Extract order IDs that the user has purchased (buyer perspective)
@@ -719,9 +723,10 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
               missingOrders.push(orderDetails as CompleteOrderDetails);
             }
           } catch (err) {
-            console.warn(`Failed to fetch order ${orderId}:`, err);
+            // Silently handle errors
           }
         }
+
         
         // Combine allOrders with missing orders for transaction history
         const combinedOrders = [...allOrders, ...missingOrders];
@@ -729,22 +734,13 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
         
         setPurchaseTransactions(transactions);
         
-        console.log('✅ Purchase history fetched:', {
-          transactions: transactions.length,
-          allOrders: allOrders.length,
-          missingOrders: missingOrders.length,
-          combinedOrders: combinedOrders.length,
-          transactionOrderIds: transactions.map(t => t.orderId)
-        });
-        
       } catch (error) {
-        console.error('❌ Error fetching purchase history:', error);
         // Set empty set on error
         setPurchasedOrderIds(new Set());
         setPurchaseTransactions([]);
         setOrdersForHistory(allOrders);
       }
-  }, [address, publicClient, allOrders]);
+  }, [address, publicClient, allOrders, isMarketplaceMode]);
 
   // Query user's purchase history from OrderFilled events and get actual purchase amounts
   useEffect(() => {
@@ -2149,21 +2145,19 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
         >
           Cancelled ({getLevel3Orders(tokenFilter, ownershipFilter, 'cancelled').length})
         </button>
-        {!isMarketplaceMode && (
-          <button
-            onClick={() => {
-              setStatusFilter('order-history');
-              clearExpandedPositions();
-            }}
-            className={`px-3 md:px-4 py-2  transition-all duration-100 border whitespace-nowrap text-sm md:text-base ${
-              statusFilter === 'order-history'
-                ? 'bg-[#00D9FF]/20 text-[#00D9FF] border-[#00D9FF]'
-                : 'bg-gray-800/50 text-gray-300 border-gray-600 hover:bg-gray-700/50'
-            }`}
-          >
-            Tx History ({purchaseTransactions.length})
-          </button>
-        )}
+        <button
+          onClick={() => {
+            setStatusFilter('order-history');
+            clearExpandedPositions();
+          }}
+          className={`px-3 md:px-4 py-2  transition-all duration-100 border whitespace-nowrap text-sm md:text-base ${
+            statusFilter === 'order-history'
+              ? 'bg-[#00D9FF]/20 text-[#00D9FF] border-[#00D9FF]'
+              : 'bg-gray-800/50 text-gray-300 border-gray-600 hover:bg-gray-700/50'
+          }`}
+        >
+          Tx History ({purchaseTransactions.length})
+        </button>
         </div>
 
       {/* Cancel All Expired Button - Show only in Expired tab for My Deals */}
