@@ -12,6 +12,7 @@
     "deploy:mainnet": "hardhat run scripts/deploy.ts --network pulsechain",
     "test": "hardhat test",
     "check-whitelist": "node scripts/check-whitelist.js",
+    "check-listing-fee": "node scripts/check-listing-fee.js",
     "clean-logs": "node scripts/remove-console-logs.js",
     "clean-logs:apply": "node scripts/remove-console-logs.js --apply",
     "generate-logos": "node scripts/generate-logo-manifest.js",

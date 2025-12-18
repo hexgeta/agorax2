@@ -8,6 +8,7 @@ import { useTokenPrices } from '@/hooks/crypto/useTokenPrices';
 import { formatEther, parseEther } from 'viem';
 import logoManifest from '@/constants/logo-manifest.json';
 import { formatTokenTicker, parseTokenAmount, getTokenInfoByIndex, getContractWhitelistIndex } from '@/utils/tokenUtils';
+import { getBlockExplorerTxUrl } from '@/utils/blockExplorer';
 import { useTokenStats } from '@/hooks/crypto/useTokenStats';
 import { useTokenAccess } from '@/context/TokenAccessContext';
 import { PAYWALL_ENABLED, REQUIRED_PARTY_TOKENS, REQUIRED_TEAM_TOKENS, PAYWALL_TITLE, PAYWALL_DESCRIPTION } from '@/config/paywall';
@@ -140,19 +141,23 @@ export function LimitOrderForm({
 }: LimitOrderFormProps) {
   const { isConnected, address, chainId } = useAccount();
   
-  // Default tokens: PLS for sell, PLSX for buy
+  // Default tokens: PLS for sell, HEX for buy
   const getDefaultSellToken = (): TokenOption | null => {
     const pls = TOKEN_CONSTANTS.find(t => t.a === '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE');
-    return pls ? { a: pls.a, ticker: pls.ticker, name: pls.name, decimals: pls.decimals } : null;
+    return pls && pls.a ? { a: pls.a, ticker: pls.ticker, name: pls.name, decimals: pls.decimals } : null;
   };
   
   const getDefaultBuyToken = (): TokenOption | null => {
     const hex = TOKEN_CONSTANTS.find(t => t.a === '0x2b591e99afE9f32eAA6214f7B7629768c40Eeb39');
-    return hex ? { a: hex.a, ticker: hex.ticker, name: hex.name, decimals: hex.decimals } : null;
+    return hex && hex.a ? { a: hex.a, ticker: hex.ticker, name: hex.name, decimals: hex.decimals } : null;
   };
   
   const [sellToken, setSellToken] = useState<TokenOption | null>(getDefaultSellToken());
   const [buyTokens, setBuyTokens] = useState<(TokenOption | null)[]>([getDefaultBuyToken()]); // Array of buy tokens
+  
+  // Extract buy token address for stable dependency (must be here before useEffect hooks)
+  const firstBuyTokenAddress = buyTokens[0]?.a;
+  
   const [sellAmount, setSellAmount] = useState(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('limitOrderSellAmount') || '';
@@ -230,6 +235,7 @@ export function LimitOrderForm({
   const datePickerRef = useRef<HTMLDivElement>(null);
   const isInitialLoadRef = useRef<boolean>(true);
   const limitPriceSetByUserRef = useRef<boolean>(false);
+  const hasInitializedTokensRef = useRef<boolean>(false);
   const lastEditedInputRef = useRef<'sell' | number | null>(null); // 'sell' or buy index
   const isUpdatingFromOtherInputRef = useRef<boolean>(false);
   const previousSellTokenRef = useRef<TokenOption | null>(null);
@@ -269,18 +275,18 @@ export function LimitOrderForm({
           address: contractAddress as `0x${string}`,
           abi: [
             {
-              name: 'getListingFee',
+              name: 'listingFee',
               type: 'function',
               stateMutability: 'view',
               inputs: [],
               outputs: [{ name: '', type: 'uint256' }],
             },
           ],
-          functionName: 'getListingFee',
+          functionName: 'listingFee',
         }) as bigint;
         setListingFee(fee);
       } catch (error) {
-        
+        console.warn('Could not fetch listing fee:', error);
         setListingFee(0n);
       }
     };
@@ -293,11 +299,28 @@ export function LimitOrderForm({
     activeTokens.map(token => token.tokenAddress.toLowerCase())
   );
   
+  // Deduplicate tokens by address (keep the first occurrence)
   const availableTokens = TOKEN_CONSTANTS.filter(t => {
-    if (!t.a || !t.dexs) return false;
+    if (!t.a) return false;
     // Only include tokens that are in the contract whitelist
     return whitelistedAddresses.has(t.a.toLowerCase());
-  });
+  }).reduce((unique, token) => {
+    // Only add if this address hasn't been added yet
+    if (!unique.some(t => t.a?.toLowerCase() === token.a?.toLowerCase())) {
+      unique.push(token);
+    }
+    return unique;
+  }, [] as typeof TOKEN_CONSTANTS);
+  
+  // Log token counts for debugging
+  useEffect(() => {
+    if (availableTokens.length > 0) {
+      console.log('🔢 Token Counts:', {
+        'Contract Whitelist': activeTokens.length,
+        'Available after filtering': availableTokens.length
+      });
+    }
+  }, [availableTokens.length, activeTokens.length]);
 
   // Filter tokens based on search queries and exclude already selected tokens
   const filteredSellTokens = availableTokens.filter(token => {
@@ -496,27 +519,40 @@ export function LimitOrderForm({
 
   // Set default tokens
   useEffect(() => {
+    // Only run if availableTokens is populated and we haven't initialized yet
+    if (availableTokens.length === 0 || hasInitializedTokensRef.current) return;
+    
     const savedSellToken = localStorage.getItem('limitOrderSellToken');
     const savedBuyToken = localStorage.getItem('limitOrderBuyToken');
     
+    // Handle sell token
     if (savedSellToken) {
       const token = availableTokens.find(t => t.a?.toLowerCase() === savedSellToken.toLowerCase());
       if (token && token.a) {
         setSellToken({ a: token.a, ticker: token.ticker, name: token.name, decimals: token.decimals });
       }
-    } else {
-      const defaultSell = availableTokens.find(t => t.a?.toLowerCase() === '0x000000000000000000000000000000000000dead');
-      if (defaultSell && defaultSell.a) setSellToken({ a: defaultSell.a, ticker: defaultSell.ticker, name: defaultSell.name, decimals: defaultSell.decimals });
+    } else if (!sellToken || !sellToken.a) {
+      // Set default sell token (PLS) only if no token is selected
+      const defaultSell = availableTokens.find(t => t.a?.toLowerCase() === '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee');
+      if (defaultSell && defaultSell.a) {
+        setSellToken({ a: defaultSell.a, ticker: defaultSell.ticker, name: defaultSell.name, decimals: defaultSell.decimals });
+        localStorage.setItem('limitOrderSellToken', defaultSell.a);
+      }
     }
     
+    // Handle buy token
     if (savedBuyToken) {
       const token = availableTokens.find(t => t.a?.toLowerCase() === savedBuyToken.toLowerCase());
       if (token && token.a) {
         setBuyTokens([{ a: token.a, ticker: token.ticker, name: token.name, decimals: token.decimals }]);
       }
-    } else {
+    } else if (!buyTokens[0] || !buyTokens[0].a) {
+      // Set default buy token (HEX) only if no token is selected
       const defaultBuy = availableTokens.find(t => t.a?.toLowerCase() === '0x2b591e99afe9f32eaa6214f7b7629768c40eeb39');
-      if (defaultBuy && defaultBuy.a) setBuyTokens([{ a: defaultBuy.a, ticker: defaultBuy.ticker, name: defaultBuy.name, decimals: defaultBuy.decimals }]);
+      if (defaultBuy && defaultBuy.a) {
+        setBuyTokens([{ a: defaultBuy.a, ticker: defaultBuy.ticker, name: defaultBuy.name, decimals: defaultBuy.decimals }]);
+        localStorage.setItem('limitOrderBuyToken', defaultBuy.a);
+      }
     }
     
     const savedLimitPrice = localStorage.getItem('limitOrderPrice');
@@ -524,7 +560,10 @@ export function LimitOrderForm({
       limitPriceSetByUserRef.current = true;
       isInitialLoadRef.current = false;
     }
-  }, []);
+    
+    // Mark that we've initialized
+    hasInitializedTokensRef.current = true;
+  }, [availableTokens]);
 
   // Save form values to localStorage
   useEffect(() => {
@@ -581,7 +620,7 @@ export function LimitOrderForm({
       }
       setPricePercentage(Math.abs(percentageAboveMarket) > 0.01 ? percentageAboveMarket : null);
     }
-  }, [invertPriceDisplay, limitPrice, externalMarketPrice, sellToken, buyTokens, prices]);
+  }, [invertPriceDisplay, limitPrice, externalMarketPrice, sellToken?.a, firstBuyTokenAddress, prices]);
 
   // Notify parent of token changes (pass all buy tokens for chart)
   useEffect(() => {
@@ -589,7 +628,9 @@ export function LimitOrderForm({
       const buyTokenAddresses = buyTokens.map(token => token?.a);
       onTokenChange(sellToken?.a, buyTokenAddresses);
     }
-  }, [sellToken, buyTokens, onTokenChange]);
+    // Note: onTokenChange intentionally excluded to prevent infinite loops
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sellToken?.a, firstBuyTokenAddress]);
 
   // Notify parent of loaded invertPriceDisplay on mount
   useEffect(() => {
@@ -811,12 +852,12 @@ export function LimitOrderForm({
       // Prepare order parameters - Get whitelist indices
       const buyTokenIndices = buyTokens.map((token) => {
         if (!token) throw new Error('Buy token is null');
-
+        
         const whitelistIndex = getContractWhitelistIndex(token.a);
         if (whitelistIndex === -1) {
           throw new Error(`Token ${token.ticker} is not whitelisted`);
         }
-
+        
         return BigInt(whitelistIndex);
       });
 
@@ -898,7 +939,7 @@ export function LimitOrderForm({
         variant: "success",
         action: txHash ? (
           <a 
-            href={`https://scan.v4.testnet.pulsechain.com/tx/${txHash}`}
+            href={getBlockExplorerTxUrl(chainId, txHash)}
             target="_blank"
             rel="noopener noreferrer"
             className="text-white hover:underline font-medium"
@@ -1130,7 +1171,8 @@ export function LimitOrderForm({
     // Update refs for next comparison
     previousSellTokenRef.current = sellToken;
     previousBuyTokenRef.current = currentBuyToken;
-  }, [sellToken?.a, buyTokens[0]?.a, prices, invertPriceDisplay, marketPrice, sellAmount, onLimitPriceChange]);
+  }, [sellToken?.a, firstBuyTokenAddress, prices, invertPriceDisplay, marketPrice, sellAmount]);
+  // Note: onLimitPriceChange intentionally excluded to prevent infinite loops
 
   const handlePercentageClick = (percentage: number, direction: 'above' | 'below' = 'above') => {
     if (!marketPrice) return;
@@ -1367,7 +1409,7 @@ export function LimitOrderForm({
                   type="text"
                   value={sellSearchQuery}
                   onChange={(e) => setSellSearchQuery(e.target.value)}
-                  placeholder="Search tokens..."
+                  placeholder={`Search tokens... (${filteredSellTokens.length})`}
                   className="w-full bg-black border border-[#00D9FF]/50 p-2 text-[#00D9FF] text-sm placeholder-[#00D9FF]/30 focus:outline-none focus:border-[#00D9FF]"
                 />
               </div>
@@ -1389,9 +1431,18 @@ export function LimitOrderForm({
                   className="w-full p-3 flex items-center space-x-3 hover:bg-[#00D9FF]/10 transition-all text-left border-b border-[#00D9FF]/20 last:border-b-0"
                 >
                   <TokenLogo ticker={token.ticker} className="w-6 h-6" />
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
                   <div>
                     <div className="text-[#00D9FF] font-medium">{formatTokenTicker(token.ticker, chainId)}</div>
                     <div className="text-[#00D9FF]/70 text-xs">{token.name}</div>
+                      </div>
+                      {token.a && prices[token.a]?.price === -1 && (
+                        <span className="text-xs px-2 py-0.5 bg-yellow-900/30 border border-yellow-500/30 text-yellow-500 rounded ml-2">
+                          No Price
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </button>
                   ))
@@ -1566,7 +1617,7 @@ export function LimitOrderForm({
                               newQueries[index] = e.target.value;
                               setBuySearchQueries(newQueries);
                             }}
-                            placeholder="Search tokens..."
+                            placeholder={`Search tokens... (${getFilteredBuyTokens(index).length})`}
                             className="w-full bg-black border border-[#00D9FF]/50 p-2 text-[#00D9FF] text-sm placeholder-[#00D9FF]/30 focus:outline-none focus:border-[#00D9FF]"
                           />
                         </div>
@@ -1581,9 +1632,18 @@ export function LimitOrderForm({
                                 className="w-full p-3 flex items-center space-x-3 hover:bg-[#00D9FF]/10 transition-all text-left border-b border-[#00D9FF]/20 last:border-b-0"
                               >
                                 <TokenLogo ticker={token.ticker} className="w-6 h-6" />
+                                <div className="flex-1">
+                                  <div className="flex items-center justify-between">
                                 <div>
                                   <div className="text-[#00D9FF] font-medium">{formatTokenTicker(token.ticker, chainId)}</div>
                                   <div className="text-[#00D9FF]/70 text-xs">{token.name}</div>
+                                    </div>
+                                    {token.a && prices[token.a]?.price === -1 && (
+                                      <span className="text-xs px-2 py-0.5 bg-yellow-900/30 border border-yellow-500/30 text-yellow-500 rounded ml-2">
+                                        No Price
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
                               </button>
                             ))
@@ -1735,11 +1795,35 @@ export function LimitOrderForm({
               </div>
             )}
           </div>
+          
+          {/* Price Warning for tokens without price data */}
+          {sellToken && buyTokens[0] && (
+            (sellToken && prices[sellToken.a]?.price === -1) || (buyTokens[0] && prices[buyTokens[0].a]?.price === -1)
+          ) && (
+            <div className="mt-2 p-3 bg-yellow-900/20 border border-yellow-500/30 rounded-lg">
+              <div className="flex items-start gap-2">
+                <svg className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <div className="text-sm">
+                  <p className="text-yellow-500 font-medium">⚠️ No Market Price Available</p>
+                  <p className="text-yellow-400/80 mt-1">
+                    {sellToken && prices[sellToken.a]?.price === -1 && buyTokens[0] && prices[buyTokens[0].a]?.price === -1 
+                      ? `Neither ${formatTokenTicker(sellToken.ticker, chainId)} nor ${formatTokenTicker(buyTokens[0].ticker, chainId)} have market prices.`
+                      : sellToken && prices[sellToken.a]?.price === -1
+                      ? `${formatTokenTicker(sellToken.ticker, chainId)} has no market price data.`
+                      : `${formatTokenTicker(buyTokens[0].ticker, chainId)} has no market price data.`
+                    } You'll need to manually set your desired price.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       {/* Percentage Buttons */}
-      {buyTokens[0] && (
+      {buyTokens[0] && marketPrice > 0 && (
         <div className="flex gap-2 mb-6">
           <button
             onClick={() => handlePercentageClick(0, 'above')}

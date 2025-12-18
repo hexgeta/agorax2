@@ -88,9 +88,6 @@ export function useContractWhitelist() {
 
     // Execute the contract function
     try {
-      ,
-      });
-
       const result = await writeContractAsync({
         address: contractAddress as Address,
         abi: CONTRACT_ABI,

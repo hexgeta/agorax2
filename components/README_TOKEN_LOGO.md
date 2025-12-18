@@ -81,3 +81,4 @@ To add a new token logo:
 1. Add `{TICKER}.png` or `{TICKER}.svg` to `public/coin-logos/`
 2. Component automatically detects and uses it
 3. No code changes needed!
+

@@ -11,9 +11,9 @@ import type { PublicClient, Hash } from 'viem';
  * Configuration for transaction timeouts
  */
 export const TRANSACTION_TIMEOUTS = {
-  APPROVAL: 120_000, // 2 minutes for token approvals (longer for testnet)
-  TRANSACTION: 180_000, // 3 minutes for standard transactions (longer for testnet)
-  COMPLEX_TRANSACTION: 300_000, // 5 minutes for complex operations
+  APPROVAL: 120_000, // 2 minutes for token approvals
+  TRANSACTION: 300_000, // 5 minutes for standard transactions (increased for PulseChain)
+  COMPLEX_TRANSACTION: 420_000, // 7 minutes for complex operations
   APPROVAL_VERIFICATION: 120_000, // 2 minutes for approval state verification
 } as const;
 
@@ -32,17 +32,14 @@ export async function waitForTransactionWithTimeout(
   timeout: number = TRANSACTION_TIMEOUTS.TRANSACTION
 ) {
   try {
-    `);
-    
+    // Add a small delay to allow transaction to propagate to RPC
+    await new Promise(resolve => setTimeout(resolve, 1000));
     
     const receipt = await publicClient.waitForTransactionReceipt({
       hash,
       timeout,
-      confirmations: 1, // Only wait for 1 confirmation on testnet
-    });
-
-    ,
-      gasUsed: receipt.gasUsed.toString(),
+      confirmations: 1, // Only wait for 1 confirmation
+      pollingInterval: 2000, // Poll every 2 seconds instead of default
     });
 
     // Check if transaction was successful
@@ -54,11 +51,17 @@ export async function waitForTransactionWithTimeout(
   } catch (error: any) {
     
     
-    // Handle timeout specifically
-    if (error.message?.includes('timeout') || error.message?.includes('timed out')) {
-      throw new Error(
-        `Transaction is taking longer than expected (${timeout / 1000}s). It may still be pending. Check the block explorer: https://scan.v4.testnet.pulsechain.com/tx/${hash}`
+    // Handle timeout or "could not be found" errors (transaction was submitted but receipt not found)
+    if (error.message?.includes('timeout') || 
+        error.message?.includes('timed out') || 
+        error.message?.includes('could not be found') ||
+        error.message?.includes('may not be processed on a block yet')) {
+      // This is a timeout/receipt not found error - transaction was likely submitted successfully
+      const timeoutError = new Error(
+        `Transaction submitted but confirmation is taking longer than expected. Check Otterscan to verify: https://otter.pulsechain.com/tx/${hash}`
       );
+      (timeoutError as any).isTimeout = true; // Flag this as a timeout error
+      throw timeoutError;
     }
 
     // Handle user rejection

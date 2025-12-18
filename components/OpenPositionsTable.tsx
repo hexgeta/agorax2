@@ -2,18 +2,22 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
 import { motion } from 'framer-motion';
-import { CircleDollarSign, ChevronDown, Trash2, Loader2, Lock, Search, ArrowRight, MoveRight, ChevronRight, Play } from 'lucide-react';
+import { CircleDollarSign, ChevronDown, Trash2, Loader2, Lock, Search, ArrowRight, MoveRight, ChevronRight, Play, CalendarDays } from 'lucide-react';
 import PaywallModal from './PaywallModal';
 import OrderHistoryTable from './OrderHistoryTable';
+import { Calendar } from '@/components/ui/calendar';
 import useToast from '@/hooks/use-toast';
 import { ToastAction } from '@/components/ui/toast';
-import { useOpenPositions } from '@/hooks/contracts/useOpenPositions';
+import { useOpenPositions, CompleteOrderDetails } from '@/hooks/contracts/useOpenPositions';
 import { useTokenPrices } from '@/hooks/crypto/useTokenPrices';
 import { useTokenStats } from '@/hooks/crypto/useTokenStats';
 import { useContractWhitelist } from '@/hooks/contracts/useContractWhitelist';
+import { CONTRACT_ABI } from '@/config/abis';
 import { formatEther, parseEther, parseAbiItem } from 'viem';
 import { getTokenInfo, getTokenInfoByIndex, formatAddress, formatTokenTicker, parseTokenAmount, formatTokenAmount } from '@/utils/tokenUtils';
 import { isNativeToken } from '@/utils/tokenApproval';
+import { getRemainingPercentage } from '@/utils/orderUtils';
+import { getBlockExplorerTxUrl } from '@/utils/blockExplorer';
 import { TOKEN_CONSTANTS } from '@/constants/crypto';
 import { waitForTransactionWithTimeout, TRANSACTION_TIMEOUTS } from '@/utils/transactionTimeout';
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
@@ -262,6 +266,19 @@ function TokenLogo({ src, alt, className }: { src: string; alt: string; classNam
   );
 }
 
+// Helper to simplify error messages
+const simplifyErrorMessage = (error: any): string => {
+  if (error?.shortMessage) return error.shortMessage;
+  if (error?.message) {
+    // Extract user-friendly message from common error patterns
+    if (error.message.includes('User rejected')) return 'Transaction rejected by user';
+    if (error.message.includes('insufficient funds')) return 'Insufficient funds for transaction';
+    if (error.message.includes('Order expired')) return 'Order has expired';
+    return error.message;
+  }
+  return 'An unknown error occurred';
+};
+
 interface OpenPositionsTableProps {
   isMarketplaceMode?: boolean;
 }
@@ -351,6 +368,9 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     timestamp?: number;
   }>>([]);
   
+  // Combined orders for transaction history (includes user's orders + orders they've interacted with)
+  const [ordersForHistory, setOrdersForHistory] = useState<CompleteOrderDetails[]>([]);
+  
   // Offer input state
   const [offerInputs, setOfferInputs] = useState<{[orderId: string]: {[tokenAddress: string]: string}}>({});
   
@@ -378,6 +398,10 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     buyAmounts: {[tokenIndex: string]: string};
     expirationTime: string;
   }>({ sellAmount: '', buyAmounts: {}, expirationTime: '' });
+  
+  // State for calendar popup for expiration edit
+  const [showExpirationCalendar, setShowExpirationCalendar] = useState<string | null>(null);
+  const [selectedExpirationDate, setSelectedExpirationDate] = useState<Date | undefined>(undefined);
   const [updatingOrders, setUpdatingOrders] = useState<Set<string>>(new Set());
   const [updateErrors, setUpdateErrors] = useState<{[orderId: string]: string}>({});
   
@@ -395,7 +419,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     isLoading, 
     error,
     refetch
-  } = useOpenPositions(isMarketplaceMode ? undefined : address);
+  } = useOpenPositions(address, isMarketplaceMode);
 
   // Get unique sell token addresses for price fetching
   const sellTokenAddresses = allOrders ? [...new Set(allOrders.map(order => 
@@ -538,20 +562,25 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
 
   // Function to fetch purchase history - extracted so it can be called manually
   const fetchPurchaseHistory = useCallback(async () => {
-      if (!address || !publicClient) return;
+      if (!address || !publicClient) {
+        console.log('⚠️ Cannot fetch purchase history:', { address: !!address, publicClient: !!publicClient });
+        return;
+      }
+      
+      console.log('🔄 Fetching purchase history...', { allOrders: allOrders?.length || 0 });
 
       try {
-        // PART 1: Query OrderExecuted events where the user is the buyer
+        // PART 1: Query OrderFilled events where the user is the buyer
         const buyerLogs = await publicClient.getLogs({
           address: OTC_CONTRACT_ADDRESS,
-          event: parseAbiItem('event OrderExecuted(address indexed user, uint256 orderId)'),
+          event: parseAbiItem('event OrderFilled(address indexed buyer, uint256 indexed orderID, uint256 indexed buyTokenIndex, uint256 buyAmount)'),
           args: {
-            user: address // Current connected wallet as buyer
+            buyer: address // Current connected wallet as buyer
           },
           fromBlock: 'earliest' // Query from the beginning - could be optimized with a specific block range
         });
 
-        // PART 2: Query OrderExecuted events where the user is the seller (order creator)
+        // PART 2: Query OrderFilled events where the user is the seller (order creator)
         // First, find all orders created by the connected wallet
         const userCreatedOrders = allOrders.filter(order => 
           order.userDetails.orderOwner.toLowerCase() === address.toLowerCase()
@@ -560,19 +589,19 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
           order.orderDetailsWithID.orderID.toString()
         );
         
-        // Query ALL OrderExecuted events for those order IDs (no user filter)
+        // Query ALL OrderFilled events for those order IDs (no buyer filter)
         let sellerLogs: any[] = [];
         if (userCreatedOrderIds.length > 0) {
           sellerLogs = await publicClient.getLogs({
             address: OTC_CONTRACT_ADDRESS,
-            event: parseAbiItem('event OrderExecuted(address indexed user, uint256 orderId)'),
+            event: parseAbiItem('event OrderFilled(address indexed buyer, uint256 indexed orderID, uint256 indexed buyTokenIndex, uint256 buyAmount)'),
             fromBlock: 'earliest'
           });
           
           // Filter to only include events for user's created orders and exclude their own purchases
           sellerLogs = sellerLogs.filter(log => {
             const orderId = log.args.orderID?.toString();
-            const buyer = log.args.user?.toLowerCase();
+            const buyer = log.args.buyer?.toLowerCase();
             return orderId && 
                    userCreatedOrderIds.includes(orderId) && 
                    buyer !== address.toLowerCase(); // Exclude own purchases from seller view
@@ -603,7 +632,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
           
           try {
             // Determine if this is a buyer or seller transaction
-            const buyerAddress = log.args.user?.toLowerCase();
+            const buyerAddress = log.args.buyer?.toLowerCase();
             const isBuyerTransaction = buyerAddress === address.toLowerCase();
             const relevantAddress = isBuyerTransaction ? address.toLowerCase() : buyerAddress;
             
@@ -670,23 +699,64 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
           }
         }
         
+        // Fetch missing order details for transactions
+        const transactionOrderIds = new Set(transactions.map(t => t.orderId));
+        const existingOrderIds = new Set(allOrders.map(o => o.orderDetailsWithID.orderID.toString()));
+        const missingOrderIds = Array.from(transactionOrderIds).filter(id => !existingOrderIds.has(id));
+        
+        // Fetch missing orders
+        const missingOrders: CompleteOrderDetails[] = [];
+        for (const orderId of missingOrderIds) {
+          try {
+            const orderDetails = await publicClient.readContract({
+              address: OTC_CONTRACT_ADDRESS,
+              abi: CONTRACT_ABI,
+              functionName: 'getOrderDetails',
+              args: [BigInt(orderId)]
+            }) as any;
+            
+            if (orderDetails && orderDetails.orderDetailsWithID) {
+              missingOrders.push(orderDetails as CompleteOrderDetails);
+            }
+          } catch (err) {
+            console.warn(`Failed to fetch order ${orderId}:`, err);
+          }
+        }
+        
+        // Combine allOrders with missing orders for transaction history
+        const combinedOrders = [...allOrders, ...missingOrders];
+        setOrdersForHistory(combinedOrders);
+        
         setPurchaseTransactions(transactions);
         
-        // Debug: Log each transaction
-        transactions.forEach((transaction) => {
+        console.log('✅ Purchase history fetched:', {
+          transactions: transactions.length,
+          allOrders: allOrders.length,
+          missingOrders: missingOrders.length,
+          combinedOrders: combinedOrders.length,
+          transactionOrderIds: transactions.map(t => t.orderId)
         });
         
       } catch (error) {
+        console.error('❌ Error fetching purchase history:', error);
         // Set empty set on error
         setPurchasedOrderIds(new Set());
         setPurchaseTransactions([]);
+        setOrdersForHistory(allOrders);
       }
   }, [address, publicClient, allOrders]);
 
-  // Query user's purchase history from OrderExecuted events and get actual purchase amounts
+  // Query user's purchase history from OrderFilled events and get actual purchase amounts
   useEffect(() => {
     fetchPurchaseHistory();
   }, [fetchPurchaseHistory]);
+  
+  // Update ordersForHistory when allOrders changes (fallback if no transactions yet)
+  useEffect(() => {
+    if (ordersForHistory.length === 0 && allOrders && allOrders.length > 0) {
+      setOrdersForHistory(allOrders);
+    }
+  }, [allOrders, ordersForHistory.length]);
 
   // Lock scrolling when edit modal is open
   useEffect(() => {
@@ -892,6 +962,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
       return newErrors;
     });
     setTransactionPending(true);
+    
+    let txHash: string | undefined;
 
     try {
       // For now, we'll execute with the first token that has an input
@@ -1005,7 +1077,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
       setExecutingOrders(prev => new Set(prev).add(orderId));
 
       // Execute/Fill the order
-      const txHash = await fillOrExecuteOrder(
+      txHash = await fillOrExecuteOrder(
         BigInt(orderId),
         BigInt(tokenIndexToExecute),
         buyAmount,
@@ -1013,22 +1085,14 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
       );
 
       
-      // Wait for transaction confirmation with proper timeout handling
-      const receipt = await waitForTransactionWithTimeout(
-        publicClient,
-        txHash as `0x${string}`,
-        TRANSACTION_TIMEOUTS.TRANSACTION
-      );
-      
-      
-      // Show success toast only after confirmation
+      // Show immediate success toast (don't wait for receipt - PulseChain RPC is slow to index)
       toast({
-        title: "Order Fulfilled!",
-        description: "You have successfully completed this trade.",
+        title: "✅ Order Fill Submitted!",
+        description: "Your transaction has been submitted successfully. The order will update shortly.",
         variant: "success",
         action: txHash ? (
           <a 
-            href={`https://otter.pulsechain.com/tx/${txHash}`}
+            href={getBlockExplorerTxUrl(chainId, txHash)}
             target="_blank"
             rel="noopener noreferrer"
             className="text-white hover:underline font-medium"
@@ -1041,29 +1105,20 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
       // Clear the inputs for this order
       handleClearInputs(order);
       
-      // Determine if this is a MAXI deal
-      const sellTokenAddress = order.orderDetailsWithID.orderDetails.sellToken;
-      const isMaxiDeal = maxiTokenAddresses.some(addr => 
-        addr.toLowerCase() === sellTokenAddress.toLowerCase()
-      ) || order.orderDetailsWithID.orderDetails.buyTokensIndex.some((tokenIndex: bigint) => {
-        const tokenInfo = getTokenInfoByIndex(Number(tokenIndex));
-        return maxiTokenAddresses.some(addr => 
-          addr.toLowerCase() === tokenInfo.address.toLowerCase()
-        );
-      });
+      // Refresh the data after short delays to show updated amounts
+      setTimeout(() => {
+        refetch();
+        fetchPurchaseHistory();
+      }, 3000); // First refresh after 3 seconds
       
-      // Navigate to "My Deals" > "Order History" to show the fulfilled order
-      setTokenFilter(isMaxiDeal ? 'maxi' : 'non-maxi');
-      setOwnershipFilter('mine');
-      setStatusFilter('order-history');
-      setExpandedPositions(new Set());
-      
-      // Refresh the orders and purchase history to show updated amounts
-      refetch();
-      fetchPurchaseHistory();
+      setTimeout(() => {
+        refetch();
+        fetchPurchaseHistory();
+      }, 8000); // Second refresh after 8 seconds to catch slower confirmations
       
     } catch (error: any) {
       const errorMsg = simplifyErrorMessage(error) || 'Failed to execute order. Please try again.';
+      
       setExecuteErrors(prev => ({
         ...prev,
         [orderId]: errorMsg
@@ -1130,7 +1185,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
         variant: "success",
         action: txHash ? (
           <a 
-            href={`https://otter.pulsechain.com/tx/${txHash}`}
+            href={getBlockExplorerTxUrl(chainId, txHash)}
             target="_blank"
             rel="noopener noreferrer"
             className="text-white hover:underline font-medium"
@@ -1210,8 +1265,10 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     setCollectErrors(prev => ({ ...prev, [orderId]: '' }));
     setTransactionPending(true);
     
+    let txHash: string | undefined;
+    
     try {
-      const txHash = await collectProceeds(order.orderDetailsWithID.orderID);
+      txHash = await collectProceeds(order.orderDetailsWithID.orderID);
       
       // Wait for transaction confirmation
       const receipt = await waitForTransactionWithTimeout(
@@ -1220,14 +1277,14 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
         TRANSACTION_TIMEOUTS.TRANSACTION
       );
       
-      // Show success toast
+      // Show success toast only after confirmation
       toast({
-        title: "Proceeds Collected!",
+        title: "✅ Proceeds Collected!",
         description: "Your earnings have been transferred to your wallet.",
         variant: "success",
         action: txHash ? (
           <a 
-            href={`https://otter.pulsechain.com/tx/${txHash}`}
+            href={getBlockExplorerTxUrl(chainId, txHash)}
             target="_blank"
             rel="noopener noreferrer"
             className="text-white hover:underline font-medium"
@@ -1237,10 +1294,6 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
         ) : undefined,
       });
       
-      // Refresh the orders to show updated status
-      refetch();
-      fetchPurchaseHistory();
-      
       // Clear any previous errors
       setCollectErrors(prev => {
         const newErrors = { ...prev };
@@ -1248,19 +1301,59 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
         return newErrors;
       });
       
+      // Refresh the data to show updated amounts
+      refetch();
+      fetchPurchaseHistory();
+      
     } catch (error: any) {
       const errorMsg = simplifyErrorMessage(error) || 'Failed to collect proceeds';
+      const isTimeout = error.isTimeout || 
+                        errorMsg.includes('taking longer than expected') || 
+                        errorMsg.includes('confirmation is taking longer') ||
+                        errorMsg.includes('Check Otterscan');
+      
       setCollectErrors(prev => ({ 
         ...prev, 
         [orderId]: errorMsg
       }));
       
-      // Show error toast
-      toast({
-        title: "Collection Failed",
-        description: errorMsg,
-        variant: "destructive",
-      });
+      // Show appropriate toast based on error type
+      if (isTimeout) {
+        // Transaction submitted but confirmation timeout
+        toast({
+          title: "⏳ Collection Pending",
+          description: "Your transaction was submitted but is taking longer to confirm. Funds may arrive soon - check Otterscan.",
+          variant: "default",
+          action: txHash ? (
+            <a 
+              href={getBlockExplorerTxUrl(chainId, txHash)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-white hover:underline font-medium"
+            >
+              View Tx
+            </a>
+          ) : undefined,
+        });
+        
+        // Refresh after delays to check if collection succeeded
+        setTimeout(() => {
+          refetch();
+          fetchPurchaseHistory();
+        }, 5000);
+        
+        setTimeout(() => {
+          refetch();
+          fetchPurchaseHistory();
+        }, 15000);
+      } else {
+        // Real error
+        toast({
+          title: "Collection Failed",
+          description: errorMsg,
+          variant: "destructive",
+        });
+      }
     } finally {
       setCollectingOrders(prev => {
         const newSet = new Set(prev);
@@ -1330,7 +1423,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
         variant: "success",
         action: txHash ? (
           <a 
-            href={`https://otter.pulsechain.com/tx/${txHash}`}
+            href={getBlockExplorerTxUrl(chainId, txHash)}
             target="_blank"
             rel="noopener noreferrer"
             className="text-white hover:underline font-medium"
@@ -1446,7 +1539,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
         variant: "success",
         action: txHash ? (
           <a 
-            href={`https://otter.pulsechain.com/tx/${txHash}`}
+            href={getBlockExplorerTxUrl(chainId, txHash)}
             target="_blank"
             rel="noopener noreferrer"
             className="text-white hover:underline font-medium"
@@ -1490,6 +1583,84 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
         return newSet;
       });
       setTransactionPending(false);
+    }
+  };
+  
+  // Handler for quick expiration update from calendar popup
+  const handleQuickExpirationUpdate = async (orderId: string) => {
+    if (!selectedExpirationDate || !publicClient) {
+      toast({
+        title: "Error",
+        description: "Please select a valid date",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    if (updatingOrders.has(orderId)) return;
+    
+    setUpdatingOrders(prev => new Set(prev).add(orderId));
+    setUpdateErrors(prev => ({ ...prev, [orderId]: '' }));
+    setTransactionPending(true);
+    setShowExpirationCalendar(null);
+    
+    try {
+      // Convert date to Unix timestamp (seconds)
+      const newExpiration = BigInt(Math.floor(selectedExpirationDate.getTime() / 1000));
+      
+      // Call updateOrderExpiration
+      const txHash = await updateOrderExpiration(
+        BigInt(orderId),
+        newExpiration
+      );
+      
+      // Wait for transaction confirmation
+      await waitForTransactionWithTimeout(
+        publicClient,
+        txHash as `0x${string}`,
+        TRANSACTION_TIMEOUTS.TRANSACTION
+      );
+      
+      // Show success toast
+      toast({
+        title: "Expiration Updated!",
+        description: `Order will now expire on ${selectedExpirationDate.toLocaleDateString()}`,
+        variant: "success",
+        action: txHash ? (
+          <a 
+            href={getBlockExplorerTxUrl(chainId, txHash)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-white hover:underline font-medium"
+          >
+            View Tx
+          </a>
+        ) : undefined,
+      });
+      
+      // Refresh orders
+      refetch();
+      
+    } catch (error: any) {
+      const errorMsg = simplifyErrorMessage(error) || 'Failed to update order expiration';
+      setUpdateErrors(prev => ({
+        ...prev,
+        [orderId]: errorMsg
+      }));
+      
+      toast({
+        title: "Update Failed",
+        description: errorMsg,
+        variant: "destructive"
+      });
+    } finally {
+      setUpdatingOrders(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(orderId);
+        return newSet;
+      });
+      setTransactionPending(false);
+      setSelectedExpirationDate(undefined);
     }
   };
 
@@ -1740,7 +1911,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     const currentTime = Math.floor(Date.now() / 1000);
     
     if (status === 0 && expirationTime < currentTime) {
-      return 'Inactive';
+      return 'Expired';
     }
     
     switch (status) {
@@ -1990,7 +2161,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                 : 'bg-gray-800/50 text-gray-300 border-gray-600 hover:bg-gray-700/50'
             }`}
           >
-            Order History ({purchaseTransactions.length})
+            Tx History ({purchaseTransactions.length})
           </button>
         )}
         </div>
@@ -2004,7 +2175,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
             <button
               onClick={handleCancelAllExpired}
               disabled={isCancellingAll}
-              className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              className="px-4 py-2 bg-red-700 text-white rounded-lg hover:bg-orange-600 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {isCancellingAll ? (
                 <>
@@ -2013,7 +2184,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                 </>
               ) : (
                 <>
-                  Cancel All Expired ({expiredCount})
+                  <Trash2 className="w-4 h-4 text-white" />
+                  Cancel All Expired Orders ({expiredCount})
                 </>
               )}
             </button>
@@ -2055,7 +2227,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
           <div className="overflow-x-auto scrollbar-hide -mx-6 px-6">
             <OrderHistoryTable
               purchaseTransactions={purchaseTransactions}
-              allOrders={allOrders || []}
+              allOrders={ordersForHistory.length > 0 ? ordersForHistory : (allOrders || [])}
               tokenFilter={tokenFilter}
               searchTerm={searchQuery}
               maxiTokenAddresses={maxiTokenAddresses}
@@ -2127,19 +2299,19 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                 Status {sortField === 'status' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
               </button>
               
-              {/* COLUMN 7: Expires */}
+              {/* COLUMN 7: Expires / Expired */}
               <button 
                 onClick={() => handleSort('date')}
                 className={`text-sm font-medium text-center hover:text-[#00D9FF] transition-colors ${
                   sortField === 'date' ? 'text-[#00D9FF]' : 'text-[#00D9FF]/60'
                 }`}
               >
-                Expires {sortField === 'date' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                {statusFilter === 'expired' ? 'Expired' : 'Expires'} {sortField === 'date' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
               </button>
               
               {/* COLUMN 8: Actions / Order ID */}
               <div className="text-sm font-medium text-center text-[#00D9FF]/60">
-                {(statusFilter === 'expired' || statusFilter === 'completed' || statusFilter === 'cancelled') ? 'Order ID' : ''}
+                {(statusFilter === 'completed' || statusFilter === 'cancelled') ? 'Order ID' : ''}
             </div>
             </div>
 
@@ -2528,7 +2700,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                   {/* COLUMN 5: Status Content */}
                   <div className="text-center min-w-0 mt-1">
                     <span className={`px-3 py-2 rounded-full text-sm font-medium border ${
-                      getStatusText(order) === 'Inactive'
+                      getStatusText(order) === 'Expired'
                         ? 'bg-yellow-500/20 text-yellow-400 border-yellow-400'
                         : order.orderDetailsWithID.status === 0 
                         ? 'bg-green-500/20 text-green-400 border-green-400' 
@@ -2547,15 +2719,59 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                   
                   {/* COLUMN 8: Actions / Order ID Content */}
                     <div className="text-center min-w-0">
-                      {(statusFilter === 'expired' || statusFilter === 'completed' || statusFilter === 'cancelled') ? (
+                      {(statusFilter === 'completed' || statusFilter === 'cancelled') ? (
                         <div className="text-gray-400 mt-1.5 text-sm">{order.orderDetailsWithID.orderID.toString()}</div>
                       ) : (
                         <>
                       {ownershipFilter === 'mine' && order.orderDetailsWithID.status === 0 ? (
+                        <div className="flex items-center gap-2 justify-center">
+                          {/* Collect Proceeds Button - Show if there are proceeds to collect */}
+                          {(() => {
+                            const sellAmount = order.orderDetailsWithID.orderDetails.sellAmount;
+                            const filled = sellAmount - order.orderDetailsWithID.remainingSellAmount;
+                            const hasProceeds = filled > order.orderDetailsWithID.redeemedSellAmount;
+                            return hasProceeds && (
+                              <button
+                                onClick={() => handleCollectProceeds(order)}
+                                disabled={collectingOrders.has(order.orderDetailsWithID.orderID.toString())}
+                                className="p-2 -mt-1.5 rounded hover:bg-green-700/50 transition-colors disabled:opacity-50"
+                                title="Collect Proceeds"
+                              >
+                                {collectingOrders.has(order.orderDetailsWithID.orderID.toString()) ? (
+                                  <Loader2 className="w-5 h-5 text-green-400 animate-spin mx-auto" />
+                                ) : (
+                                  <CircleDollarSign className="w-5 h-5 text-green-400 hover:text-green-300 mx-auto" />
+                                )}
+                              </button>
+                            );
+                          })()}
+                          
+                          {/* Edit Expiration Button */}
+                          <button
+                            onClick={() => {
+                              const orderId = order.orderDetailsWithID.orderID.toString();
+                              setShowExpirationCalendar(orderId);
+                              // Set current expiration as default
+                              const currentExpiration = Number(order.orderDetailsWithID.orderDetails.expirationTime) * 1000;
+                              setSelectedExpirationDate(new Date(currentExpiration));
+                            }}
+                            disabled={updatingOrders.has(order.orderDetailsWithID.orderID.toString())}
+                            className="p-2 -mt-1.5 rounded hover:bg-blue-700/50 transition-colors disabled:opacity-50"
+                            title="Update Expiration"
+                          >
+                            {updatingOrders.has(order.orderDetailsWithID.orderID.toString()) ? (
+                              <Loader2 className="w-5 h-5 text-blue-400 animate-spin mx-auto" />
+                            ) : (
+                              <CalendarDays className="w-5 h-5 text-blue-400 hover:text-blue-300 mx-auto" />
+                            )}
+                          </button>
+                          
+                          {/* Cancel/Delete Button */}
                           <button
                             onClick={() => handleCancelOrder(order)}
                             disabled={cancelingOrders.has(order.orderDetailsWithID.orderID.toString())}
                             className="p-2 -mt-1.5 rounded hover:bg-gray-700/50 transition-colors disabled:opacity-50"
+                            title="Cancel Order"
                           >
                             {cancelingOrders.has(order.orderDetailsWithID.orderID.toString()) ? (
                               <Loader2 className="w-5 h-5 text-red-400 animate-spin mx-auto" />
@@ -2563,6 +2779,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                               <Trash2 className="w-5 h-5 text-red-400 hover:text-red-300 mx-auto" />
                             )}
                       </button>
+                        </div>
                       ) : ownershipFilter === 'non-mine' && order.orderDetailsWithID.status === 0 && statusFilter === 'active' ? (
                           <button
                             onClick={() => togglePositionExpansion(order.orderDetailsWithID.orderID.toString())}
@@ -2580,7 +2797,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                             />
                           </button>
                         ) : (
-                        // No action button for completed/inactive/cancelled orders
+                        // No action button for completed/expired/cancelled orders
                         <div className="w-16 h-8"></div>
                       )}
                         </>
@@ -2693,7 +2910,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                 }
                                 
                                 if (totalBuyAmount > 0) {
-                                  const platformFee = totalBuyAmount * 0.01; // 1% fee
+                                  const platformFee = totalBuyAmount * 0.002; // 0.2% fee
                                   const orderOwnerReceives = totalBuyAmount - platformFee;
                                   
                                   return (
@@ -2717,7 +2934,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                           </div>
                                         </div>
                                         <div className="flex justify-between">
-                                          <span className="text-gray-400">Platform Fee (1%):</span>
+                                          <span className="text-gray-400">Platform Fee (0.2%):</span>
                                           <div className="flex items-center space-x-1">
                                             <span className="text-white">{platformFee.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })}</span>
                                             {primaryTokenInfo !== null && (
@@ -2736,7 +2953,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                           <div className="flex justify-between">
                                             <span className="text-white font-bold">You Pay:</span>
                                             <div className="flex items-center space-x-1">
-                                              <span className="text-white font-bold">{formatNumberWithCommas(formatTokenAmountDisplay(totalBuyAmount))}</span>
+                                              <span className="text-white font-bold">{totalBuyAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })}</span>
                                               {primaryTokenInfo !== null && (
                                                 <>
                                                   <TokenLogo 
@@ -2983,6 +3200,73 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                 className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {updatingOrders.has(editingOrder) ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Calendar Popup for Expiration Update */}
+      {showExpirationCalendar && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+          <div className="bg-gray-900 border-2 border-[#00D9FF] rounded-lg p-6 max-w-md w-full mx-4 shadow-[0_0_30px_rgba(0,217,255,0.3)]">
+            <h3 className="text-xl font-bold text-[#00D9FF] mb-4">Update Expiration Date</h3>
+            
+            <div className="mb-6">
+              <Calendar
+                mode="single"
+                selected={selectedExpirationDate}
+                onSelect={setSelectedExpirationDate}
+                disabled={(date) => date < new Date()}
+                className="rounded-md border border-[#00D9FF]/30 bg-black p-3"
+                classNames={{
+                  months: "flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0",
+                  month: "space-y-4",
+                  caption: "flex justify-center pt-1 relative items-center text-[#00D9FF]",
+                  caption_label: "text-sm font-medium",
+                  nav: "space-x-1 flex items-center",
+                  nav_button: "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100 text-[#00D9FF]",
+                  nav_button_previous: "absolute left-1",
+                  nav_button_next: "absolute right-1",
+                  table: "w-full border-collapse space-y-1",
+                  head_row: "flex",
+                  head_cell: "text-[#00D9FF]/70 rounded-md w-9 font-normal text-[0.8rem]",
+                  row: "flex w-full mt-2",
+                  cell: "text-center text-sm p-0 relative [&:has([aria-selected])]:bg-[#00D9FF]/20 first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20",
+                  day: "h-9 w-9 p-0 font-normal text-white hover:bg-[#00D9FF]/30 hover:text-white rounded-md",
+                  day_selected: "bg-[#00D9FF] text-black hover:bg-[#00D9FF] hover:text-black focus:bg-[#00D9FF] focus:text-black",
+                  day_today: "bg-[#00D9FF]/20 text-[#00D9FF]",
+                  day_outside: "text-gray-600 opacity-50",
+                  day_disabled: "text-gray-600 opacity-30",
+                  day_hidden: "invisible",
+                }}
+              />
+            </div>
+            
+            {selectedExpirationDate && (
+              <div className="mb-4 p-3 bg-[#00D9FF]/10 border border-[#00D9FF]/30 rounded-lg">
+                <p className="text-sm text-[#00D9FF]">
+                  New expiration: <span className="font-bold">{selectedExpirationDate.toLocaleDateString()} at {selectedExpirationDate.toLocaleTimeString()}</span>
+                </p>
+              </div>
+            )}
+            
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowExpirationCalendar(null);
+                  setSelectedExpirationDate(undefined);
+                }}
+                className="flex-1 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleQuickExpirationUpdate(showExpirationCalendar)}
+                disabled={!selectedExpirationDate || updatingOrders.has(showExpirationCalendar)}
+                className="flex-1 px-4 py-2 bg-[#00D9FF] text-black rounded-lg hover:bg-[#00D9FF]/80 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {updatingOrders.has(showExpirationCalendar) ? 'Updating...' : 'Update Expiration'}
               </button>
             </div>
           </div>

@@ -6,6 +6,7 @@ import { useAccount } from 'wagmi';
 import { useOpenPositions } from '@/hooks/contracts/useOpenPositions';
 import { useTokenPrices } from '@/hooks/crypto/useTokenPrices';
 import { getTokenInfo, getTokenInfoByIndex, formatTokenTicker, formatTokenAmount } from '@/utils/tokenUtils';
+import { getBlockExplorerTxUrl } from '@/utils/blockExplorer';
 import { CircleDollarSign } from 'lucide-react';
 
 // Track which logos have failed to load to avoid repeat 404s
@@ -56,7 +57,7 @@ export function NotificationBell() {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   
-  // Filter out inactive orders and orders we can't display
+  // Filter out expired orders and orders we can't display
   const activeNotifications = useMemo(() => {
     if (!allOrders) return [];
     
@@ -75,9 +76,9 @@ export function NotificationBell() {
       
       const status = baseOrder.orderDetailsWithID.status;
       const expirationTime = Number(baseOrder.orderDetailsWithID.orderDetails.expirationTime);
-      const isInactive = status === 0 && expirationTime < currentTime;
+      const isExpired = status === 0 && expirationTime < currentTime;
       
-      return !isInactive;
+      return !isExpired;
     });
   }, [notifications, allOrders]);
 
@@ -197,7 +198,7 @@ export function NotificationBell() {
     const currentTime = Math.floor(Date.now() / 1000);
     
     if (status === 0 && expirationTime < currentTime) {
-      return 'Inactive';
+      return 'Expired';
     }
     
     switch (status) {
@@ -356,7 +357,7 @@ export function NotificationBell() {
                             onClick={(e) => {
                               e.stopPropagation();
                               markAsRead(notificationId);
-                              window.open(`https://otter.pulsechain.com/tx/${notif.txHash}`, '_blank');
+                              window.open(getBlockExplorerTxUrl(chainId, notif.txHash), '_blank');
                             }}
                             className="px-2 py-1 bg-transparent text-[#00D9FF] text-xs border border-[#00D9FF] hover:bg-[#00D9FF]/10 transition-colors whitespace-nowrap"
                           >

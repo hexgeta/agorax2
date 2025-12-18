@@ -1,30 +1,37 @@
 const fs = require('fs');
 const path = require('path');
 
-// Generate a manifest of all coin logos and their formats
 const logosDir = path.join(__dirname, '../public/coin-logos');
 const outputPath = path.join(__dirname, '../constants/logo-manifest.json');
 
+console.log('🎨 Generating logo manifest...');
+console.log('📁 Scanning:', logosDir);
+
 const manifest = {};
 
-// Read all files in coin-logos directory
+try {
 const files = fs.readdirSync(logosDir);
 
 files.forEach(file => {
-  const ext = path.extname(file).toLowerCase();
+    // Skip default.svg
+    if (file === 'default.svg') return;
+    
+    const ext = path.extname(file);
   if (ext === '.png' || ext === '.svg') {
     const ticker = path.basename(file, ext);
     
-    // If ticker already exists, prefer PNG over SVG (since we have more PNGs)
-    if (!manifest[ticker] || ext === '.png') {
-      manifest[ticker] = ext.slice(1); // Remove the dot
+      // Only add if not already in manifest (PNG takes precedence)
+      if (!manifest[ticker]) {
+        manifest[ticker] = ext.slice(1); // 'png' or 'svg'
     }
   }
 });
 
-// Write manifest to file
 fs.writeFileSync(outputPath, JSON.stringify(manifest, null, 2));
 
-console.log(`✅ Generated logo manifest with ${Object.keys(manifest).length} entries`);
-console.log(`   Output: ${outputPath}`);
-
+  console.log('✅ Generated logo manifest with', Object.keys(manifest).length, 'tokens');
+  console.log('📄 Saved to:', outputPath);
+} catch (error) {
+  console.error('❌ Error generating logo manifest:', error);
+  process.exit(1);
+}

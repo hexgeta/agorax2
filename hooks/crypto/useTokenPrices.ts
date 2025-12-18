@@ -186,7 +186,10 @@ async function fetchTokenPrices(contractAddresses: string[], customTokens: any[]
     let bestPairAddress: string | null = null;
     
     // First, try the configured DEX address if it exists
-    if (dexs && dexs !== '' && dexs !== '0x0') {
+    // Treat null address (0x0000...) as no DEX configured
+    const isNullAddress = !dexs || dexs === '' || dexs === '0x0' || dexs === '0x0000000000000000000000000000000000000000';
+    
+    if (!isNullAddress) {
       const dexAddress = Array.isArray(dexs) ? dexs[0] : dexs;
       bestPairAddress = dexAddress;
     } else {
@@ -195,6 +198,11 @@ async function fetchTokenPrices(contractAddresses: string[], customTokens: any[]
     }
     
     if (!bestPairAddress) {
+      // Token has no price source - add to results with null price but marked as "no price available"
+      results[contractAddress] = {
+        ...DEFAULT_PRICE_DATA,
+        price: -1 // Use -1 to indicate "no price available" vs "price is $0"
+      };
       continue;
     }
     

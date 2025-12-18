@@ -85,7 +85,7 @@ function createClient(chainId: number) {
 }
 
 // Helper function to fetch contract data efficiently
-async function fetchContractData(contractAddress: Address, chainId: number, userAddress?: Address) {
+async function fetchContractData(contractAddress: Address, chainId: number, userAddress?: Address | null) {
   try {
     if (!contractAddress) {
       throw new Error('No contract address provided');
@@ -148,7 +148,7 @@ async function fetchContractData(contractAddress: Address, chainId: number, user
     let allOrders: CompleteOrderDetails[] = [];
     
     if (userAddress) {
-      // ⚡ EFFICIENT: Use user-specific queries (4 calls instead of N calls)
+      // ⚡ EFFICIENT: Use user-specific queries (4 calls instead of N calls for user's own orders)
       const [openOrders, expiredOrders, completedOrders, cancelledOrders] = await Promise.all([
         client.readContract({
           address: contractAddress,
@@ -198,7 +198,8 @@ async function fetchContractData(contractAddress: Address, chainId: number, user
         ...convertOrders(cancelledOrders),
       ];
     } else {
-      // 🐌 FALLBACK: Fetch all orders for marketplace view (N calls)
+      // 🌐 MARKETPLACE MODE: Fetch ALL orders from all users (N calls where N = total orders)
+      // This is used when userAddress is null/undefined - typically in marketplace view
     if (orderCounter && orderCounter > 0n) {
       // Create array of order IDs (1 to orderCounter)
       const orderIds = Array.from({ length: Number(orderCounter) }, (_, i) => i + 1);
@@ -274,12 +275,14 @@ async function fetchContractData(contractAddress: Address, chainId: number, user
   }
 }
 
-export function useOpenPositions(userAddress?: Address) {
+export function useOpenPositions(userAddress?: Address | null, fetchAllOrders?: boolean) {
   const { chainId, isConnected, address: connectedAddress } = useAccount();
   const contractAddress = getContractAddress(chainId);
   
-  // Use provided userAddress or fall back to connected address
-  const queryAddress = userAddress || connectedAddress;
+  // Determine query address:
+  // - If fetchAllOrders is true, use null (marketplace mode - fetch ALL orders)
+  // - Otherwise use userAddress if provided, or fall back to connectedAddress
+  const queryAddress = fetchAllOrders ? null : (userAddress ?? connectedAddress);
   
   const [data, setData] = useState<{
     contractName: string | null;
@@ -311,8 +314,8 @@ export function useOpenPositions(userAddress?: Address) {
     setError(null);
     
     try {
-      // Pass queryAddress for efficient user-specific queries
-      const result = await fetchContractData(contractAddress as Address, chainId, queryAddress);
+      // Pass queryAddress for efficient user-specific queries (null for marketplace)
+      const result = await fetchContractData(contractAddress as Address, chainId, queryAddress as Address | null | undefined);
       setData(result);
       
       // If all data is null, there might be an issue

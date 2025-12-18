@@ -72,9 +72,9 @@ export const TOKEN_CONSTANTS = [{
 }, {
   chain: 369,
   a: "0xE9E1340A2b31d5D2a2dB28FB854a794E106b430a",
-  dexs: null,
+  dexs: "0x0000000000000000000000000000000000000000",
   ticker: "HTT3000",
-    decimals: 8,
+  decimals: 8,
   name: "HEX Time Token - 3k Days"
 }, {
   chain: 369,
@@ -132,7 +132,7 @@ export const TOKEN_CONSTANTS = [{
 },  {
   chain: 369,
   a: "0xefd766ccb38eaf1dfd701853bfce31359239f305",
-  dexs: null,
+  dexs: "0x0000000000000000000000000000000000000000",
   ticker: "weDAI",
   decimals: 18,
   name: "Wrapped DAI from Eth",
@@ -288,7 +288,7 @@ export const TOKEN_CONSTANTS = [{
 }, {
   chain: 369,
   a: "0xa5B0D537CeBE97f087Dc5FE5732d70719caaEc1D", // hUSDC
-  dexs: null,
+  dexs: "0x0000000000000000000000000000000000000000",
   ticker: "hUSDC",
   decimals: 6,
   name: "Hyperlane USDC",
@@ -3852,8 +3852,126 @@ export const TOKEN_CONSTANTS = [{
     ticker: "PLSC",
     decimals: 18,
     name: "PulseCoin"
-  }
-];
+  }, {
+  chain: 369,
+  a: "0x7f4db854f2231c6c90749386db83e8d3089389a5",
+  dexs: "0x0000000000000000000000000000000000000000",
+  ticker: "rETH",
+  decimals: 18,
+  name: "Rocket Pool ETH from Ethereum"
+}, {
+  chain: 369,
+  a: "0x08edb18cb120676ff4c3435726df424cc8e18638",
+  dexs: "0x0000000000000000000000000000000000000000",
+  ticker: "BUSD",
+  decimals: 18,
+  name: "BUSD Token from BSC (TokensExpress)"
+}, {
+  chain: 369,
+  a: "0xec345429357e75e81d162372a48b6c4307e1922d",
+  dexs: "0x0000000000000000000000000000000000000000",
+  ticker: "USDT",
+  decimals: 18,
+  name: "Tether USD from BSC (TokensExpress)"
+}, {
+  chain: 369,
+  a: "0x21dcb2c16c3773a565acb45f6c34348ec78a8385",
+  dexs: "0x0000000000000000000000000000000000000000",
+  ticker: "stPLS",
+  decimals: 18,
+  name: "Project Pi Liquid Staking Token"
+}, {
+  chain: 369,
+  a: "0xe986610b69d362493bba34fbbca98db430643db9",
+  dexs: "0x0000000000000000000000000000000000000000",
+  ticker: "eTEAM",
+  decimals: 8,
+  name: "Maximus Team from Ethereum"
+}, {
+  chain: 369,
+  a: "0xdaef4fd0901624777eb8d290d694ba6f2d55a7db",
+  dexs: "0x0000000000000000000000000000000000000000",
+  ticker: "ePARTY",
+  decimals: 18,
+  name: "Maximus Pool Party from Ethereum"
+}, {
+  chain: 369,
+  a: "0x4eb7c1c05087f98ae617d006f48914ee73ff8d2a",
+  dexs: "0x0000000000000000000000000000000000000000",
+  ticker: "XGAME",
+  decimals: 18,
+  name: "XGAME.IO"
+}, {
+  chain: 369,
+  a: "0xa804b9e522a2d1645a19227514cfe856ad8c2fbc",
+  dexs: "0x0000000000000000000000000000000000000000",
+  ticker: "DEVC",
+  decimals: 18,
+  name: "DEV Coin"
+}, {
+  chain: 369,
+  a: "0x3cf372aa6aaa46edc4b8da86294dec0ddeced632",
+  dexs: "0x0000000000000000000000000000000000000000",
+  ticker: "HTT4000",
+  decimals: 8,
+  name: "HEX Time Token 4000"
+}, {
+  chain: 369,
+  a: "0xcdbfaf528c7cea55d0aebdb93c218d6f23b24af3",
+  dexs: "0x0000000000000000000000000000000000000000",
+  ticker: "HTT6000",
+  decimals: 8,
+  name: "HEX Time Token 6000"
+}, {
+  chain: 369,
+  a: "0xfe53f25c164c3c73ad75bdeb17ed3364d7544afc",
+  dexs: "0x0000000000000000000000000000000000000000",
+  ticker: "SWAY",
+  decimals: 8,
+  name: "Sway"
+}, {
+  chain: 369,
+  a: "0xeb52ac4d25067185f75bab4bcbfbafa28c876a22",
+  dexs: "0x0000000000000000000000000000000000000000",
+  ticker: "VAULT",
+  decimals: 18,
+  name: "VAULT 369"
+}, {
+  chain: 369,
+  a: "0xf6703dbff070f231eed966d33b1b6d7ef5207d26",
+  dexs: "0x0000000000000000000000000000000000000000",
+  ticker: "ZERO",
+  decimals: 18,
+  name: "ZeroTrust"
+}, {
+  chain: 369,
+  a: "0x5d3a536e4d6dbd6114cc1ead35777bab948e3643",
+  dexs: "0x0000000000000000000000000000000000000000",
+  ticker: "cDAI",
+  decimals: 8,
+  name: "Compound Dai"
+}, {
+  chain: 369,
+  a: "0x0195d5990a7d6d7ee7a3a4610e357bb660494ba0",
+  dexs: "0x0000000000000000000000000000000000000000",
+  ticker: "COM",
+  decimals: 12,
+  name: "Communis from Ethereum"
+}, {
+  chain: 369,
+  a: "0xefbe5d24ea08aaff31163d05eabf75ef658196ba",
+  dexs: "0x0000000000000000000000000000000000000000",
+  ticker: "gCOMM",
+  decimals: 12,
+  name: "Giga Communis from Ethereum"
+}, {
+  chain: 369,
+  a: "0xe34cab4ccf271f4f149c4cc43697c5c5810c835a",
+  dexs: "0x0000000000000000000000000000000000000000",
+  ticker: "COMV",
+  decimals: 18,
+  name: "Communis Volume"
+}];
 
 export const API_ENDPOINTS = {
   historic_pulsechain: 'https://hexdailystats.com/fulldatapulsechain',

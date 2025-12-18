@@ -3,6 +3,8 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { CircleDollarSign, Lock } from 'lucide-react';
 import { getTokenInfo, getTokenInfoByIndex, formatTokenTicker, formatTokenAmount } from '@/utils/tokenUtils';
+import { getRemainingPercentage } from '@/utils/orderUtils';
+import { getBlockExplorerTxUrl } from '@/utils/blockExplorer';
 import { useTokenPrices } from '@/hooks/crypto/useTokenPrices';
 import { useTokenStats } from '@/hooks/crypto/useTokenStats';
 import { useAccount, usePublicClient } from 'wagmi';
@@ -10,11 +12,6 @@ import { useTokenAccess } from '@/context/TokenAccessContext';
 import { PAYWALL_ENABLED, REQUIRED_PARTY_TOKENS, REQUIRED_TEAM_TOKENS, PAYWALL_TITLE, PAYWALL_DESCRIPTION } from '@/config/paywall';
 import { getContractAddress } from '@/config/testing';
 import PaywallModal from './PaywallModal';
-
-// Helper function to get remaining percentage
-const getRemainingPercentage = (orderDetailsWithID: any): bigint => {
-  return orderDetailsWithID.remainingFillPercentage || orderDetailsWithID.remainingExecutionPercentage || 0n;
-};
 
 // Helper function to find the highest version of a token in tokenStats
 // e.g. if API has eBASE, eBASE2, eBASE3, it returns "eBASE3"
@@ -176,7 +173,7 @@ const getStatusText = (order: any) => {
   const currentTime = Math.floor(Date.now() / 1000);
   
   if (status === 0 && expirationTime < currentTime) {
-    return 'Inactive';
+    return 'Expired';
   }
   
   switch (status) {
@@ -256,7 +253,7 @@ export default function OrderHistoryTable({
       .map(transaction => {
         // Find the base order to get order details
         const baseOrder = allOrders.find(order => 
-          order.orderDetailsWithID.orderID.toString() === transaction.orderID
+          order.orderDetailsWithID.orderID.toString() === transaction.orderId
         );
         
         if (!baseOrder) {
@@ -358,7 +355,7 @@ export default function OrderHistoryTable({
             if (!sellTokenInfo) return -Infinity;
             
             const baseOrder = allOrders.find(order => 
-              order.orderDetailsWithID.orderID.toString() === row.transaction.orderID
+              order.orderDetailsWithID.orderID.toString() === row.transaction.orderId
             );
             if (!baseOrder) return -Infinity;
             
@@ -851,7 +848,7 @@ export default function OrderHistoryTable({
                   {isSellTransaction ? 'Sell' : 'Buy'}
                 </span>
                 <span className={`px-3 py-1 rounded-full text-sm font-medium border w-[110px] ${
-                  getStatusText(baseOrder) === 'Inactive'
+                  getStatusText(baseOrder) === 'Expired'
                     ? 'bg-yellow-500/20 text-yellow-400 border-yellow-400'
                     : baseOrder.orderDetailsWithID.status === 0 
                     ? 'bg-green-500/20 text-green-400 border-green-400' 
@@ -895,15 +892,15 @@ export default function OrderHistoryTable({
                 )}
                 {transaction?.transactionHash && (
                   <button
-                    onClick={() => window.open(`https://otter.pulsechain.com/tx/${transaction.transactionHash}`, '_blank')}
+                    onClick={() => window.open(getBlockExplorerTxUrl(chainId, transaction.transactionHash), '_blank')}
                     className="px-3 py-2 mt-1 font-medium bg-transparent text-[#00D9FF] text-xs rounded-full border border-white hover:bg-[#00D9FF]/10 hover:text-[#00D9FF] transition-colors"
-                    title="View Transaction on Otterscan"
+                    title="View Transaction on Block Explorer"
                   >
                     View Tx
                   </button>
                 )}
                 <span className="text-gray-600 text-xs mt-1">
-                  Order ID: {transaction.orderID}
+                  Order ID: {transaction.orderId}
                 </span>
               </div>
             </div>
