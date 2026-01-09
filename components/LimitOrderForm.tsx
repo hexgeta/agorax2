@@ -239,6 +239,8 @@ export function LimitOrderForm({
   const hasInitializedTokensRef = useRef<boolean>(false);
   const lastEditedInputRef = useRef<'sell' | number | null>(null); // 'sell' or buy index
   const isUpdatingFromOtherInputRef = useRef<boolean>(false);
+  const previousSellTokenRef = useRef<TokenOption | null>(null);
+  const previousBuyTokenRef = useRef<TokenOption | null>(null);
   const isTokenChangingRef = useRef<boolean>(false);
 
   // Hooks for contract interaction

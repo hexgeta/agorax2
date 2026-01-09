@@ -19,14 +19,14 @@ export default function Home() {
   const { toast } = useToast();
   const openPositionsTableRef = useRef<any>(null);
   const [isInitializing, setIsInitializing] = useState(true);
-  
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const accepted = localStorage.getItem('disclaimer-accepted');
       setShowDisclaimer(accepted !== 'true');
     }
   }, []);
-  
+
   // Set initializing to false once connection status is determined
   useEffect(() => {
     if (!isConnecting) {
@@ -37,7 +37,7 @@ export default function Home() {
       return () => clearTimeout(timer);
     }
   }, [isConnecting]);
-  
+
   // Chart and form state
   const [sellTokenAddress, setSellTokenAddress] = useState<string | undefined>();
   const [buyTokenAddresses, setBuyTokenAddresses] = useState<(string | undefined)[]>([]);
@@ -52,7 +52,7 @@ export default function Home() {
     }
     return true;
   });
-  
+
   // Set to false to hide the whitelist debugger
   const SHOW_WHITELIST_DEBUGGER = false;
 
@@ -85,115 +85,115 @@ export default function Home() {
       });
     }, 3000);
   };
-  
+
   return (
     <>
       <DisclaimerDialog open={showDisclaimer} onAccept={() => setShowDisclaimer(false)} />
       <LogoPreloader />
       <main className="flex min-h-screen flex-col items-center">
         {/* Hero Section */}
-      <div className="w-full px-2 md:px-8 mt-24 mb-0 bg-black">
-        <div className="max-w-[1200px] mx-auto">
-          {/* Loading State */}
-          {(isInitializing || isConnecting) && (
-            <div className="flex flex-col items-center justify-center py-20">
-              <Loader2 className="h-12 w-12 animate-spin text-[#00D9FF] mb-4" />
-            </div>
-          )}
-          
-          {/* Not Connected State */}
-          {!isInitializing && !isConnecting && !isConnected && (
-            <div className="text-center">
-              <h2 className="text-3xl md:text-5xl md:leading-[90px] font-bold text-white mb-0">
-                The best place to trade on PulseChain
-              </h2>
-              <p className="text-md md:text-xl text-gray-400 max-w-2xl mx-auto mb-6 mt-4 md:mt-0 flex items-center justify-center">
-                Low fees. Fast execution. On your own terms.
-              </p>
-            </div>
-          )}
-          
-          {/* Connected State */}
-          {!isInitializing && !isConnecting && isConnected && (
-            <>
-              <div className="flex flex-col items-center gap-4">
-              {/* Main Create Deal Button with Loading State */}
-              {isTransactionLoading && (
-                <div className="flex justify-center">
-                  <div className="px-8 py-3 border border-white text-white rounded-full font-semibold flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Processing Transaction...
-                  </div>
-                </div>
-              )}
-              
-              {/* Chart and Form Section */}
-              <div className="w-full mt-8">
-                <div className="flex flex-col lg:grid lg:grid-cols-5 gap-4">
-                  {/* Chart - Full width on mobile, 3 columns on desktop */}
-                  <div className="w-full lg:col-span-3 min-h-[400px]">
-                    <LimitOrderChart 
-                      sellTokenAddress={sellTokenAddress}
-                      buyTokenAddresses={buyTokenAddresses}
-                      limitOrderPrice={limitOrderPrice}
-                      invertPriceDisplay={invertPriceDisplay}
-                      onLimitPriceChange={(newPrice) => {
-                        setLimitOrderPrice(newPrice);
-                      }}
-                      onCurrentPriceChange={(price) => {
-                        setCurrentMarketPrice(price);
-                      }}
-                      onDragStateChange={(dragging) => {
-                        setIsDragging(dragging);
-                      }}
-                    />
-                  </div>
-                  
-                  {/* Order Form - Full width on mobile, 2 columns on desktop */}
-                  <div className="w-full lg:col-span-2">
-                    <LimitOrderForm
-                      externalLimitPrice={limitOrderPrice}
-                      externalMarketPrice={currentMarketPrice}
-                      isDragging={isDragging}
-                      onTokenChange={(sell, buyTokens) => {
-                        setSellTokenAddress(sell);
-                        setBuyTokenAddresses(buyTokens);
-                      }}
-                      onLimitPriceChange={(price) => {
-                        setLimitOrderPrice(price);
-                      }}
-                      onInvertPriceDisplayChange={(inverted) => {
-                        setInvertPriceDisplay(inverted);
-                      }}
-                      onCreateOrderClick={(sellToken, buyTokens, sellAmount, buyAmounts, expirationDays) => {
-                        // Order creation is now handled directly in the form
-                        // No need to open the modal
-                      }}
-                      onOrderCreated={() => {
-                        // Refresh the positions table when a new order is created
-                        if (openPositionsTableRef.current?.refreshAndNavigateToMyActiveOrders) {
-                          openPositionsTableRef.current.refreshAndNavigateToMyActiveOrders();
-                        }
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Main Content */}
-      {!isInitializing && !isConnecting && (
-        <div className="w-full px-2 md:px-8 mt-2">
+        <div className="w-full px-2 md:px-8 mt-24 mb-0 bg-black">
           <div className="max-w-[1200px] mx-auto">
-            {SHOW_WHITELIST_DEBUGGER && <WhitelistDebugger />}
-            <OpenPositionsTable ref={openPositionsTableRef} />
+            {/* Loading State */}
+            {(isInitializing || isConnecting) && (
+              <div className="flex flex-col items-center justify-center py-20">
+                <Loader2 className="h-12 w-12 animate-spin text-white mb-4" />
+              </div>
+            )}
+
+            {/* Not Connected State */}
+            {!isInitializing && !isConnecting && !isConnected && (
+              <div className="text-center">
+                <h2 className="text-3xl md:text-5xl md:leading-[90px] font-bold text-white mb-0">
+                  The best place to trade on PulseChain
+                </h2>
+                <p className="text-md md:text-xl text-gray-400 max-w-2xl mx-auto mb-6 mt-4 md:mt-0 flex items-center justify-center">
+                  Low fees. Fast execution. On your own terms.
+                </p>
+              </div>
+            )}
+
+            {/* Connected State */}
+            {!isInitializing && !isConnecting && isConnected && (
+              <>
+                <div className="flex flex-col items-center gap-4">
+                  {/* Main Create Deal Button with Loading State */}
+                  {isTransactionLoading && (
+                    <div className="flex justify-center">
+                      <div className="px-8 py-3 border border-white text-white rounded-full font-semibold flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Processing Transaction...
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Chart and Form Section */}
+                  <div className="w-full mt-8">
+                    <div className="flex flex-col lg:grid lg:grid-cols-5 gap-4">
+                      {/* Chart - Full width on mobile, 3 columns on desktop */}
+                      <div className="w-full lg:col-span-3 min-h-[400px]">
+                        <LimitOrderChart
+                          sellTokenAddress={sellTokenAddress}
+                          buyTokenAddresses={buyTokenAddresses}
+                          limitOrderPrice={limitOrderPrice}
+                          invertPriceDisplay={invertPriceDisplay}
+                          onLimitPriceChange={(newPrice) => {
+                            setLimitOrderPrice(newPrice);
+                          }}
+                          onCurrentPriceChange={(price) => {
+                            setCurrentMarketPrice(price);
+                          }}
+                          onDragStateChange={(dragging) => {
+                            setIsDragging(dragging);
+                          }}
+                        />
+                      </div>
+
+                      {/* Order Form - Full width on mobile, 2 columns on desktop */}
+                      <div className="w-full lg:col-span-2">
+                        <LimitOrderForm
+                          externalLimitPrice={limitOrderPrice}
+                          externalMarketPrice={currentMarketPrice}
+                          isDragging={isDragging}
+                          onTokenChange={(sell, buyTokens) => {
+                            setSellTokenAddress(sell);
+                            setBuyTokenAddresses(buyTokens);
+                          }}
+                          onLimitPriceChange={(price) => {
+                            setLimitOrderPrice(price);
+                          }}
+                          onInvertPriceDisplayChange={(inverted) => {
+                            setInvertPriceDisplay(inverted);
+                          }}
+                          onCreateOrderClick={(sellToken, buyTokens, sellAmount, buyAmounts, expirationDays) => {
+                            // Order creation is now handled directly in the form
+                            // No need to open the modal
+                          }}
+                          onOrderCreated={() => {
+                            // Refresh the positions table when a new order is created
+                            if (openPositionsTableRef.current?.refreshAndNavigateToMyActiveOrders) {
+                              openPositionsTableRef.current.refreshAndNavigateToMyActiveOrders();
+                            }
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
-      )}
+
+        {/* Main Content */}
+        {!isInitializing && !isConnecting && (
+          <div className="w-full px-2 md:px-8 mt-2">
+            <div className="max-w-[1200px] mx-auto">
+              {SHOW_WHITELIST_DEBUGGER && <WhitelistDebugger />}
+              <OpenPositionsTable ref={openPositionsTableRef} />
+            </div>
+          </div>
+        )}
       </main>
     </>
   );

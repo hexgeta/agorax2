@@ -67,8 +67,8 @@ export default function StatsPage() {
     try {
       // Query ALL OrderPlaced events
       const logs = await publicClient.getLogs({
-        address: OTC_CONTRACT_ADDRESS,
-        event: parseAbiItem('event OrderPlaced(address indexed user, uint256 indexed orderID, address indexed sellToken, uint256 sellAmount)'),
+        address: OTC_CONTRACT_ADDRESS as any,
+        event: parseAbiItem('event OrderPlaced(address indexed user, uint256 indexed orderID, address indexed sellToken, uint256 sellAmount)') as any,
         fromBlock: 'earliest'
       });
 
@@ -88,7 +88,7 @@ export default function StatsPage() {
           });
 
           const tokenInfo = getTokenInfo(sellToken);
-          const sellAmountFormatted = tokenInfo 
+          const sellAmountFormatted = tokenInfo
             ? parseFloat(formatTokenAmount(sellAmount, tokenInfo.decimals))
             : 0;
 
@@ -120,8 +120,8 @@ export default function StatsPage() {
     try {
       // Query ALL OrderFilled events
       const logs = await publicClient.getLogs({
-        address: OTC_CONTRACT_ADDRESS,
-        event: parseAbiItem('event OrderFilled(address indexed buyer, uint256 indexed orderID, uint256 indexed buyTokenIndex, uint256 buyAmount)'),
+        address: OTC_CONTRACT_ADDRESS as any,
+        event: parseAbiItem('event OrderFilled(address indexed buyer, uint256 indexed orderID, uint256 indexed buyTokenIndex, uint256 buyAmount)') as any,
         fromBlock: 'earliest'
       });
 
@@ -151,7 +151,7 @@ export default function StatsPage() {
             const to = `0x${transferLog.topics[2]?.slice(26)}`.toLowerCase();
             const value = transferLog.data ? BigInt(transferLog.data) : BigInt(0);
 
-            if (from === OTC_CONTRACT_ADDRESS.toLowerCase()) {
+            if (OTC_CONTRACT_ADDRESS && from === OTC_CONTRACT_ADDRESS.toLowerCase()) {
               const tokenInfo = getTokenInfo(tokenAddress);
               if (tokenInfo && tokenInfo.address !== '0x0000000000000000000000000000000000000000') {
                 sellAmount = parseFloat(formatTokenAmount(value, tokenInfo.decimals));
@@ -159,7 +159,7 @@ export default function StatsPage() {
               }
             }
 
-            if (to === OTC_CONTRACT_ADDRESS.toLowerCase()) {
+            if (OTC_CONTRACT_ADDRESS && to === OTC_CONTRACT_ADDRESS.toLowerCase()) {
               const tokenInfo = getTokenInfo(tokenAddress);
               if (tokenInfo && tokenInfo.address !== '0x0000000000000000000000000000000000000000') {
                 buyTokens[tokenAddress] = parseFloat(formatTokenAmount(value, tokenInfo.decimals));
@@ -235,17 +235,17 @@ export default function StatsPage() {
           <div className="max-w-[1200px] mx-auto space-y-8">
             {isLoading ? (
               <div className="text-center py-12">
-                <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#00D9FF]"></div>
-                <p className="text-[#00D9FF] mt-4">Loading statistics...</p>
+                <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-white"></div>
+                <p className="text-white mt-4">Loading statistics...</p>
               </div>
             ) : (
               <>
-                <VolumeChart 
+                <VolumeChart
                   transactions={transactions}
                   tokenPrices={tokenPrices}
                 />
-                
-                <OrderVolumeChart 
+
+                <OrderVolumeChart
                   orders={orders}
                   tokenPrices={tokenPrices}
                 />
