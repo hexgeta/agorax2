@@ -2091,9 +2091,10 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
 
   return (
     <LiquidGlassCard
-      className="w-full max-w-[1200px] mx-auto mb-6 mt-2 p-6 bg-black/40"
-      shadowIntensity="none"
-      glowIntensity="none"
+      className="w-full max-w-[1200px] mx-auto mb-6 mt-2 p-6"
+      shadowIntensity="sm"
+      glowIntensity="sm"
+      blurIntensity="xl"
     >
       <div className="flex flex-wrap justify-start gap-3 mb-6">
         <button
@@ -3179,45 +3180,67 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
       {/* Calendar Popup for Expiration Update */}
       {
         showExpirationCalendar && (
-          <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
-            <div className="bg-gray-900 border-2 border-[rgba(255, 255, 255, 1)] rounded-lg p-6 max-w-md w-full mx-4 shadow-[0_0_30px_rgba(255,255,255,0.2)]">
-              <h3 className="text-xl font-bold text-white mb-4">Update Expiration Date</h3>
+          <div
+            className="fixed inset-0 bg-black/80 flex items-center justify-center z-[9999]"
+            onClick={() => {
+              setShowExpirationCalendar(null);
+              setSelectedExpirationDate(undefined);
+            }}
+          >
+            <div
+              className="bg-black rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl border border-white/20"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-semibold text-white">Update Expiration Date</h3>
+                <button
+                  onClick={() => {
+                    setShowExpirationCalendar(null);
+                    setSelectedExpirationDate(undefined);
+                  }}
+                  className="text-white/60 hover:text-white transition-colors p-1"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                </button>
+              </div>
 
-              <div className="mb-6">
+              <div className="mb-6 flex justify-center">
                 <Calendar
                   mode="single"
                   selected={selectedExpirationDate}
                   onSelect={setSelectedExpirationDate}
                   disabled={(date) => date < new Date()}
-                  className="rounded-md border border-[rgba(255, 255, 255, 1)]/30 bg-black p-3"
+                  className="rounded-lg border border-white/20 bg-black p-3 text-white"
                   classNames={{
-                    months: "flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0",
-                    month: "space-y-4",
-                    caption: "flex justify-center pt-1 relative items-center text-white",
-                    caption_label: "text-sm font-medium",
-                    nav: "space-x-1 flex items-center",
-                    nav_button: "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100 text-white",
-                    nav_button_previous: "absolute left-1",
-                    nav_button_next: "absolute right-1",
-                    table: "w-full border-collapse space-y-1",
-                    head_row: "flex",
-                    head_cell: "text-white/70 rounded-md w-9 font-normal text-[0.8rem]",
-                    row: "flex w-full mt-2",
-                    cell: "text-center text-sm p-0 relative [&:has([aria-selected])]:bg-[rgba(255, 255, 255, 1)]/20 first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20",
-                    day: "h-9 w-9 p-0 font-normal text-white hover:bg-[rgba(255, 255, 255, 1)]/30 hover:text-white rounded-md",
-                    day_selected: "bg-[rgba(255, 255, 255, 1)] text-black hover:bg-[rgba(255, 255, 255, 1)] hover:text-black focus:bg-[rgba(255, 255, 255, 1)] focus:text-black",
-                    day_today: "bg-[rgba(255, 255, 255, 1)]/20 text-white",
-                    day_outside: "text-gray-600 opacity-50",
-                    day_disabled: "text-gray-600 opacity-30",
-                    day_hidden: "invisible",
+                    months: "flex flex-col sm:flex-row gap-2",
+                    month: "flex flex-col gap-4",
+                    month_caption: "flex justify-center pt-1 relative items-center w-full",
+                    caption_label: "text-sm font-medium text-white",
+                    nav: "flex items-center gap-1",
+                    button_previous: "size-7 bg-transparent p-0 opacity-70 hover:opacity-100 absolute left-1 text-white hover:bg-white/10 rounded",
+                    button_next: "size-7 bg-transparent p-0 opacity-70 hover:opacity-100 absolute right-1 text-white hover:bg-white/10 rounded",
+                    month_grid: "w-full border-collapse",
+                    weekdays: "flex",
+                    weekday: "text-white/60 rounded-md w-9 font-normal text-[0.8rem] text-center",
+                    week: "flex w-full mt-2",
+                    day: "h-9 w-9 text-center text-sm p-0 relative focus-within:relative focus-within:z-20",
+                    day_button: "h-9 w-9 p-0 font-normal text-white hover:bg-white/20 rounded-md transition-colors aria-selected:opacity-100",
+                    selected: "bg-white text-black hover:bg-white hover:text-black",
+                    today: "bg-white/20 text-white",
+                    outside: "text-white/40 opacity-50",
+                    disabled: "text-white/20 opacity-50 cursor-not-allowed",
+                    hidden: "invisible",
                   }}
                 />
               </div>
 
               {selectedExpirationDate && (
-                <div className="mb-4 p-3 bg-[rgba(255, 255, 255, 1)]/5 border border-[rgba(255, 255, 255, 1)]/30 rounded-lg">
-                  <p className="text-sm text-white">
-                    New expiration: <span className="font-bold">{selectedExpirationDate.toLocaleDateString()} at {selectedExpirationDate.toLocaleTimeString()}</span>
+                <div className="mb-4 p-3 bg-white/5 border border-white/20 rounded-lg">
+                  <p className="text-sm text-white/70">
+                    New expiration: <span className="font-semibold text-white">{selectedExpirationDate.toLocaleDateString()} at {selectedExpirationDate.toLocaleTimeString()}</span>
                   </p>
                 </div>
               )}
@@ -3228,14 +3251,14 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                     setShowExpirationCalendar(null);
                     setSelectedExpirationDate(undefined);
                   }}
-                  className="flex-1 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors"
+                  className="flex-1 px-4 py-2 bg-black text-white rounded-lg hover:bg-white/10 transition-colors border border-white/20"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={() => handleQuickExpirationUpdate(showExpirationCalendar)}
                   disabled={!selectedExpirationDate || updatingOrders.has(showExpirationCalendar)}
-                  className="flex-1 px-4 py-2 bg-[rgba(255, 255, 255, 1)] text-black rounded-lg hover:bg-[rgba(255, 255, 255, 1)]/80 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 px-4 py-2 bg-white text-black rounded-lg hover:bg-white/90 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {updatingOrders.has(showExpirationCalendar) ? 'Loading' : 'Update Expiration'}
                 </button>

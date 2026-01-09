@@ -11,6 +11,8 @@ import { LimitOrderForm } from '@/components/LimitOrderForm';
 import useToast from '@/hooks/use-toast';
 import { ToastAction } from '@/components/ui/toast';
 import { PixelSpinner } from '@/components/ui/PixelSpinner';
+import PixelBlastBackground from '@/components/ui/PixelBlastBackground';
+import { motion } from 'framer-motion';
 
 export default function Home() {
   const [isTransactionLoading, setIsTransactionLoading] = useState(false);
@@ -90,9 +92,23 @@ export default function Home() {
     <>
       <DisclaimerDialog open={showDisclaimer} onAccept={() => setShowDisclaimer(false)} />
       <LogoPreloader />
-      <main className="flex min-h-screen flex-col items-center">
+      <main className="flex min-h-screen flex-col items-center relative overflow-hidden">
+        {/* Animated background effect - fades in after UI loads */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: !isInitializing && !isConnecting ? 1 : 0 }}
+          transition={{
+            duration: 1.2,
+            delay: 0.3,
+            ease: [0.23, 1, 0.32, 1]
+          }}
+          className="fixed inset-0 z-0"
+        >
+          <PixelBlastBackground />
+        </motion.div>
+
         {/* Hero Section */}
-        <div className="w-full px-2 md:px-8 mt-2 mb-0 bg-black">
+        <div className="w-full px-2 md:px-8 mt-2 mb-0 relative z-10">
           <div className="max-w-[1200px] mx-auto">
             {/* Loading State */}
             {(isInitializing || isConnecting) && (
@@ -187,7 +203,7 @@ export default function Home() {
 
         {/* Main Content */}
         {!isInitializing && !isConnecting && (
-          <div className="w-full px-2 md:px-8 mt-2">
+          <div className="w-full px-2 md:px-8 mt-2 relative z-10">
             <div className="max-w-[1200px] mx-auto">
               {SHOW_WHITELIST_DEBUGGER && <WhitelistDebugger />}
               <OpenPositionsTable ref={openPositionsTableRef} />

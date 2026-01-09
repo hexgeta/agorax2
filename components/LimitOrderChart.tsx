@@ -273,9 +273,10 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
 
   return (
     <LiquidGlassCard
-      className="w-full h-full min-h-[400px] max-h-[calc(100vh-200px)] flex flex-col overflow-y-auto p-6 bg-black/40"
-      shadowIntensity="none"
-      glowIntensity="none"
+      className="w-full h-full min-h-[400px] max-h-[calc(100vh-200px)] flex flex-col overflow-y-auto p-6"
+      shadowIntensity="sm"
+      glowIntensity="sm"
+      blurIntensity="xl"
     >
       {/* Token Pair Info */}
       {displayBaseTokenInfo && displayQuoteTokenInfo && (
@@ -314,7 +315,7 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
           {/* Visual Price Scale */}
           <div
             ref={containerRef}
-            className="relative flex-1 bg-black/40 rounded select-none"
+            className="relative flex-1 bg-black/10 rounded select-none"
           >
             {/* Y-axis tick marks */}
             {[-30, -25, -20, -15, -10, -5, 0, 5, 10, 15, 20, 25, 30].map((percentDiff) => {

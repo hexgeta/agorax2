@@ -81,7 +81,7 @@ const formatDisplayValue = (value: number): number => {
   return parseFloat(value.toPrecision(4));
 };
 
-// Helper to format calculated values for state
+// Helper to format calculated values for state (with commas)
 const formatCalculatedValue = (value: number): string => {
   if (value === 0) return '';
 
@@ -92,7 +92,7 @@ const formatCalculatedValue = (value: number): string => {
     str = str.replace(/\.?0+$/, '');
   }
 
-  return str;
+  return formatNumberWithCommas(str);
 };
 
 // Helper function to find the highest version of a token in tokenStats
@@ -1267,12 +1267,13 @@ export function LimitOrderForm({
       maxAmount = Math.max(0, balanceNum - reservedGas).toString();
     }
 
-    setSellAmount(maxAmount);
+    setSellAmount(formatNumberWithCommas(maxAmount));
   };
 
   const handleSellAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value;
-    value = value.replace(/[^0-9.]/g, '');
+    // Remove commas first, then filter to only numbers and decimal
+    value = removeCommas(value).replace(/[^0-9.]/g, '');
 
     const parts = value.split('.');
     if (parts.length > 2) {
@@ -1280,12 +1281,14 @@ export function LimitOrderForm({
     }
 
     lastEditedInputRef.current = 'sell';
-    setSellAmount(value);
+    // Store with commas for display
+    setSellAmount(formatNumberWithCommas(value));
   };
 
   const handleBuyAmountChange = (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
     let value = e.target.value;
-    value = value.replace(/[^0-9.]/g, '');
+    // Remove commas first, then filter to only numbers and decimal
+    value = removeCommas(value).replace(/[^0-9.]/g, '');
 
     const parts = value.split('.');
     if (parts.length > 2) {
@@ -1294,7 +1297,8 @@ export function LimitOrderForm({
 
     lastEditedInputRef.current = index;
     const newAmounts = [...buyAmounts];
-    newAmounts[index] = value;
+    // Store with commas for display
+    newAmounts[index] = formatNumberWithCommas(value);
     setBuyAmounts(newAmounts);
   };
 
@@ -1415,7 +1419,7 @@ export function LimitOrderForm({
 
   return (
     <>
-      <LiquidGlassCard className="w-full h-full p-6 shadow-md overflow-y-scroll max-h-[calc(100vh-200px)] bg-black/40 scrollbar-hide" shadowIntensity="md" glowIntensity="medium">
+      <LiquidGlassCard className="w-full h-full p-6 overflow-y-scroll max-h-[calc(100vh-200px)] scrollbar-hide" shadowIntensity="sm" glowIntensity="sm" blurIntensity="xl">
         {/* Sell Section */}
         <LiquidGlassCard
           className="mb-4 p-4 bg-white/5 border-white/10 overflow-visible relative z-30"

@@ -43,6 +43,7 @@
     "lucide-react": "^0.309.0",
     "next": "15.5.9",
     "next-themes": "^0.2.1",
+    "postprocessing": "^6.38.2",
     "react": "^18",
     "react-day-picker": "^9.11.1",
     "react-dom": "^18",
