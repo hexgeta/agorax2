@@ -239,8 +239,6 @@ export function LimitOrderForm({
   const hasInitializedTokensRef = useRef<boolean>(false);
   const lastEditedInputRef = useRef<'sell' | number | null>(null); // 'sell' or buy index
   const isUpdatingFromOtherInputRef = useRef<boolean>(false);
-  const previousSellTokenRef = useRef<TokenOption | null>(null);
-  const previousBuyTokenRef = useRef<TokenOption | null>(null);
   const isTokenChangingRef = useRef<boolean>(false);
 
   // Hooks for contract interaction
@@ -1414,7 +1412,7 @@ export function LimitOrderForm({
 
   return (
     <>
-      <LiquidGlassCard className="w-full h-full p-6 shadow-md overflow-y-scroll max-h-[calc(100vh-200px)] bg-black/40 modern-scrollbar" shadowIntensity="md" glowIntensity="medium">
+      <LiquidGlassCard className="w-full h-full p-6 shadow-md overflow-y-scroll max-h-[calc(100vh-200px)] bg-black/40 scrollbar-hide" shadowIntensity="md" glowIntensity="medium">
         {/* Sell Section */}
         <LiquidGlassCard
           className="mb-4 p-4 bg-white/5 border-white/10 overflow-visible relative z-30"
@@ -2047,8 +2045,8 @@ export function LimitOrderForm({
             <button
               onClick={() => handleExpirationPreset(1 / 24)} // 1 hour = 1/24 day
               className={`flex-1 py-1.5 text-xs text-white transition-all h-[32px] flex items-center justify-center rounded-full border ${Math.abs(expirationDays - (1 / 24)) < 0.0001
-                ? 'bg-[#00D9FF]/20 text-white border-[#00D9FF]/50'
-                : 'bg-black/40 text-gray-300 border-white/10 hover:bg-[#00D9FF]/10 hover:text-white'
+                ? 'bg-white/20 text-white border-white/50'
+                : 'bg-black/40 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'
                 }`}
             >
               1h

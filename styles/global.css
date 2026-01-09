@@ -106,35 +106,29 @@ body {
   }
 }
 
-/* Modern Rounded Scrollbar - Always Visible White */
+/* Modern Rounded Scrollbar */
 .modern-scrollbar::-webkit-scrollbar {
-  width: 14px;
-  height: 10px;
-  display: block;
+  width: 8px;
+  height: 8px;
 }
 
 .modern-scrollbar::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.05);
   border-radius: 10px;
-  border-right: 4px solid transparent;
-  background-clip: padding-box;
 }
 
 .modern-scrollbar::-webkit-scrollbar-thumb {
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.2);
   border-radius: 10px;
-  border-right: 4px solid transparent;
-  background-clip: padding-box;
 }
 
 .modern-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.3);
 }
 
 .modern-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: #ffffff rgba(255, 255, 255, 0.08);
-  scrollbar-gutter: stable;
+  scrollbar-color: rgba(255, 255, 255, 0.2) rgba(255, 255, 255, 0.05);
 }
 
 .App {

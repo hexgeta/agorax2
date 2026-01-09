@@ -338,11 +338,11 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                       {percentDiff > 0 ? '+' : ''}{percentDiff}%
                     </span>
                   </div>
-                  <svg className="flex-1 h-px ml-2 opacity-20 pointer-events-none overflow-visible">
+                  <svg className="flex-1 h-px ml-2 opacity-10 pointer-events-none overflow-visible">
                     <line
                       x1="0" y1="0" x2="100%" y2="0"
                       stroke="white"
-                      strokeWidth="1"
+                      strokeWidth="2"
                       strokeDasharray="4 4"
                     />
                   </svg>
