@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAccount, usePublicClient } from 'wagmi';
 import { parseAbiItem } from 'viem';
 import { DisclaimerDialog } from '@/components/DisclaimerDialog';
+import { PixelSpinner } from '@/components/ui/PixelSpinner';
 import { LogoPreloader } from '@/components/LogoPreloader';
 import VolumeChart from '@/components/VolumeChart';
 import OrderVolumeChart from '@/components/OrderVolumeChart';
@@ -218,25 +219,14 @@ export default function StatsPage() {
       <DisclaimerDialog open={showDisclaimer} onAccept={() => setShowDisclaimer(false)} />
       <LogoPreloader />
       <main className="flex min-h-screen flex-col items-center">
-        {/* Hero Section */}
-        <div className="w-full px-2 md:px-8 mt-24 mb-0 bg-black">
-          <div className="max-w-[1200px] mx-auto text-center">
-            <h2 className="text-3xl md:text-5xl md:leading-[90px] font-bold text-white mb-0">
-              Platform Statistics
-            </h2>
-            <p className="text-md md:text-xl text-gray-400 max-w-2xl mx-auto mb-6 mt-4 md:mt-0 flex items-center justify-center">
-              Trading volume and activity across AgoráX
-            </p>
-          </div>
-        </div>
 
         {/* Main Content */}
-        <div className="w-full px-2 md:px-8 mt-8">
+        <div className="w-full px-2 md:px-8 mt-2">
           <div className="max-w-[1200px] mx-auto space-y-8">
             {isLoading ? (
               <div className="text-center py-12">
-                <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-white"></div>
-                <p className="text-white mt-4">Loading statistics...</p>
+                <PixelSpinner size={48} className="mx-auto" />
+                <p className="text-white mt-8">Loading</p>
               </div>
             ) : (
               <>

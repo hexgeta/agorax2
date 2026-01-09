@@ -34,30 +34,63 @@ const NavBar = () => {
             {/* Navigation Links */}
             <Link
               href="/"
-              className={`transition-colors font-medium text-sm md:text-base px-4 py-2 cursor-pointer ${pathname === '/'
-                ? 'text-white underline underline-offset-4'
+              className={`transition-colors font-medium text-sm md:text-base px-4 py-2 cursor-pointer group ${pathname === '/'
+                ? 'text-white'
                 : 'text-white/80 hover:text-white'
                 }`}
             >
-              My Orders
+              <span className="relative inline-block">
+                My Orders
+                <span className={`absolute bottom-[-4px] left-0 w-full h-0.5 bg-white transition-transform duration-300 ease-out origin-left ${pathname === '/'
+                  ? 'scale-x-100'
+                  : 'scale-x-0 group-hover:scale-x-100 group-hover:origin-left'
+                  }`}
+                  style={{
+                    transformOrigin: pathname === '/' ? 'left' : undefined
+                  }}
+                />
+                {pathname !== '/' && (
+                  <span className="absolute bottom-[-4px] left-0 w-full h-0.5 bg-white scale-x-0 transition-transform duration-300 ease-out origin-right group-hover:scale-x-0" />
+                )}
+              </span>
             </Link>
             <Link
               href="/marketplace"
-              className={`transition-colors font-medium text-sm md:text-base px-4 py-2 cursor-pointer ${pathname === '/marketplace'
-                ? 'text-white underline underline-offset-4'
+              className={`transition-colors font-medium text-sm md:text-base px-4 py-2 cursor-pointer group ${pathname === '/marketplace'
+                ? 'text-white'
                 : 'text-white/80 hover:text-white'
                 }`}
             >
-              Marketplace
+              <span className="relative inline-block">
+                Marketplace
+                <span className={`absolute bottom-[-4px] left-0 w-full h-0.5 bg-white transition-transform duration-300 ease-out origin-left ${pathname === '/marketplace'
+                  ? 'scale-x-100'
+                  : 'scale-x-0 group-hover:scale-x-100 group-hover:origin-left'
+                  }`}
+                />
+                {pathname !== '/marketplace' && (
+                  <span className="absolute bottom-[-4px] left-0 w-full h-0.5 bg-white scale-x-0 transition-transform duration-300 ease-out origin-right group-hover:scale-x-0" />
+                )}
+              </span>
             </Link>
             <Link
               href="/stats"
-              className={`transition-colors font-medium text-sm md:text-base px-4 py-2 cursor-pointer ${pathname === '/stats'
-                ? 'text-white underline underline-offset-4'
+              className={`transition-colors font-medium text-sm md:text-base px-4 py-2 cursor-pointer group ${pathname === '/stats'
+                ? 'text-white'
                 : 'text-white/80 hover:text-white'
                 }`}
             >
-              Stats
+              <span className="relative inline-block">
+                Stats
+                <span className={`absolute bottom-[-4px] left-0 w-full h-0.5 bg-white transition-transform duration-300 ease-out origin-left ${pathname === '/stats'
+                  ? 'scale-x-100'
+                  : 'scale-x-0 group-hover:scale-x-100 group-hover:origin-left'
+                  }`}
+                />
+                {pathname !== '/stats' && (
+                  <span className="absolute bottom-[-4px] left-0 w-full h-0.5 bg-white scale-x-0 transition-transform duration-300 ease-out origin-right group-hover:scale-x-0" />
+                )}
+              </span>
             </Link>
 
             {/* Only show chain switcher in testing mode */}

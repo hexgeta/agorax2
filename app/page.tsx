@@ -10,7 +10,7 @@ import { LimitOrderChart } from '@/components/LimitOrderChart';
 import { LimitOrderForm } from '@/components/LimitOrderForm';
 import useToast from '@/hooks/use-toast';
 import { ToastAction } from '@/components/ui/toast';
-import { Loader2 } from 'lucide-react';
+import { PixelSpinner } from '@/components/ui/PixelSpinner';
 
 export default function Home() {
   const [isTransactionLoading, setIsTransactionLoading] = useState(false);
@@ -92,12 +92,12 @@ export default function Home() {
       <LogoPreloader />
       <main className="flex min-h-screen flex-col items-center">
         {/* Hero Section */}
-        <div className="w-full px-2 md:px-8 mt-24 mb-0 bg-black">
+        <div className="w-full px-2 md:px-8 mt-8 mb-0 bg-black">
           <div className="max-w-[1200px] mx-auto">
             {/* Loading State */}
             {(isInitializing || isConnecting) && (
               <div className="flex flex-col items-center justify-center py-20">
-                <Loader2 className="h-12 w-12 animate-spin text-white mb-4" />
+                <PixelSpinner size={48} className="mb-4" />
               </div>
             )}
 
@@ -121,8 +121,8 @@ export default function Home() {
                   {isTransactionLoading && (
                     <div className="flex justify-center">
                       <div className="px-8 py-3 border border-white text-white rounded-full font-semibold flex items-center gap-2">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Processing Transaction...
+                        <PixelSpinner size={16} />
+                        Loading
                       </div>
                     </div>
                   )}

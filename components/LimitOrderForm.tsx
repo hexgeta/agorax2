@@ -14,7 +14,8 @@ import { useTokenAccess } from '@/context/TokenAccessContext';
 import { PAYWALL_ENABLED, REQUIRED_PARTY_TOKENS, REQUIRED_TEAM_TOKENS, PAYWALL_TITLE, PAYWALL_DESCRIPTION } from '@/config/paywall';
 import PaywallModal from './PaywallModal';
 import { TokenLogo } from '@/components/TokenLogo';
-import { Lock, ArrowLeftRight, Calendar as CalendarIcon, Loader2 } from 'lucide-react';
+import { Lock, ArrowLeftRight, Calendar as CalendarIcon } from 'lucide-react';
+import { PixelSpinner } from './ui/PixelSpinner';
 import { Slider } from '@/components/ui/slider';
 import { Calendar } from '@/components/ui/calendar';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
@@ -1581,8 +1582,8 @@ export function LimitOrderForm({
             disabled={buyTokens.length > 1}
             className={`p-0 rounded-full transition-all ${buyTokens.length > 1
               ? 'cursor-not-allowed opacity-30'
-              : 'hover:border-[#00D9FF]/10 hover:bg-red cursor-pointer'
-              } border-0 border-[#00D9FF]/50 ${buyTokens.length === 1 && 'hover:border-[#00D9FF]'
+              : 'hover:border-white/10 hover:bg-white/5 cursor-pointer'
+              } border-0 border-white/30 ${buyTokens.length === 1 && 'hover:border-white/50'
               }`}
             title={buyTokens.length > 1 ? "Cannot swap with multiple tokens" : "Swap tokens and amounts"}
           >
@@ -2013,7 +2014,7 @@ export function LimitOrderForm({
                 }
               }}
               placeholder="Enter days"
-              className="w-full bg-black/40 border-accent-cyan p-3 text-white placeholder-white/30 focus:outline-none focus:border-[#00D9FF]/60 transition-all rounded-lg"
+              className="w-full bg-black/40 border-white/20 p-3 text-white placeholder-white/30 focus:outline-none focus:border-white/50 transition-all rounded-lg"
             />
             {expirationDays > 0 && selectedDate && (
               <div className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 text-xs pointer-events-none">
@@ -2056,8 +2057,8 @@ export function LimitOrderForm({
             <button
               onClick={() => handleExpirationPreset(0.25)} // 6 hours
               className={`flex-1 py-1.5 text-xs text-white transition-all h-[32px] flex items-center justify-center rounded-full border ${Math.abs(expirationDays - 0.25) < 0.0001
-                ? 'bg-[#00D9FF]/20 text-white border-[#00D9FF]/50'
-                : 'bg-black/40 text-gray-300 border-white/10 hover:bg-[#00D9FF]/10 hover:text-white'
+                ? 'bg-white/20 text-white border-white/50'
+                : 'bg-black/40 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'
                 }`}
             >
               6h
@@ -2065,8 +2066,8 @@ export function LimitOrderForm({
             <button
               onClick={() => handleExpirationPreset(0.5)} // 12 hours
               className={`flex-1 py-1.5 text-xs text-white transition-all h-[32px] flex items-center justify-center rounded-full border ${Math.abs(expirationDays - 0.5) < 0.0001
-                ? 'bg-[#00D9FF]/20 text-white border-[#00D9FF]/50'
-                : 'bg-black/40 text-gray-300 border-white/10 hover:bg-[#00D9FF]/10 hover:text-white'
+                ? 'bg-white/20 text-white border-white/50'
+                : 'bg-black/40 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'
                 }`}
             >
               12h
@@ -2074,8 +2075,8 @@ export function LimitOrderForm({
             <button
               onClick={() => handleExpirationPreset(1)} // 24 hours
               className={`flex-1 py-1.5 text-xs text-white transition-all h-[32px] flex items-center justify-center rounded-full border ${Math.abs(expirationDays - 1) < 0.0001
-                ? 'bg-[#00D9FF]/20 text-white border-[#00D9FF]/50'
-                : 'bg-black/40 text-gray-300 border-white/10 hover:bg-[#00D9FF]/10 hover:text-white'
+                ? 'bg-white/20 text-white border-white/50'
+                : 'bg-black/40 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'
                 }`}
             >
               24h
@@ -2083,8 +2084,8 @@ export function LimitOrderForm({
             <button
               onClick={() => handleExpirationPreset(7)}
               className={`flex-1 py-1.5 text-xs text-white transition-all h-[32px] flex items-center justify-center rounded-full border ${Math.abs(expirationDays - 7) < 0.0001
-                ? 'bg-[#00D9FF]/20 text-white border-[#00D9FF]/50'
-                : 'bg-black/40 text-gray-300 border-white/10 hover:bg-[#00D9FF]/10 hover:text-white'
+                ? 'bg-white/20 text-white border-white/50'
+                : 'bg-black/40 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'
                 }`}
             >
               7d
@@ -2092,8 +2093,8 @@ export function LimitOrderForm({
             <button
               onClick={() => handleExpirationPreset(30)}
               className={`flex-1 py-1.5 text-xs text-white transition-all h-[32px] flex items-center justify-center rounded-full border ${Math.abs(expirationDays - 30) < 0.0001
-                ? 'bg-[#00D9FF]/20 text-white border-[#00D9FF]/50'
-                : 'bg-black/40 text-gray-300 border-white/10 hover:bg-[#00D9FF]/10 hover:text-white'
+                ? 'bg-white/20 text-white border-white/50'
+                : 'bg-black/40 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'
                 }`}
             >
               30d
@@ -2101,8 +2102,8 @@ export function LimitOrderForm({
             <button
               onClick={() => handleExpirationPreset(90)}
               className={`flex-1 py-1.5 text-xs text-white transition-all h-[32px] flex items-center justify-center rounded-full border ${Math.abs(expirationDays - 90) < 0.0001
-                ? 'bg-[#00D9FF]/20 text-white border-[#00D9FF]/50'
-                : 'bg-black/40 text-gray-300 border-white/10 hover:bg-[#00D9FF]/10 hover:text-white'
+                ? 'bg-white/20 text-white border-white/50'
+                : 'bg-black/40 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'
                 }`}
             >
               90d
@@ -2120,7 +2121,7 @@ export function LimitOrderForm({
 
               {/* Calendar Popup */}
               {showDatePicker && (
-                <div className="absolute top-full right-0 mt-2 z-[100] w-[440px] bg-black border-2 border-[#00D9FF] rounded-md">
+                <div className="absolute top-full right-0 mt-2 z-[100] w-[440px] bg-black border-2 border-white/50 rounded-md">
                   <Calendar
                     mode="single"
                     selected={selectedDate}
@@ -2128,11 +2129,11 @@ export function LimitOrderForm({
                     disabled={(date: Date) => date < new Date()}
                     classNames={{
                       caption_label: "text-white",
-                      nav_button: "text-white border-[#00D9FF]/30 hover:bg-[#00D9FF]/20",
+                      nav_button: "text-white border-white/30 hover:bg-white/20",
                       head_cell: "text-white/70",
-                      day: "text-white hover:bg-[#00D9FF]/20",
-                      day_selected: "bg-[#00D9FF] text-black font-bold hover:bg-[#00D9FF] hover:text-black",
-                      day_today: "bg-[#00D9FF]/20 text-white font-semibold",
+                      day: "text-white hover:bg-white/20",
+                      day_selected: "bg-white text-black font-bold hover:bg-white hover:text-black",
+                      day_today: "bg-white/20 text-white font-semibold",
                       day_outside: "text-white/20 opacity-40",
                       day_disabled: "text-white/10 opacity-20 cursor-not-allowed",
                     }}
@@ -2183,7 +2184,7 @@ export function LimitOrderForm({
                 const amount = buyAmounts[index];
                 if (!token || !amount || amount.trim() === '') return null;
                 return (
-                  <div key={`ask-${index}`} className="flex justify-between items-center border-t border-[#00D9FF]/30 pt-2">
+                  <div key={`ask-${index}`} className="flex justify-between items-center border-t border-white/20 pt-2">
                     <span className="text-white/70">
                       {index === 0 ? `Your Ask${buyTokens.filter((t, idx) => t && buyAmounts[idx] && buyAmounts[idx].trim() !== '').length > 1 ? ' (Either of)' : ''}:` : ''}
                     </span>
@@ -2237,7 +2238,7 @@ export function LimitOrderForm({
         {sellToken && buyTokens.length > 0 && buyTokens[0] && (showSellStats || showBuyStats || (isTokenEligibleForStats(sellToken) || buyTokens.some(t => isTokenEligibleForStats(t)))) && !duplicateTokenError &&
           !(MAXI_TOKENS.includes(sellToken.a.toLowerCase()) && buyTokens.every(t => t && MAXI_TOKENS.includes(t.a.toLowerCase()))) && (
             <LiquidGlassCard
-              className="mb-6 p-6 bg-black/40 border-[#00D9FF]/30"
+              className="mb-6 p-6 bg-black/40 border-white/20"
               borderRadius="12px"
               shadowIntensity="md"
               glowIntensity="medium"
@@ -2352,7 +2353,7 @@ export function LimitOrderForm({
                               </span>
                             </div>
                           )}
-                          <div className="border-t border-[#00D9FF]/30 my-3"></div>
+                          <div className="border-t border-white/20 my-3"></div>
                           <div className="flex justify-between">
                             <span className="text-white/70">Your OTC Price:</span>
                             <span className="text-white">{yourPriceInHEX ? yourPriceInHEX.toFixed(4) : 'N/A'} {hexDisplayName}</span>
@@ -2447,7 +2448,7 @@ export function LimitOrderForm({
                       }
 
                       return (
-                        <div key={`buy-stats-${buyIndex}`} className="space-y-2 text-sm border-t border-[#00D9FF]/30 pt-4 first:border-t-0 first:pt-0">
+                        <div key={`buy-stats-${buyIndex}`} className="space-y-2 text-sm border-t border-white/20 pt-4 first:border-t-0 first:pt-0">
                           <h4 className="text-white font-medium mb-3 text-left">{formatTokenTicker(buyToken.ticker, chainId)} Stats</h4>
                           <div className="flex justify-between">
                             <span className="text-white/70">Progress:</span>
@@ -2538,7 +2539,7 @@ export function LimitOrderForm({
 
         {/* Connect/Submit Button */}
         {!isConnected ? (
-          <button className="w-full py-4 bg-black text-white border border-[#00D9FF]/30 font-bold hover:bg-[#00D9FF] hover:text-black transition-all shadow-lg hover:shadow-[#00D9FF]/30 text-lg tracking-wider rounded-lg">
+          <button className="w-full py-4 bg-black text-white border border-white/30 font-bold hover:bg-white hover:text-black transition-all shadow-lg hover:shadow-white/30 text-lg tracking-wider rounded-lg">
             CONNECT WALLET
           </button>
         ) : (
@@ -2547,8 +2548,8 @@ export function LimitOrderForm({
             disabled={!sellToken || !sellAmount || buyTokens.some(t => !t) || buyAmounts.some(a => !a || a.trim() === '') || !!duplicateTokenError || !!expirationError || isCreatingOrder || isApproving}
             className="w-full py-4 bg-white text-black border border-white font-bold hover:bg-white/80 hover:text-black text-lg tracking-wider disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 rounded-full"
           >
-            {isApproving && <Loader2 className="w-5 h-5 animate-spin" />}
-            {isCreatingOrder && !isApproving && <Loader2 className="w-5 h-5 animate-spin" />}
+            {isApproving && <PixelSpinner size={20} />}
+            {isCreatingOrder && !isApproving && <PixelSpinner size={20} />}
             {isApproving ? 'APPROVING...' : isCreatingOrder ? 'CREATING ORDER...' : 'CREATE LIMIT ORDER'}
           </button>
         )}

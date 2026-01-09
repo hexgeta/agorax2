@@ -17,7 +17,7 @@ function TokenLogo({ src, alt, className }: { src: string; alt: string; classNam
   // Check cache first - don't even try to render if we know it will fail
   if (src.includes('default.svg') || failedLogosNotif.has(src)) {
     return (
-      <CircleDollarSign 
+      <CircleDollarSign
         className={`${className} text-white`}
       />
     );
@@ -27,19 +27,19 @@ function TokenLogo({ src, alt, className }: { src: string; alt: string; classNam
 
   const handleError = useCallback(() => {
     failedLogosNotif.add(src);
-      setHasError(true);
+    setHasError(true);
   }, [src]);
 
   if (hasError) {
     return (
-      <CircleDollarSign 
+      <CircleDollarSign
         className={`${className} text-white`}
       />
     );
   }
 
   return (
-    <img 
+    <img
       src={src}
       alt={alt}
       className={className}
@@ -51,33 +51,33 @@ function TokenLogo({ src, alt, className }: { src: string; alt: string; classNam
 }
 
 export function NotificationBell() {
-  const { isConnected, address } = useAccount();
+  const { isConnected, address, chainId } = useAccount();
   const { notifications, isLoading, markAsRead, toggleReadStatus } = useNotifications();
   const { allOrders } = useOpenPositions();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  
+
   // Filter out expired orders and orders we can't display
   const activeNotifications = useMemo(() => {
     if (!allOrders) return [];
-    
+
     const currentTime = Math.floor(Date.now() / 1000);
     return notifications.filter(notif => {
-      const baseOrder = allOrders.find((order: any) => 
-        order.orderDetailsWithID.orderID.toString() === notif.orderID
+      const baseOrder = allOrders.find((order: any) =>
+        order.orderDetailsWithID.orderID.toString() === notif.orderId
       );
-      
+
       // If order not found, filter it out
       if (!baseOrder) return false;
-      
+
       // Check if token info exists
       const sellTokenInfo = getTokenInfo(baseOrder.orderDetailsWithID.orderDetails.sellToken);
       if (!sellTokenInfo) return false;
-      
+
       const status = baseOrder.orderDetailsWithID.status;
       const expirationTime = Number(baseOrder.orderDetailsWithID.orderDetails.expirationTime);
       const isExpired = status === 0 && expirationTime < currentTime;
-      
+
       return !isExpired;
     });
   }, [notifications, allOrders]);
@@ -86,7 +86,7 @@ export function NotificationBell() {
   const unreadCount = useMemo(() => {
     return activeNotifications.filter(notif => notif.isNew).length;
   }, [activeNotifications]);
-  
+
   // Collect all unique token addresses from notifications
   const allTokenAddresses = useMemo(() => {
     if (!allOrders || allOrders.length === 0) return [];
@@ -128,7 +128,7 @@ export function NotificationBell() {
     if (tokenAddress.toLowerCase() === '0xefd766ccb38eaf1dfd701853bfce31359239f305') {
       return 1.0;
     }
-    
+
     // Use WPLS price for PLS (native token addresses)
     const plsAddresses = [
       '0x0000000000000000000000000000000000000000',
@@ -138,7 +138,7 @@ export function NotificationBell() {
       const wplsPrice = tokenPrices['0xa1077a294dde1b09bb078844df40758a5d0f9a27']?.price;
       return wplsPrice || 0.000034;
     }
-    
+
     return tokenPrices[tokenAddress]?.price || 0;
   }, [tokenPrices]);
 
@@ -147,9 +147,9 @@ export function NotificationBell() {
     if (amount < 0.01) return `$${amount.toFixed(6)}`;
     if (amount < 1) return `$${amount.toFixed(4)}`;
     if (amount >= 1000) {
-      return `$${amount.toLocaleString(undefined, { 
-        minimumFractionDigits: 0, 
-        maximumFractionDigits: 2 
+      return `$${amount.toLocaleString(undefined, {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2
       })}`;
     }
     const formatted = amount.toFixed(2);
@@ -185,7 +185,7 @@ export function NotificationBell() {
     const days = Math.floor(diff / 86400);
     const hours = Math.floor(diff / 3600);
     const minutes = Math.floor(diff / 60);
-    
+
     if (days > 0) return `${days}d ago`;
     if (hours > 0) return `${hours}h ago`;
     if (minutes > 0) return `${minutes}m ago`;
@@ -196,11 +196,11 @@ export function NotificationBell() {
     const status = order.orderDetailsWithID.status;
     const expirationTime = Number(order.orderDetailsWithID.orderDetails.expirationTime);
     const currentTime = Math.floor(Date.now() / 1000);
-    
+
     if (status === 0 && expirationTime < currentTime) {
       return 'Expired';
     }
-    
+
     switch (status) {
       case 0: return 'Active';
       case 1: return 'Cancelled';
@@ -217,7 +217,7 @@ export function NotificationBell() {
       {/* Bell Icon Button */}
       <button
         onClick={handleToggle}
-        className="relative p-2 text-[#00D9FF] hover:text-white transition-colors"
+        className="relative p-2 text-[rgba(255, 255, 255, 1)] hover:text-white transition-colors"
         aria-label="Notifications"
       >
         {/* Bell Icon */}
@@ -246,29 +246,29 @@ export function NotificationBell() {
 
       {/* Dropdown */}
       {isOpen && (
-        <div className="fixed lg:absolute left-1/2 -translate-x-1/2 lg:left-4 lg:translate-x-0 mt-2 w-min-w-[190px] md:min-w-[660px] bg-black border-2 border-[#00D9FF] shadow-[0_0_30px_rgba(0,217,255,0.3)] rounded z-[9999] flex flex-col max-h-[calc(100vh-120px)]">
+        <div className="fixed lg:absolute left-1/2 -translate-x-1/2 lg:left-4 lg:translate-x-0 mt-2 w-min-w-[190px] md:min-w-[660px] bg-black border-2 border-[rgba(255, 255, 255, 1)] shadow-[0_0_30px_rgba(0,217,255,0.3)] rounded z-[9999] flex flex-col max-h-[calc(100vh-120px)]">
 
           {/* Notifications List - Scrollable */}
           <div className="overflow-y-auto flex-1 notifications-scroll"
-               style={{ 
-                 scrollbarWidth: 'thin',
-                 scrollbarColor: 'rgba(0, 217, 255, 0.5) transparent'
-               }}
+            style={{
+              scrollbarWidth: 'thin',
+              scrollbarColor: 'rgba(0, 217, 255, 0.5) transparent'
+            }}
           >
             {isLoading ? (
-              <div className="px-4 py-8 text-center text-[#00D9FF]/50">
-                Loading...
+              <div className="px-4 py-8 text-center text-[rgba(255, 255, 255, 1)]/50">
+                Loading
               </div>
             ) : activeNotifications.length === 0 ? (
-              <div className="px-4 py-8 text-center text-[#00D9FF]/50">
+              <div className="px-4 py-8 text-center text-[rgba(255, 255, 255, 1)]/50">
                 No order history yet
               </div>
             ) : (
               <div className="pl-4 pr-6 py-2 md:py-4">
                 {activeNotifications.map((notif, index) => {
                   const notificationId = notif.txHash;
-                  const baseOrder = allOrders?.find((order: any) => 
-                    order.orderDetailsWithID.orderID.toString() === notif.orderID
+                  const baseOrder = allOrders?.find((order: any) =>
+                    order.orderDetailsWithID.orderID.toString() === notif.orderId
                   );
 
                   if (!baseOrder) return null;
@@ -279,14 +279,14 @@ export function NotificationBell() {
                   // For filled transactions, show ALL BUY tokens received
                   // For other transactions, show the SELL token
                   const displayTokens: Array<{ info: any; amount: number }> = [];
-                  
+
                   if (notif.type === 'filled' && baseOrder.orderDetailsWithID.orderDetails.buyTokensIndex.length > 0) {
                     // Get all buy tokens
                     for (let i = 0; i < baseOrder.orderDetailsWithID.orderDetails.buyTokensIndex.length; i++) {
                       const tokenInfo = getTokenInfoByIndex(Number(baseOrder.orderDetailsWithID.orderDetails.buyTokensIndex[i]));
                       if (tokenInfo && baseOrder.orderDetailsWithID.orderDetails.buyAmounts[i]) {
                         const amount = parseFloat(formatTokenAmount(
-                          baseOrder.orderDetailsWithID.orderDetails.buyAmounts[i], 
+                          baseOrder.orderDetailsWithID.orderDetails.buyAmounts[i],
                           tokenInfo.decimals
                         ));
                         displayTokens.push({ info: tokenInfo, amount });
@@ -295,31 +295,29 @@ export function NotificationBell() {
                   } else {
                     // For non-filled notifications, show sell token
                     const amount = parseFloat(formatTokenAmount(
-                      baseOrder.orderDetailsWithID.orderDetails.sellAmount, 
+                      baseOrder.orderDetailsWithID.orderDetails.sellAmount,
                       sellTokenInfo.decimals
                     ));
                     displayTokens.push({ info: sellTokenInfo, amount });
                   }
-                  
+
                   if (displayTokens.length === 0) return null;
 
                   return (
                     <div
                       key={notif.txHash}
                       onClick={() => toggleReadStatus(notificationId)}
-                      className={`border border-[#00D9FF]/20 rounded p-2 md:p-3 mb-1.5 md:mb-2 hover:border-[#00D9FF]/40 transition-colors cursor-pointer ${
-                        notif.isNew ? 'bg-[#FF0080]/5' : ''
-                      }`}
+                      className={`border border-[rgba(255, 255, 255, 1)]/20 rounded p-2 md:p-3 mb-1.5 md:mb-2 hover:border-[rgba(255, 255, 255, 1)]/40 transition-colors cursor-pointer ${notif.isNew ? 'bg-[#FF0080]/5' : ''
+                        }`}
                     >
                       <div className="flex items-center justify-between">
                         {/* Left: Event Badge + Asset Info */}
                         <div className="flex items-center gap-2 md:gap-3 flex-1">
                           {/* Event Type Badge */}
-                          <span className={`hidden md:inline px-2 py-1 text-xs font-medium border rounded w-[125px] text-center ${
-                            notif.type === 'filled'
-                              ? 'bg-green-500/20 text-green-400 border-green-400'
-                              : 'bg-yellow-500/20 text-yellow-400 border-yellow-400'
-                          }`}>
+                          <span className={`hidden md:inline px-2 py-1 text-xs font-medium border rounded w-[125px] text-center ${notif.type === 'filled'
+                            ? 'bg-green-500/20 text-green-400 border-green-400'
+                            : 'bg-yellow-500/20 text-yellow-400 border-yellow-400'
+                            }`}>
                             {notif.type === 'filled' ? 'Filled' : 'Updated'}
                           </span>
 
@@ -327,12 +325,12 @@ export function NotificationBell() {
                           <div className="flex flex-col gap-1">
                             {displayTokens.map((token, idx) => (
                               <div key={idx} className="flex items-center gap-2">
-                                <TokenLogo 
+                                <TokenLogo
                                   src={token.info.logo}
                                   alt={formatTokenTicker(token.info.ticker)}
                                   className="w-5 h-5"
                                 />
-                                <span className="text-sm text-[#00D9FF] font-medium">
+                                <span className="text-sm text-[rgba(255, 255, 255, 1)] font-medium">
                                   {formatTokenAmountDisplay(token.amount)} {formatTokenTicker(token.info.ticker)}
                                 </span>
                               </div>
@@ -343,12 +341,12 @@ export function NotificationBell() {
                         {/* Right: Time and Actions */}
                         <div className="flex items-center gap-1.5 md:gap-3">
                           {/* Time ago */}
-                          <div className="text-xs text-[#00D9FF]/60 whitespace-nowrap">
+                          <div className="text-xs text-[rgba(255, 255, 255, 1)]/60 whitespace-nowrap">
                             {getTimeAgo(notif.timestamp)}
                           </div>
 
                           {/* Date */}
-                          <div className="hidden md:block text-xs text-[#00D9FF]/40 whitespace-nowrap">
+                          <div className="hidden md:block text-xs text-[rgba(255, 255, 255, 1)]/40 whitespace-nowrap">
                             {formatTimestamp(notif.timestamp).date}
                           </div>
 
@@ -359,7 +357,7 @@ export function NotificationBell() {
                               markAsRead(notificationId);
                               window.open(getBlockExplorerTxUrl(chainId, notif.txHash), '_blank');
                             }}
-                            className="px-2 py-1 bg-transparent text-[#00D9FF] text-xs border border-[#00D9FF] hover:bg-[#00D9FF]/10 transition-colors whitespace-nowrap"
+                            className="px-2 py-1 bg-transparent text-[rgba(255, 255, 255, 1)] text-xs border border-[rgba(255, 255, 255, 1)] hover:bg-[rgba(255, 255, 255, 1)]/10 transition-colors whitespace-nowrap"
                           >
                             View Tx
                           </button>
@@ -370,7 +368,7 @@ export function NotificationBell() {
                               e.stopPropagation();
                               toggleReadStatus(notificationId);
                             }}
-                            className="p-1 hover:bg-[#00D9FF]/10 rounded transition-colors"
+                            className="p-1 hover:bg-[rgba(255, 255, 255, 1)]/10 rounded transition-colors"
                             title={notif.isNew ? "Mark as read" : "Mark as unread"}
                           >
                             {notif.isNew ? (
@@ -378,7 +376,7 @@ export function NotificationBell() {
                                 <circle cx="10" cy="10" r="5" />
                               </svg>
                             ) : (
-                              <svg className="w-4 h-4 text-[#00D9FF]/30" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 20 20">
+                              <svg className="w-4 h-4 text-[rgba(255, 255, 255, 1)]/30" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 20 20">
                                 <circle cx="10" cy="10" r="5" />
                               </svg>
                             )}

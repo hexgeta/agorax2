@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
 import { motion } from 'framer-motion';
-import { CircleDollarSign, ChevronDown, Trash2, Loader2, Lock, Search, ArrowRight, MoveRight, ChevronRight, Play, CalendarDays } from 'lucide-react';
+import { CircleDollarSign, ChevronDown, Trash2, Lock, Search, ArrowRight, MoveRight, ChevronRight, Play, CalendarDays } from 'lucide-react';
+import { PixelSpinner } from './ui/PixelSpinner';
 import PaywallModal from './PaywallModal';
 import OrderHistoryTable from './OrderHistoryTable';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
@@ -2041,7 +2042,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
             className="bg-black border-0 border-white/10 rounded-full p-6 text-center max-w-[660px] w-full mx-auto"
           >
             <div className="flex items-center justify-center gap-3 text-gray-400 text-base md:text-lg">
-              <Loader2 className="w-5 h-5 animate-spin" />
+              <PixelSpinner size={20} />
               <span>Loading data</span>
             </div>
           </div>
@@ -2101,7 +2102,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
             clearExpandedPositions();
           }}
           className={`px-4 md:px-6 py-2 transition-all duration-100 border whitespace-nowrap text-sm md:text-base rounded-full font-medium ${statusFilter === 'active'
-            ? 'bg-white text-black border-white'
+            ? 'bg-white text-black border-white/10'
             : 'bg-black/40 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'
             }`}
         >
@@ -2113,7 +2114,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
             clearExpandedPositions();
           }}
           className={`px-4 md:px-6 py-2 transition-all duration-100 border whitespace-nowrap text-sm md:text-base rounded-full font-medium ${statusFilter === 'expired'
-            ? 'bg-white text-black border-white'
+            ? 'bg-white text-black border-white/10'
             : 'bg-black/40 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'
             }`}
         >
@@ -2125,7 +2126,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
             clearExpandedPositions();
           }}
           className={`px-4 md:px-6 py-2 transition-all duration-100 border whitespace-nowrap text-sm md:text-base rounded-full font-medium ${statusFilter === 'completed'
-            ? 'bg-white text-black border-white'
+            ? 'bg-white text-black border-white/10'
             : 'bg-black/40 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'
             }`}
         >
@@ -2137,7 +2138,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
             clearExpandedPositions();
           }}
           className={`px-4 md:px-6 py-2 transition-all duration-100 border whitespace-nowrap text-sm md:text-base rounded-full font-medium ${statusFilter === 'cancelled'
-            ? 'bg-white text-black border-white'
+            ? 'bg-white text-black border-white/10'
             : 'bg-black/40 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'
             }`}
         >
@@ -2149,7 +2150,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
             clearExpandedPositions();
           }}
           className={`px-4 md:px-6 py-2 transition-all duration-100 border whitespace-nowrap text-sm md:text-base rounded-full font-medium ${statusFilter === 'order-history'
-            ? 'bg-white text-black border-white'
+            ? 'bg-white text-black border-white/10'
             : 'bg-black/40 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'
             }`}
         >
@@ -2170,8 +2171,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
             >
               {isCancellingAll ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Cancelling...
+                  <PixelSpinner size={16} />
+                  Loading
                 </>
               ) : (
                 <>
@@ -2223,9 +2224,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
             </div>
           ) : (
             <div className="w-full min-w-[800px] text-lg">
-              {/* Table Header */}
               <div
-                className={`grid grid-cols-[minmax(120px,1fr)_minmax(120px,1fr)_minmax(80px,120px)_minmax(100px,140px)_minmax(80px,120px)_minmax(80px,120px)_minmax(80px,120px)_auto] items-center gap-4 pb-4 border-b border-[#00D9FF]/30 ${expandedPositions.size > 0 ? 'opacity-90' : 'opacity-100'
+                className={`grid grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(80px,1fr)_minmax(100px,1.2fr)_minmax(80px,1fr)_minmax(80px,1fr)_minmax(100px,auto)] items-center gap-4 pb-4 border-b border-[rgba(255, 255, 255, 1)]/15 ${expandedPositions.size > 0 ? 'opacity-90' : 'opacity-100'
                   }`}
               >
                 {/* COLUMN 1: Token For Sale */}
@@ -2452,7 +2452,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
 
                   return (
                     <div key={`${orderId}-${tokenFilter}-${ownershipFilter}-${statusFilter}`} data-order-id={orderId}
-                      className={`grid grid-cols-[minmax(120px,1fr)_minmax(120px,1fr)_minmax(80px,120px)_minmax(100px,140px)_minmax(80px,120px)_minmax(80px,120px)_minmax(80px,120px)_auto] items-start gap-4 py-8 ${index < displayOrders.length - 1 ? 'border-b border-[#00D9FF]/20' : ''
+                      className={`grid grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(80px,1fr)_minmax(100px,1.2fr)_minmax(80px,1fr)_minmax(80px,1fr)_minmax(100px,auto)] items-start gap-4 py-8 ${index < displayOrders.length - 1 && !expandedPositions.has(orderId) ? 'border-b border-[rgba(255, 255, 255, 1)]/10' : ''
                         }`}
                     >
                       {/* COLUMN 1: Token For Sale Content */}
@@ -2487,7 +2487,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                               <span className={`text-lg font-medium ${tokenPrice > 0 ? 'text-white' : 'text-gray-500'} ${tokenPrice === 0 ? 'py-1' : ''}`}>
                                 {tokenPrice > 0 ? formatUSD(usdValue) : '--'}
                               </span>
-                              <div className="w-1/2 h-px bg-[#00D9FF]/10 my-2"></div>
+                              <div className="w-1/2 h-px bg-[rgba(255, 255, 255, 1)]/5 my-2"></div>
                               <div className="flex items-center space-x-2">
                                 <TokenLogo
                                   src={getTokenInfo(order.orderDetailsWithID.orderDetails.sellToken).logo}
@@ -2536,7 +2536,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                               <span className={`text-lg font-medium ${totalUsdValue > 0 ? 'text-white' : 'text-gray-500'} ${totalUsdValue === 0 ? 'py-1' : ''}`}>
                                 {totalUsdValue > 0 ? formatUSD(totalUsdValue) : '--'}
                               </span>
-                              <div className="w-1/2 h-px bg-[#00D9FF]/10 my-2"></div>
+                              <div className="w-1/2 h-px bg-[rgba(255, 255, 255, 1)]/5 my-2"></div>
                               {(() => {
                                 // For completed and active orders
                                 const hasMultipleTokens = buyTokensIndex.length > 1;
@@ -2610,7 +2610,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
 
                             return (
                               <div
-                                className={`h-full transition-all duration-300 ${fillPercentage === 0 ? 'bg-gray-500' : 'bg-[#00D9FF]'} rounded-full`}
+                                className={`h-full transition-all duration-300 ${fillPercentage === 0 ? 'bg-gray-500' : 'bg-[rgba(255, 255, 255, 1)]'} rounded-full`}
                                 style={{
                                   width: `${fillPercentage}%`
                                 }}
@@ -2708,7 +2708,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                       title="Collect Proceeds"
                                     >
                                       {collectingOrders.has(order.orderDetailsWithID.orderID.toString()) ? (
-                                        <Loader2 className="w-5 h-5 text-green-400 animate-spin mx-auto" />
+                                        <PixelSpinner size={20} className="mx-auto" />
                                       ) : (
                                         <CircleDollarSign className="w-5 h-5 text-green-400 hover:text-green-300 mx-auto" />
                                       )}
@@ -2730,7 +2730,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                   title="Update Expiration"
                                 >
                                   {updatingOrders.has(order.orderDetailsWithID.orderID.toString()) ? (
-                                    <Loader2 className="w-5 h-5 text-blue-400 animate-spin mx-auto" />
+                                    <PixelSpinner size={20} className="mx-auto" />
                                   ) : (
                                     <CalendarDays className="w-5 h-5 text-blue-400 hover:text-blue-300 mx-auto" />
                                   )}
@@ -2744,7 +2744,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                   title="Cancel Order"
                                 >
                                   {cancelingOrders.has(order.orderDetailsWithID.orderID.toString()) ? (
-                                    <Loader2 className="w-5 h-5 text-red-400 animate-spin mx-auto" />
+                                    <PixelSpinner size={20} className="mx-auto" />
                                   ) : (
                                     <Trash2 className="w-5 h-5 text-red-400 hover:text-red-300 mx-auto" />
                                   )}
@@ -2754,13 +2754,13 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                               <button
                                 onClick={() => togglePositionExpansion(order.orderDetailsWithID.orderID.toString())}
                                 className={`flex items-center gap-1 ml-4 px-4 py-2 text-xs rounded-full transition-colors ${expandedPositions.has(order.orderDetailsWithID.orderID.toString())
-                                  ? 'bg-transparent border border-white text-white hover:bg-white/10'
+                                  ? 'bg-transparent border border-white/10 text-white hover:bg-white/10'
                                   : 'bg-white text-black hover:bg-gray-200'
                                   }`}
                               >
                                 <span>Buy</span>
                                 <ChevronDown
-                                  className={`w-3 h-3 transition-transform duration-200 ${expandedPositions.has(order.orderDetailsWithID.orderID.toString()) ? '' : 'rotate-180'
+                                  className={`w-3 h-3 transition-transform duration-200 ${expandedPositions.has(order.orderDetailsWithID.orderID.toString()) ? 'rotate-180' : ''
                                     }`}
                                 />
                               </button>
@@ -2775,15 +2775,15 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                       {/* Expandable Actions Shelf */}
                       {expandedPositions.has(order.orderDetailsWithID.orderID.toString()) && (
                         <div
-                          className="col-span-full  mt-2 border-2 border-[#00D9FF] bg-black/60 backdrop-blur-sm w-full shadow-[0_0_20px_rgba(0,217,255,0.3)]"
+                          className="col-span-full mt-2 rounded-xl border border-white/20 bg-black/60 backdrop-blur-sm w-full shadow-[0_0_20px_rgba(255,255,255,0.1)]"
                         >
                           <div className="p-3">
                             <div className="flex flex-col space-y-2">
                               <h4 className="text-white font-medium text-xl">Your Trade</h4>
 
                               {/* Offer Input Fields */}
-                              <div className="mt-3 pt-3 border-t border-[#00D9FF]/30">
-                                <h5 className="text-white font-medium text-xs mb-2">You pay:</h5>
+                              <div className="mt-3 pt-3 border-t border-white/20">
+                                <h5 className="text-white font-medium text-sm mb-2">You pay:</h5>
                                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                                   {order.orderDetailsWithID.orderDetails.buyTokensIndex.map((tokenIndex: bigint, idx: number) => {
                                     const tokenInfo = getTokenInfoByIndex(Number(tokenIndex));
@@ -2812,7 +2812,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                               removeCommas(e.target.value),
                                               order
                                             )}
-                                            className="bg-transparent border border-white/20  px-2 py-1 text-white text-sm w-26 md:w-20 focus:border-white/40 focus:outline-none"
+                                            className="bg-transparent border border-white/10  px-2 py-1 text-white text-sm w-26 md:w-20 focus:border-white/40 focus:outline-none"
                                             placeholder="0"
                                           />
                                         </div>
@@ -2917,7 +2917,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                               )}
                                             </div>
                                           </div>
-                                          <div className="border-t border-[#00D9FF]/30 pt-1">
+                                          <div className="border-t border-[rgba(255, 255, 255, 1)]/30 pt-1">
                                             <div className="flex justify-between">
                                               <span className="text-white font-bold">You Pay:</span>
                                               <div className="flex items-center space-x-1">
@@ -2984,7 +2984,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                 )}
 
                                 {/* Submit Section */}
-                                <div className="mt-4 pt-3 border-t border-[#00D9FF]/30">
+                                <div className="mt-4 pt-3 border-t border-[rgba(255, 255, 255, 1)]/30">
                                   {(() => {
                                     const orderId = order.orderDetailsWithID.orderID.toString();
                                     const currentInputs = offerInputs[orderId];
@@ -2999,16 +2999,16 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                       <button
                                         onClick={() => handleExecuteOrder(order)}
                                         disabled={executingOrders.has(orderId) || approvingOrders.has(orderId) || !isWalletConnected}
-                                        className="px-6 py-2 bg-white text-black border border-white rounded-lg hover:bg-gray-100 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                                        className="px-6 py-2 bg-white text-black border border-white/20 rounded-lg hover:bg-gray-100 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                                       >
-                                        {approvingOrders.has(orderId) ? 'Approving...' : executingOrders.has(orderId) ? 'Executing...' : (hasNativeTokenInput ? 'Confirm Trade' : 'Approve & Confirm Trade')}
+                                        {approvingOrders.has(orderId) || executingOrders.has(orderId) ? 'Loading' : (hasNativeTokenInput ? 'Confirm Trade' : 'Approve & Confirm Trade')}
                                       </button>
                                     );
                                   })()}
                                 </div>
                               </div>
 
-                              <div className="text-xs text-gray-500 mt-4">
+                              <div className="text-xs text-gray-500 mt-6">
                                 Order ID: {order.orderDetailsWithID.orderID.toString()}
                               </div>
 
@@ -3018,7 +3018,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
 
                               {/* Owner Actions - Only show for user's own orders */}
                               {address && order.userDetails.orderOwner.toLowerCase() === address.toLowerCase() && (
-                                <div className="mt-3 pt-3 border-t border-[#00D9FF]/30">
+                                <div className="mt-3 pt-3 border-t border-[rgba(255, 255, 255, 1)]/30">
                                   <div className="flex gap-2 flex-wrap">
                                     {/* Collect Proceeds Button - Show if order has been filled */}
                                     {(() => {
@@ -3031,7 +3031,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                           disabled={collectingOrders.has(order.orderDetailsWithID.orderID.toString())}
                                           className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                                         >
-                                          {collectingOrders.has(order.orderDetailsWithID.orderID.toString()) ? 'Collecting...' : 'Collect Proceeds'}
+                                          {collectingOrders.has(order.orderDetailsWithID.orderID.toString()) ? 'Loading' : 'Collect Proceeds'}
                                         </button>
                                       );
                                     })()}
@@ -3043,7 +3043,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                         order.orderDetailsWithID.status !== 0}
                                       className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
-                                      {cancelingOrders.has(order.orderDetailsWithID.orderID.toString()) ? 'Canceling...' : 'Cancel Order'}
+                                      {cancelingOrders.has(order.orderDetailsWithID.orderID.toString()) ? 'Loading' : 'Cancel Order'}
                                     </button>
 
                                     {/* Edit Button */}
@@ -3082,7 +3082,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
             </div>
           )}
         </div>
-      )}
+      )
+      }
 
       {/* Edit Order Modal */}
       {
@@ -3167,7 +3168,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                   disabled={updatingOrders.has(editingOrder)}
                   className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {updatingOrders.has(editingOrder) ? 'Saving...' : 'Save Changes'}
+                  {updatingOrders.has(editingOrder) ? 'Loading' : 'Save Changes'}
                 </button>
               </div>
             </div>
@@ -3179,7 +3180,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
       {
         showExpirationCalendar && (
           <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
-            <div className="bg-gray-900 border-2 border-[#00D9FF] rounded-lg p-6 max-w-md w-full mx-4 shadow-[0_0_30px_rgba(0,217,255,0.3)]">
+            <div className="bg-gray-900 border-2 border-[rgba(255, 255, 255, 1)] rounded-lg p-6 max-w-md w-full mx-4 shadow-[0_0_30px_rgba(255,255,255,0.2)]">
               <h3 className="text-xl font-bold text-white mb-4">Update Expiration Date</h3>
 
               <div className="mb-6">
@@ -3188,7 +3189,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                   selected={selectedExpirationDate}
                   onSelect={setSelectedExpirationDate}
                   disabled={(date) => date < new Date()}
-                  className="rounded-md border border-[#00D9FF]/30 bg-black p-3"
+                  className="rounded-md border border-[rgba(255, 255, 255, 1)]/30 bg-black p-3"
                   classNames={{
                     months: "flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0",
                     month: "space-y-4",
@@ -3202,10 +3203,10 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                     head_row: "flex",
                     head_cell: "text-white/70 rounded-md w-9 font-normal text-[0.8rem]",
                     row: "flex w-full mt-2",
-                    cell: "text-center text-sm p-0 relative [&:has([aria-selected])]:bg-[#00D9FF]/20 first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20",
-                    day: "h-9 w-9 p-0 font-normal text-white hover:bg-[#00D9FF]/30 hover:text-white rounded-md",
-                    day_selected: "bg-[#00D9FF] text-black hover:bg-[#00D9FF] hover:text-black focus:bg-[#00D9FF] focus:text-black",
-                    day_today: "bg-[#00D9FF]/20 text-white",
+                    cell: "text-center text-sm p-0 relative [&:has([aria-selected])]:bg-[rgba(255, 255, 255, 1)]/20 first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20",
+                    day: "h-9 w-9 p-0 font-normal text-white hover:bg-[rgba(255, 255, 255, 1)]/30 hover:text-white rounded-md",
+                    day_selected: "bg-[rgba(255, 255, 255, 1)] text-black hover:bg-[rgba(255, 255, 255, 1)] hover:text-black focus:bg-[rgba(255, 255, 255, 1)] focus:text-black",
+                    day_today: "bg-[rgba(255, 255, 255, 1)]/20 text-white",
                     day_outside: "text-gray-600 opacity-50",
                     day_disabled: "text-gray-600 opacity-30",
                     day_hidden: "invisible",
@@ -3214,7 +3215,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
               </div>
 
               {selectedExpirationDate && (
-                <div className="mb-4 p-3 bg-[#00D9FF]/10 border border-[#00D9FF]/30 rounded-lg">
+                <div className="mb-4 p-3 bg-[rgba(255, 255, 255, 1)]/5 border border-[rgba(255, 255, 255, 1)]/30 rounded-lg">
                   <p className="text-sm text-white">
                     New expiration: <span className="font-bold">{selectedExpirationDate.toLocaleDateString()} at {selectedExpirationDate.toLocaleTimeString()}</span>
                   </p>
@@ -3234,9 +3235,9 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                 <button
                   onClick={() => handleQuickExpirationUpdate(showExpirationCalendar)}
                   disabled={!selectedExpirationDate || updatingOrders.has(showExpirationCalendar)}
-                  className="flex-1 px-4 py-2 bg-[#00D9FF] text-black rounded-lg hover:bg-[#00D9FF]/80 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 px-4 py-2 bg-[rgba(255, 255, 255, 1)] text-black rounded-lg hover:bg-[rgba(255, 255, 255, 1)]/80 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {updatingOrders.has(showExpirationCalendar) ? 'Updating...' : 'Update Expiration'}
+                  {updatingOrders.has(showExpirationCalendar) ? 'Loading' : 'Update Expiration'}
                 </button>
               </div>
             </div>
@@ -3250,14 +3251,14 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
         onClose={() => setShowPaywallModal(false)}
         title={PAYWALL_TITLE}
         description={PAYWALL_DESCRIPTION}
-        price={checkingTokenBalance ? "Checking..." : hasTokenAccess ? "Access Granted" : `${REQUIRED_PARTY_TOKENS.toLocaleString()} PARTY or ${REQUIRED_TEAM_TOKENS.toLocaleString()} TEAM`}
+        price={checkingTokenBalance ? "Loading" : hasTokenAccess ? "Access Granted" : `${REQUIRED_PARTY_TOKENS.toLocaleString()} PARTY or ${REQUIRED_TEAM_TOKENS.toLocaleString()} TEAM`}
         contactUrl="https://x.com/hexgeta"
         partyBalance={partyBalance}
         teamBalance={teamBalance}
         requiredParty={REQUIRED_PARTY_TOKENS}
         requiredTeam={REQUIRED_TEAM_TOKENS}
       />
-    </LiquidGlassCard>
+    </LiquidGlassCard >
   );
 });
 

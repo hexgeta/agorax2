@@ -30,7 +30,7 @@ export function ChainSwitcher({ isCheckingConnection }: { isCheckingConnection: 
       transition={{ duration: 0.5 }}
     >
       <DropdownMenu>
-        <DropdownMenuTrigger className="flex items-center justify-center gap-2 md:gap-3 px-3 md:px-4 h-12 bg-black/40 border border-[#00D9FF]/30 hover:bg-[#00D9FF]/10 transition-colors w-full md:w-[220px] rounded-none focus:outline-none focus-visible:outline-none">
+        <DropdownMenuTrigger className="flex items-center justify-center gap-2 md:gap-3 px-3 md:px-4 h-12 bg-black/40 border border-[rgba(255, 255, 255, 1)]/30 hover:bg-[rgba(255, 255, 255, 1)]/10 transition-colors w-full md:w-[220px] rounded-none focus:outline-none focus-visible:outline-none">
           <div
             className="w-3 h-3 md:w-4 md:h-4 relative"
             style={{
@@ -50,7 +50,7 @@ export function ChainSwitcher({ isCheckingConnection }: { isCheckingConnection: 
           <span className="text-white font-medium hidden md:inline">{currentChain.name}</span>
           <ChevronDown className="w-3 h-3 md:w-4 md:h-4 text-white/70" />
         </DropdownMenuTrigger>
-        <DropdownMenuContent className="bg-black/95 border border-[#00D9FF]/10 backdrop-blur-sm z-[200] w-full md:w-[220px] rounded-lg">
+        <DropdownMenuContent className="bg-black/95 border border-[rgba(255, 255, 255, 1)]/10 backdrop-blur-sm z-[200] w-full md:w-[220px] rounded-lg">
           {CHAINS.map((chainOption) => (
             <DropdownMenuItem
               key={chainOption.id}

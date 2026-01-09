@@ -5,15 +5,14 @@ import { ShaderGradientCanvas, ShaderGradient } from '@shadergradient/react';
 
 export function AppBackground() {
     return (
-        <div className='fixed top-0 left-0 w-full h-full -z-10 pointer-events-none'>
+        <div className='fixed top-0 left-0 w-full h-full z-0 pointer-events-none'>
             <ShaderGradientCanvas
                 style={{
                     width: '100%',
                     height: '100%',
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
                 }}
+                lazyLoad={undefined}
+                fov={undefined}
                 pixelDensity={1}
                 pointerEvents='none'
             >

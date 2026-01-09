@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useAccount, useConnect, useDisconnect } from 'wagmi'
+import { PixelSpinner } from './ui/PixelSpinner';
 import { useAppKit } from '@reown/appkit/react'
 import { useTransaction } from '@/context/TransactionContext'
 import { DisclaimerDialog } from './DisclaimerDialog'
@@ -44,8 +45,8 @@ export const ConnectButton = () => {
       >
         {isTransactionPending ? (
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 border-2 border-gray-600 border-t-transparent rounded-full animate-spin"></div>
-            <span>Pending...</span>
+            <PixelSpinner size={16} />
+            <span>Loading</span>
           </div>
         ) : (
           `${address.slice(0, 6)}...${address.slice(-4)}`

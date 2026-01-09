@@ -363,7 +363,7 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
             >
               {/* Visible line */}
               <div
-                className="absolute top-1/2 -translate-y-1/2 left-[58px] right-0 h-[2px] bg-[#00D9FF] rounded-full transition-all duration-500 pointer-events-none"
+                className="absolute top-1/2 -translate-y-1/2 left-[58px] right-0 h-[2px] bg-[rgba(255, 255, 255, 1)] rounded-full transition-all duration-500 pointer-events-none"
               />
               <LiquidGlassCard
                 className={`absolute right-0 flex items-center justify-between bg-cyan-500/10 px-3 py-1 border-cyan-500/30 w-[250px] ${limitPricePosition && limitPricePosition < currentPricePosition ? 'top-0 -translate-y-[calc(45%-0px)]' : 'bottom-0 translate-y-[calc(45%-0px)]'
@@ -382,7 +382,7 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                   </span>
                   {displayQuoteTokenInfo && (
                     <>
-                      <span className="text-xs text-white/70">
+                      <span className="text-xs text-[#00D9FF]">
                         {formatTokenTicker(displayQuoteTokenInfo.ticker)}
                       </span>
                       <TokenLogo

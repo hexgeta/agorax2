@@ -22,7 +22,7 @@ export default function MarketplacePage() {
       <main className="flex min-h-screen flex-col items-center">
 
         {/* Main Content */}
-        <div className="w-full px-2 md:px-8 mt-6">
+        <div className="w-full px-2 md:px-8 mt-2">
           <div className="max-w-[1200px] mx-auto">
             <OpenPositionsTable isMarketplaceMode={true} />
           </div>

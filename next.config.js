@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  transpilePackages: ['three', '@react-three/fiber', '@react-three/drei', '@shadergradient/react'],
   images: {
     domains: ['raw.githubusercontent.com', 'pbs.twimg.com', 'surhzkquxduscyjdiroh.supabase.co'],
     minimumCacheTTL: 2592000, // 30 days in seconds
@@ -15,19 +16,19 @@ const nextConfig = {
       test: /\.svg$/,
       use: ['@svgr/webpack'],
     });
-    
+
     // Handle pino-pretty module resolution - make it optional
     config.resolve.fallback = {
       ...config.resolve.fallback,
       'pino-pretty': false,
     };
-    
+
     // Add alias to handle pino-pretty gracefully
     config.resolve.alias = {
       ...config.resolve.alias,
       'pino-pretty': false,
     };
-    
+
     return config;
   },
   typescript: {
@@ -44,7 +45,7 @@ const nextConfig = {
         destination: 'https://x.com/i/broadcasts/1YqxookRyOvxv',
         permanent: false,
       },
-      
+
     ]
   },
   async headers() {

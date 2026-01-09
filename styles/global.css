@@ -6,11 +6,11 @@
 
 :root {
   --background-color: #000000;
-  --text-color: #00D9FF;
+  --text-color: #ffffff;
   --neon-pink: #FF0080;
-  --neon-cyan: #00D9FF;
+  --neon-cyan: #ffffff;
   --neon-green: #39FF14;
-  --neon-blue: #0080FF;
+  --neon-blue: #ffffff;
 }
 
 /* No-select utility classes */
@@ -807,12 +807,12 @@ w3m-modal [style*="background"],
 }
 
 .border-accent-cyan {
-  border: 1px solid rgba(0, 217, 255, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.4);
   transition: all 0.3s ease;
 }
 
 .border-accent-cyan:hover {
-  border-color: rgba(0, 217, 255, 0.8);
+  border-color: rgba(255, 255, 255, 0.8);
 }
 
 .neon-border-green {
