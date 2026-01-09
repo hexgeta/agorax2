@@ -15,7 +15,7 @@ export const ConnectButton = () => {
   const handleConnectClick = () => {
     // Check if user has already accepted the disclaimer
     const hasAccepted = localStorage.getItem('disclaimer-accepted')
-    
+
     if (!hasAccepted) {
       // Show disclaimer first
       setShowDisclaimer(true)
@@ -37,11 +37,10 @@ export const ConnectButton = () => {
       <button
         onClick={() => open()}
         disabled={isTransactionPending}
-        className={`px-4 md:px-8 py-2 md:py-3 rounded-none font-semibold transition-colors text-sm md:text-base ${
-          isTransactionPending 
-            ? 'bg-[#00D9FF] border-2 border-[#00D9FF] text-gray-600 cursor-not-allowed' 
-            : 'bg-[#00D9FF] text-black hover:bg-[#00D9FF]/80'
-        }`}
+        className={`px-4 md:px-8 py-2 md:py-3 rounded-full font-semibold transition-colors text-sm md:text-base ${isTransactionPending
+          ? 'bg-white border-2 border-white text-white cursor-not-allowed'
+          : 'bg-white text-black hover:bg-white/80'
+          }`}
       >
         {isTransactionPending ? (
           <div className="flex items-center gap-2">
@@ -59,11 +58,11 @@ export const ConnectButton = () => {
     <>
       <button
         onClick={handleConnectClick}
-        className="px-4 md:px-8 py-2 md:py-3 bg-black text-[#00D9FF] border-2 border-[#00D9FF] rounded-none font-semibold hover:bg-[#00D9FF] hover:text-black transition-colors text-sm md:text-base"
+        className="px-4 md:px-8 py-2 md:py-3 bg-white text-black border-2 border-white rounded-full font-semibold hover:bg-black hover:text-white transition-colors text-sm md:text-base"
       >
         Connect Wallet
       </button>
-      <DisclaimerDialog 
+      <DisclaimerDialog
         open={showDisclaimer}
         onAccept={handleDisclaimerAccept}
       />

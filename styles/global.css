@@ -41,26 +41,31 @@
 
 .skeleton {
   @apply bg-zinc-950 bg-[length:200%_100%] animate-shine;
-  background-image: linear-gradient(
-    110deg,
-    rgb(9, 9, 11) 8%,      /* This is the BASE color (zinc-950)
+  background-image: linear-gradient(110deg,
+      rgb(9, 9, 11) 8%,
+      /* This is the BASE color (zinc-950)
                               It's what you see before and after the shine effect */
-    rgb(24, 24, 27) 18%,   /* This is the SHINE color (zinc-900)
+      rgb(24, 24, 27) 18%,
+      /* This is the SHINE color (zinc-900)
                               It's slightly lighter, creating the moving highlight */
-    rgb(9, 9, 11) 33%      /* This returns to the BASE color
+      rgb(9, 9, 11) 33%
+      /* This returns to the BASE color
                               Creates the end of the shine effect */
-  );
+    );
 }
 
 .skeleton-dark {
   @apply bg-zinc-900 bg-[length:200%_100%] animate-shine;
-  background-image: linear-gradient(
-    110deg,
-    rgb(24, 24, 27) 8%,     /* Base color (zinc-900) */
-    rgb(63, 63, 70) 18%,    /* Shine color (zinc-700) - more visible */
-    rgb(24, 24, 27) 33%     /* Back to base color */
-  );
-  animation: shine 1.5s infinite linear;  /* Slower animation for more visible effect */
+  background-image: linear-gradient(110deg,
+      rgb(24, 24, 27) 8%,
+      /* Base color (zinc-900) */
+      rgb(63, 63, 70) 18%,
+      /* Shine color (zinc-700) - more visible */
+      rgb(24, 24, 27) 33%
+      /* Back to base color */
+    );
+  animation: shine 1.5s infinite linear;
+  /* Slower animation for more visible effect */
 }
 
 @keyframes shine {
@@ -83,19 +88,53 @@ body {
   0% {
     transform: rotate(0deg);
   }
+
   25% {
     transform: rotate(20deg);
   }
+
   50% {
     transform: rotate(0deg);
   }
+
   75% {
-    transform: rotate(20deg);
+    transform: rotate(-15deg);
   }
+
   100% {
     transform: rotate(0deg);
   }
 }
+
+/* Modern Rounded Scrollbar - Always Visible White */
+.modern-scrollbar::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+  display: block;
+}
+
+.modern-scrollbar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+}
+
+.modern-scrollbar::-webkit-scrollbar-thumb {
+  background: #ffffff;
+  border-radius: 10px;
+  border: 2px solid rgba(0, 0, 0, 0.2);
+  background-clip: padding-box;
+}
+
+.modern-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #ffffff;
+}
+
+.modern-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #ffffff rgba(255, 255, 255, 0.08);
+  scrollbar-gutter: stable;
+}
+
 .App {
   @apply max-w-[1200px] mx-auto relative;
 }
@@ -112,18 +151,15 @@ html {
 }
 
 @media (max-width: 991px) {
-  .App {
-  }
+  .App {}
 }
 
 @media (max-width: 767px) {
-  .App {
-  }
+  .App {}
 }
 
 @media (max-width: 479px) {
-  .App {
-  }
+  .App {}
 }
 
 * {
@@ -139,43 +175,100 @@ a {
 }
 
 /* Ensure all text elements use Share Tech Mono */
-span, div, p, h1, h2, h3, h4, h5, h6, button, input, textarea, label {
+span,
+div,
+p,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+button,
+input,
+textarea,
+label {
   font-family: 'Share Tech Mono', monospace, ui-monospace, 'Courier New' !important;
   letter-spacing: 0.02em;
   word-spacing: 0.1em;
 }
 
 /* Target Web3Modal button specifically */
-w3m-button, w3m-button *, w3m-button button, w3m-button span {
+w3m-button,
+w3m-button *,
+w3m-button button,
+w3m-button span {
   font-family: 'Share Tech Mono', monospace, ui-monospace, 'Courier New' !important;
 }
 
 /* Target any Web3Modal components */
-[data-w3m], [data-w3m] *, [data-w3m] button, [data-w3m] span {
+[data-w3m],
+[data-w3m] *,
+[data-w3m] button,
+[data-w3m] span {
   font-family: 'Share Tech Mono', monospace, ui-monospace, 'Courier New' !important;
 }
 
 /* More aggressive Web3Modal targeting */
-.w3m-button, .w3m-button *, .w3m-button button, .w3m-button span,
-.w3m-connect-button, .w3m-connect-button *, .w3m-connect-button button, .w3m-connect-button span,
-.w3m-modal, .w3m-modal *, .w3m-modal button, .w3m-modal span {
+.w3m-button,
+.w3m-button *,
+.w3m-button button,
+.w3m-button span,
+.w3m-connect-button,
+.w3m-connect-button *,
+.w3m-connect-button button,
+.w3m-connect-button span,
+.w3m-modal,
+.w3m-modal *,
+.w3m-modal button,
+.w3m-modal span {
   font-family: 'Share Tech Mono', monospace, ui-monospace, 'Courier New' !important;
 }
 
 /* Target all possible button variations */
-button, .button, [role="button"] {
+button,
+.button,
+[role="button"] {
   font-family: 'Share Tech Mono', monospace, ui-monospace, 'Courier New' !important;
 }
 
 /* Ultra-aggressive Web3Modal targeting - try to catch everything */
-w3m-button, w3m-button *, w3m-button button, w3m-button span, w3m-button div,
-w3m-connect-button, w3m-connect-button *, w3m-connect-button button, w3m-connect-button span, w3m-connect-button div,
-w3m-modal, w3m-modal *, w3m-modal button, w3m-modal span, w3m-modal div,
-[data-w3m], [data-w3m] *, [data-w3m] button, [data-w3m] span, [data-w3m] div,
-.w3m-button, .w3m-button *, .w3m-connect-button, .w3m-connect-button *, .w3m-modal, .w3m-modal *,
-.w3m-connect-button, .w3m-connect-button *, .w3m-modal, .w3m-modal *,
-w3m-button::part(button), w3m-button::part(text), w3m-button::part(label),
-w3m-connect-button::part(button), w3m-connect-button::part(text), w3m-connect-button::part(label) {
+w3m-button,
+w3m-button *,
+w3m-button button,
+w3m-button span,
+w3m-button div,
+w3m-connect-button,
+w3m-connect-button *,
+w3m-connect-button button,
+w3m-connect-button span,
+w3m-connect-button div,
+w3m-modal,
+w3m-modal *,
+w3m-modal button,
+w3m-modal span,
+w3m-modal div,
+[data-w3m],
+[data-w3m] *,
+[data-w3m] button,
+[data-w3m] span,
+[data-w3m] div,
+.w3m-button,
+.w3m-button *,
+.w3m-connect-button,
+.w3m-connect-button *,
+.w3m-modal,
+.w3m-modal *,
+.w3m-connect-button,
+.w3m-connect-button *,
+.w3m-modal,
+.w3m-modal *,
+w3m-button::part(button),
+w3m-button::part(text),
+w3m-button::part(label),
+w3m-connect-button::part(button),
+w3m-connect-button::part(text),
+w3m-connect-button::part(label) {
   font-family: 'Share Tech Mono', monospace, ui-monospace, 'Courier New' !important;
   color: white !important;
   background-color: white !important;
@@ -183,8 +276,12 @@ w3m-connect-button::part(button), w3m-connect-button::part(text), w3m-connect-bu
 }
 
 /* Try to target shadow DOM elements */
-w3m-button::shadow, w3m-connect-button::shadow, w3m-modal::shadow,
-w3m-button::shadow *, w3m-connect-button::shadow *, w3m-modal::shadow * {
+w3m-button::shadow,
+w3m-connect-button::shadow,
+w3m-modal::shadow,
+w3m-button::shadow *,
+w3m-connect-button::shadow *,
+w3m-modal::shadow * {
   font-family: 'Share Tech Mono', monospace, ui-monospace, 'Courier New' !important;
   color: white !important;
   background-color: white !important;
@@ -195,7 +292,7 @@ w3m-button::shadow *, w3m-connect-button::shadow *, w3m-modal::shadow * {
   :where(w3m-button, w3m-connect-button, w3m-modal) {
     font-family: 'Share Tech Mono', monospace, ui-monospace, 'Courier New' !important;
   }
-  
+
   :where(w3m-button, w3m-connect-button, w3m-modal) * {
     font-family: 'Share Tech Mono', monospace, ui-monospace, 'Courier New' !important;
     color: white !important;
@@ -272,6 +369,7 @@ textarea {
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
+
   .dark {
     --background: 240 10% 3.9%;
     --foreground: 0 0% 98%;
@@ -312,6 +410,7 @@ textarea {
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground font-mono;
     font-family: 'Share Tech Mono', monospace, ui-monospace, 'Courier New';
@@ -331,9 +430,9 @@ textarea {
   .radio-page {
     overflow: hidden;
   }
-  
+
   /* When radio-page class is present, prevent scrolling on body only if explicitly needed */
-  .radio-page ~ body {
+  .radio-page~body {
     overflow: hidden;
   }
 }
@@ -345,15 +444,20 @@ body {
 
 /* Utility Class for Selective Hiding (Lines 179-186) */
 .scrollbar-hide {
-  -ms-overflow-style: none;  /* Internet Explorer 10+ */
-  scrollbar-width: none;  /* Firefox */
-}
-.scrollbar-hide::-webkit-scrollbar { 
-  display: none;  /* Safari and Chrome */
+  -ms-overflow-style: none;
+  /* Internet Explorer 10+ */
+  scrollbar-width: none;
+  /* Firefox */
 }
 
 .scrollbar-hide::-webkit-scrollbar {
-  display: none;  /* Safari and Chrome */
+  display: none;
+  /* Safari and Chrome */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+  /* Safari and Chrome */
 }
 
 /* Hide scrollbar arrows globally */
@@ -450,13 +554,14 @@ w3m-modal::backdrop,
   background: rgba(0, 0, 0, 0.5) !important;
   backdrop-filter: blur(4px) !important;
   -webkit-backdrop-filter: blur(4px) !important;
-  z-index: 9999 !important; /* Higher than navbar (z-[100]) and footer */
+  z-index: 9999 !important;
+  /* Higher than navbar (z-[100]) and footer */
 }
 
 /* Target the modal container itself */
-w3m-modal > div,
-[data-w3m-modal] > div,
-.w3m-modal > div {
+w3m-modal>div,
+[data-w3m-modal]>div,
+.w3m-modal>div {
   background: rgba(0, 0, 0, 0.5) !important;
   backdrop-filter: blur(4px) !important;
   -webkit-backdrop-filter: blur(4px) !important;
@@ -497,9 +602,9 @@ w3m-modal *,
 }
 
 /* Ensure the modal content has proper z-index */
-w3m-modal > div > div,
-[data-w3m-modal] > div > div,
-.w3m-modal > div > div {
+w3m-modal>div>div,
+[data-w3m-modal]>div>div,
+.w3m-modal>div>div {
   z-index: 10000 !important;
 }
 
@@ -645,8 +750,8 @@ w3m-modal .wui-ux-by-reown,
 /* Force modal background to be pure black */
 w3m-modal,
 .w3m-modal,
-w3m-modal > div,
-.w3m-modal > div {
+w3m-modal>div,
+.w3m-modal>div {
   background-color: #000000 !important;
   background: #000000 !important;
 }
@@ -687,13 +792,31 @@ w3m-modal [style*="background"],
 }
 
 .neon-border-pink {
-  border: 2px solid var(--neon-pink);
-  box-shadow: 0 0 10px var(--neon-pink), 0 0 20px var(--neon-pink), inset 0 0 10px rgba(255, 0, 128, 0.2);
+  border: 1px solid rgba(255, 0, 128, 0.5);
+  box-shadow: 0 0 8px rgba(255, 0, 128, 0.3), inset 0 0 8px rgba(255, 0, 128, 0.1);
+}
+
+.border-accent-pink {
+  border: 1px solid rgba(255, 0, 128, 0.4);
+  transition: all 0.3s ease;
+}
+
+.border-accent-pink:hover {
+  border-color: rgba(255, 0, 128, 0.8);
 }
 
 .neon-border-cyan {
-  border: 2px solid var(--neon-cyan);
-  box-shadow: 0 0 10px var(--neon-cyan), 0 0 20px var(--neon-cyan), inset 0 0 10px rgba(0, 217, 255, 0.2);
+  border: 1px solid rgba(0, 217, 255, 0.5);
+  box-shadow: 0 0 8px rgba(0, 217, 255, 0.3), inset 0 0 8px rgba(0, 217, 255, 0.1);
+}
+
+.border-accent-cyan {
+  border: 1px solid rgba(0, 217, 255, 0.4);
+  transition: all 0.3s ease;
+}
+
+.border-accent-cyan:hover {
+  border-color: rgba(0, 217, 255, 0.8);
 }
 
 .neon-border-green {
@@ -733,10 +856,13 @@ w3m-modal [style*="background"],
 
 /* Animated neon pulse */
 @keyframes neon-pulse {
-  0%, 100% {
+
+  0%,
+  100% {
     filter: brightness(1) saturate(1);
     opacity: 1;
   }
+
   50% {
     filter: brightness(1.5) saturate(1.5);
     opacity: 0.95;

@@ -25,7 +25,7 @@ const getTokenPrice = (tokenAddress: string, tokenPrices: any): number => {
   if (tokenAddress.toLowerCase() === '0xefd766ccb38eaf1dfd701853bfce31359239f305') {
     return 1.0;
   }
-  
+
   // Use WPLS price for PLS (native token addresses)
   const plsAddresses = [
     '0x0000000000000000000000000000000000000000',
@@ -35,7 +35,7 @@ const getTokenPrice = (tokenAddress: string, tokenPrices: any): number => {
     const wplsPrice = tokenPrices['0xa1077a294dde1b09bb078844df40758a5d0f9a27']?.price;
     return wplsPrice || 0.000034;
   }
-  
+
   return tokenPrices[tokenAddress]?.price || 0;
 };
 
@@ -47,15 +47,17 @@ const formatUSD = (amount: number) => {
   return `$${(amount / 1000000).toFixed(2)}M`;
 };
 
+import { LiquidGlassCard } from '@/components/ui/liquid-glass';
+
 export default function OrderVolumeChart({ orders, tokenPrices }: OrderVolumeChartProps) {
   // Calculate daily order volume data
   const chartData = useMemo(() => {
     if (!orders || orders.length === 0) return [];
 
     // Group orders by day
-    const volumeByDay: Record<string, { 
-      date: string; 
-      volume: number; 
+    const volumeByDay: Record<string, {
+      date: string;
+      volume: number;
       orderCount: number;
       uniqueCreators: Set<string>;
     }> = {};
@@ -73,16 +75,16 @@ export default function OrderVolumeChart({ orders, tokenPrices }: OrderVolumeCha
 
       // Add to daily total
       if (!volumeByDay[dateStr]) {
-        volumeByDay[dateStr] = { 
-          date: dateStr, 
-          volume: 0, 
+        volumeByDay[dateStr] = {
+          date: dateStr,
+          volume: 0,
           orderCount: 0,
           uniqueCreators: new Set()
         };
       }
       volumeByDay[dateStr].volume += orderValueUSD;
       volumeByDay[dateStr].orderCount += 1;
-      
+
       // Track unique order creators
       if (order.orderOwner) {
         volumeByDay[dateStr].uniqueCreators.add(order.orderOwner.toLowerCase());
@@ -97,10 +99,10 @@ export default function OrderVolumeChart({ orders, tokenPrices }: OrderVolumeCha
     const maxDate = new Date(dates[dates.length - 1]);
 
     // Fill in all days between min and max
-    const allDays: { 
-      date: string; 
-      volume: number; 
-      orderCount: number; 
+    const allDays: {
+      date: string;
+      volume: number;
+      orderCount: number;
       uniqueCreators: number;
       displayDate: string;
     }[] = [];
@@ -109,7 +111,7 @@ export default function OrderVolumeChart({ orders, tokenPrices }: OrderVolumeCha
     while (currentDate <= maxDate) {
       const dateStr = currentDate.toISOString().split('T')[0];
       const dayData = volumeByDay[dateStr];
-      
+
       allDays.push({
         date: dateStr,
         volume: dayData?.volume || 0,
@@ -138,21 +140,25 @@ export default function OrderVolumeChart({ orders, tokenPrices }: OrderVolumeCha
   }
 
   return (
-    <div className="bg-black/80 backdrop-blur-sm border-2 border-[#00D9FF] p-6 shadow-[0_0_30px_rgba(0,217,255,0.3)]">
+    <LiquidGlassCard
+      className="p-6 bg-black/40"
+      shadowIntensity="none"
+      glowIntensity="none"
+    >
       <div className="mb-6">
         <h3 className="text-2xl font-bold text-white mb-2">Order Creation Volume</h3>
         <div className="flex gap-6">
           <div>
             <p className="text-gray-400 text-sm">Total Listed</p>
-            <p className="text-[#00D9FF] text-xl font-bold">{formatUSD(totalVolume)}</p>
+            <p className="text-white text-xl font-bold">{formatUSD(totalVolume)}</p>
           </div>
           <div>
             <p className="text-gray-400 text-sm">Total Orders</p>
-            <p className="text-[#00D9FF] text-xl font-bold">{totalOrders}</p>
+            <p className="text-white text-xl font-bold">{totalOrders}</p>
           </div>
           <div>
             <p className="text-gray-400 text-sm">Active Days</p>
-            <p className="text-[#00D9FF] text-xl font-bold">{chartData.filter(d => d.orderCount > 0).length}</p>
+            <p className="text-white text-xl font-bold">{chartData.filter(d => d.orderCount > 0).length}</p>
           </div>
         </div>
       </div>
@@ -162,46 +168,46 @@ export default function OrderVolumeChart({ orders, tokenPrices }: OrderVolumeCha
           data={chartData}
           margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
         >
-          <CartesianGrid strokeDasharray="3 3" stroke="#00D9FF20" />
+          <CartesianGrid strokeDasharray="3 3" stroke="#FFFFFF20" />
           <XAxis
             dataKey="displayDate"
-            stroke="#00D9FF"
-            tick={{ fill: '#00D9FF' }}
-            tickLine={{ stroke: '#00D9FF' }}
+            stroke="#FFFFFF"
+            tick={{ fill: '#FFFFFF' }}
+            tickLine={{ stroke: '#FFFFFF' }}
           />
           <YAxis
-            stroke="#00D9FF"
-            tick={{ fill: '#00D9FF' }}
-            tickLine={{ stroke: '#00D9FF' }}
+            stroke="#FFFFFF"
+            tick={{ fill: '#FFFFFF' }}
+            tickLine={{ stroke: '#FFFFFF' }}
             tickFormatter={(value) => formatUSD(value)}
           />
           <Tooltip
             content={({ active, payload }) => {
               if (!active || !payload || !payload[0]) return null;
-              
+
               const data = payload[0].payload;
-              
+
               return (
                 <div style={{
                   backgroundColor: '#000',
-                  border: '2px solid #00D9FF',
+                  border: '2px solid #FFFFFF',
                   borderRadius: '8px',
                   padding: '12px',
                   color: '#fff',
                 }}>
-                  <p style={{ color: '#00D9FF', fontWeight: 'bold', marginBottom: '8px' }}>
+                  <p style={{ color: '#FFFFFF', fontWeight: 'bold', marginBottom: '8px' }}>
                     {data.displayDate}
                   </p>
                   <p style={{ margin: '4px 0', fontSize: '14px' }}>
-                    <span style={{ color: '#00D9FF' }}>Listed Value:</span>{' '}
+                    <span style={{ color: '#FFFFFF' }}>Listed Value:</span>{' '}
                     <span style={{ fontWeight: 'bold' }}>{formatUSD(data.volume)}</span>
                   </p>
                   <p style={{ margin: '4px 0', fontSize: '14px' }}>
-                    <span style={{ color: '#00D9FF' }}>Orders Created:</span>{' '}
+                    <span style={{ color: '#FFFFFF' }}>Orders Created:</span>{' '}
                     <span style={{ fontWeight: 'bold' }}>{data.orderCount}</span>
                   </p>
                   <p style={{ margin: '4px 0', fontSize: '14px' }}>
-                    <span style={{ color: '#00D9FF' }}>Unique Creators:</span>{' '}
+                    <span style={{ color: '#FFFFFF' }}>Unique Creators:</span>{' '}
                     <span style={{ fontWeight: 'bold' }}>{data.uniqueCreators}</span>
                   </p>
                 </div>
@@ -209,7 +215,7 @@ export default function OrderVolumeChart({ orders, tokenPrices }: OrderVolumeCha
             }}
           />
           <Legend
-            wrapperStyle={{ color: '#00D9FF' }}
+            wrapperStyle={{ color: '#FFFFFF' }}
             iconType="square"
           />
           <Bar
@@ -220,6 +226,6 @@ export default function OrderVolumeChart({ orders, tokenPrices }: OrderVolumeCha
           />
         </BarChart>
       </ResponsiveContainer>
-    </div>
+    </LiquidGlassCard>
   );
 }

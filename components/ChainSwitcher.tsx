@@ -31,9 +31,9 @@ export function ChainSwitcher({ isCheckingConnection }: { isCheckingConnection: 
     >
       <DropdownMenu>
         <DropdownMenuTrigger className="flex items-center justify-center gap-2 md:gap-3 px-3 md:px-4 h-12 bg-black/40 border border-[#00D9FF]/30 hover:bg-[#00D9FF]/10 transition-colors w-full md:w-[220px] rounded-none focus:outline-none focus-visible:outline-none">
-          <div 
+          <div
             className="w-3 h-3 md:w-4 md:h-4 relative"
-            style={{ 
+            style={{
               WebkitMaskImage: `url(${currentChain.icon})`,
               WebkitMaskSize: 'contain',
               WebkitMaskRepeat: 'no-repeat',
@@ -45,21 +45,21 @@ export function ChainSwitcher({ isCheckingConnection }: { isCheckingConnection: 
             }}
             aria-label={currentChain.name}
           >
-            <div className="absolute inset-0 bg-[#00D9FF]" />
+            <div className="absolute inset-0 bg-white" />
           </div>
-          <span className="text-[#00D9FF] font-medium hidden md:inline">{currentChain.name}</span>
-          <ChevronDown className="w-3 h-3 md:w-4 md:h-4 text-[#00D9FF]/70" />
+          <span className="text-white font-medium hidden md:inline">{currentChain.name}</span>
+          <ChevronDown className="w-3 h-3 md:w-4 md:h-4 text-white/70" />
         </DropdownMenuTrigger>
         <DropdownMenuContent className="bg-black/95 border border-[#00D9FF]/10 backdrop-blur-sm z-[200] w-full md:w-[220px] rounded-lg">
           {CHAINS.map((chainOption) => (
             <DropdownMenuItem
               key={chainOption.id}
               onClick={() => switchChain({ chainId: chainOption.id })}
-              className="group flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2 cursor-pointer text-[#00D9FF] hover:text-black hover:bg-[#00D9FF] data-[highlighted]:bg-[#00D9FF] data-[highlighted]:text-black focus-visible:outline-none text-xs md:text-base transition-colors"
+              className="group flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2 cursor-pointer text-white hover:text-black hover:bg-white data-[highlighted]:bg-white data-[highlighted]:text-black focus-visible:outline-none text-xs md:text-base transition-colors"
             >
-              <div 
+              <div
                 className="w-3 h-3 md:w-4 md:h-4 relative"
-                style={{ 
+                style={{
                   WebkitMaskImage: `url(${chainOption.icon})`,
                   WebkitMaskSize: 'contain',
                   WebkitMaskRepeat: 'no-repeat',
@@ -71,7 +71,7 @@ export function ChainSwitcher({ isCheckingConnection }: { isCheckingConnection: 
                 }}
                 aria-label={chainOption.name}
               >
-                <div className="absolute inset-0 bg-[#00D9FF] group-hover:bg-black group-data-[highlighted]:bg-black transition-colors" />
+                <div className="absolute inset-0 bg-white group-hover:bg-black group-data-[highlighted]:bg-black transition-colors" />
               </div>
               <span className="hidden md:inline">{chainOption.name}</span>
               {chain?.id === chainOption.id && (
