@@ -1,60 +1,12 @@
 'use client';
 
 import React from 'react';
-import { ShaderGradientCanvas, ShaderGradient } from '@shadergradient/react';
 
 export function AppBackground() {
     return (
-        <div className='fixed top-0 left-0 w-full h-full z-0 pointer-events-none'>
-            <ShaderGradientCanvas
-                style={{
-                    width: '100%',
-                    height: '100%',
-                }}
-                lazyLoad={undefined}
-                fov={undefined}
-                pixelDensity={1}
-                pointerEvents='none'
-            >
-                <ShaderGradient
-                    animate='on'
-                    type='sphere'
-                    wireframe={false}
-                    shader='defaults'
-                    uTime={0}
-                    uSpeed={0.3}
-                    uStrength={0.3}
-                    uDensity={0.8}
-                    uFrequency={5.5}
-                    uAmplitude={3.2}
-                    positionX={-0.1}
-                    positionY={0}
-                    positionZ={0}
-                    rotationX={0}
-                    rotationY={130}
-                    rotationZ={70}
-                    color1='#73bfc4'
-                    color2='#ff810a'
-                    color3='#8da0ce'
-                    reflection={0.4}
-                    // View (camera) props
-                    cAzimuthAngle={270}
-                    cPolarAngle={180}
-                    cDistance={0.5}
-                    cameraZoom={15.1}
-                    // Effect props
-                    lightType='env'
-                    brightness={0.8}
-                    envPreset='city'
-                    grain='on'
-                    // Tool props
-                    toggleAxis={false}
-                    zoomOut={false}
-                    hoverState=''
-                    // Optional - if using transition features
-                    enableTransition={false}
-                />
-            </ShaderGradientCanvas>
+        <div className='fixed top-0 left-0 w-full h-full z-0 pointer-events-none overflow-hidden'>
+            <div className="absolute inset-0 bg-gradient-to-br from-[#73bfc4]/20 via-[#ff810a]/10 to-[#8da0ce]/20 animate-gradient-shift" />
+            <div className="absolute inset-0 bg-gradient-to-tl from-[#8da0ce]/15 via-transparent to-[#73bfc4]/15 animate-gradient-shift-reverse" />
         </div>
     );
 }

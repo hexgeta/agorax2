@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useState } from 'react';
 import { ConnectButton } from './ConnectButton';
 import { ChainSwitcher } from './ChainSwitcher';
 import { TESTING_MODE } from '@/config/testing';
@@ -9,6 +10,7 @@ import { TESTING_MODE } from '@/config/testing';
 
 const NavBar = () => {
   const pathname = usePathname();
+  const [hoveredPath, setHoveredPath] = useState<string | null>(null);
   return (
     <nav className="w-full bg-black bg-blur-[6.65px] px-8 py-4 relative md:fixed top-0 left-0 right-0 z-[200] border-b border-white/20">
       <div className="max-w-[1200px] mx-auto">
@@ -38,20 +40,16 @@ const NavBar = () => {
                 ? 'text-white'
                 : 'text-white/80 hover:text-white'
                 }`}
+              onMouseEnter={() => setHoveredPath('/')}
+              onMouseLeave={() => setHoveredPath(null)}
             >
               <span className="relative inline-block">
                 My Orders
-                <span className={`absolute bottom-[-4px] left-0 w-full h-0.5 bg-white transition-transform duration-300 ease-out origin-left ${pathname === '/'
-                  ? 'scale-x-100'
-                  : 'scale-x-0 group-hover:scale-x-100 group-hover:origin-left'
+                <span className={`absolute bottom-[-4px] left-0 w-full h-0.5 bg-white transition-transform duration-300 ease-out ${pathname === '/'
+                  ? (hoveredPath && hoveredPath !== '/' ? 'scale-x-0 origin-left' : 'scale-x-100 origin-left')
+                  : 'scale-x-0 group-hover:scale-x-100 origin-left'
                   }`}
-                  style={{
-                    transformOrigin: pathname === '/' ? 'left' : undefined
-                  }}
                 />
-                {pathname !== '/' && (
-                  <span className="absolute bottom-[-4px] left-0 w-full h-0.5 bg-white scale-x-0 transition-transform duration-300 ease-out origin-right group-hover:scale-x-0" />
-                )}
               </span>
             </Link>
             <Link
@@ -60,17 +58,16 @@ const NavBar = () => {
                 ? 'text-white'
                 : 'text-white/80 hover:text-white'
                 }`}
+              onMouseEnter={() => setHoveredPath('/marketplace')}
+              onMouseLeave={() => setHoveredPath(null)}
             >
               <span className="relative inline-block">
                 Marketplace
-                <span className={`absolute bottom-[-4px] left-0 w-full h-0.5 bg-white transition-transform duration-300 ease-out origin-left ${pathname === '/marketplace'
-                  ? 'scale-x-100'
-                  : 'scale-x-0 group-hover:scale-x-100 group-hover:origin-left'
+                <span className={`absolute bottom-[-4px] left-0 w-full h-0.5 bg-white transition-transform duration-300 ease-out ${pathname === '/marketplace'
+                  ? (hoveredPath && hoveredPath !== '/marketplace' ? 'scale-x-0 origin-left' : 'scale-x-100 origin-left')
+                  : 'scale-x-0 group-hover:scale-x-100 origin-left'
                   }`}
                 />
-                {pathname !== '/marketplace' && (
-                  <span className="absolute bottom-[-4px] left-0 w-full h-0.5 bg-white scale-x-0 transition-transform duration-300 ease-out origin-right group-hover:scale-x-0" />
-                )}
               </span>
             </Link>
             <Link
@@ -79,17 +76,16 @@ const NavBar = () => {
                 ? 'text-white'
                 : 'text-white/80 hover:text-white'
                 }`}
+              onMouseEnter={() => setHoveredPath('/stats')}
+              onMouseLeave={() => setHoveredPath(null)}
             >
               <span className="relative inline-block">
                 Stats
-                <span className={`absolute bottom-[-4px] left-0 w-full h-0.5 bg-white transition-transform duration-300 ease-out origin-left ${pathname === '/stats'
-                  ? 'scale-x-100'
-                  : 'scale-x-0 group-hover:scale-x-100 group-hover:origin-left'
+                <span className={`absolute bottom-[-4px] left-0 w-full h-0.5 bg-white transition-transform duration-300 ease-out ${pathname === '/stats'
+                  ? (hoveredPath && hoveredPath !== '/stats' ? 'scale-x-0 origin-left' : 'scale-x-100 origin-left')
+                  : 'scale-x-0 group-hover:scale-x-100 origin-left'
                   }`}
                 />
-                {pathname !== '/stats' && (
-                  <span className="absolute bottom-[-4px] left-0 w-full h-0.5 bg-white scale-x-0 transition-transform duration-300 ease-out origin-right group-hover:scale-x-0" />
-                )}
               </span>
             </Link>
 

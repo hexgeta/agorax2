@@ -74,6 +74,30 @@
   }
 }
 
+@keyframes gradient-shift {
+
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes gradient-shift-reverse {
+
+  0%,
+  100% {
+    background-position: 100% 50%;
+  }
+
+  50% {
+    background-position: 0% 50%;
+  }
+}
+
 html,
 body {
   @apply w-full m-0 font-sans bg-[var(--background-color)] text-[var(--text-color)];

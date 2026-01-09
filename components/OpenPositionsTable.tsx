@@ -2225,7 +2225,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
           ) : (
             <div className="w-full min-w-[800px] text-lg">
               <div
-                className={`grid grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(80px,1fr)_minmax(100px,1.2fr)_minmax(80px,1fr)_minmax(80px,1fr)_minmax(100px,auto)] items-center gap-4 pb-4 border-b border-[rgba(255, 255, 255, 1)]/15 ${expandedPositions.size > 0 ? 'opacity-90' : 'opacity-100'
+                className={`grid grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(80px,1fr)_minmax(100px,1.2fr)_minmax(80px,1fr)_minmax(80px,1fr)_minmax(100px,auto)] items-center gap-4 pb-4 border-b border-white/10 ${expandedPositions.size > 0 ? 'opacity-90' : 'opacity-100'
                   }`}
               >
                 {/* COLUMN 1: Token For Sale */}
@@ -2452,7 +2452,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
 
                   return (
                     <div key={`${orderId}-${tokenFilter}-${ownershipFilter}-${statusFilter}`} data-order-id={orderId}
-                      className={`grid grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(80px,1fr)_minmax(100px,1.2fr)_minmax(80px,1fr)_minmax(80px,1fr)_minmax(100px,auto)] items-start gap-4 py-8 ${index < displayOrders.length - 1 && !expandedPositions.has(orderId) ? 'border-b border-[rgba(255, 255, 255, 1)]/10' : ''
+                      className={`grid grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(80px,1fr)_minmax(100px,1.2fr)_minmax(80px,1fr)_minmax(80px,1fr)_minmax(100px,auto)] items-start gap-4 py-8 ${index < displayOrders.length - 1 && !expandedPositions.has(orderId) ? 'border-b border-white/10' : ''
                         }`}
                     >
                       {/* COLUMN 1: Token For Sale Content */}
@@ -2782,7 +2782,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                               <h4 className="text-white font-medium text-xl">Your Trade</h4>
 
                               {/* Offer Input Fields */}
-                              <div className="mt-3 pt-3 border-t border-white/20">
+                              <div className="mt-3 pt-3 border-t border-white/10">
                                 <h5 className="text-white font-medium text-sm mb-2">You pay:</h5>
                                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                                   {order.orderDetailsWithID.orderDetails.buyTokensIndex.map((tokenIndex: bigint, idx: number) => {
@@ -2917,7 +2917,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                               )}
                                             </div>
                                           </div>
-                                          <div className="border-t border-[rgba(255, 255, 255, 1)]/30 pt-1">
+                                          <div className="border-t border-white/10 pt-1">
                                             <div className="flex justify-between">
                                               <span className="text-white font-bold">You Pay:</span>
                                               <div className="flex items-center space-x-1">
@@ -2984,7 +2984,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                 )}
 
                                 {/* Submit Section */}
-                                <div className="mt-4 pt-3 border-t border-[rgba(255, 255, 255, 1)]/30">
+                                <div className="mt-4 pt-3 border-t border-white/10">
                                   {(() => {
                                     const orderId = order.orderDetailsWithID.orderID.toString();
                                     const currentInputs = offerInputs[orderId];
@@ -3018,7 +3018,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
 
                               {/* Owner Actions - Only show for user's own orders */}
                               {address && order.userDetails.orderOwner.toLowerCase() === address.toLowerCase() && (
-                                <div className="mt-3 pt-3 border-t border-[rgba(255, 255, 255, 1)]/30">
+                                <div className="mt-3 pt-3 border-t border-white/10">
                                   <div className="flex gap-2 flex-wrap">
                                     {/* Collect Proceeds Button - Show if order has been filled */}
                                     {(() => {
