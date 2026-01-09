@@ -168,7 +168,7 @@ export default function OrderVolumeChart({ orders, tokenPrices }: OrderVolumeCha
           data={chartData}
           margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
         >
-          <CartesianGrid strokeDasharray="3 3" stroke="#FFFFFF20" />
+          <CartesianGrid strokeDasharray="10 10" stroke="#FFFFFF20" />
           <XAxis
             dataKey="displayDate"
             stroke="#FFFFFF"

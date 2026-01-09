@@ -108,7 +108,7 @@ body {
 
 /* Modern Rounded Scrollbar - Always Visible White */
 .modern-scrollbar::-webkit-scrollbar {
-  width: 10px;
+  width: 14px;
   height: 10px;
   display: block;
 }
@@ -116,12 +116,14 @@ body {
 .modern-scrollbar::-webkit-scrollbar-track {
   background: rgba(255, 255, 255, 0.08);
   border-radius: 10px;
+  border-right: 4px solid transparent;
+  background-clip: padding-box;
 }
 
 .modern-scrollbar::-webkit-scrollbar-thumb {
   background: #ffffff;
   border-radius: 10px;
-  border: 2px solid rgba(0, 0, 0, 0.2);
+  border-right: 4px solid transparent;
   background-clip: padding-box;
 }
 
@@ -306,7 +308,7 @@ textarea {
   @apply text-[var(--background-color)];
 }
 
-/* Global Scrollbar Hiding for All Elements (Lines 193-217) */
+/* Global Scrollbar Hiding - Removed !important to allow overrides */
 *::-webkit-scrollbar {
   width: 0px;
   background: transparent;
@@ -318,7 +320,7 @@ textarea {
   display: none;
 }
 
-/* Cross-Browser Compatibility (Lines 205-217) */
+/* Cross-Browser Compatibility */
 @supports (-webkit-overflow-scrolling: touch) {
   * {
     -webkit-overflow-scrolling: touch;
@@ -328,9 +330,9 @@ textarea {
 }
 
 *::-webkit-scrollbar {
-  display: none !important;
-  width: 0 !important;
-  height: 0 !important;
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 @layer base {

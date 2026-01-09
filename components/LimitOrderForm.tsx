@@ -1934,7 +1934,7 @@ export function LimitOrderForm({
 
         {/* Expiration */}
         <LiquidGlassCard
-          className="mb-4 p-4 bg-white/5 border-white/10"
+          className="mb-4 p-4 bg-white/5 border-white/10 overflow-visible relative z-10"
           borderRadius="12px"
           shadowIntensity="xs"
           glowIntensity="none"
