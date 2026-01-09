@@ -70,24 +70,6 @@ const NavBar = () => {
                 />
               </span>
             </Link>
-            <Link
-              href="/stats"
-              className={`transition-colors font-medium text-sm md:text-base px-4 py-2 cursor-pointer group ${pathname === '/stats'
-                ? 'text-white'
-                : 'text-white/80 hover:text-white'
-                }`}
-              onMouseEnter={() => setHoveredPath('/stats')}
-              onMouseLeave={() => setHoveredPath(null)}
-            >
-              <span className="relative inline-block">
-                Stats
-                <span className={`absolute bottom-[-4px] left-0 w-full h-0.5 bg-white transition-transform duration-300 ease-out ${pathname === '/stats'
-                  ? (hoveredPath && hoveredPath !== '/stats' ? 'scale-x-0 origin-left' : 'scale-x-100 origin-left')
-                  : 'scale-x-0 group-hover:scale-x-100 origin-left'
-                  }`}
-                />
-              </span>
-            </Link>
 
             {/* Only show chain switcher in testing mode */}
             {TESTING_MODE && <ChainSwitcher isCheckingConnection={false} />}

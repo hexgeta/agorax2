@@ -98,6 +98,50 @@
   }
 }
 
+@keyframes cloud-drift-right {
+  0% {
+    background-position: 0 0, 0 0, 0 0;
+  }
+
+  100% {
+    background-position: 100% 0, 100% 0, 100% 0;
+  }
+}
+
+@keyframes cloud-drift-left {
+  0% {
+    background-position: 0 0, 0 0, 0 0;
+  }
+
+  100% {
+    background-position: -100% 0, -100% 0, -100% 0;
+  }
+}
+
+@keyframes cloud-drift-diagonal {
+  0% {
+    background-position: 0 0, 0 0;
+  }
+
+  100% {
+    background-position: 100% 100%, 100% 100%;
+  }
+}
+
+@keyframes gradient-drift {
+
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.3;
+  }
+
+  50% {
+    transform: translate(20%, 10%) scale(1.2);
+    opacity: 0.5;
+  }
+}
+
 html,
 body {
   @apply w-full m-0 font-sans bg-[var(--background-color)] text-[var(--text-color)];

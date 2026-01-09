@@ -92,7 +92,7 @@ export default function Home() {
       <LogoPreloader />
       <main className="flex min-h-screen flex-col items-center">
         {/* Hero Section */}
-        <div className="w-full px-2 md:px-8 mt-8 mb-0 bg-black">
+        <div className="w-full px-2 md:px-8 mt-2 mb-0 bg-black">
           <div className="max-w-[1200px] mx-auto">
             {/* Loading State */}
             {(isInitializing || isConnecting) && (
