@@ -435,11 +435,15 @@ export default function Home() {
                     />
                     <FAQItem
                       question="What are the fees?"
-                      answer="AgoraX charges a 0.2% fee to the seller + a flat 100 PLS for spam prevention—the lowest of any DEX on PulseChain. Plus, PulseChain's low gas costs mean your total transaction costs stay minimal."
+                      answer="AgoraX charges a flat 100 PLS listing fee + a 0.2% fee paid by the seller on his bought assets, the lowest of any DEX on PulseChain. For example, "
                     />
                     <FAQItem
                       question="Which tokens can I trade?"
                       answer="You can buy any PRC-20 token on PulseChain. You can sell from a selection of whitelisted PRC20 tokens. For whitelist additions DM us at https://x.com/hexgeta"
+                    />
+                                        <FAQItem
+                      question="What is All or Nothing?"
+                      answer="This advanced setting when creating an order prevents your order from being partially filled by buyers. Either 100% of your order gets filled or none of it does. It deters small fish from nibbling on your order."
                     />
                   </div>
                 </motion.section>

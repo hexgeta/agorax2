@@ -227,6 +227,18 @@ export function LimitOrderForm({
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
+  const [showAdvancedOptions, setShowAdvancedOptions] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('limitOrderShowAdvanced') === 'true';
+    }
+    return false;
+  });
+  const [allOrNothing, setAllOrNothing] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('limitOrderAllOrNothing') === 'true';
+    }
+    return false;
+  });
 
   const sellDropdownRef = useRef<HTMLDivElement>(null);
   const buyDropdownRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -640,6 +652,15 @@ export function LimitOrderForm({
     localStorage.setItem('limitOrderInvertPrice', invertPriceDisplay.toString());
   }, [invertPriceDisplay]);
 
+  // Save advanced options state to localStorage
+  useEffect(() => {
+    localStorage.setItem('limitOrderShowAdvanced', showAdvancedOptions.toString());
+  }, [showAdvancedOptions]);
+
+  useEffect(() => {
+    localStorage.setItem('limitOrderAllOrNothing', allOrNothing.toString());
+  }, [allOrNothing]);
+
   // Recalculate percentage when invert display changes
   useEffect(() => {
     const sellTokenPrice = sellToken ? prices[sellToken.a]?.price || 0 : 0;
@@ -952,7 +973,7 @@ export function LimitOrderForm({
         buyTokenIndices,                 // _buyTokensIndex
         buyAmountsWei,                   // _buyAmounts
         expirationTime,                  // _expirationTime
-        false,                           // _allOrNothing (default to false)
+        allOrNothing,                    // _allOrNothing
         valueToSend                      // msg.value
       );
 
@@ -2165,7 +2186,7 @@ export function LimitOrderForm({
 
               {/* Listing Fee - always required, paid in native PLS */}
               <div className="flex justify-between items-center">
-                <span className="text-white/70">Listing Fee (in {formatTokenTicker('PLS', chainId)}):</span>
+                <span className="text-white/70">Flat listing fee:</span>
                 <span className="text-red-400 font-medium">
                   +{parseFloat(formatEther(listingFee)).toString()} {formatTokenTicker('PLS', chainId)}
                 </span>
@@ -2207,7 +2228,7 @@ export function LimitOrderForm({
                 return (
                   <div key={`fee-${index}`} className="flex justify-between items-center">
                     <span className="text-white/70">
-                      {index === 0 ? 'Their Max Fee (0.2%):' : ''}
+                      {index === 0 ? 'Platform Fee (0.2%):' : ''}
                     </span>
                     <span className="text-red-400 font-medium">
                       -{formatBalanceDisplay(feeAmount.toString())} {formatTokenTicker(token.ticker, chainId)}
@@ -2233,6 +2254,50 @@ export function LimitOrderForm({
                     </div>
                   );
                 })}
+              </div>
+
+              {/* Advanced Options */}
+              <div className="border-t border-white/10 mt-3 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
+                  className="flex items-center gap-2 text-white/60 hover:text-white/80 transition-colors text-sm"
+                >
+                  <span>Advanced Options</span>
+                  <svg
+                    className={`w-4 h-4 transition-transform duration-200 ${showAdvancedOptions ? 'rotate-180' : ''}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                  </svg>
+                </button>
+
+                {showAdvancedOptions && (
+                  <div className="mt-3 space-y-3">
+                    {/* All or Nothing Toggle */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex flex-col">
+                        <span className="text-white/70 text-sm">All or Nothing?</span>
+                        <span className="text-white/40 text-xs">Order must be filled completely in one transaction</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setAllOrNothing(!allOrNothing)}
+                        className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${
+                          allOrNothing ? 'bg-green-500' : 'bg-white/20'
+                        }`}
+                      >
+                        <span
+                          className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform duration-200 ${
+                            allOrNothing ? 'translate-x-5' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </LiquidGlassCard>
