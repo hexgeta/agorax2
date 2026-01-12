@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
+import { useAccount } from 'wagmi';
 import { ConnectButton } from './ConnectButton';
 import { ChainSwitcher } from './ChainSwitcher';
 import { TESTING_MODE } from '@/config/testing';
@@ -11,6 +12,7 @@ import { TESTING_MODE } from '@/config/testing';
 const NavBar = () => {
   const pathname = usePathname();
   const [hoveredPath, setHoveredPath] = useState<string | null>(null);
+  const { isConnected } = useAccount();
   return (
     <nav className="w-full bg-black bg-blur-[6.65px] px-8 py-4 relative md:fixed top-0 left-0 right-0 z-[200] border-b border-white/20">
       <div className="max-w-[1200px] mx-auto">
@@ -34,24 +36,26 @@ const NavBar = () => {
               <NotificationBell />
             </div> */}
             {/* Navigation Links */}
-            <Link
-              href="/"
-              className={`transition-colors font-medium text-sm md:text-base px-4 py-2 cursor-pointer group ${pathname === '/'
-                ? 'text-white'
-                : 'text-white/80 hover:text-white'
-                }`}
-              onMouseEnter={() => setHoveredPath('/')}
-              onMouseLeave={() => setHoveredPath(null)}
-            >
-              <span className="relative inline-block">
-                My Orders
-                <span className={`absolute bottom-[-4px] left-0 w-full h-0.5 bg-white transition-transform duration-300 ease-out ${pathname === '/'
-                  ? (hoveredPath && hoveredPath !== '/' ? 'scale-x-0 origin-left' : 'scale-x-100 origin-left')
-                  : 'scale-x-0 group-hover:scale-x-100 origin-left'
+            {isConnected && (
+              <Link
+                href="/"
+                className={`transition-colors font-medium text-sm md:text-base px-4 py-2 cursor-pointer group ${pathname === '/'
+                  ? 'text-white'
+                  : 'text-white/80 hover:text-white'
                   }`}
-                />
-              </span>
-            </Link>
+                onMouseEnter={() => setHoveredPath('/')}
+                onMouseLeave={() => setHoveredPath(null)}
+              >
+                <span className="relative inline-block">
+                  My Orders
+                  <span className={`absolute bottom-[-4px] left-0 w-full h-0.5 bg-white transition-transform duration-300 ease-out ${pathname === '/'
+                    ? (hoveredPath && hoveredPath !== '/' ? 'scale-x-0 origin-left' : 'scale-x-100 origin-left')
+                    : 'scale-x-0 group-hover:scale-x-100 origin-left'
+                    }`}
+                  />
+                </span>
+              </Link>
+            )}
             <Link
               href="/marketplace"
               className={`transition-colors font-medium text-sm md:text-base px-4 py-2 cursor-pointer group ${pathname === '/marketplace'

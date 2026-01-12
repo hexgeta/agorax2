@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { CircleDollarSign, ChevronDown, Trash2, Lock, Search, ArrowRight, MoveRight, ChevronRight, Play, CalendarDays } from 'lucide-react';
 import { PixelSpinner } from './ui/PixelSpinner';
 import PaywallModal from './PaywallModal';
+import { DisclaimerDialog } from './DisclaimerDialog';
 import OrderHistoryTable from './OrderHistoryTable';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 import { Calendar } from '@/components/ui/calendar';
@@ -23,6 +24,7 @@ import { getBlockExplorerTxUrl } from '@/utils/blockExplorer';
 import { TOKEN_CONSTANTS } from '@/constants/crypto';
 import { waitForTransactionWithTimeout, TRANSACTION_TIMEOUTS } from '@/utils/transactionTimeout';
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
+import { useAppKit } from '@reown/appkit/react';
 import { useTransaction } from '@/context/TransactionContext';
 import { useTokenAccess } from '@/context/TokenAccessContext';
 import { PAYWALL_ENABLED, REQUIRED_PARTY_TOKENS, REQUIRED_TEAM_TOKENS, PAYWALL_TITLE, PAYWALL_DESCRIPTION } from '@/config/paywall';
@@ -283,13 +285,15 @@ const simplifyErrorMessage = (error: any): string => {
 
 interface OpenPositionsTableProps {
   isMarketplaceMode?: boolean;
+  isLandingPageMode?: boolean; // Simplified view for landing page - shows top 10 active, no search/toggles
 }
 
-export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ isMarketplaceMode = false }, ref) => {
+export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ isMarketplaceMode = false, isLandingPageMode = false }, ref) => {
   const { fillOrExecuteOrder, cancelOrder, collectProceeds, cancelAllExpiredOrders, updateOrderExpiration, isWalletConnected } = useContractWhitelist();
   const { address, chainId } = useAccount();
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
+  const { open: openWalletModal } = useAppKit();
 
   // Contract address for querying events - get based on current chain
   const OTC_CONTRACT_ADDRESS = getContractAddress(chainId) as `0x${string}`;
@@ -406,6 +410,9 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
   const [selectedExpirationDate, setSelectedExpirationDate] = useState<Date | undefined>(undefined);
   const [updatingOrders, setUpdatingOrders] = useState<Set<string>>(new Set());
   const [updateErrors, setUpdateErrors] = useState<{ [orderId: string]: string }>({});
+
+  // State for landing page connect button disclaimer
+  const [showLandingDisclaimer, setShowLandingDisclaimer] = useState(false);
 
   // Efficient querying: Pass address for user orders, undefined for marketplace (all orders)
   const {
@@ -2028,8 +2035,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     });
   }, [allOrders]);
 
-  // Show nothing if wallet not connected (no loading state)
-  if (!mounted || !address) {
+  // Show nothing if wallet not connected (unless in marketplace mode)
+  if (!mounted || (!address && !isMarketplaceMode)) {
     return null;
   }
 
@@ -2089,13 +2096,19 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
   }
 
 
+  // For landing page mode, only show top 10 active orders
+  const landingPageOrders = isLandingPageMode ? displayOrders.slice(0, 10) : displayOrders;
+
   return (
     <LiquidGlassCard
-      className="w-full max-w-[1200px] mx-auto mb-6 mt-2 p-6"
+      className={`w-full max-w-[1200px] mx-auto mb-6 mt-2 p-0 ${isLandingPageMode ? 'relative mx-2 md:mx-auto' : ''}`}
       shadowIntensity="sm"
       glowIntensity="sm"
       blurIntensity="xl"
     >
+      <div className={`p-4 md:p-6 ${isLandingPageMode ? 'overflow-x-scroll pb-0' : ''}`}>
+      {/* Status filter buttons - hide in landing page mode */}
+      {!isLandingPageMode && (
       <div className="flex flex-wrap justify-start gap-3 mb-6">
         <button
           onClick={() => {
@@ -2158,9 +2171,10 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
           Tx History ({purchaseTransactions.length})
         </button>
       </div>
+      )}
 
       {/* Cancel All Expired Button - Show only in Expired tab for My Deals */}
-      {ownershipFilter === 'mine' && statusFilter === 'expired' && (() => {
+      {!isLandingPageMode && ownershipFilter === 'mine' && statusFilter === 'expired' && (() => {
         const expiredCount = getLevel3Orders(tokenFilter, ownershipFilter, 'expired').length;
 
         return expiredCount > 0 && (
@@ -2191,7 +2205,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
         );
       })()}
 
-      {/* Search Bar */}
+      {/* Search Bar - hide in landing page mode */}
+      {!isLandingPageMode && (
       <div className="mb-6 w-full max-w-[480px]">
         <div className="relative w-full">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500" />
@@ -2204,8 +2219,9 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
           />
         </div>
       </div>
+      )}
       {/* Render separate OrderHistoryTable component for order history */}
-      {statusFilter === 'order-history' ? (
+      {!isLandingPageMode && statusFilter === 'order-history' ? (
         <div className="overflow-x-auto scrollbar-hide -mx-6 px-6">
           <OrderHistoryTable
             purchaseTransactions={purchaseTransactions}
@@ -2293,7 +2309,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
               <div
                 className={`space-y-1 ${expandedPositions.size > 0 ? 'pt-0' : ''}`}
               >
-                {displayOrders.map((order, index) => {
+                {landingPageOrders.map((order, index) => {
                   const orderId = order.orderDetailsWithID.orderID.toString();
                   const isExpanded = expandedPositions.has(orderId);
                   const hasAnyExpanded = expandedPositions.size > 0;
@@ -2996,6 +3012,25 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                       return tokenInfo.address && currentInputs[tokenInfo.address] && parseFloat(removeCommas(currentInputs[tokenInfo.address])) > 0 && isNativeToken(tokenInfo.address);
                                     });
 
+                                    // Show Connect Wallet button if not connected
+                                    if (!address) {
+                                      return (
+                                        <button
+                                          onClick={() => {
+                                            const hasAccepted = localStorage.getItem('disclaimer-accepted');
+                                            if (hasAccepted) {
+                                              openWalletModal();
+                                            } else {
+                                              setShowLandingDisclaimer(true);
+                                            }
+                                          }}
+                                          className="px-6 py-2 bg-white text-black border border-white/20 rounded-lg hover:bg-gray-100 transition-colors text-sm font-medium"
+                                        >
+                                          Connect Wallet
+                                        </button>
+                                      );
+                                    }
+
                                     return (
                                       <button
                                         onClick={() => handleExecuteOrder(order)}
@@ -3213,25 +3248,25 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                   selected={selectedExpirationDate}
                   onSelect={setSelectedExpirationDate}
                   disabled={(date) => date < new Date()}
-                  className="rounded-lg border border-white/20 bg-black p-3 text-white"
+                  className="rounded-lg border border-gray-700 bg-gray-900 p-3"
                   classNames={{
                     months: "flex flex-col sm:flex-row gap-2",
                     month: "flex flex-col gap-4",
                     month_caption: "flex justify-center pt-1 relative items-center w-full",
-                    caption_label: "text-sm font-medium text-white",
+                    caption_label: "text-sm font-medium text-gray-100",
                     nav: "flex items-center gap-1",
-                    button_previous: "size-7 bg-transparent p-0 opacity-70 hover:opacity-100 absolute left-1 text-white hover:bg-white/10 rounded",
-                    button_next: "size-7 bg-transparent p-0 opacity-70 hover:opacity-100 absolute right-1 text-white hover:bg-white/10 rounded",
+                    button_previous: "size-7 bg-transparent p-0 opacity-70 hover:opacity-100 absolute left-1 text-gray-300 hover:bg-gray-700 rounded",
+                    button_next: "size-7 bg-transparent p-0 opacity-70 hover:opacity-100 absolute right-1 text-gray-300 hover:bg-gray-700 rounded",
                     month_grid: "w-full border-collapse",
                     weekdays: "flex",
-                    weekday: "text-white/60 rounded-md w-9 font-normal text-[0.8rem] text-center",
+                    weekday: "text-gray-500 rounded-md w-9 font-normal text-[0.8rem] text-center",
                     week: "flex w-full mt-2",
                     day: "h-9 w-9 text-center text-sm p-0 relative focus-within:relative focus-within:z-20",
-                    day_button: "h-9 w-9 p-0 font-normal text-white hover:bg-white/20 rounded-md transition-colors aria-selected:opacity-100",
-                    selected: "bg-white text-black hover:bg-white hover:text-black",
-                    today: "bg-white/20 text-white",
-                    outside: "text-white/40 opacity-50",
-                    disabled: "text-white/20 opacity-50 cursor-not-allowed",
+                    day_button: "h-9 w-9 p-0 font-normal text-gray-200 hover:bg-gray-700 rounded-md transition-colors aria-selected:opacity-100",
+                    selected: "bg-blue-600 text-white hover:bg-blue-500 hover:text-white rounded-md",
+                    today: "ring-1 ring-gray-500 text-gray-100",
+                    outside: "text-gray-600",
+                    disabled: "text-gray-700 cursor-not-allowed hover:bg-transparent",
                     hidden: "invisible",
                   }}
                 />
@@ -3280,6 +3315,18 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
         teamBalance={teamBalance}
         requiredParty={REQUIRED_PARTY_TOKENS}
         requiredTeam={REQUIRED_TEAM_TOKENS}
+      />
+      </div>
+
+
+      {/* Disclaimer dialog for landing page connect button */}
+      <DisclaimerDialog
+        open={showLandingDisclaimer}
+        onAccept={() => {
+          localStorage.setItem('disclaimer-accepted', 'true');
+          setShowLandingDisclaimer(false);
+          openWalletModal();
+        }}
       />
     </LiquidGlassCard >
   );

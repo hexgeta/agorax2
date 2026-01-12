@@ -41,7 +41,7 @@ export default function PixelBlastBackground() {
         patternDensity={3} // Default: 1 - Density of visible pixels, no max limit
         pixelSizeJitter={0.5} // Range: 0-1 (default: 0) - Random size variation per pixel
         enableRipples // Boolean - Enable click ripple effects
-        rippleSpeed={10} // Default: 0.3 - Speed of ripple expansion, no max limit
+        rippleSpeed={0} // Default: 0.3 - Speed of ripple expansion, no max limit
         speed={6} // Default: 0.5 - Animation speed multiplier, no max limit
         edgeFade={0.3} // Range: 0-1 (default: 0.5) - Fade at edges (0 = none, 1 = max)
         transparent // Boolean - Transparent background

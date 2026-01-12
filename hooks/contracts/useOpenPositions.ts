@@ -276,7 +276,9 @@ async function fetchContractData(contractAddress: Address, chainId: number, user
 }
 
 export function useOpenPositions(userAddress?: Address | null, fetchAllOrders?: boolean) {
-  const { chainId, isConnected, address: connectedAddress } = useAccount();
+  const { chainId: walletChainId, isConnected, address: connectedAddress } = useAccount();
+  // Default to PulseChain mainnet when wallet not connected (for marketplace viewing)
+  const chainId = walletChainId ?? PULSECHAIN_CHAIN_ID;
   const contractAddress = getContractAddress(chainId);
   
   // Determine query address:
