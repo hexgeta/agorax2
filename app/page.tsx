@@ -13,7 +13,47 @@ import { ToastAction } from '@/components/ui/toast';
 import { PixelSpinner } from '@/components/ui/PixelSpinner';
 import PixelBlastBackground from '@/components/ui/PixelBlastBackground';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
+
+// FAQ Accordion Item Component
+function FAQItem({ question, answer }: { question: string; answer: string }) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <LiquidGlassCard blurIntensity="sm" glowIntensity="none" shadowIntensity="sm" className="overflow-hidden">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full p-6 flex items-center justify-between text-left"
+      >
+        <h3 className="text-lg font-semibold text-white pr-4">{question}</h3>
+        <motion.svg
+          animate={{ rotate: isOpen ? 180 : 0 }}
+          transition={{ duration: 0.2 }}
+          className="w-5 h-5 text-gray-400 flex-shrink-0"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </motion.svg>
+      </button>
+      <AnimatePresence initial={false}>
+        {isOpen && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <div className="px-6 pb-6 pt-0">
+              <p className="text-gray-400">{answer}</p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </LiquidGlassCard>
+  );
+}
 
 export default function Home() {
   const [isTransactionLoading, setIsTransactionLoading] = useState(false);
@@ -368,46 +408,44 @@ export default function Home() {
                 >
                   <h2 className="text-2xl md:text-4xl font-bold text-white mb-10 text-center">Frequently Asked Questions</h2>
 
-                  <div className="space-y-4 max-w-3xl mx-auto">
-                    <LiquidGlassCard blurIntensity="sm" glowIntensity="none" shadowIntensity="sm" className="p-6">
-                      <h3 className="text-lg font-semibold text-white mb-2">What is AgoraX?</h3>
-                      <p className="text-gray-400">
-                        AgoraX is a peer-to-peer OTC trading platform built on PulseChain. It allows users to create and fill limit orders directly from their wallets, with no intermediaries, no KYC, and minimal fees.
-                      </p>
-                    </LiquidGlassCard>
-
-                    <LiquidGlassCard blurIntensity="sm" glowIntensity="none" shadowIntensity="sm" className="p-6">
-                      <h3 className="text-lg font-semibold text-white mb-2">How does it work?</h3>
-                      <p className="text-gray-400">
-                        You create an order by specifying what tokens you want to sell and what you want to receive. Your tokens are held in a smart contract until someone fills your order or you cancel it. Settlement is instant and trustless.
-                      </p>
-                    </LiquidGlassCard>
-
-                    <LiquidGlassCard blurIntensity="sm" glowIntensity="none" shadowIntensity="sm" className="p-6">
-                      <h3 className="text-lg font-semibold text-white mb-2">Is it safe?</h3>
-                      <p className="text-gray-400">
-                        Yes. AgoraX is non-custodial—your tokens never leave the smart contract until a trade executes. There's no centralized point of failure, no admin keys that can freeze your funds, and all code is on-chain and verifiable.
-                      </p>
-                    </LiquidGlassCard>
-
-                    <LiquidGlassCard blurIntensity="sm" glowIntensity="none" shadowIntensity="sm" className="p-6">
-                      <h3 className="text-lg font-semibold text-white mb-2">What are the fees?</h3>
-                      <p className="text-gray-400">
-                        AgoraX charges minimal protocol fees that are significantly lower than centralized exchanges. Plus, PulseChain's low gas costs mean your total transaction costs stay minimal.
-                      </p>
-                    </LiquidGlassCard>
-
-                    <LiquidGlassCard blurIntensity="sm" glowIntensity="none" shadowIntensity="sm" className="p-6">
-                      <h3 className="text-lg font-semibold text-white mb-2">Which tokens can I trade?</h3>
-                      <p className="text-gray-400">
-                        You can trade any PRC-20 token on PulseChain. Create orders for any token pair—popular tokens, new launches, or anything in between.
-                      </p>
-                    </LiquidGlassCard>
+                  <div className="space-y-3 max-w-3xl mx-auto">
+                    <FAQItem
+                      question="What is AgoraX?"
+                      answer="AgoraX is a peer-to-peer OTC trading platform built on PulseChain. It allows users to create and fill limit orders directly from their wallets, with no intermediaries, no KYC, and minimal fees."
+                    />
+                    <FAQItem
+                      question="How does it work?"
+                      answer="You create an order by specifying what tokens you want to sell and what you want to receive. Your tokens are held in a smart contract until someone fills your order or you cancel it. Settlement is trustless."
+                    />
+                    <FAQItem
+                      question="Is it safe?"
+                      answer="Yes. AgoraX is non-custodial—your tokens never leave the smart contract until a trade executes. There's no centralized point of failure, no admin keys that can freeze your funds, and all code is on-chain and verifiable."
+                    />
+                    <FAQItem
+                      question="Are there admin keys?"
+                      answer="tbc"
+                    />
+                    <FAQItem
+                      question="Is the code immutable?"
+                      answer="tbc"
+                    />
+                    <FAQItem
+                      question="What is the liquidity & slippage like?"
+                      answer="AgoraX uses peer-to-peer limit order logic to complete your trades. This means that there is no slippage on your orders whatsoever. You either get filled at your exact price or you don't."
+                    />
+                    <FAQItem
+                      question="What are the fees?"
+                      answer="AgoraX charges a 0.2% fee to the seller + a flat 100 PLS for spam prevention—the lowest of any DEX on PulseChain. Plus, PulseChain's low gas costs mean your total transaction costs stay minimal."
+                    />
+                    <FAQItem
+                      question="Which tokens can I trade?"
+                      answer="You can buy any PRC-20 token on PulseChain. You can sell from a selection of whitelisted PRC20 tokens. For whitelist additions DM us at https://x.com/hexgeta"
+                    />
                   </div>
                 </motion.section>
 
                 {/* Section Divider */}
-                <div className="w-full h-px bg-gradient-to-r from-transparent via-white/20 to-transparent my-16 md:my-24" />
+                <div className="w-full h-px bg-gradient-to-r from-black via-gray-400 to-black my-16 md:my-24" />
 
                 {/* Full Width CTA */}
                 <motion.section
@@ -424,7 +462,7 @@ export default function Home() {
                     href="/marketplace"
                     className="inline-block px-8 py-3 bg-white text-black rounded-full font-semibold hover:bg-gray-100 transition-colors"
                   >
-                    Go to Marketplace
+                    Connect Wallet
                   </a>
                 </motion.section>
 
