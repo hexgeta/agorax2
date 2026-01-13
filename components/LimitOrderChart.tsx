@@ -22,9 +22,12 @@ interface LimitOrderChartProps {
 
 export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limitOrderPrice, invertPriceDisplay = true, onLimitPriceChange, onCurrentPriceChange, onDragStateChange }: LimitOrderChartProps) {
   const [currentPrice, setCurrentPrice] = useState<number | null>(null);
+  const [buyTokenUsdPrices, setBuyTokenUsdPrices] = useState<Record<string, number>>({});
+  const [sellTokenUsdPrice, setSellTokenUsdPrice] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [draggedPrice, setDraggedPrice] = useState<number | null>(null);
+  const [displayedTokenIndex, setDisplayedTokenIndex] = useState(0); // For cycling through tokens
   const containerRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number | null>(null);
   const justReleasedRef = useRef<boolean>(false);
@@ -49,58 +52,73 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
     // Refresh price every 10 seconds
     const interval = setInterval(fetchPriceData, 10000);
     return () => clearInterval(interval);
-  }, [sellToken, buyToken]);
+  }, [sellToken, buyToken, JSON.stringify(buyTokenAddresses)]);
 
   const fetchPriceData = async () => {
     if (!sellToken || !buyToken) return;
 
     setLoading(true);
     try {
-      // Fetch both token configs
+      // Fetch sell token config
       const sellTokenConfig = TOKEN_CONSTANTS.find(t => t.a?.toLowerCase() === sellToken.toLowerCase());
-      const buyTokenConfig = TOKEN_CONSTANTS.find(t => t.a?.toLowerCase() === buyToken.toLowerCase());
 
-      if (!sellTokenConfig?.dexs || !buyTokenConfig?.dexs) {
+      if (!sellTokenConfig?.dexs) {
         setLoading(false);
         return;
       }
 
-      // Get pair addresses for DexScreener
+      // Get pair address for sell token
       const sellPairAddress = Array.isArray(sellTokenConfig.dexs) ? sellTokenConfig.dexs[0] : sellTokenConfig.dexs;
-      const buyPairAddress = Array.isArray(buyTokenConfig.dexs) ? buyTokenConfig.dexs[0] : buyTokenConfig.dexs;
 
-      // Fetch current prices from DexScreener
-      const [sellResponse, buyResponse] = await Promise.all([
-        fetch(`https://api.dexscreener.com/latest/dex/pairs/pulsechain/${sellPairAddress}`),
-        fetch(`https://api.dexscreener.com/latest/dex/pairs/pulsechain/${buyPairAddress}`)
-      ]);
-
-      if (!sellResponse.ok || !buyResponse.ok) {
-        throw new Error('Failed to fetch current price data');
+      // Fetch sell token price
+      const sellResponse = await fetch(`https://api.dexscreener.com/latest/dex/pairs/pulsechain/${sellPairAddress}`);
+      if (!sellResponse.ok) {
+        throw new Error('Failed to fetch sell token price');
       }
-
-      const [sellData, buyData] = await Promise.all([
-        sellResponse.json(),
-        buyResponse.json()
-      ]);
-
+      const sellData = await sellResponse.json();
       const sellPair = sellData.pairs?.[0];
-      const buyPair = buyData.pairs?.[0];
-
-      if (!sellPair || !buyPair || !sellPair.priceUsd || !buyPair.priceUsd) {
-        throw new Error('Invalid price data from DexScreener');
+      if (!sellPair?.priceUsd) {
+        throw new Error('Invalid sell token price data');
       }
-
       const sellPriceUsd = parseFloat(sellPair.priceUsd);
-      const buyPriceUsd = parseFloat(buyPair.priceUsd);
+      setSellTokenUsdPrice(sellPriceUsd);
 
-      // Calculate current ratio: how many buy tokens per sell token
-      const currentRatio = sellPriceUsd / buyPriceUsd;
-      setCurrentPrice(currentRatio);
+      // Fetch prices for all buy tokens
+      const validBuyAddresses = buyTokenAddresses.filter(addr => addr);
+      const buyTokenConfigs = validBuyAddresses.map(addr =>
+        TOKEN_CONSTANTS.find(t => t.a?.toLowerCase() === addr?.toLowerCase())
+      ).filter(config => config?.dexs);
 
-      // Notify parent of current price change (always in base direction)
-      if (onCurrentPriceChange) {
-        onCurrentPriceChange(currentRatio);
+      const buyPricePromises = buyTokenConfigs.map(async (config) => {
+        if (!config?.dexs) return null;
+        const pairAddress = Array.isArray(config.dexs) ? config.dexs[0] : config.dexs;
+        const response = await fetch(`https://api.dexscreener.com/latest/dex/pairs/pulsechain/${pairAddress}`);
+        if (!response.ok) return null;
+        const data = await response.json();
+        const pair = data.pairs?.[0];
+        if (!pair?.priceUsd) return null;
+        return { address: config.a?.toLowerCase(), price: parseFloat(pair.priceUsd) };
+      });
+
+      const buyPriceResults = await Promise.all(buyPricePromises);
+      const newBuyTokenPrices: Record<string, number> = {};
+      buyPriceResults.forEach(result => {
+        if (result) {
+          newBuyTokenPrices[result.address] = result.price;
+        }
+      });
+      setBuyTokenUsdPrices(newBuyTokenPrices);
+
+      // Calculate current ratio for the first buy token
+      const firstBuyTokenPrice = newBuyTokenPrices[buyToken.toLowerCase()];
+      if (firstBuyTokenPrice) {
+        const currentRatio = sellPriceUsd / firstBuyTokenPrice;
+        setCurrentPrice(currentRatio);
+
+        // Notify parent of current price change (always in base direction)
+        if (onCurrentPriceChange) {
+          onCurrentPriceChange(currentRatio);
+        }
       }
 
     } catch (error) {
@@ -113,20 +131,70 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
   const sellTokenInfo = TOKEN_CONSTANTS.find(t => t.a?.toLowerCase() === sellToken.toLowerCase());
   const buyTokenInfo = TOKEN_CONSTANTS.find(t => t.a?.toLowerCase() === buyToken.toLowerCase());
 
-  // Get info for all buy tokens
+  // Get info for all buy tokens (create placeholder for tokens not in TOKEN_CONSTANTS)
   const buyTokenInfos = buyTokenAddresses
     .filter(addr => addr)
-    .map(addr => TOKEN_CONSTANTS.find(t => t.a?.toLowerCase() === addr?.toLowerCase()))
-    .filter(info => info);
+    .map(addr => {
+      const found = TOKEN_CONSTANTS.find(t => t.a?.toLowerCase() === addr?.toLowerCase());
+      if (found) return found;
+      // Create placeholder for tokens not in TOKEN_CONSTANTS
+      return { a: addr, ticker: 'UNKNOWN', dexs: null };
+    });
 
   // When inverted, swap the display token info
   const displayBaseTokenInfo = invertPriceDisplay ? buyTokenInfo : sellTokenInfo;
   const displayQuoteTokenInfo = invertPriceDisplay ? sellTokenInfo : buyTokenInfo;
 
   // For multiple tokens, get all display tokens
-  const displayQuoteTokenInfos = invertPriceDisplay
-    ? [sellTokenInfo].filter(Boolean)
-    : buyTokenInfos;
+  // When inverted: price is "X sell_tokens per 1 buy_token", so we show buy token names
+  // We want to show all buy tokens with their respective limit prices
+  const displayQuoteTokenInfos = buyTokenInfos.length > 0
+    ? buyTokenInfos
+    : [buyTokenInfo].filter(Boolean);
+
+  // Reset displayed token index if it's out of bounds
+  useEffect(() => {
+    if (displayedTokenIndex >= displayQuoteTokenInfos.length) {
+      setDisplayedTokenIndex(0);
+    }
+  }, [displayQuoteTokenInfos.length, displayedTokenIndex]);
+
+  // Cycle to next token on click
+  const cycleDisplayedToken = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation(); // Don't trigger drag
+    if (displayQuoteTokenInfos.length > 1) {
+      setDisplayedTokenIndex(prev => (prev + 1) % displayQuoteTokenInfos.length);
+    }
+  }, [displayQuoteTokenInfos.length]);
+
+  // Calculate limit price for each buy token based on USD prices
+  // The limitOrderPrice is expressed as "sellToken per first buyToken"
+  // We need to calculate the equivalent for other buy tokens
+  const calculateLimitPriceForToken = (tokenAddress: string | undefined): number | null => {
+    if (!tokenAddress || !limitOrderPrice || !sellTokenUsdPrice) return null;
+
+    const firstBuyTokenAddress = buyTokenAddresses[0]?.toLowerCase();
+    const tokenAddressLower = tokenAddress.toLowerCase();
+
+    // If this is the first buy token, use the limit price directly
+    if (tokenAddressLower === firstBuyTokenAddress) {
+      return limitOrderPrice;
+    }
+
+    // For other buy tokens, calculate based on USD prices
+    const firstBuyTokenUsdPrice = firstBuyTokenAddress ? buyTokenUsdPrices[firstBuyTokenAddress] : 0;
+    const thisTokenUsdPrice = buyTokenUsdPrices[tokenAddressLower];
+
+    if (!firstBuyTokenUsdPrice || !thisTokenUsdPrice) return null;
+
+    // The premium/discount from the first token's market rate
+    const marketPriceForFirst = sellTokenUsdPrice / firstBuyTokenUsdPrice;
+    const premiumMultiplier = limitOrderPrice / marketPriceForFirst;
+
+    // Apply same premium to this token's market rate
+    const marketPriceForThis = sellTokenUsdPrice / thisTokenUsdPrice;
+    return marketPriceForThis * premiumMultiplier;
+  };
 
   // Calculate display prices (invert if needed)
   const displayCurrentPrice = currentPrice && invertPriceDisplay && currentPrice > 0
@@ -418,49 +486,59 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                   }}
                 />
                 <LiquidGlassCard
-                  className={`absolute right-0 flex flex-col gap-1 bg-pink-500/10 px-3 py-1 border-pink-500/30 pointer-events-none w-[250px] ${limitPricePosition < currentPricePosition ? 'bottom-0 translate-y-[calc(45%-0px)]' : 'top-0 -translate-y-[calc(45%-0px)]'
-                    }`}
+                  className={`absolute right-0 flex items-center justify-between bg-pink-500/10 px-3 py-1 border-pink-500/30 w-[250px] ${displayQuoteTokenInfos.length > 1 ? 'cursor-pointer pointer-events-auto' : 'pointer-events-none'} ${limitPricePosition < currentPricePosition ? 'bottom-0 translate-y-[calc(45%-0px)]' : 'top-0 -translate-y-[calc(45%-0px)]'}`}
                   borderRadius="8px"
                   shadowIntensity="none"
                   glowIntensity="none"
+                  onClick={cycleDisplayedToken}
                 >
-                  {displayQuoteTokenInfos.length > 0 && displayQuoteTokenInfos.map((tokenInfo, index) => (
-                    <div key={index} className="flex items-center justify-between">
-                      {index === 0 && (
-                        <span className="text-xs text-white/70 whitespace-nowrap">
+                  {(() => {
+                    // Get the currently displayed token
+                    const tokenInfo = displayQuoteTokenInfos[displayedTokenIndex] || displayQuoteTokenInfos[0];
+                    if (!tokenInfo) return null;
+
+                    // Calculate the specific limit price for this token
+                    const tokenAddress = tokenInfo?.a;
+                    const tokenLimitPrice = calculateLimitPriceForToken(tokenAddress);
+                    // Apply inversion if needed
+                    const displayTokenPrice = tokenLimitPrice && invertPriceDisplay && tokenLimitPrice > 0
+                      ? 1 / tokenLimitPrice
+                      : tokenLimitPrice;
+                    // Fall back to the base priceToDisplay if calculation failed
+                    const priceForThisToken = displayTokenPrice || priceToDisplay;
+
+                    return (
+                      <>
+                        <span className="text-xs text-white/70 whitespace-nowrap flex items-center gap-1">
                           Limit Price:
-                        </span>
-                      )}
-                      {index > 0 && (
-                        <span className="text-xs text-white/70 whitespace-nowrap">
-                          {/* Empty space to align with first row */}
-                        </span>
-                      )}
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-bold text-white">
-                          <NumberFlow
-                            value={priceToDisplay || 0}
-                            format={{
-                              minimumSignificantDigits: 1,
-                              maximumSignificantDigits: 4
-                            }}
-                          />
-                        </span>
-                        {tokenInfo && (
-                          <>
-                            <span className="text-xs text-[#FF0080]">
-                              {formatTokenTicker(tokenInfo.ticker)}
+                          {displayQuoteTokenInfos.length > 1 && (
+                            <span className="text-[10px] text-white/40">
+                              ({displayedTokenIndex + 1}/{displayQuoteTokenInfos.length})
                             </span>
-                            <TokenLogo
-                              ticker={tokenInfo.ticker}
-                              className="w-[16px] h-[16px] object-contain"
-                              style={{ filter: 'brightness(0) saturate(100%) invert(47%) sepia(99%) saturate(6544%) hue-rotate(312deg) brightness(103%) contrast(103%)' }}
+                          )}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold text-white">
+                            <NumberFlow
+                              value={priceForThisToken || 0}
+                              format={{
+                                minimumSignificantDigits: 1,
+                                maximumSignificantDigits: 4
+                              }}
                             />
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                          </span>
+                          <span className="text-xs text-[#FF0080]">
+                            {formatTokenTicker(tokenInfo.ticker)}
+                          </span>
+                          <TokenLogo
+                            ticker={tokenInfo.ticker}
+                            className="w-[16px] h-[16px] object-contain"
+                            style={{ filter: 'brightness(0) saturate(100%) invert(47%) sepia(99%) saturate(6544%) hue-rotate(312deg) brightness(103%) contrast(103%)' }}
+                          />
+                        </div>
+                      </>
+                    );
+                  })()}
                 </LiquidGlassCard>
               </div>
             )}

@@ -575,7 +575,9 @@ export function LimitOrderForm({
     if (availableTokens.length === 0 || hasInitializedTokensRef.current) return;
 
     const savedSellToken = localStorage.getItem('limitOrderSellToken');
-    const savedBuyToken = localStorage.getItem('limitOrderBuyToken');
+    const savedBuyTokens = localStorage.getItem('limitOrderBuyTokens'); // New: array of buy tokens
+    const savedBuyToken = localStorage.getItem('limitOrderBuyToken'); // Legacy: single buy token
+    const savedBuyAmounts = localStorage.getItem('limitOrderBuyAmounts'); // New: array of buy amounts
 
     // Handle sell token
     if (savedSellToken) {
@@ -592,8 +594,27 @@ export function LimitOrderForm({
       }
     }
 
-    // Handle buy token
-    if (savedBuyToken) {
+    // Handle buy tokens (support multiple)
+    if (savedBuyTokens) {
+      try {
+        const tokenAddresses = JSON.parse(savedBuyTokens) as string[];
+        const loadedTokens = tokenAddresses
+          .map(addr => availableTokens.find(t => t.a?.toLowerCase() === addr.toLowerCase()))
+          .filter(t => t && t.a)
+          .map(t => ({ a: t!.a, ticker: t!.ticker, name: t!.name, decimals: t!.decimals }));
+        if (loadedTokens.length > 0) {
+          setBuyTokens(loadedTokens as (TokenOption | null)[]);
+          // Also load saved amounts
+          if (savedBuyAmounts) {
+            try {
+              const amounts = JSON.parse(savedBuyAmounts) as string[];
+              setBuyAmounts(amounts.length >= loadedTokens.length ? amounts : [...amounts, ...Array(loadedTokens.length - amounts.length).fill('')]);
+            } catch { /* ignore parse errors */ }
+          }
+        }
+      } catch { /* ignore parse errors */ }
+    } else if (savedBuyToken) {
+      // Legacy: single buy token
       const token = availableTokens.find(t => t.a?.toLowerCase() === savedBuyToken.toLowerCase());
       if (token && token.a) {
         setBuyTokens([{ a: token.a, ticker: token.ticker, name: token.name, decimals: token.decimals }]);
@@ -640,6 +661,25 @@ export function LimitOrderForm({
     }
   }, [limitPrice]);
 
+  // Save buy tokens to localStorage
+  useEffect(() => {
+    const tokenAddresses = buyTokens
+      .filter(t => t && t.a)
+      .map(t => t!.a);
+    if (tokenAddresses.length > 0) {
+      localStorage.setItem('limitOrderBuyTokens', JSON.stringify(tokenAddresses));
+      // Also update legacy single token for backwards compatibility
+      localStorage.setItem('limitOrderBuyToken', tokenAddresses[0]);
+    }
+  }, [buyTokens]);
+
+  // Save buy amounts to localStorage
+  useEffect(() => {
+    if (buyAmounts.some(a => a && a.trim() !== '')) {
+      localStorage.setItem('limitOrderBuyAmounts', JSON.stringify(buyAmounts));
+    }
+  }, [buyAmounts]);
+
   useEffect(() => {
     if (pricePercentage !== null) {
       localStorage.setItem('limitOrderPricePercentage', pricePercentage.toString());
@@ -683,6 +723,9 @@ export function LimitOrderForm({
     }
   }, [invertPriceDisplay, limitPrice, externalMarketPrice, sellToken?.a, firstBuyTokenAddress, prices]);
 
+  // Create a stable string key for all buy token addresses to use in dependency
+  const buyTokenAddressesKey = buyTokens.map(t => t?.a || '').join(',');
+
   // Notify parent of token changes (pass all buy tokens for chart)
   useEffect(() => {
     if (onTokenChange && (sellToken || buyTokens.some(t => t))) {
@@ -691,7 +734,7 @@ export function LimitOrderForm({
     }
     // Note: onTokenChange intentionally excluded to prevent infinite loops
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sellToken?.a, firstBuyTokenAddress]);
+  }, [sellToken?.a, buyTokenAddressesKey]);
 
   // Notify parent of loaded invertPriceDisplay on mount
   useEffect(() => {
@@ -758,6 +801,26 @@ export function LimitOrderForm({
   const internalMarketPrice = sellTokenPrice > 0 && buyTokenPrice > 0 ? sellTokenPrice / buyTokenPrice : 0;
   const marketPrice = externalMarketPrice || internalMarketPrice;
 
+  // Initialize limit price to market price on first visit (when no saved price exists)
+  useEffect(() => {
+    const savedLimitPrice = localStorage.getItem('limitOrderPrice');
+    const hasExistingPrice = savedLimitPrice && parseFloat(savedLimitPrice) > 0;
+
+    // Only set to market price if:
+    // 1. No saved limit price exists
+    // 2. We have a valid market price
+    // 3. We haven't already set the limit price
+    if (!hasExistingPrice && marketPrice > 0 && !limitPriceSetByUserRef.current) {
+      setLimitPrice(marketPrice.toFixed(8));
+      limitPriceSetByUserRef.current = true;
+      isInitialLoadRef.current = false;
+
+      if (onLimitPriceChange) {
+        onLimitPriceChange(marketPrice);
+      }
+    }
+  }, [marketPrice, onLimitPriceChange]);
+
   // Sync external limit price changes
   useEffect(() => {
     if (externalLimitPrice !== undefined) {
@@ -767,16 +830,37 @@ export function LimitOrderForm({
       setLimitPrice(externalLimitPrice.toString());
 
       if (sellAmountNum > 0) {
-        // Capture current buyTokens to avoid closure issues
-        const currentBuyTokens = buyTokens;
-        // Update all buy amounts based on the new limit price
-        setBuyAmounts((prevAmounts) => prevAmounts.map((_, index) => {
-          if (currentBuyTokens[index]) {
+        // Update all buy token amounts based on their respective USD prices
+        setBuyAmounts((prevAmounts) => {
+          const newAmounts = [...prevAmounts];
+          // First buy token uses the limit price directly
+          if (buyTokens[0]) {
             const newBuyAmount = sellAmountNum * externalLimitPrice;
-            return formatCalculatedValue(newBuyAmount);
+            newAmounts[0] = formatCalculatedValue(newBuyAmount);
           }
-          return '';
-        }));
+          // Additional buy tokens: calculate based on USD value with same premium
+          const sellTokenUsdPrice = sellToken ? getPrice(sellToken.a) : 0;
+          if (sellTokenUsdPrice > 0) {
+            const sellUsdValue = sellAmountNum * sellTokenUsdPrice;
+            // Calculate the premium/discount from market for the first token
+            const firstBuyTokenUsdPrice = buyTokens[0] ? getPrice(buyTokens[0].a) : 0;
+            const marketPriceForFirst = firstBuyTokenUsdPrice > 0 ? sellTokenUsdPrice / firstBuyTokenUsdPrice : 0;
+            const premiumMultiplier = marketPriceForFirst > 0 ? externalLimitPrice / marketPriceForFirst : 1;
+
+            for (let i = 1; i < buyTokens.length; i++) {
+              if (buyTokens[i]) {
+                const tokenUsdPrice = getPrice(buyTokens[i]!.a);
+                if (tokenUsdPrice > 0) {
+                  // Apply same premium/discount to this token's market rate
+                  const marketAmount = sellUsdValue / tokenUsdPrice;
+                  const adjustedAmount = marketAmount * premiumMultiplier;
+                  newAmounts[i] = formatCalculatedValue(adjustedAmount);
+                }
+              }
+            }
+          }
+          return newAmounts;
+        });
       }
 
       if (marketPrice > 0) {
@@ -805,16 +889,37 @@ export function LimitOrderForm({
       const limitPriceNum = parseFloat(limitPrice);
       if (limitPriceNum > 0) {
         isUpdatingFromOtherInputRef.current = true;
-        // Capture current buyTokens to avoid closure issues
-        const currentBuyTokens = buyTokens;
-        // Update all buy amounts based on the new sell amount and limit price
-        setBuyAmounts((prevAmounts) => prevAmounts.map((_, index) => {
-          if (currentBuyTokens[index]) {
+        // Update all buy token amounts based on their respective USD prices
+        setBuyAmounts((prevAmounts) => {
+          const newAmounts = [...prevAmounts];
+          // First buy token uses the limit price directly
+          if (buyTokens[0]) {
             const newBuyAmount = sellAmountNum * limitPriceNum;
-            return formatCalculatedValue(newBuyAmount);
+            newAmounts[0] = formatCalculatedValue(newBuyAmount);
           }
-          return '';
-        }));
+          // Additional buy tokens: calculate based on USD value with same premium
+          const sellTokenUsdPrice = sellToken ? getPrice(sellToken.a) : 0;
+          if (sellTokenUsdPrice > 0) {
+            const sellUsdValue = sellAmountNum * sellTokenUsdPrice;
+            // Calculate the premium/discount from market for the first token
+            const firstBuyTokenUsdPrice = buyTokens[0] ? getPrice(buyTokens[0].a) : 0;
+            const marketPriceForFirst = firstBuyTokenUsdPrice > 0 ? sellTokenUsdPrice / firstBuyTokenUsdPrice : 0;
+            const premiumMultiplier = marketPriceForFirst > 0 ? limitPriceNum / marketPriceForFirst : 1;
+
+            for (let i = 1; i < buyTokens.length; i++) {
+              if (buyTokens[i]) {
+                const tokenUsdPrice = getPrice(buyTokens[i]!.a);
+                if (tokenUsdPrice > 0) {
+                  // Apply same premium/discount to this token's market rate
+                  const marketAmount = sellUsdValue / tokenUsdPrice;
+                  const adjustedAmount = marketAmount * premiumMultiplier;
+                  newAmounts[i] = formatCalculatedValue(adjustedAmount);
+                }
+              }
+            }
+          }
+          return newAmounts;
+        });
         isUpdatingFromOtherInputRef.current = false;
       }
 
@@ -842,6 +947,43 @@ export function LimitOrderForm({
       lastEditedInputRef.current = null;
     }
   }, [buyAmountNum, limitPrice]);
+
+  // Recalculate additional buy token amounts when prices change or new tokens are added
+  useEffect(() => {
+    if (buyTokens.length <= 1 || !sellAmount || sellAmountNum <= 0) return;
+
+    const sellTokenUsdPrice = sellToken ? getPrice(sellToken.a) : 0;
+    if (sellTokenUsdPrice <= 0) return;
+
+    const firstBuyTokenUsdPrice = buyTokens[0] ? getPrice(buyTokens[0].a) : 0;
+    const limitPriceNum = parseFloat(limitPrice) || 0;
+    const marketPriceForFirst = firstBuyTokenUsdPrice > 0 ? sellTokenUsdPrice / firstBuyTokenUsdPrice : 0;
+    const premiumMultiplier = marketPriceForFirst > 0 && limitPriceNum > 0 ? limitPriceNum / marketPriceForFirst : 1;
+    const sellUsdValue = sellAmountNum * sellTokenUsdPrice;
+
+    let hasUpdates = false;
+    const newBuyAmounts = [...buyAmounts];
+
+    for (let i = 1; i < buyTokens.length; i++) {
+      const token = buyTokens[i];
+      if (!token) continue;
+
+      const tokenUsdPrice = getPrice(token.a);
+      // Only auto-calculate if amount is empty/zero and we have valid price
+      const currentAmount = buyAmounts[i] ? parseFloat(removeCommas(buyAmounts[i])) : 0;
+      if (currentAmount === 0 && tokenUsdPrice > 0) {
+        const marketAmount = sellUsdValue / tokenUsdPrice;
+        const adjustedAmount = marketAmount * premiumMultiplier;
+        newBuyAmounts[i] = formatCalculatedValue(adjustedAmount);
+        hasUpdates = true;
+      }
+    }
+
+    if (hasUpdates) {
+      setBuyAmounts(newBuyAmounts);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [buyTokens.length, prices, sellAmountNum, limitPrice]);
 
   const handleCreateOrder = async () => {
     // Capture address early to avoid closure issues
@@ -1266,15 +1408,35 @@ export function LimitOrderForm({
       onLimitPriceChange(newPrice);
     }
 
-    // Update all buy amounts based on the new limit price
-    const newAmounts = buyAmounts.map((_, index) => {
-      if (buyTokens[index]) {
+    // Update all buy token amounts based on their respective USD prices
+    setBuyAmounts((prevAmounts) => {
+      const newAmounts = [...prevAmounts];
+      // First buy token uses the limit price directly
+      if (buyTokens[0]) {
         const newBuyAmount = effectiveSellAmount * newPrice;
-        return formatCalculatedValue(newBuyAmount);
+        newAmounts[0] = formatCalculatedValue(newBuyAmount);
       }
-      return '';
+      // Additional buy tokens: calculate based on USD value with same premium
+      const sellTokenUsdPrice = sellToken ? getPrice(sellToken.a) : 0;
+      if (sellTokenUsdPrice > 0) {
+        const sellUsdValue = effectiveSellAmount * sellTokenUsdPrice;
+        // The premium multiplier is based on the percentage adjustment
+        const premiumMultiplier = 1 + adjustedPercentage / 100;
+
+        for (let i = 1; i < buyTokens.length; i++) {
+          if (buyTokens[i]) {
+            const tokenUsdPrice = getPrice(buyTokens[i]!.a);
+            if (tokenUsdPrice > 0) {
+              // Apply same premium/discount to this token's market rate
+              const marketAmount = sellUsdValue / tokenUsdPrice;
+              const adjustedAmount = marketAmount * premiumMultiplier;
+              newAmounts[i] = formatCalculatedValue(adjustedAmount);
+            }
+          }
+        }
+      }
+      return newAmounts;
     });
-    setBuyAmounts(newAmounts);
   };
 
   const handleMaxSellAmount = () => {
@@ -1292,6 +1454,10 @@ export function LimitOrderForm({
   };
 
   const handleSellAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const input = e.target;
+    const cursorPos = input.selectionStart || 0;
+    const oldValue = input.value;
+
     let value = e.target.value;
     // Remove commas first, then filter to only numbers and decimal
     value = removeCommas(value).replace(/[^0-9.]/g, '');
@@ -1302,11 +1468,26 @@ export function LimitOrderForm({
     }
 
     lastEditedInputRef.current = 'sell';
+    const newValue = formatNumberWithCommas(value);
     // Store with commas for display
-    setSellAmount(formatNumberWithCommas(value));
+    setSellAmount(newValue);
+
+    // Calculate new cursor position based on comma difference
+    requestAnimationFrame(() => {
+      if (sellInputRef.current) {
+        const commasBefore = (oldValue.slice(0, cursorPos).match(/,/g) || []).length;
+        const commasAfter = (newValue.slice(0, cursorPos + (newValue.length - oldValue.length)).match(/,/g) || []).length;
+        const newCursorPos = Math.max(0, cursorPos + (commasAfter - commasBefore));
+        sellInputRef.current.setSelectionRange(newCursorPos, newCursorPos);
+      }
+    });
   };
 
   const handleBuyAmountChange = (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
+    const input = e.target;
+    const cursorPos = input.selectionStart || 0;
+    const oldValue = input.value;
+
     let value = e.target.value;
     // Remove commas first, then filter to only numbers and decimal
     value = removeCommas(value).replace(/[^0-9.]/g, '');
@@ -1318,9 +1499,21 @@ export function LimitOrderForm({
 
     lastEditedInputRef.current = index;
     const newAmounts = [...buyAmounts];
+    const newValue = formatNumberWithCommas(value);
     // Store with commas for display
-    newAmounts[index] = formatNumberWithCommas(value);
+    newAmounts[index] = newValue;
     setBuyAmounts(newAmounts);
+
+    // Calculate new cursor position based on comma difference
+    requestAnimationFrame(() => {
+      const buyInput = buyInputRefs.current[index];
+      if (buyInput) {
+        const commasBefore = (oldValue.slice(0, cursorPos).match(/,/g) || []).length;
+        const commasAfter = (newValue.slice(0, cursorPos + (newValue.length - oldValue.length)).match(/,/g) || []).length;
+        const newCursorPos = Math.max(0, cursorPos + (commasAfter - commasBefore));
+        buyInput.setSelectionRange(newCursorPos, newCursorPos);
+      }
+    });
   };
 
   const handleAddBuyToken = () => {
@@ -1414,24 +1607,32 @@ export function LimitOrderForm({
       localStorage.setItem('limitOrderBuyToken', token.a);
     }
 
-    // Auto-calculate buy amount for additional tokens (index > 0) based on limit price
-    if (index > 0 && limitPrice && sellAmount && parseFloat(limitPrice) > 0 && parseFloat(removeCommas(sellAmount)) > 0) {
-      const newBuyAmounts = [...buyAmounts];
+    // Auto-calculate buy amount for additional tokens based on USD prices
+    if (index > 0 && sellAmount && parseFloat(removeCommas(sellAmount)) > 0) {
       const sellAmt = parseFloat(removeCommas(sellAmount));
-      const price = parseFloat(limitPrice);
+      const sellTokenUsdPrice = sellToken ? getPrice(sellToken.a) : 0;
+      const tokenUsdPrice = getPrice(token.a);
 
-      // Calculate buy amount based on limit price
-      // If inverted: buyAmount = sellAmount * price
-      // If not inverted: buyAmount = sellAmount / price
-      let calculatedAmount: number;
-      if (invertPriceDisplay) {
-        calculatedAmount = sellAmt * price;
-      } else {
-        calculatedAmount = sellAmt / price;
+      // Only calculate if we have valid prices (> 0, not -1 which means no price)
+      if (sellTokenUsdPrice > 0 && tokenUsdPrice > 0) {
+        const sellUsdValue = sellAmt * sellTokenUsdPrice;
+        // Calculate the premium/discount from market for the first token
+        // Use newBuyTokens[0] since buyTokens hasn't updated yet (async state)
+        const firstBuyToken = newBuyTokens[0];
+        const firstBuyTokenUsdPrice = firstBuyToken ? getPrice(firstBuyToken.a) : 0;
+        const limitPriceNum = parseFloat(limitPrice) || 0;
+        const marketPriceForFirst = firstBuyTokenUsdPrice > 0 ? sellTokenUsdPrice / firstBuyTokenUsdPrice : 0;
+        const premiumMultiplier = marketPriceForFirst > 0 && limitPriceNum > 0 ? limitPriceNum / marketPriceForFirst : 1;
+
+        // Apply same premium/discount to this token's market rate
+        const marketAmount = sellUsdValue / tokenUsdPrice;
+        const adjustedAmount = marketAmount * premiumMultiplier;
+
+        const newBuyAmounts = [...buyAmounts];
+        newBuyAmounts[index] = formatCalculatedValue(adjustedAmount);
+        setBuyAmounts(newBuyAmounts);
       }
-
-      newBuyAmounts[index] = formatCalculatedValue(calculatedAmount);
-      setBuyAmounts(newBuyAmounts);
+      // If token has no price data, leave the amount empty for user to fill manually
     }
 
     // Note: checkDuplicateTokens is no longer needed since we filter out
@@ -1481,7 +1682,7 @@ export function LimitOrderForm({
                     value={sellSearchQuery}
                     onChange={(e) => setSellSearchQuery(e.target.value)}
                     placeholder={`Search tokens... (${filteredSellTokens.length})`}
-                    className="w-full bg-transparent border border-white/10 p-2 text-white text-sm placeholder-white/30 focus:outline-none focus:border-white/30 rounded"
+                    className="w-full bg-transparent border border-white/10 p-2 text-white text-sm placeholder-white/30 focus:outline-none rounded"
                   />
                 </div>
                 <div className="max-h-60 overflow-y-auto modern-scrollbar">
@@ -1551,7 +1752,7 @@ export function LimitOrderForm({
                 onFocus={() => setIsSellInputFocused(true)}
                 onBlur={() => setIsSellInputFocused(false)}
                 placeholder="0.00"
-                className="w-full bg-transparent border border-white/10 p-3 text-white text-2xl placeholder-white/30 focus:outline-none focus:border-white/30 transition-all rounded-lg"
+                className="w-full bg-transparent border border-white/10 p-3 text-white text-2xl placeholder-white/30 focus:outline-none rounded-lg"
               />
             )}
           </div>
@@ -1672,7 +1873,7 @@ export function LimitOrderForm({
                         {index > 0 && (
                           <button
                             onClick={() => handleRemoveBuyToken(index)}
-                            className="p-3 h-[52px] bg-red-500/20 hover:bg-red-500/30 border-2 border-red-500/50 transition-colors flex items-center justify-center"
+                            className="p-3 h-[52px] bg-red-500/20 hover:bg-red-500/30 border-2 border-red-500/50 transition-colors flex items-center justify-center rounded-lg"
                             title="Remove token"
                           >
                             <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1696,7 +1897,7 @@ export function LimitOrderForm({
                                 setBuySearchQueries(newQueries);
                               }}
                               placeholder={`Search tokens... (${getFilteredBuyTokens(index).length})`}
-                              className="w-full bg-transparent border border-white/10 p-2 text-white text-sm placeholder-white/30 focus:outline-none focus:border-white/30 rounded"
+                              className="w-full bg-transparent border border-white/10 p-2 text-white text-sm placeholder-white/30 focus:outline-none rounded"
                             />
                           </div>
                           <div className="max-h-60 overflow-y-auto modern-scrollbar">
@@ -1769,7 +1970,7 @@ export function LimitOrderForm({
                             setIsBuyInputFocused(newFocused);
                           }}
                           placeholder="0.00"
-                          className="w-full bg-transparent border border-white/10 p-3 text-white text-2xl placeholder-white/30 focus:outline-none focus:border-white/30 transition-all rounded-lg"
+                          className="w-full bg-transparent border border-white/10 p-3 text-white text-2xl placeholder-white/30 focus:outline-none rounded-lg"
                         />
                       )}
                     </div>
@@ -2039,7 +2240,7 @@ export function LimitOrderForm({
                 }
               }}
               placeholder="Enter days"
-              className="w-full bg-black/40 border-white/20 p-3 text-white placeholder-white/30 focus:outline-none focus:border-white/50 transition-all rounded-lg"
+              className="w-full bg-black/40 border-white/20 p-3 text-white placeholder-white/30 focus:outline-none rounded-lg"
             />
             {expirationDays > 0 && selectedDate && (
               <div className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 text-xs pointer-events-none">
@@ -2188,7 +2389,7 @@ export function LimitOrderForm({
               <div className="flex justify-between items-center">
                 <span className="text-white/70">Flat listing fee:</span>
                 <span className="text-red-400 font-medium">
-                  +{parseFloat(formatEther(listingFee)).toString()} {formatTokenTicker('PLS', chainId)}
+                  -{parseFloat(formatEther(listingFee)).toString()} {formatTokenTicker('PLS', chainId)}
                 </span>
               </div>
 
@@ -2222,13 +2423,14 @@ export function LimitOrderForm({
 
               {/* Fee deducted from buyer */}
               {buyTokens.filter((t, idx) => t && buyAmounts[idx] && buyAmounts[idx].trim() !== '').map((token, index) => {
+                const filteredBuyTokens = buyTokens.filter((t, idx) => t && buyAmounts[idx] && buyAmounts[idx].trim() !== '');
                 const amount = buyAmounts[buyTokens.indexOf(token)];
                 if (!token || !amount || amount.trim() === '') return null;
                 const feeAmount = parseFloat(removeCommas(amount)) * 0.002;
                 return (
                   <div key={`fee-${index}`} className="flex justify-between items-center">
                     <span className="text-white/70">
-                      {index === 0 ? 'Platform Fee (0.2%):' : ''}
+                      {index === 0 ? `Platform Fee (0.2%)${filteredBuyTokens.length > 1 ? ' (Either of)' : ''}:` : ''}
                     </span>
                     <span className="text-red-400 font-medium">
                       -{formatBalanceDisplay(feeAmount.toString())} {formatTokenTicker(token.ticker, chainId)}

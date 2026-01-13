@@ -72,7 +72,7 @@ export const TOKEN_CONSTANTS = [{
 }, {
   chain: 369,
   a: "0xE9E1340A2b31d5D2a2dB28FB854a794E106b430a",
-  dexs: "0x0000000000000000000000000000000000000000",
+  dexs: "0xBB4D05C1663f079C1d9e0A4A6eE5a877CFE34F72",
   ticker: "HTT3000",
   decimals: 8,
   name: "HEX Time Token - 3k Days"
@@ -131,7 +131,7 @@ export const TOKEN_CONSTANTS = [{
   isWhitelisted: true
 },  {
   chain: 369,
-  a: "0xefd766ccb38eaf1dfd701853bfce31359239f305",
+  a: "0xefD766cCb38EaF1dfd701853BFCe31359239F305",
   dexs: "0x0000000000000000000000000000000000000000",
   ticker: "weDAI",
   decimals: 18,
@@ -288,7 +288,7 @@ export const TOKEN_CONSTANTS = [{
 }, {
   chain: 369,
   a: "0xa5B0D537CeBE97f087Dc5FE5732d70719caaEc1D", // hUSDC
-  dexs: "0x0000000000000000000000000000000000000000",
+  dexs: "0x351Db3D77d658d7F4BD3dC34066357535Ee522f4",
   ticker: "hUSDC",
   decimals: 6,
   name: "Hyperlane USDC",
