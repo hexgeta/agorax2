@@ -465,9 +465,11 @@ export function LimitOrderForm({
     );
     if (isSelectedInBuy) return false;
 
-    // Apply search filter
-    return token.ticker.toLowerCase().includes(sellSearchQuery.toLowerCase()) ||
-      token.name.toLowerCase().includes(sellSearchQuery.toLowerCase());
+    // Apply search filter (including address search)
+    const searchLower = sellSearchQuery.toLowerCase();
+    return token.ticker.toLowerCase().includes(searchLower) ||
+      token.name.toLowerCase().includes(searchLower) ||
+      (token.a && token.a.toLowerCase().includes(searchLower));
   }).sort((a, b) => {
     const searchLower = sellSearchQuery.toLowerCase();
     const aLower = a.ticker.toLowerCase();
@@ -514,9 +516,11 @@ export function LimitOrderForm({
       );
       if (isSelectedInOtherBuySlot) return false;
 
-      // Apply search filter
-      return token.ticker.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        token.name.toLowerCase().includes(searchQuery.toLowerCase());
+      // Apply search filter (including address search)
+      const searchLower = searchQuery.toLowerCase();
+      return token.ticker.toLowerCase().includes(searchLower) ||
+        token.name.toLowerCase().includes(searchLower) ||
+        (token.a && token.a.toLowerCase().includes(searchLower));
     }).sort((a, b) => {
       const searchLower = searchQuery.toLowerCase();
       const aLower = a.ticker.toLowerCase();
