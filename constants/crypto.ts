@@ -52,7 +52,7 @@ export const TOKEN_CONSTANTS = [{
   dexs: "0xf1f4ee610b2babb05c635f726ef8b0c568c8dc65",
   ticker: "HEX",
     decimals: 8,
-  name: "HEX on Pls",
+  name: "HEX on PulseChain",
   isWhitelisted: true
 }, {
   chain: 369,
@@ -162,14 +162,14 @@ export const TOKEN_CONSTANTS = [{
   dexs: "0x5f4cb14a7858bdb9066f9e4b561cdc1623807da0",
   ticker: "HDRN",
   decimals: 9,
-  name: "Hedron on Pls"
+  name: "Hedron on PulseChain"
 }, {
   chain: 369,
   a: "0xfc4913214444af5c715cc9f7b52655e788a569ed",
   dexs: "0xe5bb65e7a384d2671c96cfe1ee9663f7b03a573e",
   ticker: "ICSA",
   decimals: 9,
-  name: "ICSA on Pls"
+  name: "ICSA on PulseChain"
 }, 
 {
   chain: 369,
@@ -177,7 +177,7 @@ export const TOKEN_CONSTANTS = [{
   dexs: "0x5137a308dbf822aae9fb34467633baaa516ed099",
   ticker: "COM",
   decimals: 12,
-  name: "Communis on Pls"
+  name: "Communis on PulseChain"
 },  
 {
   chain: 369,
@@ -822,7 +822,7 @@ export const TOKEN_CONSTANTS = [{
   dexs: "0x57251492b7f9b8ecd8a7209c9eef555501c268bb",
   ticker: "pCOMP",
   decimals: 18,
-  name: "Compound on Pls"
+  name: "Compound on PulseChain"
 }, {
   chain: 369,
   a: "0xc18360217d8f7ab5e7c516566761ea12ce7f9d72",
@@ -1589,7 +1589,7 @@ export const TOKEN_CONSTANTS = [{
     dexs: "",
     ticker: "FLOW",
   decimals: 18,
-    name: "Pulsechain FLOW"
+    name: "PulseChain FLOW"
   },
 {
     chain: 369,
@@ -2244,7 +2244,7 @@ export const TOKEN_CONSTANTS = [{
     dexs: "0x7C69B191990891392ea6909e5C8679E16ae9EFD5",
     ticker: "pGNO",
   decimals: 18,
-    name: "Gnosis on Pulsechain"
+    name: "Gnosis on PulseChain"
   },
 {
     chain: 369,
@@ -2372,7 +2372,7 @@ export const TOKEN_CONSTANTS = [{
     dexs: "",
     ticker: "pTRB",
   decimals: 18,
-    name: "Tellor Tributes on Pulsechain"
+    name: "Tellor Tributes on PulseChain"
   },
 {
     chain: 369,
@@ -2380,7 +2380,7 @@ export const TOKEN_CONSTANTS = [{
     dexs: "0x7EbEA6AAE0c5a3Fb17D7C34Ca4f0d8444BaA7c13",
     ticker: "pLQTY",
   decimals: 18,
-    name: "LQTY on Pulsechain"
+    name: "LQTY on PulseChain"
   },
 {
     chain: 369,
@@ -2388,7 +2388,7 @@ export const TOKEN_CONSTANTS = [{
     dexs: "",
     ticker: "pBUSD",
   decimals: 18,
-    name: "Binance USD on Pulsechain"
+    name: "Binance USD on PulseChain"
   },
 {
     chain: 369,
@@ -2844,7 +2844,7 @@ export const TOKEN_CONSTANTS = [{
     dexs: "",
     ticker: "PCAP",
   decimals: 18,
-    name: "Pulsechain Capital"
+    name: "PulseChain Capital"
   },
 {
     chain: 369,
