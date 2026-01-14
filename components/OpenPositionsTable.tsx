@@ -414,6 +414,36 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
   // State for landing page connect button disclaimer
   const [showLandingDisclaimer, setShowLandingDisclaimer] = useState(false);
 
+  // State for horizontal scroll shadows (landing page)
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(true);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Handle scroll to update shadow indicators
+  const handleScroll = useCallback(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const { scrollLeft, scrollWidth, clientWidth } = container;
+    setCanScrollLeft(scrollLeft > 0);
+    setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 1);
+  }, []);
+
+  // Check scroll state on mount and resize
+  useEffect(() => {
+    if (!isLandingPageMode) return;
+
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    handleScroll();
+
+    const resizeObserver = new ResizeObserver(handleScroll);
+    resizeObserver.observe(container);
+
+    return () => resizeObserver.disconnect();
+  }, [isLandingPageMode, handleScroll]);
+
   // Efficient querying: Pass address for user orders, undefined for marketplace (all orders)
   const {
     contractName,
@@ -2106,7 +2136,18 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
       glowIntensity="sm"
       blurIntensity="xl"
     >
-      <div className={`p-4 md:p-6 ${isLandingPageMode ? 'overflow-x-scroll pb-0' : ''}`}>
+      {/* Scroll shadow indicators for landing page */}
+      {isLandingPageMode && canScrollLeft && (
+        <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-16 bg-gradient-to-r from-black/60 to-transparent z-10 md:hidden" />
+      )}
+      {isLandingPageMode && canScrollRight && (
+        <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-16 bg-gradient-to-l from-black/60 to-transparent z-10 md:hidden" />
+      )}
+      <div
+        ref={isLandingPageMode ? scrollContainerRef : undefined}
+        onScroll={isLandingPageMode ? handleScroll : undefined}
+        className={`p-4 md:p-6 ${isLandingPageMode ? 'overflow-x-scroll pb-0 modern-scrollbar' : ''}`}
+      >
       {/* Status filter buttons - hide in landing page mode */}
       {!isLandingPageMode && (
       <div className="flex flex-wrap justify-start gap-3 mb-6">

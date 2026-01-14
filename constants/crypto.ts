@@ -1060,21 +1060,7 @@ export const TOKEN_CONSTANTS = [{
   decimals: 12,
   name: "ASIC on PulseChain"
 },
-{
-  chain: 369,
-  a: "0xsss",
-  dexs: "0xe7726e023ae722ac180e7fcbd4bf028950fefa4e",
-  ticker: "stICARUS",
-  decimals: 18,
-  name: "Staked Icarus"
-}, {
-  chain: 369,
-  a: null,
-  dexs: "0xf5a89a6487d62df5308cdda89c566c5b5ef94c11",
-  ticker: "stPTGC",
-  decimals: 18,
-  name: "Staked Grays Currency"
-}, {
+ {
   chain: 369,
   a: "0x5ca97D93D06A0B35a70FEf2F7E8fF88dD1d2DA65",
   dexs: "0x6734ec4debe7756593cdc3DC6A42aB079e084954",
@@ -1194,29 +1180,6 @@ export const TOKEN_CONSTANTS = [{
   ticker: "stCOM",
   decimals: 12,
   name: "Staked Communis on PulseChain"
-},
-{
-  chain: 369,
-  a: "0x",
-  dexs: "0x6d69654390c70d9e8814b04c69a542632dc93161",
-  ticker: "stLOAN (Liquid Loans)",
-  decimals: 18,
-  name: "Staked LOAN on Liquid Loans"
-}, {
-  chain: 369,
-  a: "0x",
-  dexs: "0x27557d148293d1c8e8f8c5deeab93545b1eb8410",
-  ticker: "stUSDL (Liquid Loans)",
-  decimals: 18,
-  name: "Staked USDL on Liquid Loans"
-},
-{
-  chain: 369,
-  a: "0x",
-  dexs: "0x27557d148293d1c8e8f8c5deeab93545b1eb8410",
-  ticker: "PLS (Liquid Loans)",
-  decimals: 18,
-  name: "Deposited PLS on Liquid Loans"
 }, 
 {
     chain: 369,
@@ -1233,14 +1196,6 @@ export const TOKEN_CONSTANTS = [{
     ticker: "SOL",
     decimals: 9,
     name: "Solana from Ethereum"
-  },
-{
-    chain: 369,
-    a: "0x",
-    dexs: "0xfe75839c16a6516149D0F7B2208395F54A5e16e8",
-    ticker: "stPHIAT",
-  decimals: 18,
-    name: "StakedPhiat Token"
   },
 {
     chain: 369,
@@ -3738,14 +3693,6 @@ export const TOKEN_CONSTANTS = [{
     ticker: "FETCH",
       decimals: 18,
     name: "Fetch"
-  },
-{
-    chain: 369,
-    a: "0x144Cd22AaA2a80FEd0Bb8B1DeADDc51A53Df1d50",
-    dexs: "0x2cb92b1e8B2fC53b5A9165E765488e17B38C26D3",
-    ticker: "INCD",
-      decimals: 18,
-    name: "INC Dollar"
   },
 {
     chain: 369,

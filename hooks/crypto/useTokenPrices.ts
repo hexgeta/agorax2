@@ -61,9 +61,9 @@ async function findBestPairAddress(contractAddress: string, chainId: number): Pr
     }
     
     // Filter pairs for the correct chain
+    // DexScreener returns chainId as string (e.g., "pulsechain", "ethereum")
     const chainPairs = pairs.filter((pair: any) => {
-      const pairChainId = pair.chainId;
-      return pairChainId === chainId;
+      return pair.chainId === chainName;
     });
     
     if (chainPairs.length === 0) {

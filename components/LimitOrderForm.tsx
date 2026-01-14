@@ -172,7 +172,7 @@ export function LimitOrderForm({
     }
     return '';
   });
-  const [buyAmounts, setBuyAmounts] = useState<string[]>(['']); // Array of buy amounts
+  const [buyAmounts, setBuyAmounts] = useState<string[]>(['']);
   const [expirationDays, setExpirationDays] = useState(() => {
     if (typeof window !== 'undefined') {
       return Number(localStorage.getItem('limitOrderExpirationDays')) || 7;
@@ -260,6 +260,19 @@ export function LimitOrderForm({
     }
     return true;
   });
+
+  // Show more tokens toggle - when true, shows all tokens in sell dropdown (not just whitelisted)
+  const [showMoreTokens, setShowMoreTokens] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('limitOrderShowMoreTokens') === 'true';
+    }
+    return false;
+  });
+
+  // Custom token state for pasted contract addresses (sell only)
+  const [customToken, setCustomToken] = useState<TokenOption | null>(null);
+  const [isLoadingCustomToken, setIsLoadingCustomToken] = useState(false);
+  const [customTokenError, setCustomTokenError] = useState<string | null>(null);
 
   // Individual limit prices for each buy token (used when pricesBound is false)
   const [individualLimitPrices, setIndividualLimitPrices] = useState<(number | undefined)[]>([]);
@@ -360,8 +373,90 @@ export function LimitOrderForm({
     }
   }, [availableTokens.length, activeTokens.length]);
 
+  // Detect if sell search query is a contract address and fetch token info from DexScreener
+  useEffect(() => {
+    const isContractAddress = /^0x[a-fA-F0-9]{40}$/.test(sellSearchQuery.trim());
+
+    if (!isContractAddress) {
+      setCustomToken(null);
+      setCustomTokenError(null);
+      setIsLoadingCustomToken(false);
+      return;
+    }
+
+    const contractAddress = sellSearchQuery.trim().toLowerCase();
+
+    // Check if already in TOKEN_CONSTANTS
+    const existingToken = TOKEN_CONSTANTS.find(t =>
+      t.a && t.a.toLowerCase() === contractAddress
+    );
+    if (existingToken) {
+      setCustomToken(null);
+      setCustomTokenError(null);
+      return;
+    }
+
+    // Fetch from DexScreener
+    const fetchTokenInfo = async () => {
+      setIsLoadingCustomToken(true);
+      setCustomTokenError(null);
+
+      try {
+        const response = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${contractAddress}`);
+        if (!response.ok) {
+          throw new Error('Failed to fetch token info');
+        }
+
+        const data = await response.json();
+        const pairs = data.pairs || [];
+
+        // Filter for PulseChain pairs
+        const pulsechainPairs = pairs.filter((pair: any) => pair.chainId === 'pulsechain');
+
+        if (pulsechainPairs.length === 0) {
+          setCustomTokenError('Token not found on PulseChain');
+          setCustomToken(null);
+          return;
+        }
+
+        // Get the pair with highest liquidity
+        const bestPair = pulsechainPairs.sort((a: any, b: any) => {
+          const aLiq = parseFloat(a.liquidity?.usd || '0');
+          const bLiq = parseFloat(b.liquidity?.usd || '0');
+          return bLiq - aLiq;
+        })[0];
+
+        // Determine which token in the pair matches our contract address
+        const isBaseToken = bestPair.baseToken.address.toLowerCase() === contractAddress;
+        const tokenInfo = isBaseToken ? bestPair.baseToken : bestPair.quoteToken;
+
+        // Get decimals - default to 18 if not available
+        const decimals = 18; // DexScreener doesn't always provide decimals, default to 18 for PRC20
+
+        setCustomToken({
+          a: contractAddress,
+          ticker: tokenInfo.symbol || 'UNKNOWN',
+          name: tokenInfo.name || 'Unknown Token',
+          decimals: decimals
+        });
+        setCustomTokenError(null);
+      } catch (error) {
+        setCustomTokenError('Failed to fetch token info');
+        setCustomToken(null);
+      } finally {
+        setIsLoadingCustomToken(false);
+      }
+    };
+
+    // Debounce the fetch
+    const timeoutId = setTimeout(fetchTokenInfo, 500);
+    return () => clearTimeout(timeoutId);
+  }, [sellSearchQuery]);
+
   // Filter tokens based on search queries and exclude already selected tokens
-  const filteredSellTokens = availableTokens.filter(token => {
+  // When showMoreTokens is true, show ALL tokens from TOKEN_CONSTANTS (not just whitelisted)
+  const sellTokenSource = showMoreTokens ? TOKEN_CONSTANTS.filter(t => t.a) : availableTokens;
+  const filteredSellTokens = sellTokenSource.filter(token => {
     if (!token.a) return false;
 
     // Exclude if it's already selected in any buy token
@@ -373,6 +468,32 @@ export function LimitOrderForm({
     // Apply search filter
     return token.ticker.toLowerCase().includes(sellSearchQuery.toLowerCase()) ||
       token.name.toLowerCase().includes(sellSearchQuery.toLowerCase());
+  }).sort((a, b) => {
+    const searchLower = sellSearchQuery.toLowerCase();
+    const aLower = a.ticker.toLowerCase();
+    const bLower = b.ticker.toLowerCase();
+    const aTickerMatches = aLower.includes(searchLower);
+    const bTickerMatches = bLower.includes(searchLower);
+
+    // 1. Exact ticker match goes first
+    const aExact = aLower === searchLower;
+    const bExact = bLower === searchLower;
+    if (aExact && !bExact) return -1;
+    if (bExact && !aExact) return 1;
+
+    // 2. Tokens with prefix (e, p, st, we) + search term come next (e.g., eHEX, pHEX for "hex")
+    const prefixes = ['e', 'p', 'st', 'we'];
+    const aIsPrefixed = prefixes.some(prefix => aLower === prefix + searchLower);
+    const bIsPrefixed = prefixes.some(prefix => bLower === prefix + searchLower);
+    if (aIsPrefixed && !bIsPrefixed) return -1;
+    if (bIsPrefixed && !aIsPrefixed) return 1;
+
+    // 3. Ticker contains search term comes before name-only matches
+    if (aTickerMatches && !bTickerMatches) return -1;
+    if (bTickerMatches && !aTickerMatches) return 1;
+
+    // 4. Then alphabetically
+    return a.ticker.localeCompare(b.ticker);
   });
 
   const getFilteredBuyTokens = (index: number) => {
@@ -396,6 +517,32 @@ export function LimitOrderForm({
       // Apply search filter
       return token.ticker.toLowerCase().includes(searchQuery.toLowerCase()) ||
         token.name.toLowerCase().includes(searchQuery.toLowerCase());
+    }).sort((a, b) => {
+      const searchLower = searchQuery.toLowerCase();
+      const aLower = a.ticker.toLowerCase();
+      const bLower = b.ticker.toLowerCase();
+      const aTickerMatches = aLower.includes(searchLower);
+      const bTickerMatches = bLower.includes(searchLower);
+
+      // 1. Exact ticker match goes first
+      const aExact = aLower === searchLower;
+      const bExact = bLower === searchLower;
+      if (aExact && !bExact) return -1;
+      if (bExact && !aExact) return 1;
+
+      // 2. Tokens with prefix (e, p, st, we) + search term come next (e.g., eHEX, pHEX for "hex")
+      const prefixes = ['e', 'p', 'st', 'we'];
+      const aIsPrefixed = prefixes.some(prefix => aLower === prefix + searchLower);
+      const bIsPrefixed = prefixes.some(prefix => bLower === prefix + searchLower);
+      if (aIsPrefixed && !bIsPrefixed) return -1;
+      if (bIsPrefixed && !aIsPrefixed) return 1;
+
+      // 3. Ticker contains search term comes before name-only matches
+      if (aTickerMatches && !bTickerMatches) return -1;
+      if (bTickerMatches && !aTickerMatches) return 1;
+
+      // 4. Then alphabetically
+      return a.ticker.localeCompare(b.ticker);
     });
   };
 
@@ -418,8 +565,24 @@ export function LimitOrderForm({
     return Array.from(addresses);
   }, [availableTokens, priorityAddresses]);
 
+  // Build custom tokens array for price fetching (tokens not in TOKEN_CONSTANTS)
+  const customTokensForPricing = useMemo(() => {
+    if (!sellToken?.a) return [];
+    const isInConstants = TOKEN_CONSTANTS.some(t => t.a && t.a.toLowerCase() === sellToken.a.toLowerCase());
+    if (isInConstants) return [];
+    return [{
+      a: sellToken.a,
+      ticker: sellToken.ticker,
+      name: sellToken.name,
+      decimals: sellToken.decimals,
+      chain: 369, // PulseChain
+      dexs: '', // Will be discovered dynamically
+      type: 'token' as const
+    }];
+  }, [sellToken]);
+
   // Fetch token prices
-  const { prices: priorityPrices, isLoading: priorityPricesLoading } = useTokenPrices(priorityAddresses);
+  const { prices: priorityPrices, isLoading: priorityPricesLoading } = useTokenPrices(priorityAddresses, { customTokens: customTokensForPricing });
   const { prices: backgroundPrices } = useTokenPrices(backgroundAddresses);
 
   // Combine prices, with priority taking precedence
@@ -689,15 +852,25 @@ export function LimitOrderForm({
     if (availableTokens.length === 0 || hasInitializedTokensRef.current) return;
 
     const savedSellToken = localStorage.getItem('limitOrderSellToken');
-    const savedBuyTokens = localStorage.getItem('limitOrderBuyTokens'); // New: array of buy tokens
+    const savedCustomSellToken = localStorage.getItem('limitOrderCustomSellToken'); // Custom token with full object
+    const savedBuyTokens = localStorage.getItem('limitOrderBuyTokens'); // Array of buy tokens
     const savedBuyToken = localStorage.getItem('limitOrderBuyToken'); // Legacy: single buy token
-    const savedBuyAmounts = localStorage.getItem('limitOrderBuyAmounts'); // New: array of buy amounts
+    // Note: buy amounts are NOT restored - they recalculate based on fresh prices
 
     // Handle sell token
     if (savedSellToken) {
+      // First, check if it's in availableTokens (regular tokens)
       const token = availableTokens.find(t => t.a?.toLowerCase() === savedSellToken.toLowerCase());
       if (token && token.a) {
         setSellToken({ a: token.a, ticker: token.ticker, name: token.name, decimals: token.decimals });
+      } else if (savedCustomSellToken) {
+        // Not in available tokens, check if we have a saved custom token object
+        try {
+          const customTokenData = JSON.parse(savedCustomSellToken) as TokenOption;
+          if (customTokenData.a && customTokenData.ticker && customTokenData.name && customTokenData.decimals !== undefined) {
+            setSellToken(customTokenData);
+          }
+        } catch { /* ignore parse errors */ }
       }
     } else if (!sellToken || !sellToken.a) {
       // Set default sell token (PLS) only if no token is selected
@@ -718,13 +891,8 @@ export function LimitOrderForm({
           .map(t => ({ a: t!.a, ticker: t!.ticker, name: t!.name, decimals: t!.decimals }));
         if (loadedTokens.length > 0) {
           setBuyTokens(loadedTokens as (TokenOption | null)[]);
-          // Also load saved amounts
-          if (savedBuyAmounts) {
-            try {
-              const amounts = JSON.parse(savedBuyAmounts) as string[];
-              setBuyAmounts(amounts.length >= loadedTokens.length ? amounts : [...amounts, ...Array(loadedTokens.length - amounts.length).fill('')]);
-            } catch { /* ignore parse errors */ }
-          }
+          // Don't restore buy amounts - let them recalculate based on fresh prices
+          setBuyAmounts(Array(loadedTokens.length).fill(''));
         }
       } catch { /* ignore parse errors */ }
     } else if (savedBuyToken) {
@@ -787,12 +955,7 @@ export function LimitOrderForm({
     }
   }, [buyTokens]);
 
-  // Save buy amounts to localStorage
-  useEffect(() => {
-    if (buyAmounts.some(a => a && a.trim() !== '')) {
-      localStorage.setItem('limitOrderBuyAmounts', JSON.stringify(buyAmounts));
-    }
-  }, [buyAmounts]);
+  // Note: buy amounts are NOT saved to localStorage - they recalculate on reload based on fresh prices
 
   useEffect(() => {
     if (pricePercentage !== null) {
@@ -818,6 +981,10 @@ export function LimitOrderForm({
   useEffect(() => {
     localStorage.setItem('limitOrderMaxiStats', maxiStats.toString());
   }, [maxiStats]);
+
+  useEffect(() => {
+    localStorage.setItem('limitOrderShowMoreTokens', showMoreTokens.toString());
+  }, [showMoreTokens]);
 
   // Save pricesBound to localStorage and notify parent
   useEffect(() => {
@@ -2208,12 +2375,55 @@ export function LimitOrderForm({
                     type="text"
                     value={sellSearchQuery}
                     onChange={(e) => setSellSearchQuery(e.target.value)}
-                    placeholder={`Search tokens... (${filteredSellTokens.length})`}
+                    placeholder={`Search or paste address... (${filteredSellTokens.length})`}
                     className="w-full bg-transparent border border-white/10 p-2 text-white text-sm placeholder-white/30 focus:outline-none rounded"
                   />
                 </div>
                 <div className="max-h-60 overflow-y-auto modern-scrollbar">
-                  {filteredSellTokens.length === 0 ? (
+                  {/* Loading state for custom token lookup */}
+                  {isLoadingCustomToken && (
+                    <div className="p-4 flex items-center justify-center space-x-2">
+                      <PixelSpinner size={16} color="#00D9FF" />
+                      <span className="text-white/50 text-sm">Looking up token...</span>
+                    </div>
+                  )}
+
+                  {/* Error state for custom token lookup */}
+                  {customTokenError && !isLoadingCustomToken && (
+                    <div className="p-4 text-center text-red-400 text-sm">{customTokenError}</div>
+                  )}
+
+                  {/* Custom token from contract address */}
+                  {customToken && !isLoadingCustomToken && (
+                    <button
+                      onClick={() => {
+                        setSellToken(customToken);
+                        localStorage.setItem('limitOrderSellToken', customToken.a);
+                        // Save full custom token object for restoration after reload
+                        localStorage.setItem('limitOrderCustomSellToken', JSON.stringify(customToken));
+                        setShowSellDropdown(false);
+                        setSellSearchQuery('');
+                        setCustomToken(null);
+                      }}
+                      className="w-full p-3 flex items-center space-x-3 hover:bg-white/5 transition-all text-left border-b border-white/5 bg-cyan-900/20"
+                    >
+                      <img src="/coin-logos/default.svg" alt="Token" className="w-6 h-6" />
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="text-white font-medium">{customToken.ticker}</div>
+                            <div className="text-white/50 text-xs">{customToken.name}</div>
+                          </div>
+                          <span className="text-xs px-2 py-0.5 bg-cyan-900/30 border border-cyan-500/30 text-cyan-400 rounded ml-2">
+                            Custom
+                          </span>
+                        </div>
+                      </div>
+                    </button>
+                  )}
+
+                  {/* Regular token list */}
+                  {filteredSellTokens.length === 0 && !customToken && !isLoadingCustomToken && !customTokenError ? (
                     <div className="p-4 text-center text-white/50 text-sm">No tokens found</div>
                   ) : (
                     filteredSellTokens.map((token) => (
@@ -2223,6 +2433,8 @@ export function LimitOrderForm({
                           if (token.a) {
                             setSellToken({ a: token.a, ticker: token.ticker, name: token.name, decimals: token.decimals });
                             localStorage.setItem('limitOrderSellToken', token.a);
+                            // Clear custom token storage when selecting a regular token
+                            localStorage.removeItem('limitOrderCustomSellToken');
                             setShowSellDropdown(false);
                             setSellSearchQuery('');
                           }
@@ -3265,6 +3477,27 @@ export function LimitOrderForm({
                         <span
                           className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform duration-200 ${
                             maxiStats ? 'translate-x-5' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    {/* Show More Tokens Toggle */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex flex-col">
+                        <span className="text-white/70 text-sm">Show more tokens</span>
+                        <span className="text-white/40 text-xs">Display all tokens in sell dropdown (including non-whitelisted)</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowMoreTokens(!showMoreTokens)}
+                        className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${
+                          showMoreTokens ? 'bg-green-500' : 'bg-white/20'
+                        }`}
+                      >
+                        <span
+                          className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform duration-200 ${
+                            showMoreTokens ? 'translate-x-5' : 'translate-x-0'
                           }`}
                         />
                       </button>

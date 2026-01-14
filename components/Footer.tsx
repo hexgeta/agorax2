@@ -42,20 +42,12 @@ const Footer = () => {
                   Marketplace
                 </Link>
               </li>
-              <li>
-                <Link
-                  href="/stats"
-                  className="text-sm text-white/70 hover:text-white transition-colors"
-                >
-                  Stats
-                </Link>
-              </li>
                             <li>
                 <Link
-                  href="/docs"
+                  href="https://x.com/agoraxwin"
                   className="text-sm text-white/70 hover:text-white transition-colors"
                 >
-                  Docs
+                  Twitter
                 </Link>
               </li>
             </ul>
