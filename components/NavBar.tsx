@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAccount } from 'wagmi';
 import { ConnectButton } from './ConnectButton';
 import { ChainSwitcher } from './ChainSwitcher';
@@ -12,76 +12,203 @@ import { TESTING_MODE } from '@/config/testing';
 const NavBar = () => {
   const pathname = usePathname();
   const [hoveredPath, setHoveredPath] = useState<string | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { isConnected } = useAccount();
+
+  // Close mobile menu when route changes
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname]);
+
+  // Prevent body scroll when mobile menu is open
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [mobileMenuOpen]);
+
+  // Close mobile menu when resizing to desktop to prevent flashing
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(min-width: 768px)');
+    const handleChange = (e: MediaQueryListEvent) => {
+      if (e.matches) {
+        setMobileMenuOpen(false);
+      }
+    };
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
+
   return (
-    <nav className="w-full bg-black bg-blur-[6.65px] px-8 py-4 relative md:fixed top-0 left-0 right-0 z-[200] border-b border-white/20">
-      <div className="max-w-[1200px] mx-auto">
-        {/* Mobile: Stacked layout, Desktop: Single row */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-0">
-          {/* Top row on mobile: Logo + Notification */}
+    <>
+      <nav className="w-full bg-black bg-blur-[6.65px] px-4 md:px-8 py-4 relative md:fixed top-0 left-0 right-0 z-[200] border-b border-white/20">
+        <div className="max-w-[1200px] mx-auto">
           <div className="flex items-center justify-between">
+            {/* Logo */}
             <Link href="/" className="text-white font-bold text-xl md:text-3xl">
               AgoráX
             </Link>
-            {/* Notification Bell - Mobile only (next to logo) */}
-            {/* <div className="md:hidden">
-              <NotificationBell />
-            </div> */}
-          </div>
 
-          {/* Bottom row on mobile: Buttons / Right side on desktop */}
-          <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2 md:gap-4">
-            {/* Notification Bell - Desktop only (with other buttons) */}
-            {/* <div className="hidden md:block">
-              <NotificationBell />
-            </div> */}
-            {/* Navigation Links */}
-            {isConnected && (
+            {/* Desktop Navigation */}
+            <div className="hidden md:flex items-center gap-4">
+              {isConnected && (
+                <Link
+                  href="/"
+                  className={`transition-colors font-medium text-base px-4 py-2 cursor-pointer group ${pathname === '/'
+                    ? 'text-white'
+                    : 'text-white/80 hover:text-white'
+                    }`}
+                  onMouseEnter={() => setHoveredPath('/')}
+                  onMouseLeave={() => setHoveredPath(null)}
+                >
+                  <span className="relative inline-block">
+                    My Orders
+                    <span className={`absolute bottom-[-4px] left-0 w-full h-0.5 bg-white transition-transform duration-300 ease-out ${pathname === '/'
+                      ? (hoveredPath && hoveredPath !== '/' ? 'scale-x-0 origin-left' : 'scale-x-100 origin-left')
+                      : 'scale-x-0 group-hover:scale-x-100 origin-left'
+                      }`}
+                    />
+                  </span>
+                </Link>
+              )}
               <Link
-                href="/"
-                className={`transition-colors font-medium text-sm md:text-base px-4 py-2 cursor-pointer group ${pathname === '/'
+                href="/marketplace"
+                className={`transition-colors font-medium text-base px-4 py-2 cursor-pointer group ${pathname === '/marketplace'
                   ? 'text-white'
                   : 'text-white/80 hover:text-white'
                   }`}
-                onMouseEnter={() => setHoveredPath('/')}
+                onMouseEnter={() => setHoveredPath('/marketplace')}
                 onMouseLeave={() => setHoveredPath(null)}
               >
                 <span className="relative inline-block">
-                  My Orders
-                  <span className={`absolute bottom-[-4px] left-0 w-full h-0.5 bg-white transition-transform duration-300 ease-out ${pathname === '/'
-                    ? (hoveredPath && hoveredPath !== '/' ? 'scale-x-0 origin-left' : 'scale-x-100 origin-left')
+                  Marketplace
+                  <span className={`absolute bottom-[-4px] left-0 w-full h-0.5 bg-white transition-transform duration-300 ease-out ${pathname === '/marketplace'
+                    ? (hoveredPath && hoveredPath !== '/marketplace' ? 'scale-x-0 origin-left' : 'scale-x-100 origin-left')
                     : 'scale-x-0 group-hover:scale-x-100 origin-left'
                     }`}
                   />
                 </span>
               </Link>
+
+              {TESTING_MODE && <ChainSwitcher isCheckingConnection={false} />}
+              <ConnectButton />
+            </div>
+
+            {/* Mobile: Hamburger / Close Button */}
+            <button
+              className="md:hidden relative w-8 h-8 flex items-center justify-center"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              aria-label="Toggle menu"
+              aria-expanded={mobileMenuOpen}
+            >
+              <svg
+                width="28"
+                height="28"
+                viewBox="0 0 32 32"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                className="overflow-visible"
+              >
+                {/* Hamburger lines / X */}
+                <line
+                  className="transition-all duration-300 ease-out"
+                  style={{
+                    transformOrigin: '16px 16px',
+                    transform: mobileMenuOpen ? 'rotate(45deg)' : 'rotate(0deg) translateY(-8px)'
+                  }}
+                  x1="6" y1="16" x2="26" y2="16"
+                  stroke="white"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                />
+                <line
+                  className={`transition-all duration-300 ease-out ${mobileMenuOpen ? 'opacity-0 scale-0' : 'opacity-100 scale-100'}`}
+                  style={{ transformOrigin: '16px 16px' }}
+                  x1="6" y1="16" x2="26" y2="16"
+                  stroke="white"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                />
+                <line
+                  className="transition-all duration-300 ease-out"
+                  style={{
+                    transformOrigin: '16px 16px',
+                    transform: mobileMenuOpen ? 'rotate(-45deg)' : 'rotate(0deg) translateY(8px)'
+                  }}
+                  x1="6" y1="16" x2="26" y2="16"
+                  stroke="white"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </nav>
+
+      {/* Mobile Menu Overlay - hidden on desktop via state, not media query to avoid flash */}
+      <div
+        className={`fixed inset-0 z-[199] transition-opacity duration-300 ease-out ${mobileMenuOpen
+          ? 'opacity-100 pointer-events-auto'
+          : 'opacity-0 pointer-events-none'
+          }`}
+        aria-hidden={!mobileMenuOpen}
+      >
+        {/* Backdrop */}
+        <div
+          className="absolute inset-0 bg-black/90 backdrop-blur-md"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+
+        {/* Menu Content */}
+        <div
+          className={`absolute inset-x-0 top-[73px] bottom-0 flex flex-col items-center justify-start pt-12 gap-6 transition-transform duration-300 ease-out ${mobileMenuOpen ? 'translate-y-0' : '-translate-y-8'
+            }`}
+        >
+          {/* Navigation Links */}
+          <nav className="flex flex-col items-center gap-2 w-full px-8">
+            {isConnected && (
+              <Link
+                href="/"
+                onClick={() => setMobileMenuOpen(false)}
+                className={`text-xl font-medium py-3 px-6 rounded-lg transition-colors w-full text-center ${pathname === '/'
+                  ? 'text-white bg-white/10'
+                  : 'text-white/80 hover:text-white hover:bg-white/5'
+                  }`}
+              >
+                My Orders
+              </Link>
             )}
             <Link
               href="/marketplace"
-              className={`transition-colors font-medium text-sm md:text-base px-4 py-2 cursor-pointer group ${pathname === '/marketplace'
-                ? 'text-white'
-                : 'text-white/80 hover:text-white'
+              onClick={() => setMobileMenuOpen(false)}
+              className={`text-xl font-medium py-3 px-6 rounded-lg transition-colors w-full text-center ${pathname === '/marketplace'
+                ? 'text-white bg-white/10'
+                : 'text-white/80 hover:text-white hover:bg-white/5'
                 }`}
-              onMouseEnter={() => setHoveredPath('/marketplace')}
-              onMouseLeave={() => setHoveredPath(null)}
             >
-              <span className="relative inline-block">
-                Marketplace
-                <span className={`absolute bottom-[-4px] left-0 w-full h-0.5 bg-white transition-transform duration-300 ease-out ${pathname === '/marketplace'
-                  ? (hoveredPath && hoveredPath !== '/marketplace' ? 'scale-x-0 origin-left' : 'scale-x-100 origin-left')
-                  : 'scale-x-0 group-hover:scale-x-100 origin-left'
-                  }`}
-                />
-              </span>
+              Marketplace
             </Link>
+          </nav>
 
-            {/* Only show chain switcher in testing mode */}
+          {/* Divider */}
+          <div className="w-32 h-px bg-white/20" />
+
+          {/* Connect Button */}
+          <div className="flex flex-col items-center gap-4 px-8 w-full">
             {TESTING_MODE && <ChainSwitcher isCheckingConnection={false} />}
-            <ConnectButton />
+            <div className="w-full [&>*]:w-full [&>*>button]:w-full">
+              <ConnectButton />
+            </div>
           </div>
         </div>
       </div>
-    </nav>
+    </>
   );
 };
 

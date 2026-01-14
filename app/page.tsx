@@ -95,6 +95,14 @@ export default function Home() {
     }
     return true;
   });
+  const [pricesBound, setPricesBound] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('limitOrderPricesBound');
+      return saved === null ? true : saved === 'true';
+    }
+    return true;
+  });
+  const [individualLimitPrices, setIndividualLimitPrices] = useState<(number | undefined)[]>([]);
 
   // Set to false to hide the whitelist debugger
   const SHOW_WHITELIST_DEBUGGER = false;
@@ -510,8 +518,17 @@ export default function Home() {
                           buyTokenAddresses={buyTokenAddresses}
                           limitOrderPrice={limitOrderPrice}
                           invertPriceDisplay={invertPriceDisplay}
+                          pricesBound={pricesBound}
+                          individualLimitPrices={individualLimitPrices}
                           onLimitPriceChange={(newPrice) => {
                             setLimitOrderPrice(newPrice);
+                          }}
+                          onIndividualLimitPriceChange={(index, newPrice) => {
+                            setIndividualLimitPrices(prev => {
+                              const newPrices = [...prev];
+                              newPrices[index] = newPrice;
+                              return newPrices;
+                            });
                           }}
                           onCurrentPriceChange={(price) => {
                             setCurrentMarketPrice(price);
@@ -527,6 +544,7 @@ export default function Home() {
                         <LimitOrderForm
                           externalLimitPrice={limitOrderPrice}
                           externalMarketPrice={currentMarketPrice}
+                          externalIndividualLimitPrices={individualLimitPrices}
                           isDragging={isDragging}
                           onTokenChange={(sell, buyTokens) => {
                             setSellTokenAddress(sell);
@@ -537,6 +555,12 @@ export default function Home() {
                           }}
                           onInvertPriceDisplayChange={(inverted) => {
                             setInvertPriceDisplay(inverted);
+                          }}
+                          onPricesBoundChange={(bound) => {
+                            setPricesBound(bound);
+                          }}
+                          onIndividualLimitPricesChange={(prices) => {
+                            setIndividualLimitPrices(prices);
                           }}
                           onCreateOrderClick={(sellToken, buyTokens, sellAmount, buyAmounts, expirationDays) => {
                             // Order creation is now handled directly in the form

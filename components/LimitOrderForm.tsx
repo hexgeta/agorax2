@@ -29,8 +29,11 @@ interface LimitOrderFormProps {
   onTokenChange?: (sellToken: string | undefined, buyTokens: (string | undefined)[]) => void;
   onLimitPriceChange?: (price: number | undefined) => void;
   onInvertPriceDisplayChange?: (inverted: boolean) => void;
+  onPricesBoundChange?: (bound: boolean) => void;
+  onIndividualLimitPricesChange?: (prices: (number | undefined)[]) => void;
   externalLimitPrice?: number;
   externalMarketPrice?: number;
+  externalIndividualLimitPrices?: (number | undefined)[];
   isDragging?: boolean;
   onCreateOrderClick?: (sellToken: TokenOption | null, buyTokens: (TokenOption | null)[], sellAmount: string, buyAmounts: string[], expirationDays: number) => void;
   onOrderCreated?: () => void;
@@ -135,8 +138,11 @@ export function LimitOrderForm({
   onTokenChange,
   onLimitPriceChange,
   onInvertPriceDisplayChange,
+  onPricesBoundChange,
+  onIndividualLimitPricesChange,
   externalLimitPrice,
   externalMarketPrice,
+  externalIndividualLimitPrices,
   isDragging = false,
   onCreateOrderClick,
   onOrderCreated,
@@ -239,6 +245,24 @@ export function LimitOrderForm({
     }
     return false;
   });
+  const [maxiStats, setMaxiStats] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('limitOrderMaxiStats') === 'true';
+    }
+    return false;
+  });
+
+  // Bind prices toggle - when true (default), all buy tokens have the same % from market
+  const [pricesBound, setPricesBound] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('limitOrderPricesBound');
+      return saved === null ? true : saved === 'true'; // Default to true (bound)
+    }
+    return true;
+  });
+
+  // Individual limit prices for each buy token (used when pricesBound is false)
+  const [individualLimitPrices, setIndividualLimitPrices] = useState<(number | undefined)[]>([]);
 
   const sellDropdownRef = useRef<HTMLDivElement>(null);
   const buyDropdownRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -569,6 +593,96 @@ export function LimitOrderForm({
     return null;
   }, [sellToken, buyTokens, sellAmount, buyAmounts, prices]);
 
+  // Helper to get backing price per token in HEX terms for a given token
+  const getBackingPriceForToken = (token: TokenOption | null): number | null => {
+    if (!token || !hasTokenAccess || !tokenStats) return null;
+
+    const tokensWithVersions = ['DECI', 'LUCKY', 'TRIO', 'BASE'];
+    let tokenKey: string;
+
+    if (token.ticker.startsWith('we')) {
+      const baseTicker = token.ticker.slice(2);
+      if (tokensWithVersions.includes(baseTicker)) {
+        tokenKey = getHighestTokenVersion(tokenStats, 'e', baseTicker);
+      } else {
+        tokenKey = `e${baseTicker}`;
+      }
+    } else if (token.ticker.startsWith('e')) {
+      const baseTicker = token.ticker.slice(1);
+      if (tokensWithVersions.includes(baseTicker)) {
+        tokenKey = getHighestTokenVersion(tokenStats, 'e', baseTicker);
+      } else {
+        tokenKey = token.ticker;
+      }
+    } else {
+      if (tokensWithVersions.includes(token.ticker)) {
+        tokenKey = getHighestTokenVersion(tokenStats, 'p', token.ticker);
+      } else {
+        tokenKey = `p${token.ticker}`;
+      }
+    }
+
+    const stats = tokenStats[tokenKey];
+    if (!stats?.token?.backingPerToken || stats.token.backingPerToken <= 0) return null;
+
+    return stats.token.backingPerToken;
+  };
+
+  // Check if we can show backing button for the primary limit price
+  // Backing button shows when either:
+  // 1. Sell token has backing AND buy token is HEX variant (selling MAXI for HEX)
+  // 2. Sell token is HEX AND buy token has backing (buying MAXI with HEX)
+  // Also requires maxiStats toggle to be enabled
+  const canShowBackingButton = useMemo(() => {
+    if (!maxiStats || !hasTokenAccess || !sellToken || !buyTokens[0]) return false;
+
+    const isHexVariant = (ticker: string) => {
+      return ticker === 'HEX' || ticker === 'eHEX' || ticker === 'pHEX' || ticker === 'weHEX';
+    };
+
+    // Case 1: Sell token has backing, buy token is HEX (selling MAXI for HEX)
+    const sellTokenBacking = getBackingPriceForToken(sellToken);
+    if (sellTokenBacking && isHexVariant(buyTokens[0].ticker)) {
+      return true;
+    }
+
+    // Case 2: Sell token is HEX, buy token has backing (buying MAXI with HEX)
+    const buyTokenBacking = getBackingPriceForToken(buyTokens[0]);
+    if (isHexVariant(sellToken.ticker) && buyTokenBacking) {
+      return true;
+    }
+
+    return false;
+  }, [maxiStats, hasTokenAccess, sellToken, buyTokens, tokenStats]);
+
+  // Get the backing price to set as limit price
+  // The limit price is always "buy tokens per sell token"
+  // Case 1: Selling MAXI for HEX -> limit price = backing (HEX per MAXI)
+  // Case 2: Selling HEX for MAXI -> limit price = 1/backing (MAXI per HEX)
+  const getBackingLimitPrice = (): number | null => {
+    if (!hasTokenAccess || !sellToken || !buyTokens[0]) return null;
+
+    const isHexVariant = (ticker: string) => {
+      return ticker === 'HEX' || ticker === 'eHEX' || ticker === 'pHEX' || ticker === 'weHEX';
+    };
+
+    // Case 1: Selling MAXI for HEX
+    const sellTokenBacking = getBackingPriceForToken(sellToken);
+    if (sellTokenBacking && isHexVariant(buyTokens[0].ticker)) {
+      return sellTokenBacking;
+    }
+
+    // Case 2: Selling HEX for MAXI
+    const buyTokenBacking = getBackingPriceForToken(buyTokens[0]);
+    if (isHexVariant(sellToken.ticker) && buyTokenBacking) {
+      // Limit price is "MAXI per HEX", backing is "HEX per MAXI"
+      // So we need to invert: 1 / backing
+      return 1 / buyTokenBacking;
+    }
+
+    return null;
+  };
+
   // Set default tokens
   useEffect(() => {
     // Only run if availableTokens is populated and we haven't initialized yet
@@ -701,6 +815,107 @@ export function LimitOrderForm({
     localStorage.setItem('limitOrderAllOrNothing', allOrNothing.toString());
   }, [allOrNothing]);
 
+  useEffect(() => {
+    localStorage.setItem('limitOrderMaxiStats', maxiStats.toString());
+  }, [maxiStats]);
+
+  // Save pricesBound to localStorage and notify parent
+  useEffect(() => {
+    localStorage.setItem('limitOrderPricesBound', pricesBound.toString());
+    if (onPricesBoundChange) {
+      onPricesBoundChange(pricesBound);
+    }
+  }, [pricesBound, onPricesBoundChange]);
+
+  // Track if we're receiving updates from chart drag to avoid circular updates
+  const isReceivingExternalIndividualPriceRef = useRef(false);
+
+  // Notify parent of individual limit prices changes
+  // Skip notification when receiving external updates to avoid circular loop
+  useEffect(() => {
+    if (onIndividualLimitPricesChange && !pricesBound && !isReceivingExternalIndividualPriceRef.current) {
+      onIndividualLimitPricesChange(individualLimitPrices);
+    }
+  }, [individualLimitPrices, pricesBound, onIndividualLimitPricesChange]);
+
+  // Track previous pricesBound state to detect bound->unbound transitions
+  const prevPricesBoundRef = useRef(pricesBound);
+  const prevBuyTokensLengthRef = useRef(buyTokens.length);
+
+  // Initialize individual limit prices ONLY when:
+  // 1. Switching from bound to unbound (not when limitPrice changes while unbound)
+  // 2. When new tokens are added while unbound (only initialize the new token, not all)
+  useEffect(() => {
+    if (!pricesBound && buyTokens.length > 0) {
+      const wasBound = prevPricesBoundRef.current;
+      const prevLength = prevBuyTokensLengthRef.current;
+      const tokenCountIncreased = buyTokens.length > prevLength;
+
+      const sellTokenUsdPrice = sellToken ? getPrice(sellToken.a) : 0;
+      const limitPriceNum = parseFloat(limitPrice) || 0;
+
+      // Only proceed if we have valid prices
+      if (limitPriceNum > 0) {
+        // Case 1: Just switched from bound to unbound - initialize all prices
+        if (wasBound) {
+          const newIndividualPrices: (number | undefined)[] = buyTokens.map((token, index) => {
+            if (!token) return undefined;
+
+            // First token always uses the main limit price
+            if (index === 0) {
+              return limitPriceNum;
+            }
+
+            // For additional tokens, calculate based on USD if possible
+            const firstBuyTokenUsdPrice = buyTokens[0] ? getPrice(buyTokens[0].a) : 0;
+            const tokenUsdPrice = getPrice(token.a);
+
+            if (sellTokenUsdPrice > 0 && firstBuyTokenUsdPrice > 0 && tokenUsdPrice > 0) {
+              const marketPriceForFirst = sellTokenUsdPrice / firstBuyTokenUsdPrice;
+              const premiumMultiplier = limitPriceNum / marketPriceForFirst;
+              const marketPriceForThis = sellTokenUsdPrice / tokenUsdPrice;
+              return marketPriceForThis * premiumMultiplier;
+            }
+
+            // Fallback: use the same limit price as first token (will be different units but at least visible)
+            return limitPriceNum;
+          });
+
+          setIndividualLimitPrices(newIndividualPrices);
+          if (onIndividualLimitPricesChange) {
+            onIndividualLimitPricesChange(newIndividualPrices);
+          }
+        }
+        // Case 2: New token added while already unbound - only initialize the new token at market price
+        else if (tokenCountIncreased) {
+          setIndividualLimitPrices(prev => {
+            const newPrices = [...prev];
+            // Initialize new tokens at market price (not first token's premium)
+            for (let i = prevLength; i < buyTokens.length; i++) {
+              const token = buyTokens[i];
+              if (token) {
+                const tokenUsdPrice = getPrice(token.a);
+                if (sellTokenUsdPrice > 0 && tokenUsdPrice > 0) {
+                  // Use market price for new tokens (premiumMultiplier = 1)
+                  newPrices[i] = sellTokenUsdPrice / tokenUsdPrice;
+                }
+              }
+            }
+            if (onIndividualLimitPricesChange) {
+              onIndividualLimitPricesChange(newPrices);
+            }
+            return newPrices;
+          });
+        }
+      }
+    }
+
+    // Update refs for next render
+    prevPricesBoundRef.current = pricesBound;
+    prevBuyTokensLengthRef.current = buyTokens.length;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pricesBound, buyTokens.length, priorityPrices, sellToken?.a]);
+
   // Recalculate percentage when invert display changes
   useEffect(() => {
     const sellTokenPrice = sellToken ? prices[sellToken.a]?.price || 0 : 0;
@@ -740,6 +955,13 @@ export function LimitOrderForm({
   useEffect(() => {
     if (onInvertPriceDisplayChange) {
       onInvertPriceDisplayChange(invertPriceDisplay);
+    }
+  }, []);
+
+  // Notify parent of loaded pricesBound on mount
+  useEffect(() => {
+    if (onPricesBoundChange) {
+      onPricesBoundChange(pricesBound);
     }
   }, []);
 
@@ -821,7 +1043,7 @@ export function LimitOrderForm({
     }
   }, [marketPrice, onLimitPriceChange]);
 
-  // Sync external limit price changes
+  // Sync external limit price changes (from chart dragging)
   useEffect(() => {
     if (externalLimitPrice !== undefined) {
       limitPriceSetByUserRef.current = true;
@@ -830,7 +1052,7 @@ export function LimitOrderForm({
       setLimitPrice(externalLimitPrice.toString());
 
       if (sellAmountNum > 0) {
-        // Update all buy token amounts based on their respective USD prices
+        // Update buy token amounts
         setBuyAmounts((prevAmounts) => {
           const newAmounts = [...prevAmounts];
           // First buy token uses the limit price directly
@@ -838,28 +1060,44 @@ export function LimitOrderForm({
             const newBuyAmount = sellAmountNum * externalLimitPrice;
             newAmounts[0] = formatCalculatedValue(newBuyAmount);
           }
-          // Additional buy tokens: calculate based on USD value with same premium
-          const sellTokenUsdPrice = sellToken ? getPrice(sellToken.a) : 0;
-          if (sellTokenUsdPrice > 0) {
-            const sellUsdValue = sellAmountNum * sellTokenUsdPrice;
-            // Calculate the premium/discount from market for the first token
-            const firstBuyTokenUsdPrice = buyTokens[0] ? getPrice(buyTokens[0].a) : 0;
-            const marketPriceForFirst = firstBuyTokenUsdPrice > 0 ? sellTokenUsdPrice / firstBuyTokenUsdPrice : 0;
-            const premiumMultiplier = marketPriceForFirst > 0 ? externalLimitPrice / marketPriceForFirst : 1;
 
-            for (let i = 1; i < buyTokens.length; i++) {
-              if (buyTokens[i]) {
-                const tokenUsdPrice = getPrice(buyTokens[i]!.a);
-                if (tokenUsdPrice > 0) {
-                  // Apply same premium/discount to this token's market rate
-                  const marketAmount = sellUsdValue / tokenUsdPrice;
-                  const adjustedAmount = marketAmount * premiumMultiplier;
-                  newAmounts[i] = formatCalculatedValue(adjustedAmount);
+          // Only update additional tokens if prices are BOUND
+          // When unlinked, each token has its own independent price
+          if (pricesBound) {
+            const sellTokenUsdPrice = sellToken ? getPrice(sellToken.a) : 0;
+            if (sellTokenUsdPrice > 0) {
+              const sellUsdValue = sellAmountNum * sellTokenUsdPrice;
+              // Calculate the premium/discount from market for the first token
+              const firstBuyTokenUsdPrice = buyTokens[0] ? getPrice(buyTokens[0].a) : 0;
+              const marketPriceForFirst = firstBuyTokenUsdPrice > 0 ? sellTokenUsdPrice / firstBuyTokenUsdPrice : 0;
+              const premiumMultiplier = marketPriceForFirst > 0 ? externalLimitPrice / marketPriceForFirst : 1;
+
+              for (let i = 1; i < buyTokens.length; i++) {
+                if (buyTokens[i]) {
+                  const tokenUsdPrice = getPrice(buyTokens[i]!.a);
+                  if (tokenUsdPrice > 0) {
+                    // Apply same premium/discount to this token's market rate
+                    const marketAmount = sellUsdValue / tokenUsdPrice;
+                    const adjustedAmount = marketAmount * premiumMultiplier;
+                    newAmounts[i] = formatCalculatedValue(adjustedAmount);
+                  }
                 }
               }
             }
           }
           return newAmounts;
+        });
+      }
+
+      // Update individual limit price for first token when unbound
+      if (!pricesBound) {
+        setIndividualLimitPrices(prev => {
+          const newPrices = [...prev];
+          newPrices[0] = externalLimitPrice;
+          if (onIndividualLimitPricesChange) {
+            onIndividualLimitPricesChange(newPrices);
+          }
+          return newPrices;
         });
       }
 
@@ -877,6 +1115,62 @@ export function LimitOrderForm({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [externalLimitPrice, sellAmountNum, marketPrice, invertPriceDisplay]);
+
+  // Sync external individual limit price changes (from chart dragging individual token lines)
+  useEffect(() => {
+    if (!externalIndividualLimitPrices) return;
+    // Only sync when dragging from chart (isDragging is true)
+    if (!isDragging) return;
+
+    isReceivingExternalIndividualPriceRef.current = true;
+
+    // Batch all updates to avoid multiple re-renders
+    let hasLimitPriceChanges = false;
+    let hasBuyAmountChanges = false;
+    const newLimitPrices = [...individualLimitPrices];
+    const newBuyAmounts = [...buyAmounts];
+
+    const sellTokenUsdPrice = sellToken ? getPrice(sellToken.a) : 0;
+
+    externalIndividualLimitPrices.forEach((newPrice, index) => {
+      if (newPrice === undefined || index === 0) return; // Skip first token (handled by main limit price)
+
+      const token = buyTokens[index];
+      if (!token) return;
+
+      // Check if price actually changed
+      if (newLimitPrices[index] !== newPrice) {
+        newLimitPrices[index] = newPrice;
+        hasLimitPriceChanges = true;
+
+        // Calculate new buy amount for this token
+        const tokenUsdPrice = getPrice(token.a);
+        if (sellTokenUsdPrice > 0 && tokenUsdPrice > 0 && sellAmountNum > 0) {
+          const sellUsdValue = sellAmountNum * sellTokenUsdPrice;
+          const tokenMarketPrice = sellTokenUsdPrice / tokenUsdPrice;
+          const premiumMultiplier = newPrice / tokenMarketPrice;
+          const marketAmount = sellUsdValue / tokenUsdPrice;
+          const adjustedAmount = marketAmount * premiumMultiplier;
+          newBuyAmounts[index] = formatCalculatedValue(adjustedAmount);
+          hasBuyAmountChanges = true;
+        }
+      }
+    });
+
+    // Apply batched updates
+    if (hasLimitPriceChanges) {
+      setIndividualLimitPrices(newLimitPrices);
+    }
+    if (hasBuyAmountChanges) {
+      setBuyAmounts(newBuyAmounts);
+    }
+
+    // Reset flag after a short delay
+    setTimeout(() => {
+      isReceivingExternalIndividualPriceRef.current = false;
+    }, 100);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [externalIndividualLimitPrices, isDragging]);
 
   // When sell amount changes, update buy amount based on limit price
   useEffect(() => {
@@ -898,22 +1192,25 @@ export function LimitOrderForm({
             newAmounts[0] = formatCalculatedValue(newBuyAmount);
           }
           // Additional buy tokens: calculate based on USD value with same premium
-          const sellTokenUsdPrice = sellToken ? getPrice(sellToken.a) : 0;
-          if (sellTokenUsdPrice > 0) {
-            const sellUsdValue = sellAmountNum * sellTokenUsdPrice;
-            // Calculate the premium/discount from market for the first token
-            const firstBuyTokenUsdPrice = buyTokens[0] ? getPrice(buyTokens[0].a) : 0;
-            const marketPriceForFirst = firstBuyTokenUsdPrice > 0 ? sellTokenUsdPrice / firstBuyTokenUsdPrice : 0;
-            const premiumMultiplier = marketPriceForFirst > 0 ? limitPriceNum / marketPriceForFirst : 1;
+          // Only sync additional tokens if prices are BOUND
+          if (pricesBound) {
+            const sellTokenUsdPrice = sellToken ? getPrice(sellToken.a) : 0;
+            if (sellTokenUsdPrice > 0) {
+              const sellUsdValue = sellAmountNum * sellTokenUsdPrice;
+              // Calculate the premium/discount from market for the first token
+              const firstBuyTokenUsdPrice = buyTokens[0] ? getPrice(buyTokens[0].a) : 0;
+              const marketPriceForFirst = firstBuyTokenUsdPrice > 0 ? sellTokenUsdPrice / firstBuyTokenUsdPrice : 0;
+              const premiumMultiplier = marketPriceForFirst > 0 ? limitPriceNum / marketPriceForFirst : 1;
 
-            for (let i = 1; i < buyTokens.length; i++) {
-              if (buyTokens[i]) {
-                const tokenUsdPrice = getPrice(buyTokens[i]!.a);
-                if (tokenUsdPrice > 0) {
-                  // Apply same premium/discount to this token's market rate
-                  const marketAmount = sellUsdValue / tokenUsdPrice;
-                  const adjustedAmount = marketAmount * premiumMultiplier;
-                  newAmounts[i] = formatCalculatedValue(adjustedAmount);
+              for (let i = 1; i < buyTokens.length; i++) {
+                if (buyTokens[i]) {
+                  const tokenUsdPrice = getPrice(buyTokens[i]!.a);
+                  if (tokenUsdPrice > 0) {
+                    // Apply same premium/discount to this token's market rate
+                    const marketAmount = sellUsdValue / tokenUsdPrice;
+                    const adjustedAmount = marketAmount * premiumMultiplier;
+                    newAmounts[i] = formatCalculatedValue(adjustedAmount);
+                  }
                 }
               }
             }
@@ -949,8 +1246,11 @@ export function LimitOrderForm({
   }, [buyAmountNum, limitPrice]);
 
   // Recalculate additional buy token amounts when prices change or new tokens are added
+  // Only applies when prices are BOUND - when unlinked, each token keeps its own price
   useEffect(() => {
     if (buyTokens.length <= 1 || !sellAmount || sellAmountNum <= 0) return;
+    // Don't auto-sync prices when unlinked
+    if (!pricesBound) return;
 
     const sellTokenUsdPrice = sellToken ? getPrice(sellToken.a) : 0;
     if (sellTokenUsdPrice <= 0) return;
@@ -983,7 +1283,7 @@ export function LimitOrderForm({
       setBuyAmounts(newBuyAmounts);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [buyTokens.length, prices, sellAmountNum, limitPrice]);
+  }, [buyTokens.length, prices, sellAmountNum, limitPrice, pricesBound]);
 
   const handleCreateOrder = async () => {
     // Capture address early to avoid closure issues
@@ -1408,7 +1708,7 @@ export function LimitOrderForm({
       onLimitPriceChange(newPrice);
     }
 
-    // Update all buy token amounts based on their respective USD prices
+    // Update buy token amounts based on their respective USD prices
     setBuyAmounts((prevAmounts) => {
       const newAmounts = [...prevAmounts];
       // First buy token uses the limit price directly
@@ -1416,27 +1716,235 @@ export function LimitOrderForm({
         const newBuyAmount = effectiveSellAmount * newPrice;
         newAmounts[0] = formatCalculatedValue(newBuyAmount);
       }
-      // Additional buy tokens: calculate based on USD value with same premium
-      const sellTokenUsdPrice = sellToken ? getPrice(sellToken.a) : 0;
-      if (sellTokenUsdPrice > 0) {
-        const sellUsdValue = effectiveSellAmount * sellTokenUsdPrice;
-        // The premium multiplier is based on the percentage adjustment
-        const premiumMultiplier = 1 + adjustedPercentage / 100;
 
-        for (let i = 1; i < buyTokens.length; i++) {
-          if (buyTokens[i]) {
-            const tokenUsdPrice = getPrice(buyTokens[i]!.a);
-            if (tokenUsdPrice > 0) {
-              // Apply same premium/discount to this token's market rate
-              const marketAmount = sellUsdValue / tokenUsdPrice;
-              const adjustedAmount = marketAmount * premiumMultiplier;
-              newAmounts[i] = formatCalculatedValue(adjustedAmount);
+      // Only update additional tokens if prices are BOUND
+      // When unlinked, each token has its own independent price
+      if (pricesBound) {
+        const sellTokenUsdPrice = sellToken ? getPrice(sellToken.a) : 0;
+        if (sellTokenUsdPrice > 0) {
+          const sellUsdValue = effectiveSellAmount * sellTokenUsdPrice;
+          // The premium multiplier is based on the percentage adjustment
+          const premiumMultiplier = 1 + adjustedPercentage / 100;
+
+          for (let i = 1; i < buyTokens.length; i++) {
+            if (buyTokens[i]) {
+              const tokenUsdPrice = getPrice(buyTokens[i]!.a);
+              if (tokenUsdPrice > 0) {
+                // Apply same premium/discount to this token's market rate
+                const marketAmount = sellUsdValue / tokenUsdPrice;
+                const adjustedAmount = marketAmount * premiumMultiplier;
+                newAmounts[i] = formatCalculatedValue(adjustedAmount);
+              }
             }
           }
         }
       }
       return newAmounts;
     });
+
+    // Update individual limit prices for first token when unbound
+    if (!pricesBound) {
+      setIndividualLimitPrices(prev => {
+        const newPrices = [...prev];
+        newPrices[0] = newPrice;
+        if (onIndividualLimitPricesChange) {
+          onIndividualLimitPricesChange(newPrices);
+        }
+        return newPrices;
+      });
+    }
+  };
+
+  // Handler for setting limit price to backing value
+  const handleBackingPriceClick = () => {
+    const backingPrice = getBackingLimitPrice();
+    if (!backingPrice || !sellToken) return;
+
+    let effectiveSellAmount = sellAmountNum;
+    if (!sellAmountNum || sellAmountNum === 0) {
+      effectiveSellAmount = 1;
+      setSellAmount('1');
+    }
+
+    limitPriceSetByUserRef.current = true;
+    isInitialLoadRef.current = false;
+
+    // Calculate what percentage the backing is from market
+    if (marketPrice && marketPrice > 0) {
+      const percentFromMarket = ((backingPrice - marketPrice) / marketPrice) * 100;
+      setPricePercentage(percentFromMarket);
+    } else {
+      setPricePercentage(null);
+    }
+
+    setLimitPrice(backingPrice.toFixed(8));
+
+    if (onLimitPriceChange) {
+      onLimitPriceChange(backingPrice);
+    }
+
+    // Update buy token amounts
+    setBuyAmounts((prevAmounts) => {
+      const newAmounts = [...prevAmounts];
+      if (buyTokens[0]) {
+        const newBuyAmount = effectiveSellAmount * backingPrice;
+        newAmounts[0] = formatCalculatedValue(newBuyAmount);
+      }
+
+      // Update additional tokens if prices are bound
+      if (pricesBound && marketPrice && marketPrice > 0) {
+        const sellTokenUsdPrice = sellToken ? getPrice(sellToken.a) : 0;
+        if (sellTokenUsdPrice > 0) {
+          const sellUsdValue = effectiveSellAmount * sellTokenUsdPrice;
+          const premiumMultiplier = backingPrice / marketPrice;
+
+          for (let i = 1; i < buyTokens.length; i++) {
+            if (buyTokens[i]) {
+              const tokenUsdPrice = getPrice(buyTokens[i]!.a);
+              if (tokenUsdPrice > 0) {
+                const marketAmount = sellUsdValue / tokenUsdPrice;
+                const adjustedAmount = marketAmount * premiumMultiplier;
+                newAmounts[i] = formatCalculatedValue(adjustedAmount);
+              }
+            }
+          }
+        }
+      }
+      return newAmounts;
+    });
+
+    // Update individual limit prices for first token when unbound
+    if (!pricesBound) {
+      setIndividualLimitPrices(prev => {
+        const newPrices = [...prev];
+        newPrices[0] = backingPrice;
+        if (onIndividualLimitPricesChange) {
+          onIndividualLimitPricesChange(newPrices);
+        }
+        return newPrices;
+      });
+    }
+  };
+
+  // Handler for individual token percentage clicks (when prices are unbound)
+  const handleIndividualPercentageClick = (tokenIndex: number, percentage: number, direction: 'above' | 'below' = 'above') => {
+    const token = buyTokens[tokenIndex];
+    if (!token || !sellToken) return;
+
+    const sellTokenUsdPrice = getPrice(sellToken.a);
+    const tokenUsdPrice = getPrice(token.a);
+
+    if (sellTokenUsdPrice <= 0 || tokenUsdPrice <= 0) return;
+
+    const tokenMarketPrice = sellTokenUsdPrice / tokenUsdPrice;
+    const adjustedPercentage = direction === 'above' ? percentage : -percentage;
+
+    // When invertPriceDisplay is true, the percentage is applied to the inverted price
+    // So we need to calculate: invertedLimit = invertedMarket * (1 + adjustedPercentage/100)
+    // Then: newPrice = 1 / invertedLimit
+    let newPrice: number;
+    if (invertPriceDisplay) {
+      const invertedMarketPrice = 1 / tokenMarketPrice;
+      const invertedLimitPrice = invertedMarketPrice * (1 + adjustedPercentage / 100);
+      newPrice = 1 / invertedLimitPrice;
+    } else {
+      newPrice = tokenMarketPrice * (1 + adjustedPercentage / 100);
+    }
+
+    // Update individual limit prices and notify parent
+    setIndividualLimitPrices(prev => {
+      const newPrices = [...prev];
+      newPrices[tokenIndex] = newPrice;
+      // Immediately notify parent
+      if (onIndividualLimitPricesChange) {
+        onIndividualLimitPricesChange(newPrices);
+      }
+      return newPrices;
+    });
+
+    // Update the buy amount for this token
+    // buyAmount = sellAmount * limitPrice (where limitPrice is in "buy tokens per sell token")
+    const effectiveSellAmount = sellAmountNum > 0 ? sellAmountNum : 1;
+    const newBuyAmount = effectiveSellAmount * newPrice;
+
+    setBuyAmounts(prev => {
+      const newAmounts = [...prev];
+      newAmounts[tokenIndex] = formatCalculatedValue(newBuyAmount);
+      return newAmounts;
+    });
+  };
+
+  // Handler for setting individual token limit price to backing value
+  const handleIndividualBackingPriceClick = (tokenIndex: number) => {
+    const token = buyTokens[tokenIndex];
+    if (!token || !sellToken) return;
+
+    const isHexVariant = (ticker: string) => {
+      return ticker === 'HEX' || ticker === 'eHEX' || ticker === 'pHEX' || ticker === 'weHEX';
+    };
+
+    let limitPrice: number | null = null;
+
+    // Case 1: Selling MAXI for HEX - limit price = backing (HEX per MAXI)
+    const sellTokenBacking = getBackingPriceForToken(sellToken);
+    if (sellTokenBacking && isHexVariant(token.ticker)) {
+      limitPrice = sellTokenBacking;
+    }
+
+    // Case 2: Selling HEX for MAXI - limit price = 1/backing (MAXI per HEX)
+    const buyTokenBacking = getBackingPriceForToken(token);
+    if (isHexVariant(sellToken.ticker) && buyTokenBacking) {
+      limitPrice = 1 / buyTokenBacking;
+    }
+
+    if (!limitPrice) return;
+
+    // Update individual limit prices and notify parent
+    setIndividualLimitPrices(prev => {
+      const newPrices = [...prev];
+      newPrices[tokenIndex] = limitPrice!;
+      if (onIndividualLimitPricesChange) {
+        onIndividualLimitPricesChange(newPrices);
+      }
+      return newPrices;
+    });
+
+    // Update the buy amount for this token
+    const effectiveSellAmount = sellAmountNum > 0 ? sellAmountNum : 1;
+    const newBuyAmount = effectiveSellAmount * limitPrice;
+
+    setBuyAmounts(prev => {
+      const newAmounts = [...prev];
+      newAmounts[tokenIndex] = formatCalculatedValue(newBuyAmount);
+      return newAmounts;
+    });
+  };
+
+  // Check if we can show backing button for a specific additional token
+  // Also requires maxiStats toggle to be enabled
+  const canShowIndividualBackingButton = (tokenIndex: number): boolean => {
+    if (!maxiStats || !hasTokenAccess || !sellToken) return false;
+
+    const token = buyTokens[tokenIndex];
+    if (!token) return false;
+
+    const isHexVariant = (ticker: string) => {
+      return ticker === 'HEX' || ticker === 'eHEX' || ticker === 'pHEX' || ticker === 'weHEX';
+    };
+
+    // Case 1: Sell token has backing, buy token is HEX
+    const sellTokenBacking = getBackingPriceForToken(sellToken);
+    if (sellTokenBacking && isHexVariant(token.ticker)) {
+      return true;
+    }
+
+    // Case 2: Sell token is HEX, buy token has backing
+    const buyTokenBacking = getBackingPriceForToken(token);
+    if (isHexVariant(sellToken.ticker) && buyTokenBacking) {
+      return true;
+    }
+
+    return false;
   };
 
   const handleMaxSellAmount = () => {
@@ -1616,21 +2124,40 @@ export function LimitOrderForm({
       // Only calculate if we have valid prices (> 0, not -1 which means no price)
       if (sellTokenUsdPrice > 0 && tokenUsdPrice > 0) {
         const sellUsdValue = sellAmt * sellTokenUsdPrice;
-        // Calculate the premium/discount from market for the first token
-        // Use newBuyTokens[0] since buyTokens hasn't updated yet (async state)
-        const firstBuyToken = newBuyTokens[0];
-        const firstBuyTokenUsdPrice = firstBuyToken ? getPrice(firstBuyToken.a) : 0;
-        const limitPriceNum = parseFloat(limitPrice) || 0;
-        const marketPriceForFirst = firstBuyTokenUsdPrice > 0 ? sellTokenUsdPrice / firstBuyTokenUsdPrice : 0;
-        const premiumMultiplier = marketPriceForFirst > 0 && limitPriceNum > 0 ? limitPriceNum / marketPriceForFirst : 1;
 
-        // Apply same premium/discount to this token's market rate
+        let premiumMultiplier = 1; // Default to market price
+
+        // Only apply first token's premium if prices are BOUND
+        if (pricesBound) {
+          // Calculate the premium/discount from market for the first token
+          // Use newBuyTokens[0] since buyTokens hasn't updated yet (async state)
+          const firstBuyToken = newBuyTokens[0];
+          const firstBuyTokenUsdPrice = firstBuyToken ? getPrice(firstBuyToken.a) : 0;
+          const limitPriceNum = parseFloat(limitPrice) || 0;
+          const marketPriceForFirst = firstBuyTokenUsdPrice > 0 ? sellTokenUsdPrice / firstBuyTokenUsdPrice : 0;
+          premiumMultiplier = marketPriceForFirst > 0 && limitPriceNum > 0 ? limitPriceNum / marketPriceForFirst : 1;
+        }
+
+        // Apply premium/discount to this token's market rate
         const marketAmount = sellUsdValue / tokenUsdPrice;
         const adjustedAmount = marketAmount * premiumMultiplier;
 
         const newBuyAmounts = [...buyAmounts];
         newBuyAmounts[index] = formatCalculatedValue(adjustedAmount);
         setBuyAmounts(newBuyAmounts);
+
+        // When unbound, also set the individual limit price for the new token at market
+        if (!pricesBound) {
+          const marketPrice = sellTokenUsdPrice / tokenUsdPrice;
+          setIndividualLimitPrices(prev => {
+            const newPrices = [...prev];
+            newPrices[index] = marketPrice;
+            if (onIndividualLimitPricesChange) {
+              onIndividualLimitPricesChange(newPrices);
+            }
+            return newPrices;
+          });
+        }
       }
       // If token has no price data, leave the amount empty for user to fill manually
     }
@@ -1827,7 +2354,34 @@ export function LimitOrderForm({
           shadowIntensity="xs"
           glowIntensity="none"
         >
-          <label className="text-white/80 text-sm mb-2 block font-semibold text-left">BUY</label>
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-white/80 text-sm font-semibold text-left">BUY</label>
+
+            {/* Bind Prices Toggle - Only show when there are multiple buy tokens */}
+            {buyTokens.length > 1 && (
+              <button
+                type="button"
+                onClick={() => setPricesBound(!pricesBound)}
+                className={`flex items-center gap-1.5 px-2 py-1 text-xs rounded-full transition-all ${
+                  pricesBound
+                    ? 'bg-[#FF0080]/20 text-[#FF0080] border border-[#FF0080]/30'
+                    : 'bg-white/5 text-white/60 border border-white/10 hover:bg-white/10'
+                }`}
+                title={pricesBound ? 'Prices linked: same % from market for all tokens' : 'Prices unlinked: set individual prices'}
+              >
+                {pricesBound ? (
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                  </svg>
+                ) : (
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1M18 6L6 18" />
+                  </svg>
+                )}
+                <span>{pricesBound ? 'Linked' : 'Unlinked'}</span>
+              </button>
+            )}
+          </div>
 
           <div className="space-y-4">
             {buyTokens.map((buyToken, index) => (
@@ -2115,15 +2669,34 @@ export function LimitOrderForm({
                 >
                   Market
                 </button>
-                <button
-                  onClick={() => handlePercentageClick(1, invertPriceDisplay ? 'below' : 'above')}
-                  className={`flex-1 py-2 border-accent-pink text-xs transition-all font-medium rounded-full ${pricePercentage !== null && Math.abs(Math.abs(pricePercentage) - 1) < 0.01
-                    ? 'bg-[#FF0080]/20 text-white'
-                    : 'bg-black/40 text-[#FF0080] hover:bg-[#FF0080]/20 hover:text-white'
-                    }`}
-                >
-                  {invertPriceDisplay ? '-1%' : '+1%'} {invertPriceDisplay ? '↓' : '↑'}
-                </button>
+                {/* Show Backing button if available, otherwise show -1%/+1% */}
+                {canShowBackingButton ? (
+                  <button
+                    onClick={handleBackingPriceClick}
+                    className={`flex-1 py-2 border-accent-pink text-xs transition-all font-medium rounded-full ${(() => {
+                      const backingPrice = getBackingLimitPrice();
+                      if (!backingPrice || !marketPrice) return false;
+                      const backingPercent = ((backingPrice - marketPrice) / marketPrice) * 100;
+                      return pricePercentage !== null && Math.abs(pricePercentage - backingPercent) < 0.5;
+                    })()
+                      ? 'bg-[#FF0080]/20 text-white'
+                      : 'bg-black/40 text-[#FF0080] hover:bg-[#FF0080]/20 hover:text-white'
+                      }`}
+                    title={`Set price to backing value: ${getBackingLimitPrice()?.toFixed(4)} HEX`}
+                  >
+                    Backing
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handlePercentageClick(1, invertPriceDisplay ? 'below' : 'above')}
+                    className={`flex-1 py-2 border-accent-pink text-xs transition-all font-medium rounded-full ${pricePercentage !== null && Math.abs(Math.abs(pricePercentage) - 1) < 0.01
+                      ? 'bg-[#FF0080]/20 text-white'
+                      : 'bg-black/40 text-[#FF0080] hover:bg-[#FF0080]/20 hover:text-white'
+                      }`}
+                  >
+                    {invertPriceDisplay ? '-1%' : '+1%'} {invertPriceDisplay ? '↓' : '↑'}
+                  </button>
+                )}
                 <button
                   onClick={() => handlePercentageClick(2, invertPriceDisplay ? 'below' : 'above')}
                   className={`flex-1 py-2 border-accent-pink text-xs transition-all font-medium rounded-full ${pricePercentage !== null && Math.abs(Math.abs(pricePercentage) - 2) < 0.01
@@ -2156,8 +2729,183 @@ export function LimitOrderForm({
           </LiquidGlassCard>
         )}
 
-        {/* Percentage Buttons */}
+        {/* Individual Limit Price Sections for additional buy tokens when unlinked */}
+        {!pricesBound && buyTokens.length > 1 && buyTokens.slice(1).map((token, idx) => {
+          const index = idx + 1; // actual index in buyTokens array
+          if (!token) return null;
 
+          // Colors for each additional token
+          const tokenColors = [
+            { accent: '#8B5CF6', bg: 'bg-purple-500/10', border: 'border-purple-500/30', text: 'text-purple-400' }, // Purple
+            { accent: '#F59E0B', bg: 'bg-amber-500/10', border: 'border-amber-500/30', text: 'text-amber-400' }, // Amber
+            { accent: '#10B981', bg: 'bg-emerald-500/10', border: 'border-emerald-500/30', text: 'text-emerald-400' }, // Emerald
+            { accent: '#EF4444', bg: 'bg-red-500/10', border: 'border-red-500/30', text: 'text-red-400' }, // Red
+            { accent: '#3B82F6', bg: 'bg-blue-500/10', border: 'border-blue-500/30', text: 'text-blue-400' }, // Blue
+            { accent: '#EC4899', bg: 'bg-fuchsia-500/10', border: 'border-fuchsia-500/30', text: 'text-fuchsia-400' }, // Fuchsia
+            { accent: '#14B8A6', bg: 'bg-teal-500/10', border: 'border-teal-500/30', text: 'text-teal-400' }, // Teal
+            { accent: '#F97316', bg: 'bg-orange-500/10', border: 'border-orange-500/30', text: 'text-orange-400' }, // Orange
+            { accent: '#6366F1', bg: 'bg-indigo-500/10', border: 'border-indigo-500/30', text: 'text-indigo-400' }, // Indigo
+          ];
+          const colors = tokenColors[idx % tokenColors.length];
+
+          // Get the individual limit price for this token
+          const tokenLimitPrice = individualLimitPrices[index];
+
+          // Calculate percentage from market for this token
+          const sellTokenUsdPrice = sellToken ? getPrice(sellToken.a) : 0;
+          const tokenUsdPrice = getPrice(token.a);
+          const tokenMarketPrice = sellTokenUsdPrice > 0 && tokenUsdPrice > 0
+            ? sellTokenUsdPrice / tokenUsdPrice
+            : 0;
+          // Calculate percentage - account for invertPriceDisplay like the main limit price
+          let tokenPricePercentage: number | null = null;
+          if (tokenMarketPrice > 0 && tokenLimitPrice) {
+            if (invertPriceDisplay) {
+              const invertedLimitPrice = 1 / tokenLimitPrice;
+              const invertedMarketPrice = 1 / tokenMarketPrice;
+              tokenPricePercentage = ((invertedLimitPrice - invertedMarketPrice) / invertedMarketPrice) * 100;
+            } else {
+              tokenPricePercentage = ((tokenLimitPrice - tokenMarketPrice) / tokenMarketPrice) * 100;
+            }
+          }
+
+          return (
+            <LiquidGlassCard
+              key={`limit-price-${token.a}`}
+              className={`mb-4 p-4 ${colors.bg} ${colors.border}`}
+              borderRadius="12px"
+              shadowIntensity="xs"
+              glowIntensity="none"
+            >
+              <div className="flex justify-between items-center mb-2">
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-semibold" style={{ color: colors.accent }}>
+                    LIMIT PRICE ({formatTokenTicker(token.ticker, chainId)})
+                  </label>
+                </div>
+                {tokenPricePercentage !== null && Math.abs(tokenPricePercentage) > 0.01 && (
+                  <span className="text-sm font-bold" style={{ color: colors.accent }}>
+                    {tokenPricePercentage > 0 ? '+' : ''}{tokenPricePercentage.toFixed(2)}%
+                  </span>
+                )}
+              </div>
+              <div className="relative">
+                <div
+                  className="w-full bg-black/40 p-3 text-lg min-h-[52px] flex items-center rounded-lg border"
+                  style={{ borderColor: `${colors.accent}40`, color: colors.accent }}
+                >
+                  {tokenLimitPrice && tokenLimitPrice > 0 ? (
+                    <NumberFlow
+                      value={invertPriceDisplay && tokenLimitPrice > 0 ? 1 / tokenLimitPrice : tokenLimitPrice}
+                      format={{
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 8
+                      }}
+                      animated={!isDragging}
+                    />
+                  ) : (
+                    <span style={{ color: `${colors.accent}50` }}>0.00000000</span>
+                  )}
+                </div>
+                {sellToken && token && tokenLimitPrice && tokenLimitPrice > 0 && (
+                  <div
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-medium pointer-events-none"
+                    style={{ color: `${colors.accent}B3` }}
+                  >
+                    {invertPriceDisplay ? formatTokenTicker(sellToken.ticker, chainId) : formatTokenTicker(token.ticker, chainId)}
+                  </div>
+                )}
+              </div>
+
+              {/* Percentage Buttons for this token */}
+              {tokenMarketPrice > 0 && (
+                <div className="flex gap-2 mt-4">
+                  <button
+                    onClick={() => handleIndividualPercentageClick(index, 0, 'above')}
+                    className="flex-1 py-2 text-xs transition-all font-medium rounded-full"
+                    style={{
+                      backgroundColor: tokenPricePercentage === null || Math.abs(tokenPricePercentage) < 0.01 ? `${colors.accent}33` : 'rgba(0,0,0,0.4)',
+                      color: tokenPricePercentage === null || Math.abs(tokenPricePercentage) < 0.01 ? 'white' : colors.accent,
+                      border: `1px solid ${colors.accent}40`
+                    }}
+                  >
+                    Market
+                  </button>
+                  {/* Show Backing button if available, otherwise show -1%/+1% */}
+                  {canShowIndividualBackingButton(index) ? (
+                    <button
+                      onClick={() => handleIndividualBackingPriceClick(index)}
+                      className="flex-1 py-2 text-xs transition-all font-medium rounded-full"
+                      style={{
+                        backgroundColor: (() => {
+                          const backingPrice = getBackingPriceForToken(sellToken);
+                          if (!backingPrice || !tokenMarketPrice) return false;
+                          const backingPercent = ((backingPrice - tokenMarketPrice) / tokenMarketPrice) * 100;
+                          return tokenPricePercentage !== null && Math.abs(tokenPricePercentage - backingPercent) < 0.5;
+                        })() ? `${colors.accent}33` : 'rgba(0,0,0,0.4)',
+                        color: (() => {
+                          const backingPrice = getBackingPriceForToken(sellToken);
+                          if (!backingPrice || !tokenMarketPrice) return colors.accent;
+                          const backingPercent = ((backingPrice - tokenMarketPrice) / tokenMarketPrice) * 100;
+                          return tokenPricePercentage !== null && Math.abs(tokenPricePercentage - backingPercent) < 0.5 ? 'white' : colors.accent;
+                        })(),
+                        border: `1px solid ${colors.accent}40`
+                      }}
+                      title={`Set price to backing value: ${getBackingPriceForToken(sellToken)?.toFixed(4)} HEX`}
+                    >
+                      Backing
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleIndividualPercentageClick(index, 1, invertPriceDisplay ? 'below' : 'above')}
+                      className="flex-1 py-2 text-xs transition-all font-medium rounded-full"
+                      style={{
+                        backgroundColor: tokenPricePercentage !== null && Math.abs(Math.abs(tokenPricePercentage) - 1) < 0.1 ? `${colors.accent}33` : 'rgba(0,0,0,0.4)',
+                        color: tokenPricePercentage !== null && Math.abs(Math.abs(tokenPricePercentage) - 1) < 0.1 ? 'white' : colors.accent,
+                        border: `1px solid ${colors.accent}40`
+                      }}
+                    >
+                      {invertPriceDisplay ? '-1%' : '+1%'} {invertPriceDisplay ? '↓' : '↑'}
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleIndividualPercentageClick(index, 2, invertPriceDisplay ? 'below' : 'above')}
+                    className="flex-1 py-2 text-xs transition-all font-medium rounded-full"
+                    style={{
+                      backgroundColor: tokenPricePercentage !== null && Math.abs(Math.abs(tokenPricePercentage) - 2) < 0.1 ? `${colors.accent}33` : 'rgba(0,0,0,0.4)',
+                      color: tokenPricePercentage !== null && Math.abs(Math.abs(tokenPricePercentage) - 2) < 0.1 ? 'white' : colors.accent,
+                      border: `1px solid ${colors.accent}40`
+                    }}
+                  >
+                    {invertPriceDisplay ? '-2%' : '+2%'} {invertPriceDisplay ? '↓' : '↑'}
+                  </button>
+                  <button
+                    onClick={() => handleIndividualPercentageClick(index, 5, invertPriceDisplay ? 'below' : 'above')}
+                    className="flex-1 py-2 text-xs transition-all font-medium rounded-full"
+                    style={{
+                      backgroundColor: tokenPricePercentage !== null && Math.abs(Math.abs(tokenPricePercentage) - 5) < 0.1 ? `${colors.accent}33` : 'rgba(0,0,0,0.4)',
+                      color: tokenPricePercentage !== null && Math.abs(Math.abs(tokenPricePercentage) - 5) < 0.1 ? 'white' : colors.accent,
+                      border: `1px solid ${colors.accent}40`
+                    }}
+                  >
+                    {invertPriceDisplay ? '-5%' : '+5%'} {invertPriceDisplay ? '↓' : '↑'}
+                  </button>
+                  <button
+                    onClick={() => handleIndividualPercentageClick(index, 10, invertPriceDisplay ? 'below' : 'above')}
+                    className="flex-1 py-2 text-xs transition-all font-medium rounded-full"
+                    style={{
+                      backgroundColor: tokenPricePercentage !== null && Math.abs(Math.abs(tokenPricePercentage) - 10) < 0.1 ? `${colors.accent}33` : 'rgba(0,0,0,0.4)',
+                      color: tokenPricePercentage !== null && Math.abs(Math.abs(tokenPricePercentage) - 10) < 0.1 ? 'white' : colors.accent,
+                      border: `1px solid ${colors.accent}40`
+                    }}
+                  >
+                    {invertPriceDisplay ? '-10%' : '+10%'} {invertPriceDisplay ? '↓' : '↑'}
+                  </button>
+                </div>
+              )}
+            </LiquidGlassCard>
+          );
+        })}
 
         {/* Expiration */}
         <LiquidGlassCard
@@ -2409,10 +3157,12 @@ export function LimitOrderForm({
               {buyTokens.map((token, index) => {
                 const amount = buyAmounts[index];
                 if (!token || !amount || amount.trim() === '') return null;
+                const filteredBuyTokens = buyTokens.filter((t, idx) => t && buyAmounts[idx] && buyAmounts[idx].trim() !== '');
+                const isFirst = filteredBuyTokens[0] === token;
                 return (
-                  <div key={`ask-${index}`} className="flex justify-between items-center border-t border-white/20 pt-2">
+                  <div key={`ask-${index}`} className={`flex justify-between items-center ${isFirst ? 'border-t border-white/20 pt-2' : ''}`}>
                     <span className="text-white/70">
-                      {index === 0 ? `Your Ask${buyTokens.filter((t, idx) => t && buyAmounts[idx] && buyAmounts[idx].trim() !== '').length > 1 ? ' (Either of)' : ''}:` : ''}
+                      {isFirst ? `Your Ask${filteredBuyTokens.length > 1 ? ' (Either of)' : ''}:` : ''}
                     </span>
                     <span className="text-white font-medium">
                       {formatBalanceDisplay(removeCommas(amount))} {formatTokenTicker(token.ticker, chainId)}
@@ -2439,7 +3189,7 @@ export function LimitOrderForm({
                 );
               })}
 
-              <div className="pt-0">
+              <div className="border-t border-white/20 pt-2 mt-2">
                 {buyTokens.filter((t, idx) => t && buyAmounts[idx] && buyAmounts[idx].trim() !== '').map((token, index) => {
                   const filteredBuyTokens = buyTokens.filter((t, idx) => t && buyAmounts[idx] && buyAmounts[idx].trim() !== '');
                   const amount = buyAmounts[buyTokens.indexOf(token)];
@@ -2498,6 +3248,27 @@ export function LimitOrderForm({
                         />
                       </button>
                     </div>
+
+                    {/* Maxi Stats Toggle */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex flex-col">
+                        <span className="text-white/70 text-sm">Maxi stats</span>
+                        <span className="text-white/40 text-xs">Show pro stats and backing data for MAXI tokens</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setMaxiStats(!maxiStats)}
+                        className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${
+                          maxiStats ? 'bg-green-500' : 'bg-white/20'
+                        }`}
+                      >
+                        <span
+                          className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform duration-200 ${
+                            maxiStats ? 'translate-x-5' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -2505,16 +3276,16 @@ export function LimitOrderForm({
           </LiquidGlassCard>
         )}
 
-        {/* Pro Plan - Show token stats when tokens are selected, at least one is eligible for stats, and no duplicates */}
-        {sellToken && buyTokens.length > 0 && buyTokens[0] && (showSellStats || showBuyStats || (isTokenEligibleForStats(sellToken) || buyTokens.some(t => isTokenEligibleForStats(t)))) && !duplicateTokenError &&
+        {/* Pro Plan - Show token stats when tokens are selected, at least one is eligible for stats, no duplicates, and maxiStats is enabled */}
+        {maxiStats && sellToken && buyTokens.length > 0 && buyTokens[0] && (showSellStats || showBuyStats || (isTokenEligibleForStats(sellToken) || buyTokens.some(t => isTokenEligibleForStats(t)))) && !duplicateTokenError &&
           !(MAXI_TOKENS.includes(sellToken.a.toLowerCase()) && buyTokens.every(t => t && MAXI_TOKENS.includes(t.a.toLowerCase()))) && (
             <LiquidGlassCard
-              className="mb-6 p-6 bg-black/40 border-white/20"
+              className="mb-4 p-4 bg-white/5 border-white/10"
               borderRadius="12px"
-              shadowIntensity="md"
-              glowIntensity="medium"
+              shadowIntensity="xs"
+              glowIntensity="none"
             >
-              <h3 className="text-white font-semibold mb-4 text-left">PRO PLAN STATS</h3>
+              <h3 className="text-[#FF0080]/90 text-sm font-semibold mb-4 text-left">PRO PLAN STATS</h3>
 
               {/* Content with conditional blur */}
               <div className={(PAYWALL_ENABLED && !hasTokenAccess) ? 'blur-md select-none pointer-events-none' : ''}>
