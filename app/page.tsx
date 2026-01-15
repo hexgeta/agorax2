@@ -82,6 +82,16 @@ export default function Home() {
     }
   }, [isConnecting]);
 
+  // Fallback: Force initialization complete after max timeout to prevent stuck spinner
+  useEffect(() => {
+    const maxTimeout = setTimeout(() => {
+      if (isInitializing) {
+        setIsInitializing(false);
+      }
+    }, 5000); // 5 second max wait
+    return () => clearTimeout(maxTimeout);
+  }, [isInitializing]);
+
   // Chart and form state
   const [sellTokenAddress, setSellTokenAddress] = useState<string | undefined>();
   const [buyTokenAddresses, setBuyTokenAddresses] = useState<(string | undefined)[]>([]);

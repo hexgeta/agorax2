@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { useAccount } from 'wagmi';
@@ -57,8 +58,15 @@ const NavBar = () => {
           <div className="max-w-[1200px] mx-auto">
           <div className="flex items-center justify-between">
             {/* Logo */}
-            <Link href="/" className="text-white font-bold text-xl md:text-3xl">
-              AgoráX
+            <Link href="/" className="flex items-center">
+              <Image
+                src="/logo.svg"
+                alt="AgoráX"
+                width={120}
+                height={32}
+                className="h-6 md:h-8 w-auto"
+                priority
+              />
             </Link>
 
             {/* Desktop Navigation */}

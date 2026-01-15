@@ -42,15 +42,6 @@ const failedLogosHistory = new Set<string>();
 
 // Simplified TokenLogo component that always shows fallback for missing logos
 function TokenLogo({ src, alt, className }: { src: string; alt: string; className: string }) {
-  // Check cache first - don't even try to render if we know it will fail
-  if (src.includes('default.svg') || failedLogosHistory.has(src)) {
-    return (
-      <CircleDollarSign
-        className={`${className} text-[rgba(255, 255, 255, 1)]`}
-      />
-    );
-  }
-
   const [hasError, setHasError] = useState(false);
 
   const handleError = useCallback(() => {
@@ -58,10 +49,14 @@ function TokenLogo({ src, alt, className }: { src: string; alt: string; classNam
     setHasError(true);
   }, [src]);
 
-  if (hasError) {
+  // Check cache first - don't even try to render if we know it will fail
+  if (src.includes('default.svg') || failedLogosHistory.has(src) || hasError) {
     return (
-      <CircleDollarSign
-        className={`${className} text-[rgba(255, 255, 255, 1)]`}
+      <img
+        src="/coin-logos/default.svg"
+        alt={alt}
+        className={className}
+        draggable="false"
       />
     );
   }

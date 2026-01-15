@@ -234,15 +234,6 @@ const failedLogos = new Set<string>();
 
 // Simplified TokenLogo component that always shows fallback for missing logos
 function TokenLogo({ src, alt, className }: { src: string; alt: string; className: string }) {
-  // Check cache first - don't even try to render if we know it will fail
-  if (src.includes('default.svg') || failedLogos.has(src)) {
-    return (
-      <CircleDollarSign
-        className={`${className} text-white`}
-      />
-    );
-  }
-
   const [hasError, setHasError] = useState(false);
 
   const handleError = useCallback(() => {
@@ -250,10 +241,14 @@ function TokenLogo({ src, alt, className }: { src: string; alt: string; classNam
     setHasError(true);
   }, [src]);
 
-  if (hasError) {
+  // Check cache first - don't even try to render if we know it will fail
+  if (src.includes('default.svg') || failedLogos.has(src) || hasError) {
     return (
-      <CircleDollarSign
-        className={`${className} text-white`}
+      <img
+        src="/coin-logos/default.svg"
+        alt={alt}
+        className={className}
+        draggable="false"
       />
     );
   }
@@ -343,6 +338,17 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
   const [statusFilter, setStatusFilter] = useState<'active' | 'expired' | 'completed' | 'cancelled' | 'order-history'>('active');
   // Search filter
   const [searchQuery, setSearchQuery] = useState<string>('');
+  // All or Nothing filter
+  const [aonFilterEnabled, setAonFilterEnabled] = useState<boolean>(false);
+  // Advanced options shelf state (for marketplace)
+  const [showAdvancedOptions, setShowAdvancedOptions] = useState<boolean>(false);
+  // Date filter state
+  type DateFilterPreset = '1h' | '6h' | '12h' | '24h' | '7d' | '30d' | '90d' | 'custom' | null;
+  const [dateFilterPreset, setDateFilterPreset] = useState<DateFilterPreset>(null);
+  const [customDateStart, setCustomDateStart] = useState<Date | undefined>(undefined);
+  const [customDateEnd, setCustomDateEnd] = useState<Date | undefined>(undefined);
+  const [showDatePicker, setShowDatePicker] = useState<boolean>(false);
+  const datePickerRef = useRef<HTMLDivElement>(null);
   const [isClient, setIsClient] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [loadingDots, setLoadingDots] = useState(1);
@@ -518,6 +524,16 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     }
   }, [hasValidPriceData, pricesLoading, isInitialLoad]);
 
+  // Fallback: Force initial load complete after max timeout to prevent stuck spinner
+  useEffect(() => {
+    const maxTimeout = setTimeout(() => {
+      if (isInitialLoad) {
+        setIsInitialLoad(false);
+      }
+    }, 8000); // 8 second max wait for price data
+    return () => clearTimeout(maxTimeout);
+  }, [isInitialLoad]);
+
   // Loading dots animation
   useEffect(() => {
     const interval = setInterval(() => {
@@ -525,6 +541,71 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     }, 500);
     return () => clearInterval(interval);
   }, []);
+
+  // Close date picker when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (datePickerRef.current && !datePickerRef.current.contains(event.target as Node)) {
+        setShowDatePicker(false);
+      }
+    };
+    if (showDatePicker) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showDatePicker]);
+
+  // Helper function to get date range from preset
+  const getDateRangeFromPreset = useCallback((preset: DateFilterPreset): { start: number; end: number } | null => {
+    if (!preset || preset === 'custom') return null;
+
+    const now = Math.floor(Date.now() / 1000);
+    let start: number;
+
+    switch (preset) {
+      case '1h':
+        start = now - (1 * 60 * 60);
+        break;
+      case '6h':
+        start = now - (6 * 60 * 60);
+        break;
+      case '12h':
+        start = now - (12 * 60 * 60);
+        break;
+      case '24h':
+        start = now - (24 * 60 * 60);
+        break;
+      case '7d':
+        start = now - (7 * 24 * 60 * 60);
+        break;
+      case '30d':
+        start = now - (30 * 24 * 60 * 60);
+        break;
+      case '90d':
+        start = now - (90 * 24 * 60 * 60);
+        break;
+      default:
+        return null;
+    }
+
+    return { start, end: now };
+  }, []);
+
+  // Get active date range for filtering
+  const getActiveDateRange = useCallback((): { start: number; end: number } | null => {
+    if (dateFilterPreset && dateFilterPreset !== 'custom') {
+      return getDateRangeFromPreset(dateFilterPreset);
+    }
+    if (dateFilterPreset === 'custom' && customDateStart && customDateEnd) {
+      return {
+        start: Math.floor(customDateStart.getTime() / 1000),
+        end: Math.floor(customDateEnd.getTime() / 1000) + (24 * 60 * 60 - 1) // End of the selected day
+      };
+    }
+    return null;
+  }, [dateFilterPreset, customDateStart, customDateEnd, getDateRangeFromPreset]);
 
   // Handle sorting
   const handleSort = (field: SortField) => {
@@ -1766,6 +1847,22 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
       });
     }
 
+    // Level 5: Filter by All or Nothing
+    if (aonFilterEnabled) {
+      filteredOrders = filteredOrders.filter(order =>
+        order.orderDetailsWithID.orderDetails.allOrNothing === true
+      );
+    }
+
+    // Level 6: Filter by expiration date range
+    const dateRange = getActiveDateRange();
+    if (dateRange) {
+      filteredOrders = filteredOrders.filter(order => {
+        const expirationTime = Number(order.orderDetailsWithID.orderDetails.expirationTime);
+        return expirationTime >= dateRange.start && expirationTime <= dateRange.end;
+      });
+    }
+
     // Apply sorting
     const sortedOrders = [...filteredOrders].sort((a, b) => {
       let comparison = 0;
@@ -1920,7 +2017,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     });
 
     return sortedOrders;
-  }, [allOrders, tokenFilter, ownershipFilter, statusFilter, searchQuery, sortField, sortDirection, tokenPrices, tokenStats, address, purchasedOrderIds, purchaseTransactions]);
+  }, [allOrders, tokenFilter, ownershipFilter, statusFilter, searchQuery, aonFilterEnabled, getActiveDateRange, sortField, sortDirection, tokenPrices, tokenStats, address, purchasedOrderIds, purchaseTransactions]);
 
   // Helper functions
   const formatTimestamp = (timestamp: number) => {
@@ -2199,6 +2296,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
         >
           Cancelled ({getLevel3Orders(tokenFilter, ownershipFilter, 'cancelled').length})
         </button>
+        {/* Hide Tx History on marketplace - only show for user's own deals */}
+        {!isMarketplaceMode && (
         <button
           onClick={() => {
             setStatusFilter('order-history');
@@ -2211,6 +2310,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
         >
           Tx History ({purchaseTransactions.length})
         </button>
+        )}
       </div>
       )}
 
@@ -2246,8 +2346,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
         );
       })()}
 
-      {/* Search Bar - hide in landing page mode */}
-      {!isLandingPageMode && (
+      {/* Search Bar and Filters - hide in landing page mode */}
+      {!isLandingPageMode && !isMarketplaceMode && (
       <div className="mb-6 w-full max-w-[480px]">
         <div className="relative w-full">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500" />
@@ -2259,6 +2359,167 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
             className="w-full pl-10 pr-4 py-2 bg-black/40 border border-white/10 text-white placeholder-white/30 focus:outline-none focus:border-white/30 focus:bg-black/60 transition-colors shadow-sm rounded-lg"
           />
         </div>
+        {/* All or Nothing Filter Toggle */}
+        <div className="flex items-center gap-2 mt-3">
+          <button
+            onClick={() => setAonFilterEnabled(!aonFilterEnabled)}
+            className={`relative w-10 h-5 rounded-full transition-colors ${aonFilterEnabled ? 'bg-white' : 'bg-white/20'}`}
+          >
+            <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${aonFilterEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
+          </button>
+          <span className="text-sm text-white/60">All or Nothing</span>
+        </div>
+      </div>
+      )}
+
+      {/* Advanced Options Shelf - only for marketplace mode */}
+      {!isLandingPageMode && isMarketplaceMode && (
+      <div className="mb-6">
+        {/* Advanced Options Toggle Button */}
+        <button
+          type="button"
+          onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
+          className="flex items-center gap-2 text-white/60 hover:text-white/80 transition-colors text-sm mb-3"
+        >
+          <span>Filters</span>
+          <svg
+            className={`w-4 h-4 transition-transform duration-200 ${showAdvancedOptions ? 'rotate-180' : ''}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+          </svg>
+        </button>
+
+        {/* Advanced Options Content */}
+        {showAdvancedOptions && (
+          <div className="space-y-4 p-0 bg-black/20">
+            {/* Search Bar */}
+            <div className="relative w-full max-w-[480px]">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500" />
+              <input
+                type="text"
+                placeholder="Search tokens..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 bg-black/40 border border-white/10 text-white placeholder-white/30 focus:outline-none focus:border-white/30 focus:bg-black/60 transition-colors shadow-sm rounded-lg"
+              />
+            </div>
+
+            {/* All or Nothing Toggle */}
+            <div className="flex items-center justify-between max-w-[480px]">
+              <div className="flex flex-col">
+                <span className="text-white/70 text-sm">All or Nothing</span>
+                <span className="text-white/40 text-xs">Show only orders that must be filled completely</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAonFilterEnabled(!aonFilterEnabled)}
+                className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${
+                  aonFilterEnabled ? 'bg-green-500' : 'bg-white/20'
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform duration-200 ${
+                    aonFilterEnabled ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* Date Filter */}
+            <div className="space-y-2">
+              <span className="text-white/70 text-sm">Expiration Date</span>
+              <div className="flex flex-wrap items-center gap-2">
+                {(['1h', '6h', '12h', '24h', '7d', '30d', '90d'] as const).map((preset) => (
+                  <button
+                    key={preset}
+                    onClick={() => {
+                      setDateFilterPreset(dateFilterPreset === preset ? null : preset);
+                      setShowDatePicker(false);
+                    }}
+                    className={`px-4 py-2 rounded-full border text-sm font-medium transition-all duration-200 ${
+                      dateFilterPreset === preset
+                        ? 'bg-white text-black border-white'
+                        : 'bg-black/40 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'
+                    }`}
+                  >
+                    {preset}
+                  </button>
+                ))}
+                {/* Custom Date Picker Button */}
+                <div className="relative" ref={datePickerRef}>
+                  <button
+                    onClick={() => {
+                      setShowDatePicker(!showDatePicker);
+                      if (!showDatePicker) {
+                        setDateFilterPreset('custom');
+                      }
+                    }}
+                    className={`px-3 py-2 rounded-full border text-sm font-medium transition-all duration-200 flex items-center gap-1 ${
+                      dateFilterPreset === 'custom'
+                        ? 'bg-white text-black border-white'
+                        : 'bg-black/40 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'
+                    }`}
+                  >
+                    <CalendarDays className="w-4 h-4" />
+                  </button>
+                  {/* Date Picker Dropdown */}
+                  {showDatePicker && (
+                    <div className="absolute top-full mt-2 right-0 z-50 bg-black/95 border border-white/20 rounded-lg p-4 shadow-xl">
+                      <div className="flex flex-col gap-3">
+                        <div>
+                          <label className="text-white/60 text-xs mb-1 block">Start Date</label>
+                          <Calendar
+                            mode="single"
+                            selected={customDateStart}
+                            onSelect={setCustomDateStart}
+                            className="rounded-md border border-white/10"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-white/60 text-xs mb-1 block">End Date</label>
+                          <Calendar
+                            mode="single"
+                            selected={customDateEnd}
+                            onSelect={setCustomDateEnd}
+                            className="rounded-md border border-white/10"
+                          />
+                        </div>
+                        <button
+                          onClick={() => setShowDatePicker(false)}
+                          className="w-full py-2 bg-white text-black rounded-lg text-sm font-medium hover:bg-white/90 transition-colors"
+                        >
+                          Apply
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                {/* Clear Filter Button */}
+                {dateFilterPreset && (
+                  <button
+                    onClick={() => {
+                      setDateFilterPreset(null);
+                      setCustomDateStart(undefined);
+                      setCustomDateEnd(undefined);
+                      setShowDatePicker(false);
+                    }}
+                    className="px-3 py-2 text-red-400 hover:text-red-300 text-sm transition-colors"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              {dateFilterPreset === 'custom' && customDateStart && customDateEnd && (
+                <div className="text-white/50 text-xs mt-1">
+                  {customDateStart.toLocaleDateString()} - {customDateEnd.toLocaleDateString()}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
       )}
       {/* Render separate OrderHistoryTable component for order history */}
@@ -2283,7 +2544,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
           ) : (
             <div className="w-full min-w-[800px] text-lg">
               <div
-                className={`grid grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(80px,1fr)_minmax(100px,1.2fr)_minmax(80px,1fr)_minmax(80px,1fr)_minmax(100px,auto)] items-center gap-4 pb-4 border-b border-white/10 ${expandedPositions.size > 0 ? 'opacity-90' : 'opacity-100'
+                className={`grid grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(80px,1fr)_minmax(100px,1.2fr)_minmax(80px,1fr)_minmax(80px,0.8fr)_minmax(80px,1fr)_minmax(100px,auto)] items-center gap-4 pb-4 border-b border-white/10 ${expandedPositions.size > 0 ? 'opacity-90' : 'opacity-100'
                   }`}
               >
                 {/* COLUMN 1: Token For Sale */}
@@ -2330,6 +2591,11 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                 >
                   Status {sortField === 'status' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
                 </button>
+
+                {/* COLUMN 6: Tags */}
+                <div className="text-sm font-medium text-center text-white/60">
+                  Tags
+                </div>
 
                 {/* COLUMN 7: Expires / Expired */}
                 <button
@@ -2510,7 +2776,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
 
                   return (
                     <div key={`${orderId}-${tokenFilter}-${ownershipFilter}-${statusFilter}`} data-order-id={orderId}
-                      className={`grid grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(80px,1fr)_minmax(100px,1.2fr)_minmax(80px,1fr)_minmax(80px,1fr)_minmax(100px,auto)] items-start gap-4 py-8 ${index < displayOrders.length - 1 && !expandedPositions.has(orderId) ? 'border-b border-white/10' : ''
+                      className={`grid grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(80px,1fr)_minmax(100px,1.2fr)_minmax(80px,1fr)_minmax(80px,0.8fr)_minmax(80px,1fr)_minmax(100px,auto)] items-start gap-4 py-8 ${index < displayOrders.length - 1 && !expandedPositions.has(orderId) ? 'border-b border-white/10' : ''
                         }`}
                     >
                       {/* COLUMN 1: Token For Sale Content */}
@@ -2738,6 +3004,15 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                           }`}>
                           {getStatusText(order)}
                         </span>
+                      </div>
+
+                      {/* COLUMN 6: Tags Content */}
+                      <div className="text-center min-w-0 mt-1">
+                        {order.orderDetailsWithID.orderDetails.allOrNothing && (
+                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-purple-500/20 text-purple-400 border border-purple-400">
+                            AON
+                          </span>
+                        )}
                       </div>
 
                       {/* COLUMN 7: Expires Content */}
