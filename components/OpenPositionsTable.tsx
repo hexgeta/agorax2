@@ -2324,31 +2324,29 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
           Tx History ({purchaseTransactions.length})
         </button>
         )}
+        {/* Filters Toggle Button - inline with tabs (for both marketplace and non-marketplace) */}
+        <button
+          type="button"
+          onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
+          className="flex items-center gap-1.5 text-white/50 hover:text-white/80 transition-colors text-xs whitespace-nowrap py-2"
+        >
+          <span>Filters</span>
+          <svg
+            className={`w-3 h-3 transition-transform duration-200 ${showAdvancedOptions ? 'rotate-180' : ''}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+          </svg>
+        </button>
       </div>
       )}
 
-      {/* Cancel All Expired Button - Show only in Expired tab for My Deals */}
-      {/* Advanced Options Shelf - for My Orders (non-marketplace, non-landing) */}
+      {/* Filters Content - for My Orders (non-marketplace, non-landing) */}
       {!isLandingPageMode && !isMarketplaceMode && (
         <div className="mb-6">
-          {/* Advanced Toggle Button */}
-          <button
-            type="button"
-            onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
-            className="flex items-center ml-4 gap-2 text-white/60 hover:text-white/80 transition-colors text-sm mb-3"
-          >
-            <span>Advanced</span>
-            <svg
-              className={`w-4 h-4 transition-transform duration-200 ${showAdvancedOptions ? 'rotate-180' : ''}`}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-            </svg>
-          </button>
-
-          {/* Advanced Options Content */}
+          {/* Filters Content */}
           {showAdvancedOptions && (
             <div className="space-y-4">
               {/* Cancel All Expired Orders - only show when on expired tab */}
@@ -2412,27 +2410,10 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
         </div>
       )}
 
-      {/* Advanced Options Shelf - only for marketplace mode */}
+      {/* Filters Content - only for marketplace mode */}
       {!isLandingPageMode && isMarketplaceMode && (
       <div className="mb-6">
-        {/* Advanced Options Toggle Button */}
-        <button
-          type="button"
-          onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
-          className="flex items-center gap-2 text-white/60 hover:text-white/80 transition-colors text-sm mb-3"
-        >
-          <span>Filters</span>
-          <svg
-            className={`w-4 h-4 transition-transform duration-200 ${showAdvancedOptions ? 'rotate-180' : ''}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-          </svg>
-        </button>
-
-        {/* Advanced Options Content */}
+        {/* Filters Content */}
         {showAdvancedOptions && (
           <div className="space-y-4 p-0 bg-black/20">
             {/* Search Bar */}

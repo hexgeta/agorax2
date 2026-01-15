@@ -634,6 +634,10 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                       // Fall back to the base priceToDisplay if calculation failed
                       const priceForThisToken = displayTokenPrice || priceToDisplay;
 
+                      // When inverted, price is "X sell_tokens per 1 buy_token", so show sell token as unit
+                      // When not inverted, price is "X buy_tokens per 1 sell_token", so show buy token as unit
+                      const unitTokenInfo = invertPriceDisplay ? sellTokenInfo : tokenInfo;
+
                       return (
                         <>
                           <span className="text-xs text-white/70 whitespace-nowrap flex items-center gap-1">
@@ -655,10 +659,10 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                               />
                             </span>
                             <span className="text-xs text-[#FF0080]">
-                              {formatTokenTicker(tokenInfo.ticker)}
+                              {formatTokenTicker(unitTokenInfo?.ticker || '')}
                             </span>
                             <TokenLogo
-                              ticker={tokenInfo.ticker}
+                              ticker={unitTokenInfo?.ticker || ''}
                               className="w-[16px] h-[16px] object-contain"
                               style={{ filter: 'brightness(0) saturate(100%) invert(47%) sepia(99%) saturate(6544%) hue-rotate(312deg) brightness(103%) contrast(103%)' }}
                             />
@@ -741,10 +745,10 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                           />
                         </span>
                         <span className="text-xs" style={{ color: lineColor }}>
-                          {formatTokenTicker(tokenInfo.ticker)}
+                          {formatTokenTicker(invertPriceDisplay ? (sellTokenInfo?.ticker || '') : tokenInfo.ticker)}
                         </span>
                         <TokenLogo
-                          ticker={tokenInfo.ticker}
+                          ticker={invertPriceDisplay ? (sellTokenInfo?.ticker || '') : tokenInfo.ticker}
                           className="w-[16px] h-[16px] object-contain"
                         />
                       </div>
