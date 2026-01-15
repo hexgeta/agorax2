@@ -302,15 +302,23 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
     ? 1 / limitOrderPrice
     : limitOrderPrice;
 
-  // Calculate visual scale for the price display
-  // Use a symmetric percentage range around current price for accurate % representation
-  const minPrice = (displayCurrentPrice || 0) * 0.7; // 30% below current price
-  const maxPrice = (displayCurrentPrice || 0) * 1.3; // 30% above current price
-  const priceRange = maxPrice - minPrice || 1;
+  // NEW: Use percentage-based positioning
+  // The chart shows -30% to +30% from market price
+  // Current price (market) is always at 50% (center)
+  // This allows multiple tokens with different absolute prices to be compared
+  const percentageRangeMin = -30; // -30% from market
+  const percentageRangeMax = 30;  // +30% from market
+  const percentageRange = percentageRangeMax - percentageRangeMin; // 60%
 
-  const currentPricePosition = displayCurrentPrice
-    ? ((displayCurrentPrice - minPrice) / priceRange) * 100
-    : 50;
+  // Convert a percentage deviation to a Y position (0-100%)
+  const percentageToPosition = (percentDeviation: number): number => {
+    // Clamp to range and convert to 0-100 scale
+    const clampedPercent = Math.max(percentageRangeMin, Math.min(percentageRangeMax, percentDeviation));
+    return ((clampedPercent - percentageRangeMin) / percentageRange) * 100;
+  };
+
+  // Current price is always at 0% deviation = center of chart
+  const currentPricePosition = percentageToPosition(0); // Always 50%
 
   // Use draggedPrice during drag and briefly after for smooth rendering
   const basePriceToDisplay = (isDragging || justReleasedRef.current) && draggedPrice
@@ -322,8 +330,12 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
     ? 1 / basePriceToDisplay
     : basePriceToDisplay;
 
+  // Calculate limit price position using percentage-based system
+  const limitPricePercentDeviation = displayCurrentPrice && priceToDisplay
+    ? ((priceToDisplay - displayCurrentPrice) / displayCurrentPrice) * 100
+    : 0;
   const limitPricePosition = priceToDisplay
-    ? ((priceToDisplay - minPrice) / priceRange) * 100
+    ? percentageToPosition(limitPricePercentDeviation)
     : null;
 
   // Drag handlers for limit price line (bound mode)
@@ -378,17 +390,35 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
 
       const rect = containerRef.current.getBoundingClientRect();
       const y = e.clientY - rect.top;
-      const percentage = Math.max(0, Math.min(100, ((rect.height - y) / rect.height) * 100));
+      // Y position as 0-100% (bottom = 0, top = 100)
+      const positionPercent = Math.max(0, Math.min(100, ((rect.height - y) / rect.height) * 100));
 
-      // Use display price for calculations
-      const displayPrice = invertPriceDisplay && currentPrice > 0 ? 1 / currentPrice : currentPrice;
+      // Convert position to percentage deviation from market price
+      // Position 0% = -30% deviation, Position 50% = 0% deviation, Position 100% = +30% deviation
+      const percentDeviation = percentageRangeMin + (positionPercent / 100) * percentageRange;
 
-      // Calculate price range dynamically based on display price
-      const minPriceCalc = displayPrice * 0.7;
-      const maxPriceCalc = displayPrice * 1.3;
-      const priceRangeCalc = maxPriceCalc - minPriceCalc;
+      // Get the appropriate market price for this line
+      let marketPrice: number;
+      if (draggingLineIndex !== null && !pricesBound) {
+        // For individual lines, use that token's market price
+        const tokenAddress = buyTokenAddresses[draggingLineIndex]?.toLowerCase();
+        const tokenUsdPrice = tokenAddress ? buyTokenUsdPrices[tokenAddress] : 0;
+        if (tokenUsdPrice && sellTokenUsdPrice) {
+          // Calculate market price in the display direction
+          marketPrice = invertPriceDisplay
+            ? tokenUsdPrice / sellTokenUsdPrice  // inverted: buy/sell
+            : sellTokenUsdPrice / tokenUsdPrice; // normal: sell/buy
+        } else {
+          // Fallback to first token market price
+          marketPrice = invertPriceDisplay && currentPrice > 0 ? 1 / currentPrice : currentPrice;
+        }
+      } else {
+        // For bound mode or main line, use the first token's market price
+        marketPrice = invertPriceDisplay && currentPrice > 0 ? 1 / currentPrice : currentPrice;
+      }
 
-      const newDisplayPrice = minPriceCalc + (percentage / 100) * priceRangeCalc;
+      // Calculate the new display price based on percentage deviation from market
+      const newDisplayPrice = marketPrice * (1 + percentDeviation / 100);
 
       if (newDisplayPrice > 0) {
         // Convert back to base price before storing/sending
@@ -408,7 +438,7 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
         }
       }
     });
-  }, [isDragging, currentPrice, invertPriceDisplay, onLimitPriceChange, onIndividualLimitPriceChange, draggingLineIndex]);
+  }, [isDragging, currentPrice, invertPriceDisplay, onLimitPriceChange, onIndividualLimitPriceChange, draggingLineIndex, percentageRangeMin, percentageRange, pricesBound, buyTokenAddresses, buyTokenUsdPrices, sellTokenUsdPrice]);
 
   const handleMouseUp = useCallback(() => {
     // Cancel any pending animation frame
@@ -511,16 +541,10 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
             ref={containerRef}
             className="relative flex-1 bg-black/10 rounded select-none"
           >
-            {/* Y-axis tick marks */}
+            {/* Y-axis tick marks - using percentage-based positioning */}
             {[-30, -25, -20, -15, -10, -5, 0, 5, 10, 15, 20, 25, 30].map((percentDiff) => {
-              // Calculate the actual price at this percentage difference from display current price
-              const priceAtPercent = displayCurrentPrice ? displayCurrentPrice * (1 + percentDiff / 100) : 0;
-
-              // Calculate where this price would be positioned in the chart range
-              const position = ((priceAtPercent - minPrice) / priceRange) * 100;
-
-              // Only show if within bounds
-              if (position < 0 || position > 100) return null;
+              // Use percentage-based positioning directly
+              const position = percentageToPosition(percentDiff);
 
               return (
                 <div
@@ -680,9 +704,18 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
 
                 // Get the individual limit price for this token
                 // Use dragged price if this line is being dragged
-                const baseIndividualPrice = (isDragging && draggingLineIndex === index && draggedPrice)
+                // Fall back to calculating from the main limit price if individual price not set
+                let baseIndividualPrice = (isDragging && draggingLineIndex === index && draggedPrice)
                   ? draggedPrice
                   : individualLimitPrices[index];
+
+                // If no individual price, try to calculate from the main limit price
+                if (!baseIndividualPrice && limitOrderPrice) {
+                  const tokenAddress = tokenInfo?.a;
+                  const calculatedPrice = calculateLimitPriceForToken(tokenAddress);
+                  baseIndividualPrice = calculatedPrice || undefined;
+                }
+
                 if (!baseIndividualPrice) return null;
 
                 // Apply inversion if needed
@@ -690,10 +723,21 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                   ? 1 / baseIndividualPrice
                   : baseIndividualPrice;
 
-                // Calculate position for this price line
-                const individualPricePosition = displayIndividualPrice
-                  ? ((displayIndividualPrice - minPrice) / priceRange) * 100
+                // Calculate THIS token's market price to determine % deviation
+                const tokenAddress = tokenInfo?.a?.toLowerCase();
+                const tokenMarketPrice = tokenAddress && sellTokenUsdPrice && buyTokenUsdPrices[tokenAddress]
+                  ? (invertPriceDisplay
+                      ? buyTokenUsdPrices[tokenAddress] / sellTokenUsdPrice  // inverted: buy/sell
+                      : sellTokenUsdPrice / buyTokenUsdPrices[tokenAddress]) // normal: sell/buy
                   : null;
+
+                // Calculate percentage deviation from this token's market price
+                const percentDeviation = tokenMarketPrice && displayIndividualPrice
+                  ? ((displayIndividualPrice - tokenMarketPrice) / tokenMarketPrice) * 100
+                  : 0;
+
+                // Use percentage-based positioning
+                const individualPricePosition = percentageToPosition(percentDeviation);
 
                 if (individualPricePosition === null) return null;
 

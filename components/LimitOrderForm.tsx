@@ -1104,9 +1104,6 @@ export function LimitOrderForm({
                 }
               }
             }
-            if (onIndividualLimitPricesChange) {
-              onIndividualLimitPricesChange(newPrices);
-            }
             return newPrices;
           });
         }
@@ -1326,9 +1323,6 @@ export function LimitOrderForm({
         setIndividualLimitPrices(prev => {
           const newPrices = [...prev];
           newPrices[0] = externalLimitPrice;
-          if (onIndividualLimitPricesChange) {
-            onIndividualLimitPricesChange(newPrices);
-          }
           return newPrices;
         });
       }
@@ -2024,9 +2018,6 @@ export function LimitOrderForm({
       setIndividualLimitPrices(prev => {
         const newPrices = [...prev];
         newPrices[0] = newPrice;
-        if (onIndividualLimitPricesChange) {
-          onIndividualLimitPricesChange(newPrices);
-        }
         return newPrices;
       });
     }
@@ -2095,9 +2086,6 @@ export function LimitOrderForm({
       setIndividualLimitPrices(prev => {
         const newPrices = [...prev];
         newPrices[0] = backingPrice;
-        if (onIndividualLimitPricesChange) {
-          onIndividualLimitPricesChange(newPrices);
-        }
         return newPrices;
       });
     }
@@ -2132,10 +2120,6 @@ export function LimitOrderForm({
     setIndividualLimitPrices(prev => {
       const newPrices = [...prev];
       newPrices[tokenIndex] = newPrice;
-      // Immediately notify parent
-      if (onIndividualLimitPricesChange) {
-        onIndividualLimitPricesChange(newPrices);
-      }
       return newPrices;
     });
 
@@ -2176,13 +2160,10 @@ export function LimitOrderForm({
 
     if (!limitPrice) return;
 
-    // Update individual limit prices and notify parent
+    // Update individual limit prices
     setIndividualLimitPrices(prev => {
       const newPrices = [...prev];
       newPrices[tokenIndex] = limitPrice!;
-      if (onIndividualLimitPricesChange) {
-        onIndividualLimitPricesChange(newPrices);
-      }
       return newPrices;
     });
 
@@ -2429,9 +2410,6 @@ export function LimitOrderForm({
           setIndividualLimitPrices(prev => {
             const newPrices = [...prev];
             newPrices[index] = marketPrice;
-            if (onIndividualLimitPricesChange) {
-              onIndividualLimitPricesChange(newPrices);
-            }
             return newPrices;
           });
         }
