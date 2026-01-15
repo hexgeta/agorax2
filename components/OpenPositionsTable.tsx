@@ -2309,8 +2309,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
         >
           Cancelled ({getLevel3Orders(tokenFilter, ownershipFilter, 'cancelled').length})
         </button>
-        {/* Hide Tx History on marketplace - only show for user's own deals */}
-        {!isMarketplaceMode && (
+        {/* Tx History tab - hidden for now */}
+        {false && (
         <button
           onClick={() => {
             setStatusFilter('order-history');
@@ -2328,7 +2328,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
         <button
           type="button"
           onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
-          className="flex items-center gap-1.5 text-white/50 hover:text-white/80 transition-colors text-xs whitespace-nowrap py-2"
+          className="flex items-center gap-1.5 text-white/50 hover:text-white/80 transition-colors text-sm whitespace-nowrap py-2"
         >
           <span>Filters</span>
           <svg
