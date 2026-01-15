@@ -34,6 +34,43 @@ w3m-connect-button,
   overflow: hidden !important;
 }
 
+/* Calendar dropdown styling for react-day-picker */
+.rdp select,
+.rdp-dropdown {
+  background-color: #000000 !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  border-radius: 6px !important;
+  padding: 4px 8px !important;
+  font-size: 14px !important;
+  cursor: pointer !important;
+  outline: none !important;
+}
+
+.rdp select:focus,
+.rdp-dropdown:focus {
+  border-color: rgba(255, 255, 255, 0.5) !important;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.1) !important;
+}
+
+.rdp select option,
+.rdp-dropdown option {
+  background-color: #000000 !important;
+  color: #ffffff !important;
+  padding: 8px !important;
+}
+
+.rdp select option:checked,
+.rdp-dropdown option:checked {
+  background-color: #3b82f6 !important;
+  color: #ffffff !important;
+}
+
+.rdp select option:hover,
+.rdp-dropdown option:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
 /* No-select utility classes */
 .no-select {
   @apply select-none !important;

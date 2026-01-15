@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { createPortal } from 'react-dom';
 import NumberFlow from '@number-flow/react';
 import { useAccount, useBalance, usePublicClient } from 'wagmi';
 import { TOKEN_CONSTANTS } from '@/constants/crypto';
@@ -3377,27 +3376,25 @@ export function LimitOrderForm({
             {/* Calendar Date Picker Button */}
             <div ref={datePickerRef} className="relative date-picker-container flex-1">
               <button
-                onClick={() => setShowDatePicker(!showDatePicker)}
+                onClick={() => {
+                  const opening = !showDatePicker;
+                  setShowDatePicker(opening);
+                  // Default to today + 10 minutes when opening if no date selected
+                  if (opening && !selectedDate) {
+                    const defaultDate = new Date(Date.now() + 10 * 60 * 1000);
+                    setSelectedDate(defaultDate);
+                  }
+                }}
                 className="w-full py-1.5 text-xs bg-black/40 text-white border border-white/10 hover:bg-white/10 hover:border-white/30 transition-all h-[32px] flex items-center justify-center rounded-full"
                 title="Select specific date"
               >
                 <CalendarIcon className="w-3 h-3" />
               </button>
 
-            </div>
-
-            {/* Calendar Popup - Portal to body to escape overflow:hidden */}
-            {showDatePicker && typeof document !== 'undefined' && createPortal(
-              <div
-                className="fixed inset-0 z-[9998]"
-                onClick={() => setShowDatePicker(false)}
-              >
+              {/* Calendar Popup - positioned absolutely like dropdowns */}
+              {showDatePicker && (
                 <div
-                  className="fixed z-[9999] w-[340px] bg-black border border-white/30 rounded-lg shadow-xl overflow-hidden animate-in fade-in duration-150"
-                  style={{
-                    top: datePickerRef.current ? datePickerRef.current.getBoundingClientRect().bottom + 8 : 0,
-                    right: datePickerRef.current ? window.innerWidth - datePickerRef.current.getBoundingClientRect().right : 0,
-                  }}
+                  className="absolute top-full right-0 mt-2 w-[340px] bg-black border border-white/30 rounded-lg shadow-xl overflow-hidden animate-in fade-in duration-150 z-[100]"
                   onClick={(e) => e.stopPropagation()}
                   onMouseDown={(e) => e.stopPropagation()}
                 >
@@ -3413,7 +3410,7 @@ export function LimitOrderForm({
                     }}
                   />
                   <div className="px-3 pb-3 border-t border-white/10 pt-3">
-                    <label className="text-white/60 text-xs mb-2 block">Time</label>
+                    <label className="text-white/60 text-xs mb-2 block">Time (UTC)</label>
                     <input
                       type="time"
                       step="1"
@@ -3423,9 +3420,7 @@ export function LimitOrderForm({
                     />
                   </div>
                 </div>
-              </div>,
-              document.body
-            )}
+              )}
           </div>
         </LiquidGlassCard>
 

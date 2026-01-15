@@ -168,11 +168,10 @@ const NavBar = () => {
       </nav>
 
       {/* Mobile Menu Overlay - hidden on desktop via state, not media query to avoid flash */}
+      {/* Only render when open to prevent invisible elements from intercepting clicks */}
+      {mobileMenuOpen && (
       <div
-        className={`fixed inset-0 z-[199] transition-opacity duration-300 ease-out ${mobileMenuOpen
-          ? 'opacity-100 pointer-events-auto'
-          : 'opacity-0 pointer-events-none'
-          }`}
+        className="fixed inset-0 z-[199] animate-in fade-in duration-150"
         aria-hidden={!mobileMenuOpen}
       >
         {/* Backdrop */}
@@ -183,8 +182,7 @@ const NavBar = () => {
 
         {/* Menu Content */}
         <div
-          className={`absolute inset-x-0 top-[73px] bottom-0 flex flex-col items-center justify-start pt-12 gap-6 transition-transform duration-300 ease-out ${mobileMenuOpen ? 'translate-y-0' : '-translate-y-8'
-            }`}
+          className="absolute inset-x-0 top-[73px] bottom-0 flex flex-col items-center justify-start pt-12 gap-6 animate-in slide-in-from-top-2 duration-150"
         >
           {/* Navigation Links */}
           <nav className="flex flex-col items-center gap-2 w-full px-8">
@@ -224,6 +222,7 @@ const NavBar = () => {
           </div>
         </div>
       </div>
+      )}
     </>
   );
 };
