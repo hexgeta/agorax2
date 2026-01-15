@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import NumberFlow from '@number-flow/react';
 import { useAccount, useBalance, usePublicClient } from 'wagmi';
 import { TOKEN_CONSTANTS } from '@/constants/crypto';
@@ -1078,6 +1079,35 @@ export function LimitOrderForm({
             return newPrices;
           });
         }
+        // Case 3: Already unbound but individualLimitPrices is empty (e.g., page reload with unbound state)
+        else if (individualLimitPrices.length === 0 || individualLimitPrices.every(p => p === undefined)) {
+          const newIndividualPrices: (number | undefined)[] = buyTokens.map((token, index) => {
+            if (!token) return undefined;
+
+            // First token uses the main limit price
+            if (index === 0) {
+              return limitPriceNum;
+            }
+
+            // For additional tokens, calculate based on USD if possible
+            const firstBuyTokenUsdPrice = buyTokens[0] ? getPrice(buyTokens[0].a) : 0;
+            const tokenUsdPrice = getPrice(token.a);
+
+            if (sellTokenUsdPrice > 0 && firstBuyTokenUsdPrice > 0 && tokenUsdPrice > 0) {
+              const marketPriceForFirst = sellTokenUsdPrice / firstBuyTokenUsdPrice;
+              const premiumMultiplier = limitPriceNum / marketPriceForFirst;
+              const marketPriceForThis = sellTokenUsdPrice / tokenUsdPrice;
+              return marketPriceForThis * premiumMultiplier;
+            }
+
+            return limitPriceNum;
+          });
+
+          setIndividualLimitPrices(newIndividualPrices);
+          if (onIndividualLimitPricesChange) {
+            onIndividualLimitPricesChange(newIndividualPrices);
+          }
+        }
       }
     }
 
@@ -1085,7 +1115,7 @@ export function LimitOrderForm({
     prevPricesBoundRef.current = pricesBound;
     prevBuyTokensLengthRef.current = buyTokens.length;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pricesBound, buyTokens.length, priorityPrices, sellToken?.a]);
+  }, [pricesBound, buyTokens.length, priorityPrices, sellToken?.a, individualLimitPrices.length]);
 
   // Recalculate percentage when invert display changes
   useEffect(() => {
@@ -1711,6 +1741,22 @@ export function LimitOrderForm({
   const handleDateSelect = (date: Date | undefined) => {
     if (!date) return;
 
+    // Preserve the current time from selectedDate if it exists
+    if (selectedDate) {
+      date.setHours(selectedDate.getHours(), selectedDate.getMinutes(), selectedDate.getSeconds());
+    } else {
+      // For new selection, default to 1 hour from now if selecting today
+      const now = new Date();
+      const isToday = date.toDateString() === now.toDateString();
+      if (isToday) {
+        const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000);
+        date.setHours(oneHourLater.getHours(), oneHourLater.getMinutes(), oneHourLater.getSeconds());
+      } else {
+        // For future dates, default to noon
+        date.setHours(12, 0, 0);
+      }
+    }
+
     const now = new Date();
     const diffTime = date.getTime() - now.getTime();
     const diffSeconds = diffTime / 1000;
@@ -1718,7 +1764,6 @@ export function LimitOrderForm({
 
     if (diffSeconds < MIN_EXPIRATION_SECONDS) {
       setExpirationError(`Selected date must be at least ${MIN_EXPIRATION_SECONDS} seconds in the future`);
-      setShowDatePicker(false);
       return;
     }
 
@@ -1730,7 +1775,37 @@ export function LimitOrderForm({
       setExpirationDays(diffDays);
       setExpirationInput(diffDays.toString());
     }
-    setShowDatePicker(false);
+  };
+
+  const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const timeValue = e.target.value;
+    if (!timeValue) return;
+
+    const [hours, minutes, seconds] = timeValue.split(':').map(Number);
+
+    // Use selectedDate if exists, otherwise use today
+    const newDate = selectedDate ? new Date(selectedDate) : new Date();
+    newDate.setHours(hours, minutes, seconds || 0);
+
+    const now = new Date();
+    const diffTime = newDate.getTime() - now.getTime();
+    const diffSeconds = diffTime / 1000;
+    const MIN_EXPIRATION_SECONDS = 10;
+
+    // Always update the selected date, but show warning if in past
+    setSelectedDate(newDate);
+
+    if (diffSeconds < MIN_EXPIRATION_SECONDS) {
+      setExpirationError(`Selected time must be at least ${MIN_EXPIRATION_SECONDS} seconds in the future`);
+    } else {
+      setExpirationError(null);
+    }
+
+    const diffDays = diffTime / (1000 * 60 * 60 * 24);
+    if (diffDays > 0) {
+      setExpirationDays(diffDays);
+      setExpirationInput(diffDays.toString());
+    }
   };
 
   // Handle token changes and maintain price relationship
@@ -3309,28 +3384,48 @@ export function LimitOrderForm({
                 <CalendarIcon className="w-3 h-3" />
               </button>
 
-              {/* Calendar Popup */}
-              {showDatePicker && (
-                <div className="absolute top-full right-0 mt-2 z-[100] w-[440px] bg-black border-2 border-white/50 rounded-md">
+            </div>
+
+            {/* Calendar Popup - Portal to body to escape overflow:hidden */}
+            {showDatePicker && typeof document !== 'undefined' && createPortal(
+              <div
+                className="fixed inset-0 z-[9998]"
+                onClick={() => setShowDatePicker(false)}
+              >
+                <div
+                  className="fixed z-[9999] w-[340px] bg-black border border-white/30 rounded-lg shadow-xl overflow-hidden animate-in fade-in duration-150"
+                  style={{
+                    top: datePickerRef.current ? datePickerRef.current.getBoundingClientRect().bottom + 8 : 0,
+                    right: datePickerRef.current ? window.innerWidth - datePickerRef.current.getBoundingClientRect().right : 0,
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
                   <Calendar
                     mode="single"
                     selected={selectedDate}
                     onSelect={handleDateSelect}
-                    disabled={(date: Date) => date < new Date()}
-                    classNames={{
-                      caption_label: "text-white",
-                      nav_button: "text-white border-white/30 hover:bg-white/20",
-                      head_cell: "text-white/70",
-                      day: "text-white hover:bg-white/20",
-                      day_selected: "bg-white text-black font-bold hover:bg-white hover:text-black",
-                      day_today: "bg-white/20 text-white font-semibold",
-                      day_outside: "text-white/20 opacity-40",
-                      day_disabled: "text-white/10 opacity-20 cursor-not-allowed",
+                    captionLayout="dropdown"
+                    disabled={(date: Date) => {
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      return date < today;
                     }}
                   />
+                  <div className="px-3 pb-3 border-t border-white/10 pt-3">
+                    <label className="text-white/60 text-xs mb-2 block">Time</label>
+                    <input
+                      type="time"
+                      step="1"
+                      value={selectedDate ? `${String(selectedDate.getHours()).padStart(2, '0')}:${String(selectedDate.getMinutes()).padStart(2, '0')}:${String(selectedDate.getSeconds()).padStart(2, '0')}` : ''}
+                      onChange={handleTimeChange}
+                      className="w-full bg-black text-white border border-white/20 rounded-md px-3 py-2 text-sm appearance-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none focus:outline-none focus:border-white/50 selection:bg-white/30 selection:text-white [&::-webkit-datetime-edit-hour-field:focus]:bg-white/30 [&::-webkit-datetime-edit-minute-field:focus]:bg-white/30 [&::-webkit-datetime-edit-second-field:focus]:bg-white/30 [&::-webkit-datetime-edit-hour-field:focus]:text-white [&::-webkit-datetime-edit-minute-field:focus]:text-white [&::-webkit-datetime-edit-second-field:focus]:text-white"
+                    />
+                  </div>
                 </div>
-              )}
-            </div>
+              </div>,
+              document.body
+            )}
           </div>
         </LiquidGlassCard>
 
@@ -3445,15 +3540,15 @@ export function LimitOrderForm({
                 {showAdvancedOptions && (
                   <div className="mt-3 space-y-3">
                     {/* All or Nothing Toggle */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex flex-col">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex flex-col min-w-0">
                         <span className="text-white/70 text-sm">All or Nothing?</span>
                         <span className="text-white/40 text-xs">Order must be filled completely in one transaction</span>
                       </div>
                       <button
                         type="button"
                         onClick={() => setAllOrNothing(!allOrNothing)}
-                        className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${
+                        className={`relative w-11 h-6 flex-shrink-0 rounded-full transition-colors duration-200 ${
                           allOrNothing ? 'bg-green-500' : 'bg-white/20'
                         }`}
                       >
@@ -3466,15 +3561,15 @@ export function LimitOrderForm({
                     </div>
 
                     {/* Maxi Stats Toggle */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex flex-col">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex flex-col min-w-0">
                         <span className="text-white/70 text-sm">Maxi stats</span>
                         <span className="text-white/40 text-xs">Show pro stats and backing data for MAXI tokens</span>
                       </div>
                       <button
                         type="button"
                         onClick={() => setMaxiStats(!maxiStats)}
-                        className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${
+                        className={`relative w-11 h-6 flex-shrink-0 rounded-full transition-colors duration-200 ${
                           maxiStats ? 'bg-green-500' : 'bg-white/20'
                         }`}
                       >
@@ -3487,15 +3582,15 @@ export function LimitOrderForm({
                     </div>
 
                     {/* Show More Tokens Toggle */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex flex-col">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex flex-col min-w-0">
                         <span className="text-white/70 text-sm">Show more tokens</span>
-                        <span className="text-white/40 text-xs">Display all tokens in sell dropdown (including non-whitelisted)</span>
+                        <span className="text-white/40 text-xs">Display more sell tokens & enable custom tokens</span>
                       </div>
                       <button
                         type="button"
                         onClick={() => setShowMoreTokens(!showMoreTokens)}
-                        className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${
+                        className={`relative w-11 h-6 flex-shrink-0 rounded-full transition-colors duration-200 ${
                           showMoreTokens ? 'bg-green-500' : 'bg-white/20'
                         }`}
                       >
@@ -3513,9 +3608,15 @@ export function LimitOrderForm({
           </LiquidGlassCard>
         )}
 
-        {/* Pro Plan - Show token stats when tokens are selected, at least one is eligible for stats, no duplicates, and maxiStats is enabled */}
-        {maxiStats && sellToken && buyTokens.length > 0 && buyTokens[0] && (showSellStats || showBuyStats || (isTokenEligibleForStats(sellToken) || buyTokens.some(t => isTokenEligibleForStats(t)))) && !duplicateTokenError &&
-          !(MAXI_TOKENS.includes(sellToken.a.toLowerCase()) && buyTokens.every(t => t && MAXI_TOKENS.includes(t.a.toLowerCase()))) && (
+        {/* Pro Plan - Show when maxiStats is enabled:
+            - If user has NO access: always show (blurred) to tease the feature
+            - If user HAS access: only show when MAXI tokens are in buy or sell */}
+        {maxiStats && (
+          // Show if user doesn't have access (blurred teaser) OR if user has access and MAXI tokens are involved
+          (PAYWALL_ENABLED && !hasTokenAccess) ||
+          (hasTokenAccess && sellToken && buyTokens.length > 0 && buyTokens[0] && (showSellStats || showBuyStats || (isTokenEligibleForStats(sellToken) || buyTokens.some(t => isTokenEligibleForStats(t)))) && !duplicateTokenError &&
+            !(MAXI_TOKENS.includes(sellToken.a.toLowerCase()) && buyTokens.every(t => t && MAXI_TOKENS.includes(t.a.toLowerCase()))))
+        ) && (
             <LiquidGlassCard
               className="mb-4 p-4 bg-white/5 border-white/10"
               borderRadius="12px"
@@ -3797,12 +3898,19 @@ export function LimitOrderForm({
 
               {/* Paywall Overlay with Lock Button */}
               {(PAYWALL_ENABLED && !hasTokenAccess) && (
-                <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] rounded-xl flex items-center justify-center z-10">
+                <div
+                  className="absolute inset-0 bg-black/40 backdrop-blur-[2px] rounded-xl flex items-center justify-center z-10"
+                  onClick={(e) => e.stopPropagation()}
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
                   <button
+                    type="button"
                     onClick={(e) => {
                       e.stopPropagation();
+                      e.preventDefault();
                       setShowPaywallModal(true);
                     }}
+                    onPointerDown={(e) => e.stopPropagation()}
                     className="flex flex-col items-center space-y-3 p-6 rounded-lg bg-black/60 hover:bg-white/5 transition-all border border-white/10"
                   >
                     <Lock className="w-12 h-12 text-white transition-colors" />

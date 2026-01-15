@@ -15,18 +15,22 @@ interface LimitOrderChartProps {
   buyTokenAddresses?: (string | undefined)[];
   limitOrderPrice?: number;
   invertPriceDisplay?: boolean;
+  pricesBound?: boolean;
+  individualLimitPrices?: (number | undefined)[];
   onLimitPriceChange?: (newPrice: number) => void;
+  onIndividualLimitPriceChange?: (index: number, newPrice: number) => void;
   onCurrentPriceChange?: (price: number) => void;
   onDragStateChange?: (isDragging: boolean) => void;
 }
 
-export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limitOrderPrice, invertPriceDisplay = true, onLimitPriceChange, onCurrentPriceChange, onDragStateChange }: LimitOrderChartProps) {
+export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limitOrderPrice, invertPriceDisplay = true, pricesBound = true, individualLimitPrices = [], onLimitPriceChange, onIndividualLimitPriceChange, onCurrentPriceChange, onDragStateChange }: LimitOrderChartProps) {
   const [currentPrice, setCurrentPrice] = useState<number | null>(null);
   const [buyTokenUsdPrices, setBuyTokenUsdPrices] = useState<Record<string, number>>({});
   const [sellTokenUsdPrice, setSellTokenUsdPrice] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [draggedPrice, setDraggedPrice] = useState<number | null>(null);
+  const [draggingLineIndex, setDraggingLineIndex] = useState<number | null>(null); // Track which line is being dragged (for unbound mode)
   const [displayedTokenIndex, setDisplayedTokenIndex] = useState(0); // For cycling through tokens
   const containerRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number | null>(null);
@@ -322,7 +326,7 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
     ? ((priceToDisplay - minPrice) / priceRange) * 100
     : null;
 
-  // Drag handlers for limit price line
+  // Drag handlers for limit price line (bound mode)
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (!limitOrderPrice || !onLimitPriceChange) return;
     e.preventDefault();
@@ -335,12 +339,31 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
 
     justReleasedRef.current = false;
     setIsDragging(true);
+    setDraggingLineIndex(null); // No specific line index for bound mode
     setDraggedPrice(limitOrderPrice); // Initialize with current price
     if (onDragStateChange) onDragStateChange(true);
   }, [limitOrderPrice, onLimitPriceChange, onDragStateChange]);
 
+  // Drag handler for individual lines (unbound mode)
+  const handleIndividualMouseDown = useCallback((e: React.MouseEvent, index: number, price: number) => {
+    if (!onIndividualLimitPriceChange) return;
+    e.preventDefault();
+
+    // Clear any pending cooldown from previous drag
+    if (cooldownTimeoutRef.current) {
+      clearTimeout(cooldownTimeoutRef.current);
+      cooldownTimeoutRef.current = null;
+    }
+
+    justReleasedRef.current = false;
+    setIsDragging(true);
+    setDraggingLineIndex(index);
+    setDraggedPrice(price); // Initialize with current price for this line
+    if (onDragStateChange) onDragStateChange(true);
+  }, [onIndividualLimitPriceChange, onDragStateChange]);
+
   const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!isDragging || !containerRef.current || !onLimitPriceChange || !currentPrice) return;
+    if (!isDragging || !containerRef.current || !currentPrice) return;
 
     // Cancel any pending animation frame
     if (rafRef.current) {
@@ -375,12 +398,17 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
 
         // Throttle form updates to every 50ms to reduce re-renders
         if (now - lastUpdateRef.current > 50) {
-          onLimitPriceChange(newBasePrice); // Send base price to parent
+          // Check if we're dragging an individual line (unbound mode) or the main line (bound mode)
+          if (draggingLineIndex !== null && onIndividualLimitPriceChange) {
+            onIndividualLimitPriceChange(draggingLineIndex, newBasePrice);
+          } else if (onLimitPriceChange) {
+            onLimitPriceChange(newBasePrice);
+          }
           lastUpdateRef.current = now;
         }
       }
     });
-  }, [isDragging, currentPrice, invertPriceDisplay, onLimitPriceChange]);
+  }, [isDragging, currentPrice, invertPriceDisplay, onLimitPriceChange, onIndividualLimitPriceChange, draggingLineIndex]);
 
   const handleMouseUp = useCallback(() => {
     // Cancel any pending animation frame
@@ -390,11 +418,16 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
     }
 
     // Send final update immediately on release
-    if (draggedPrice && onLimitPriceChange) {
-      onLimitPriceChange(draggedPrice);
+    if (draggedPrice) {
+      if (draggingLineIndex !== null && onIndividualLimitPriceChange) {
+        onIndividualLimitPriceChange(draggingLineIndex, draggedPrice);
+      } else if (onLimitPriceChange) {
+        onLimitPriceChange(draggedPrice);
+      }
     }
 
     setIsDragging(false);
+    setDraggingLineIndex(null);
     justReleasedRef.current = true; // Keep using dragged price during cooldown
     if (onDragStateChange) onDragStateChange(false);
 
@@ -405,7 +438,7 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
       setDraggedPrice(null);
       cooldownTimeoutRef.current = null;
     }, 300);
-  }, [draggedPrice, onLimitPriceChange, onDragStateChange]);
+  }, [draggedPrice, onLimitPriceChange, onIndividualLimitPriceChange, draggingLineIndex, onDragStateChange]);
 
   useEffect(() => {
     if (isDragging) {
@@ -550,7 +583,6 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                       <TokenLogo
                         ticker={displayQuoteTokenInfo.ticker}
                         className="w-[16px] h-[16px] object-contain"
-                        style={{ filter: 'brightness(0) saturate(100%) invert(68%) sepia(96%) saturate(2367%) hue-rotate(167deg) brightness(103%) contrast(101%)' }}
                       />
                     </>
                   )}
@@ -558,82 +590,168 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
               </LiquidGlassCard>
             </div>
 
-            {/* Limit Order Price Line - Draggable */}
-            {priceToDisplay && limitPricePosition !== null && onLimitPriceChange && (
-              <div
-                className={`absolute w-full ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
-                style={{
-                  bottom: `${limitPricePosition}%`,
-                  height: '40px',
-                  zIndex: limitPricePosition < currentPricePosition ? 20 : 10,
-                  transform: 'translateY(50%)',
-                  transition: isDragging ? 'none' : 'bottom 200ms'
-                }}
-                onMouseDown={handleMouseDown}
-              >
-                {/* Visible line */}
+            {/* Limit Order Price Lines */}
+            {pricesBound ? (
+              /* Single draggable line when prices are bound */
+              priceToDisplay && limitPricePosition !== null && onLimitPriceChange && (
                 <div
-                  className={`absolute top-1/2 -translate-y-1/2 left-[58px] right-0 bg-[#FF0080] rounded-full ${isDragging ? 'h-[2px] opacity-70' : 'h-[2px] opacity-100'} pointer-events-none`}
+                  className={`absolute w-full ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
                   style={{
-                    transition: isDragging ? 'none' : 'all 200ms'
+                    bottom: `${limitPricePosition}%`,
+                    height: '40px',
+                    zIndex: limitPricePosition < currentPricePosition ? 20 : 10,
+                    transform: 'translateY(50%)',
+                    transition: isDragging ? 'none' : 'bottom 200ms'
                   }}
-                />
-                <LiquidGlassCard
-                  className={`absolute right-0 flex items-center justify-between bg-pink-500/10 px-3 py-1 border-pink-500/30 w-[250px] ${displayQuoteTokenInfos.length > 1 ? 'cursor-pointer pointer-events-auto' : 'pointer-events-none'} ${limitPricePosition < currentPricePosition ? 'bottom-0 translate-y-[calc(45%-0px)]' : 'top-0 -translate-y-[calc(45%-0px)]'}`}
-                  borderRadius="8px"
-                  shadowIntensity="none"
-                  glowIntensity="none"
-                  onClick={cycleDisplayedToken}
+                  onMouseDown={handleMouseDown}
                 >
-                  {(() => {
-                    // Get the currently displayed token
-                    const tokenInfo = displayQuoteTokenInfos[displayedTokenIndex] || displayQuoteTokenInfos[0];
-                    if (!tokenInfo) return null;
+                  {/* Visible line */}
+                  <div
+                    className={`absolute top-1/2 -translate-y-1/2 left-[58px] right-0 bg-[#FF0080] rounded-full ${isDragging ? 'h-[2px] opacity-70' : 'h-[2px] opacity-100'} pointer-events-none`}
+                    style={{
+                      transition: isDragging ? 'none' : 'all 200ms'
+                    }}
+                  />
+                  <LiquidGlassCard
+                    className={`absolute right-0 flex items-center justify-between bg-pink-500/10 px-3 py-1 border-pink-500/30 w-[250px] ${displayQuoteTokenInfos.length > 1 ? 'cursor-pointer pointer-events-auto' : 'pointer-events-none'} ${limitPricePosition < currentPricePosition ? 'bottom-0 translate-y-[calc(45%-0px)]' : 'top-0 -translate-y-[calc(45%-0px)]'}`}
+                    borderRadius="8px"
+                    shadowIntensity="none"
+                    glowIntensity="none"
+                    onClick={cycleDisplayedToken}
+                  >
+                    {(() => {
+                      // Get the currently displayed token
+                      const tokenInfo = displayQuoteTokenInfos[displayedTokenIndex] || displayQuoteTokenInfos[0];
+                      if (!tokenInfo) return null;
 
-                    // Calculate the specific limit price for this token
-                    const tokenAddress = tokenInfo?.a;
-                    const tokenLimitPrice = calculateLimitPriceForToken(tokenAddress);
-                    // Apply inversion if needed
-                    const displayTokenPrice = tokenLimitPrice && invertPriceDisplay && tokenLimitPrice > 0
-                      ? 1 / tokenLimitPrice
-                      : tokenLimitPrice;
-                    // Fall back to the base priceToDisplay if calculation failed
-                    const priceForThisToken = displayTokenPrice || priceToDisplay;
+                      // Calculate the specific limit price for this token
+                      const tokenAddress = tokenInfo?.a;
+                      const tokenLimitPrice = calculateLimitPriceForToken(tokenAddress);
+                      // Apply inversion if needed
+                      const displayTokenPrice = tokenLimitPrice && invertPriceDisplay && tokenLimitPrice > 0
+                        ? 1 / tokenLimitPrice
+                        : tokenLimitPrice;
+                      // Fall back to the base priceToDisplay if calculation failed
+                      const priceForThisToken = displayTokenPrice || priceToDisplay;
 
-                    return (
-                      <>
-                        <span className="text-xs text-white/70 whitespace-nowrap flex items-center gap-1">
-                          Limit Price:
-                          {displayQuoteTokenInfos.length > 1 && (
-                            <span className="text-[10px] text-white/40">
-                              ({displayedTokenIndex + 1}/{displayQuoteTokenInfos.length})
+                      return (
+                        <>
+                          <span className="text-xs text-white/70 whitespace-nowrap flex items-center gap-1">
+                            Limit Price:
+                            {displayQuoteTokenInfos.length > 1 && (
+                              <span className="text-[10px] text-white/40">
+                                ({displayedTokenIndex + 1}/{displayQuoteTokenInfos.length})
+                              </span>
+                            )}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-bold text-white">
+                              <NumberFlow
+                                value={priceForThisToken || 0}
+                                format={{
+                                  minimumSignificantDigits: 1,
+                                  maximumSignificantDigits: 4
+                                }}
+                              />
                             </span>
-                          )}
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-bold text-white">
-                            <NumberFlow
-                              value={priceForThisToken || 0}
-                              format={{
-                                minimumSignificantDigits: 1,
-                                maximumSignificantDigits: 4
-                              }}
+                            <span className="text-xs text-[#FF0080]">
+                              {formatTokenTicker(tokenInfo.ticker)}
+                            </span>
+                            <TokenLogo
+                              ticker={tokenInfo.ticker}
+                              className="w-[16px] h-[16px] object-contain"
+                              style={{ filter: 'brightness(0) saturate(100%) invert(47%) sepia(99%) saturate(6544%) hue-rotate(312deg) brightness(103%) contrast(103%)' }}
                             />
-                          </span>
-                          <span className="text-xs text-[#FF0080]">
-                            {formatTokenTicker(tokenInfo.ticker)}
-                          </span>
-                          <TokenLogo
-                            ticker={tokenInfo.ticker}
-                            className="w-[16px] h-[16px] object-contain"
-                            style={{ filter: 'brightness(0) saturate(100%) invert(47%) sepia(99%) saturate(6544%) hue-rotate(312deg) brightness(103%) contrast(103%)' }}
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </LiquidGlassCard>
+                </div>
+              )
+            ) : (
+              /* Multiple draggable lines when prices are unbound - one for each token */
+              displayQuoteTokenInfos.map((tokenInfo, index) => {
+                if (!tokenInfo) return null;
+
+                // Get the individual limit price for this token
+                // Use dragged price if this line is being dragged
+                const baseIndividualPrice = (isDragging && draggingLineIndex === index && draggedPrice)
+                  ? draggedPrice
+                  : individualLimitPrices[index];
+                if (!baseIndividualPrice) return null;
+
+                // Apply inversion if needed
+                const displayIndividualPrice = invertPriceDisplay && baseIndividualPrice > 0
+                  ? 1 / baseIndividualPrice
+                  : baseIndividualPrice;
+
+                // Calculate position for this price line
+                const individualPricePosition = displayIndividualPrice
+                  ? ((displayIndividualPrice - minPrice) / priceRange) * 100
+                  : null;
+
+                if (individualPricePosition === null) return null;
+
+                // Generate a unique color for each token line
+                const colors = ['#FF0080', '#8000FF', '#FF8000', '#0080FF', '#00FF80'];
+                const lineColor = colors[index % colors.length];
+
+                const isThisLineDragging = isDragging && draggingLineIndex === index;
+
+                return (
+                  <div
+                    key={`limit-line-${index}`}
+                    className={`absolute w-full ${onIndividualLimitPriceChange ? (isThisLineDragging ? 'cursor-grabbing' : 'cursor-grab') : ''}`}
+                    style={{
+                      bottom: `${individualPricePosition}%`,
+                      height: '40px',
+                      zIndex: individualPricePosition < currentPricePosition ? 20 + index : 10 + index,
+                      transform: 'translateY(50%)',
+                      transition: isThisLineDragging ? 'none' : 'bottom 200ms'
+                    }}
+                    onMouseDown={(e) => handleIndividualMouseDown(e, index, baseIndividualPrice)}
+                  >
+                    {/* Visible line */}
+                    <div
+                      className={`absolute top-1/2 -translate-y-1/2 left-[58px] right-0 h-[2px] rounded-full pointer-events-none ${isThisLineDragging ? 'opacity-70' : 'opacity-100'}`}
+                      style={{ backgroundColor: lineColor, transition: isThisLineDragging ? 'none' : 'all 200ms' }}
+                    />
+                    <LiquidGlassCard
+                      className={`absolute right-0 flex items-center justify-between px-3 py-1 w-[250px] pointer-events-none ${individualPricePosition < currentPricePosition ? 'bottom-0 translate-y-[calc(45%-0px)]' : 'top-0 -translate-y-[calc(45%-0px)]'}`}
+                      style={{
+                        backgroundColor: `${lineColor}10`,
+                        borderColor: `${lineColor}30`
+                      }}
+                      borderRadius="8px"
+                      shadowIntensity="none"
+                      glowIntensity="none"
+                    >
+                      <span className="text-xs text-white/70 whitespace-nowrap">
+                        Limit Price:
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-white">
+                          <NumberFlow
+                            value={displayIndividualPrice || 0}
+                            format={{
+                              minimumSignificantDigits: 1,
+                              maximumSignificantDigits: 4
+                            }}
                           />
-                        </div>
-                      </>
-                    );
-                  })()}
-                </LiquidGlassCard>
-              </div>
+                        </span>
+                        <span className="text-xs" style={{ color: lineColor }}>
+                          {formatTokenTicker(tokenInfo.ticker)}
+                        </span>
+                        <TokenLogo
+                          ticker={tokenInfo.ticker}
+                          className="w-[16px] h-[16px] object-contain"
+                        />
+                      </div>
+                    </LiquidGlassCard>
+                  </div>
+                );
+              })
             )}
           </div>
         </div>

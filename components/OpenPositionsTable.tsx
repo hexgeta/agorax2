@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
+import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 import { CircleDollarSign, ChevronDown, Trash2, Lock, Search, ArrowRight, MoveRight, ChevronRight, Play, CalendarDays } from 'lucide-react';
 import { PixelSpinner } from './ui/PixelSpinner';
@@ -340,8 +341,14 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
   const [searchQuery, setSearchQuery] = useState<string>('');
   // All or Nothing filter
   const [aonFilterEnabled, setAonFilterEnabled] = useState<boolean>(false);
-  // Advanced options shelf state (for marketplace)
-  const [showAdvancedOptions, setShowAdvancedOptions] = useState<boolean>(false);
+  // Advanced options shelf state (persisted to localStorage)
+  const [showAdvancedOptions, setShowAdvancedOptions] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('openPositionsAdvancedOptions');
+      return saved === 'true';
+    }
+    return false;
+  });
   // Date filter state
   type DateFilterPreset = '1h' | '6h' | '12h' | '24h' | '7d' | '30d' | '90d' | 'custom' | null;
   const [dateFilterPreset, setDateFilterPreset] = useState<DateFilterPreset>(null);
@@ -414,6 +421,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
   // State for calendar popup for expiration edit
   const [showExpirationCalendar, setShowExpirationCalendar] = useState<string | null>(null);
   const [selectedExpirationDate, setSelectedExpirationDate] = useState<Date | undefined>(undefined);
+  const [expirationTimeError, setExpirationTimeError] = useState<string | null>(null);
   const [updatingOrders, setUpdatingOrders] = useState<Set<string>>(new Set());
   const [updateErrors, setUpdateErrors] = useState<{ [orderId: string]: string }>({});
 
@@ -516,6 +524,11 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     setIsClient(true);
     setMounted(true);
   }, []);
+
+  // Persist advanced options shelf state to localStorage
+  useEffect(() => {
+    localStorage.setItem('openPositionsAdvancedOptions', showAdvancedOptions.toString());
+  }, [showAdvancedOptions]);
 
   // Effect to handle initial load completion
   useEffect(() => {
@@ -2315,61 +2328,88 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
       )}
 
       {/* Cancel All Expired Button - Show only in Expired tab for My Deals */}
-      {!isLandingPageMode && ownershipFilter === 'mine' && statusFilter === 'expired' && (() => {
-        const expiredCount = getLevel3Orders(tokenFilter, ownershipFilter, 'expired').length;
-
-        return expiredCount > 0 && (
-          <div className="mb-4 flex items-center gap-4">
-            <button
-              onClick={handleCancelAllExpired}
-              disabled={isCancellingAll}
-              className="px-4 py-2 bg-red-700 text-white rounded-full hover:bg-orange-600 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {isCancellingAll ? (
-                <>
-                  <PixelSpinner size={16} />
-                  Loading
-                </>
-              ) : (
-                <>
-                  <Trash2 className="w-4 h-4 text-white" />
-                  Cancel All Expired Orders ({expiredCount})
-                </>
-              )}
-            </button>
-            {cancelAllError && (
-              <div className="text-red-400 text-sm">
-                {cancelAllError}
-              </div>
-            )}
-          </div>
-        );
-      })()}
-
-      {/* Search Bar and Filters - hide in landing page mode */}
+      {/* Advanced Options Shelf - for My Orders (non-marketplace, non-landing) */}
       {!isLandingPageMode && !isMarketplaceMode && (
-      <div className="mb-6 w-full max-w-[480px]">
-        <div className="relative w-full">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500" />
-          <input
-            type="text"
-            placeholder="Search"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-black/40 border border-white/10 text-white placeholder-white/30 focus:outline-none focus:border-white/30 focus:bg-black/60 transition-colors shadow-sm rounded-lg"
-          />
-        </div>
-        {/* All or Nothing Filter Toggle */}
-        <div className="flex items-center gap-2 mt-3">
+        <div className="mb-6">
+          {/* Advanced Toggle Button */}
           <button
-            onClick={() => setAonFilterEnabled(!aonFilterEnabled)}
-            className={`relative w-10 h-5 rounded-full transition-colors ${aonFilterEnabled ? 'bg-white' : 'bg-white/20'}`}
+            type="button"
+            onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
+            className="flex items-center ml-4 gap-2 text-white/60 hover:text-white/80 transition-colors text-sm mb-3"
           >
-            <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${aonFilterEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
+            <span>Advanced</span>
+            <svg
+              className={`w-4 h-4 transition-transform duration-200 ${showAdvancedOptions ? 'rotate-180' : ''}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+            </svg>
           </button>
-          <span className="text-sm text-white/60">All or Nothing</span>
+
+          {/* Advanced Options Content */}
+          {showAdvancedOptions && (
+            <div className="space-y-4">
+              {/* Cancel All Expired Orders - only show when on expired tab */}
+              {ownershipFilter === 'mine' && statusFilter === 'expired' && (() => {
+                const expiredCount = getLevel3Orders(tokenFilter, ownershipFilter, 'expired').length;
+
+                return expiredCount > 0 && (
+                  <div className="flex items-center gap-4">
+                    <button
+                      onClick={handleCancelAllExpired}
+                      disabled={isCancellingAll}
+                      className="px-4 py-2 bg-red-700 text-white rounded-full hover:bg-orange-600 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      {isCancellingAll ? (
+                        <>
+                          <PixelSpinner size={16} />
+                          Loading
+                        </>
+                      ) : (
+                        <>
+                          <Trash2 className="w-4 h-4 text-white" />
+                          Cancel All Expired Orders ({expiredCount})
+                        </>
+                      )}
+                    </button>
+                    {cancelAllError && (
+                      <div className="text-red-600 text-sm">
+                        {cancelAllError}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* Search Bar */}
+              <div className="w-full max-w-[480px]">
+                <div className="relative w-full">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500" />
+                  <input
+                    type="text"
+                    placeholder="Search"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 bg-black/40 border border-white/10 text-white placeholder-white/30 focus:outline-none focus:border-white/30 focus:bg-black/60 transition-colors shadow-sm rounded-lg"
+                  />
+                </div>
+              </div>
+
+              {/* All or Nothing Filter Toggle */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setAonFilterEnabled(!aonFilterEnabled)}
+                  className={`relative w-10 h-5 rounded-full transition-colors ${aonFilterEnabled ? 'bg-green-400' : 'bg-white/20'}`}
+                >
+                  <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${aonFilterEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
+                </button>
+                <span className="text-sm text-white/60">All or Nothing</span>
+              </div>
+            </div>
+          )}
         </div>
-      </div>
       )}
 
       {/* Advanced Options Shelf - only for marketplace mode */}
@@ -3440,8 +3480,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
       {/* Edit Order Modal */}
       {
         editingOrder && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-gray-900 border border-gray-700 rounded-lg p-6 w-full max-w-md">
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-in fade-in duration-150">
+            <div className="bg-gray-900 border border-gray-700 rounded-lg p-6 w-full max-w-md animate-in fade-in zoom-in-95 duration-150">
               <h3 className="text-lg font-semibold text-white mb-4">Edit Order</h3>
 
               <div className="space-y-4">
@@ -3530,26 +3570,28 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
 
       {/* Calendar Popup for Expiration Update */}
       {
-        showExpirationCalendar && (
+        showExpirationCalendar && typeof document !== 'undefined' && createPortal(
           <div
-            className="fixed inset-0 bg-black/80 flex items-center justify-center z-[9999]"
+            className="fixed inset-0 bg-black/80 flex items-center justify-center z-[9999] animate-in fade-in duration-150"
             onClick={() => {
               setShowExpirationCalendar(null);
               setSelectedExpirationDate(undefined);
+              setExpirationTimeError(null);
             }}
           >
             <div
-              className="bg-black rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl border border-white/20"
+              className="bg-black rounded-xl p-6 w-[400px] mx-4 shadow-2xl border border-white/20 animate-in fade-in zoom-in-95 duration-150"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xl font-semibold text-white">Update Expiration Date</h3>
+                <h3 className="text-lg font-semibold text-white">Update Expiration Date</h3>
                 <button
                   onClick={() => {
                     setShowExpirationCalendar(null);
                     setSelectedExpirationDate(undefined);
+                    setExpirationTimeError(null);
                   }}
-                  className="text-white/60 hover:text-white transition-colors p-1"
+                  className="text-white/60 hover:text-white hover:bg-white/10 rounded transition-colors p-1"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -3558,64 +3600,90 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                 </button>
               </div>
 
-              <div className="mb-6 flex justify-center">
+              <div
+                className="mb-4 overflow-hidden"
+                onClick={(e) => e.stopPropagation()}
+                onPointerDown={(e) => e.stopPropagation()}
+              >
                 <Calendar
                   mode="single"
                   selected={selectedExpirationDate}
-                  onSelect={setSelectedExpirationDate}
-                  disabled={(date) => date < new Date()}
-                  className="rounded-lg border border-gray-700 bg-gray-900 p-3"
-                  classNames={{
-                    months: "flex flex-col sm:flex-row gap-2",
-                    month: "flex flex-col gap-4",
-                    month_caption: "flex justify-center pt-1 relative items-center w-full",
-                    caption_label: "text-sm font-medium text-gray-100",
-                    nav: "flex items-center gap-1",
-                    button_previous: "size-7 bg-transparent p-0 opacity-70 hover:opacity-100 absolute left-1 text-gray-300 hover:bg-gray-700 rounded",
-                    button_next: "size-7 bg-transparent p-0 opacity-70 hover:opacity-100 absolute right-1 text-gray-300 hover:bg-gray-700 rounded",
-                    month_grid: "w-full border-collapse",
-                    weekdays: "flex",
-                    weekday: "text-gray-500 rounded-md w-9 font-normal text-[0.8rem] text-center",
-                    week: "flex w-full mt-2",
-                    day: "h-9 w-9 text-center text-sm p-0 relative focus-within:relative focus-within:z-20",
-                    day_button: "h-9 w-9 p-0 font-normal text-gray-200 hover:bg-gray-700 rounded-md transition-colors aria-selected:opacity-100",
-                    selected: "bg-blue-600 text-white hover:bg-blue-500 hover:text-white rounded-md",
-                    today: "ring-1 ring-gray-500 text-gray-100",
-                    outside: "text-gray-600",
-                    disabled: "text-gray-700 cursor-not-allowed hover:bg-transparent",
-                    hidden: "invisible",
+                  onSelect={(date) => {
+                    if (!date) return;
+                    // Preserve time from existing selection or use current time
+                    const timeSource = selectedExpirationDate || new Date();
+                    date.setHours(timeSource.getHours(), timeSource.getMinutes(), timeSource.getSeconds());
+                    setSelectedExpirationDate(date);
+
+                    // Validate that resulting datetime is in the future
+                    const now = new Date();
+                    const diffSeconds = Math.floor((date.getTime() - now.getTime()) / 1000);
+                    if (diffSeconds < 60) {
+                      setExpirationTimeError('Selected time must be at least 1 minute in the future');
+                    } else {
+                      setExpirationTimeError(null);
+                    }
+                  }}
+                  captionLayout="dropdown"
+                  disabled={(date) => {
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    return date < today;
                   }}
                 />
-              </div>
+                <div className="px-3 pb-3 border-b border-white/10 pt-3">
+                  <label className="text-white/60 text-xs mb-2 block">Time</label>
+                  <input
+                    type="time"
+                    step="1"
+                    value={selectedExpirationDate ? `${String(selectedExpirationDate.getHours()).padStart(2, '0')}:${String(selectedExpirationDate.getMinutes()).padStart(2, '0')}:${String(selectedExpirationDate.getSeconds()).padStart(2, '0')}` : ''}
+                    onChange={(e) => {
+                      const timeValue = e.target.value;
+                      if (!timeValue) return;
+                      const [hours, minutes, seconds] = timeValue.split(':').map(Number);
+                      const newDate = selectedExpirationDate ? new Date(selectedExpirationDate) : new Date();
+                      newDate.setHours(hours, minutes, seconds || 0);
+                      setSelectedExpirationDate(newDate);
 
-              {selectedExpirationDate && (
-                <div className="mb-4 p-3 bg-white/5 border border-white/20 rounded-lg">
-                  <p className="text-sm text-white/70">
-                    New expiration: <span className="font-semibold text-white">{selectedExpirationDate.toLocaleDateString()} at {selectedExpirationDate.toLocaleTimeString()}</span>
-                  </p>
+                      // Validate that time is in the future
+                      const now = new Date();
+                      const diffSeconds = Math.floor((newDate.getTime() - now.getTime()) / 1000);
+                      if (diffSeconds < 60) {
+                        setExpirationTimeError('Selected time must be at least 1 minute in the future');
+                      } else {
+                        setExpirationTimeError(null);
+                      }
+                    }}
+                    className="w-full bg-black text-white border border-white/20 rounded-md px-3 py-2 text-sm appearance-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none focus:outline-none focus:border-white/50 selection:bg-white/30 selection:text-white [&::-webkit-datetime-edit-hour-field:focus]:bg-white/30 [&::-webkit-datetime-edit-minute-field:focus]:bg-white/30 [&::-webkit-datetime-edit-second-field:focus]:bg-white/30 [&::-webkit-datetime-edit-hour-field:focus]:text-white [&::-webkit-datetime-edit-minute-field:focus]:text-white [&::-webkit-datetime-edit-second-field:focus]:text-white"
+                  />
+                  {expirationTimeError && (
+                    <p className="text-red-400 text-xs mt-2">{expirationTimeError}</p>
+                  )}
                 </div>
-              )}
+              </div>
 
               <div className="flex gap-3">
                 <button
                   onClick={() => {
                     setShowExpirationCalendar(null);
                     setSelectedExpirationDate(undefined);
+                    setExpirationTimeError(null);
                   }}
-                  className="flex-1 px-4 py-2 bg-black text-white rounded-lg hover:bg-white/10 transition-colors border border-white/20"
+                  className="flex-1 px-4 py-2 bg-black text-white rounded-lg hover:bg-white/10 transition-colors border border-white/20 text-sm"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={() => handleQuickExpirationUpdate(showExpirationCalendar)}
-                  disabled={!selectedExpirationDate || updatingOrders.has(showExpirationCalendar)}
-                  className="flex-1 px-4 py-2 bg-white text-black rounded-lg hover:bg-white/90 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={!selectedExpirationDate || updatingOrders.has(showExpirationCalendar) || !!expirationTimeError}
+                  className="flex-1 px-4 py-2 bg-white text-black rounded-lg hover:bg-white/90 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                 >
                   {updatingOrders.has(showExpirationCalendar) ? 'Loading' : 'Update Expiration'}
                 </button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         )
       }
 

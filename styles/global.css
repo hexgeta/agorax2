@@ -13,6 +13,27 @@
   --neon-blue: #ffffff;
 }
 
+/* Hide any auto-injected appkit/w3m elements that might intercept clicks */
+appkit-account-button,
+appkit-network-button,
+appkit-button,
+appkit-connect-button,
+w3m-account-button,
+w3m-network-button,
+w3m-button,
+w3m-connect-button,
+[data-testid="account-button"],
+[data-testid="connect-button"] {
+  display: none !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+  position: absolute !important;
+  left: -9999px !important;
+  width: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+}
+
 /* No-select utility classes */
 .no-select {
   @apply select-none !important;

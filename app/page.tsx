@@ -3,7 +3,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAccount } from 'wagmi';
 import { OpenPositionsTable } from '@/components/OpenPositionsTable';
-import { WhitelistDebugger } from '@/components/WhitelistDebugger';
 import { DisclaimerDialog } from '@/components/DisclaimerDialog';
 import { LogoPreloader } from '@/components/LogoPreloader';
 import { LimitOrderChart } from '@/components/LimitOrderChart';
@@ -114,9 +113,6 @@ export default function Home() {
     return true;
   });
   const [individualLimitPrices, setIndividualLimitPrices] = useState<(number | undefined)[]>([]);
-
-  // Set to false to hide the whitelist debugger
-  const SHOW_WHITELIST_DEBUGGER = false;
 
   // Test functions for toast notifications
   const testSuccessToast = () => {
@@ -594,7 +590,6 @@ export default function Home() {
         {!isInitializing && !isConnecting && isConnected && (
           <div className="w-full px-2 md:px-8 mt-2 relative z-10">
             <div className="max-w-[1200px] mx-auto">
-              {SHOW_WHITELIST_DEBUGGER && <WhitelistDebugger />}
               <OpenPositionsTable ref={openPositionsTableRef} />
             </div>
           </div>
