@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import dynamic from 'next/dynamic';
 import { useAccount } from 'wagmi';
 import { DisclaimerDialog } from '@/components/DisclaimerDialog';
 import { LogoPreloader } from '@/components/LogoPreloader';
@@ -12,11 +11,9 @@ import PixelBlastBackground from '@/components/ui/PixelBlastBackground';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ConnectButton } from '@/components/ConnectButton';
-
-// Lazy load heavy components to prevent spinner freeze
-const OpenPositionsTable = dynamic(() => import('@/components/OpenPositionsTable').then(mod => ({ default: mod.OpenPositionsTable })), { ssr: false });
-const LimitOrderChart = dynamic(() => import('@/components/LimitOrderChart').then(mod => ({ default: mod.LimitOrderChart })), { ssr: false });
-const LimitOrderForm = dynamic(() => import('@/components/LimitOrderForm').then(mod => ({ default: mod.LimitOrderForm })), { ssr: false });
+import { OpenPositionsTable } from '@/components/OpenPositionsTable';
+import { LimitOrderChart } from '@/components/LimitOrderChart';
+import { LimitOrderForm } from '@/components/LimitOrderForm';
 
 // FAQ Accordion Item Component
 function FAQItem({ question, answer }: { question: string; answer: string }) {
@@ -177,26 +174,36 @@ export default function Home() {
 
             {/* Not Connected State - Landing Page */}
             {!isInitializing && !isConnecting && !isConnected && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.4 }}
-                className="pt-12 md:pt-20 pb-16"
-              >
+              <div className="pt-12 md:pt-20 pb-16">
                 {/* Hero Section */}
                 <div className="text-center mb-8 md:mb-12">
-                  <h1 className="text-4xl md:text-7xl font-bold text-white mb-6 tracking-tight">
+                  <motion.h1
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.6 }}
+                    className="text-4xl md:text-7xl font-bold text-white mb-6 tracking-tight"
+                  >
                     PulseChain's On-chain Limit Order DEX
-                  </h1>
-                  <p className="text-xl md:text-2xl text-gray-400 max-w-2xl mx-auto mb-6">
+                  </motion.h1>
+                  <motion.p
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.6, delay: 0.1 }}
+                    className="text-xl md:text-2xl text-gray-400 max-w-2xl mx-auto mb-6"
+                  >
                     Zero slippage. Low fees.  Peer-to-peer.
-                  </p>
+                  </motion.p>
                 </div>
 
                 {/* Live Orders Table - Right after header */}
-                <div className="mb-16 md:mb-24">
+                <motion.div
+                  initial={{ opacity: 0, y: 30 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6, delay: 0.3 }}
+                  className="mb-16 md:mb-24"
+                >
                   <OpenPositionsTable isMarketplaceMode={true} isLandingPageMode={true} />
-                </div>
+                </motion.div>
 
                 {/* Paradigm Shift Section */}
                 <motion.section
