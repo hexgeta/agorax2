@@ -287,6 +287,7 @@ export function LimitOrderForm({
   const isInitialLoadRef = useRef<boolean>(true);
   const limitPriceSetByUserRef = useRef<boolean>(false);
   const hasInitializedTokensRef = useRef<boolean>(false);
+  const [hasCalculatedInitialBuyAmount, setHasCalculatedInitialBuyAmount] = useState(false);
   const lastEditedInputRef = useRef<'sell' | number | null>(null); // 'sell' or buy index
   const isUpdatingFromOtherInputRef = useRef<boolean>(false);
   const previousSellTokenRef = useRef<TokenOption | null>(null);
@@ -923,6 +924,25 @@ export function LimitOrderForm({
     // Mark that we've initialized
     hasInitializedTokensRef.current = true;
   }, [availableTokens]);
+
+  // Calculate buy amounts on page load based on saved sell amount and limit price
+  useEffect(() => {
+    // Only run once after tokens are initialized and we have the required data
+    if (hasCalculatedInitialBuyAmount) return;
+    if (!hasInitializedTokensRef.current) return;
+    if (!sellAmount || !limitPrice) return;
+
+    const sellAmt = parseFloat(removeCommas(sellAmount));
+    const limitPriceNum = parseFloat(limitPrice);
+
+    if (sellAmt > 0 && limitPriceNum > 0) {
+      const newBuyAmount = sellAmt * limitPriceNum;
+      const newAmounts = [...buyAmounts];
+      newAmounts[0] = formatCalculatedValue(newBuyAmount);
+      setBuyAmounts(newAmounts);
+      setHasCalculatedInitialBuyAmount(true);
+    }
+  }, [sellAmount, limitPrice, hasCalculatedInitialBuyAmount]);
 
   // Save form values to localStorage
   useEffect(() => {
@@ -2717,10 +2737,10 @@ export function LimitOrderForm({
                         {index > 0 && (
                           <button
                             onClick={() => handleRemoveBuyToken(index)}
-                            className="p-3 h-[52px] bg-red-500/20 hover:bg-red-500/30 border-2 border-red-500/50 transition-colors flex items-center justify-center rounded-lg"
+                            className="p-3 h-[52px] hover:bg-white/10 transition-colors flex items-center justify-center rounded-lg"
                             title="Remove token"
                           >
-                            <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-5 h-5 text-red-400 hover:text-red-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                             </svg>
                           </button>

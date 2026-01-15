@@ -1,12 +1,10 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import { useAccount } from 'wagmi';
-import { OpenPositionsTable } from '@/components/OpenPositionsTable';
 import { DisclaimerDialog } from '@/components/DisclaimerDialog';
 import { LogoPreloader } from '@/components/LogoPreloader';
-import { LimitOrderChart } from '@/components/LimitOrderChart';
-import { LimitOrderForm } from '@/components/LimitOrderForm';
 import useToast from '@/hooks/use-toast';
 import { ToastAction } from '@/components/ui/toast';
 import { PixelSpinner } from '@/components/ui/PixelSpinner';
@@ -14,6 +12,11 @@ import PixelBlastBackground from '@/components/ui/PixelBlastBackground';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ConnectButton } from '@/components/ConnectButton';
+
+// Lazy load heavy components to prevent spinner freeze
+const OpenPositionsTable = dynamic(() => import('@/components/OpenPositionsTable').then(mod => ({ default: mod.OpenPositionsTable })), { ssr: false });
+const LimitOrderChart = dynamic(() => import('@/components/LimitOrderChart').then(mod => ({ default: mod.LimitOrderChart })), { ssr: false });
+const LimitOrderForm = dynamic(() => import('@/components/LimitOrderForm').then(mod => ({ default: mod.LimitOrderForm })), { ssr: false });
 
 // FAQ Accordion Item Component
 function FAQItem({ question, answer }: { question: string; answer: string }) {
@@ -82,14 +85,13 @@ export default function Home() {
   }, [isConnecting]);
 
   // Fallback: Force initialization complete after max timeout to prevent stuck spinner
+  // This runs once on mount and guarantees the spinner won't be stuck
   useEffect(() => {
     const maxTimeout = setTimeout(() => {
-      if (isInitializing) {
-        setIsInitializing(false);
-      }
-    }, 5000); // 5 second max wait
+      setIsInitializing(false);
+    }, 2000); // 2 second max wait
     return () => clearTimeout(maxTimeout);
-  }, [isInitializing]);
+  }, []);
 
   // Chart and form state
   const [sellTokenAddress, setSellTokenAddress] = useState<string | undefined>();
@@ -175,36 +177,26 @@ export default function Home() {
 
             {/* Not Connected State - Landing Page */}
             {!isInitializing && !isConnecting && !isConnected && (
-              <div className="pt-12 md:pt-20 pb-16">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.4 }}
+                className="pt-12 md:pt-20 pb-16"
+              >
                 {/* Hero Section */}
                 <div className="text-center mb-8 md:mb-12">
-                  <motion.h1
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.6 }}
-                    className="text-4xl md:text-7xl font-bold text-white mb-6 tracking-tight"
-                  >
+                  <h1 className="text-4xl md:text-7xl font-bold text-white mb-6 tracking-tight">
                     PulseChain's On-chain Limit Order DEX
-                  </motion.h1>
-                  <motion.p
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.6, delay: 0.1 }}
-                    className="text-xl md:text-2xl text-gray-400 max-w-2xl mx-auto mb-6"
-                  >
+                  </h1>
+                  <p className="text-xl md:text-2xl text-gray-400 max-w-2xl mx-auto mb-6">
                     Zero slippage. Low fees.  Peer-to-peer.
-                  </motion.p>
+                  </p>
                 </div>
 
                 {/* Live Orders Table - Right after header */}
-                <motion.div
-                  initial={{ opacity: 0, y: 30 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.6, delay: 0.3 }}
-                  className="mb-16 md:mb-24"
-                >
+                <div className="mb-16 md:mb-24">
                   <OpenPositionsTable isMarketplaceMode={true} isLandingPageMode={true} />
-                </motion.div>
+                </div>
 
                 {/* Paradigm Shift Section */}
                 <motion.section
@@ -500,7 +492,11 @@ export default function Home() {
 
             {/* Connected State */}
             {!isInitializing && !isConnecting && isConnected && (
-              <>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.4 }}
+              >
                 <div className="flex flex-col items-center gap-4">
                   {/* Main Create Deal Button with Loading State */}
                   {isTransactionLoading && (
@@ -581,18 +577,23 @@ export default function Home() {
                     </div>
                   </div>
                 </div>
-              </>
+              </motion.div>
             )}
           </div>
         </div>
 
         {/* Main Content - Only for connected users */}
         {!isInitializing && !isConnecting && isConnected && (
-          <div className="w-full px-2 md:px-8 mt-2 relative z-10">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.4 }}
+            className="w-full px-2 md:px-8 mt-2 relative z-10"
+          >
             <div className="max-w-[1200px] mx-auto">
               <OpenPositionsTable ref={openPositionsTableRef} />
             </div>
-          </div>
+          </motion.div>
         )}
       </main>
     </>
