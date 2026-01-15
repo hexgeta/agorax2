@@ -3421,6 +3421,7 @@ export function LimitOrderForm({
                   </div>
                 </div>
               )}
+            </div>
           </div>
         </LiquidGlassCard>
 
