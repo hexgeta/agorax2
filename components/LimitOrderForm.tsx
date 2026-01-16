@@ -1350,11 +1350,10 @@ export function LimitOrderForm({
   // Sync external individual limit price changes (from chart dragging individual token lines)
   useEffect(() => {
     if (!externalIndividualLimitPrices) return;
-    // Only sync when dragging from chart (isDragging is true)
-    // Also skip when user is typing in any individual price input
-    if (!isDragging) return;
+    // Skip when user is typing in any individual price input (same pattern as primary token)
     if (individualPriceInputFocused.some(focused => focused)) return;
 
+    // Set flag FIRST before any state updates to block the notify effect
     isReceivingExternalIndividualPriceRef.current = true;
 
     // Batch all updates to avoid multiple re-renders
@@ -1398,12 +1397,13 @@ export function LimitOrderForm({
       setBuyAmounts(newBuyAmounts);
     }
 
-    // Reset flag after a short delay
+    // Reset flag after a longer delay to prevent stale data from being sent back
+    // This needs to outlast any React batching and re-render cycles
     setTimeout(() => {
       isReceivingExternalIndividualPriceRef.current = false;
-    }, 100);
+    }, 300);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [externalIndividualLimitPrices, isDragging]);
+  }, [externalIndividualLimitPrices]);
 
   // When sell amount changes, update buy amount based on limit price
   useEffect(() => {
@@ -3049,6 +3049,12 @@ export function LimitOrderForm({
                   if (inputValue === '' || inputValue === '.') {
                     setLimitPrice('');
                     setPricePercentage(null);
+                    // Clear individualLimitPrices[0] as well
+                    setIndividualLimitPrices(prev => {
+                      const newPrices = [...prev];
+                      newPrices[0] = undefined;
+                      return newPrices;
+                    });
                     if (onLimitPriceChange) {
                       onLimitPriceChange(undefined);
                     }
@@ -3058,6 +3064,12 @@ export function LimitOrderForm({
                   if (!isNaN(displayPrice) && displayPrice > 0) {
                     const basePrice = invertPriceDisplay ? 1 / displayPrice : displayPrice;
                     setLimitPrice(basePrice.toString());
+                    // Update individualLimitPrices[0] to match - this is what the chart uses when unbound
+                    setIndividualLimitPrices(prev => {
+                      const newPrices = [...prev];
+                      newPrices[0] = basePrice;
+                      return newPrices;
+                    });
                     // Update percentage based on market price
                     if (marketPrice > 0) {
                       const percentageAboveMarket = ((basePrice - marketPrice) / marketPrice) * 100;

@@ -440,20 +440,52 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
     });
   }, [isDragging, currentPrice, invertPriceDisplay, onLimitPriceChange, onIndividualLimitPriceChange, draggingLineIndex, percentageRangeMin, percentageRange, pricesBound, buyTokenAddresses, buyTokenUsdPrices, sellTokenUsdPrice]);
 
-  const handleMouseUp = useCallback(() => {
+  const handleMouseUp = useCallback((e: MouseEvent) => {
     // Cancel any pending animation frame
     if (rafRef.current) {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     }
 
-    // Send final update immediately on release
-    if (draggedPrice) {
-      if (draggingLineIndex !== null && onIndividualLimitPriceChange) {
-        onIndividualLimitPriceChange(draggingLineIndex, draggedPrice);
-      } else if (onLimitPriceChange) {
-        onLimitPriceChange(draggedPrice);
+    // Use draggedPrice as final - it's already been calculated from the last mouse position
+    // Only recalculate if draggedPrice is missing (edge case)
+    let finalPrice = draggedPrice;
+    if (!finalPrice && containerRef.current && currentPrice) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const y = e.clientY - rect.top;
+      const positionPercent = Math.max(0, Math.min(100, ((rect.height - y) / rect.height) * 100));
+      const percentDeviation = percentageRangeMin + (positionPercent / 100) * percentageRange;
+
+      // Get the appropriate market price for this line
+      let marketPrice: number;
+      if (draggingLineIndex !== null && !pricesBound) {
+        const tokenAddress = buyTokenAddresses[draggingLineIndex]?.toLowerCase();
+        const tokenUsdPrice = tokenAddress ? buyTokenUsdPrices[tokenAddress] : 0;
+        if (tokenUsdPrice && sellTokenUsdPrice) {
+          marketPrice = invertPriceDisplay
+            ? tokenUsdPrice / sellTokenUsdPrice
+            : sellTokenUsdPrice / tokenUsdPrice;
+        } else {
+          marketPrice = invertPriceDisplay && currentPrice > 0 ? 1 / currentPrice : currentPrice;
+        }
+      } else {
+        marketPrice = invertPriceDisplay && currentPrice > 0 ? 1 / currentPrice : currentPrice;
       }
+
+      const newDisplayPrice = marketPrice * (1 + percentDeviation / 100);
+      if (newDisplayPrice > 0) {
+        finalPrice = invertPriceDisplay ? 1 / newDisplayPrice : newDisplayPrice;
+      }
+    }
+
+    // Send final update immediately on release
+    if (finalPrice) {
+      if (draggingLineIndex !== null && onIndividualLimitPriceChange) {
+        onIndividualLimitPriceChange(draggingLineIndex, finalPrice);
+      } else if (onLimitPriceChange) {
+        onLimitPriceChange(finalPrice);
+      }
+      setDraggedPrice(finalPrice); // Update state with final price
     }
 
     setIsDragging(false);
@@ -461,14 +493,14 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
     justReleasedRef.current = true; // Keep using dragged price during cooldown
     if (onDragStateChange) onDragStateChange(false);
 
-    // Keep using draggedPrice for a short time to prevent glitches
-    // This gives the form time to process and stabilize
+    // Keep using draggedPrice briefly to allow props to sync
     cooldownTimeoutRef.current = setTimeout(() => {
       justReleasedRef.current = false;
-      setDraggedPrice(null);
+      // Don't clear draggedPrice here - let the useEffect below handle it
+      // when the prop catches up
       cooldownTimeoutRef.current = null;
-    }, 300);
-  }, [draggedPrice, onLimitPriceChange, onIndividualLimitPriceChange, draggingLineIndex, onDragStateChange]);
+    }, 100);
+  }, [draggedPrice, onLimitPriceChange, onIndividualLimitPriceChange, draggingLineIndex, onDragStateChange, currentPrice, invertPriceDisplay, pricesBound, buyTokenAddresses, buyTokenUsdPrices, sellTokenUsdPrice, percentageRangeMin, percentageRange]);
 
   useEffect(() => {
     if (isDragging) {
@@ -485,6 +517,14 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
       };
     }
   }, [isDragging, handleMouseMove, handleMouseUp]);
+
+  // Clear draggedPrice when prop catches up (prevents jump on transition)
+  useEffect(() => {
+    if (!isDragging && !justReleasedRef.current && draggedPrice !== null) {
+      // Props have caught up, safe to clear draggedPrice
+      setDraggedPrice(null);
+    }
+  }, [isDragging, draggedPrice, limitOrderPrice, individualLimitPrices]);
 
   // Cleanup on unmount
   useEffect(() => {

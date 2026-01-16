@@ -16,13 +16,11 @@ import { LimitOrderChart } from '@/components/LimitOrderChart';
 import { LimitOrderForm } from '@/components/LimitOrderForm';
 
 // FAQ Accordion Item Component
-function FAQItem({ question, answer }: { question: string; answer: string }) {
-  const [isOpen, setIsOpen] = useState(false);
-
+function FAQItem({ question, answer, isOpen, onToggle }: { question: string; answer: string; isOpen: boolean; onToggle: () => void }) {
   return (
     <LiquidGlassCard blurIntensity="sm" glowIntensity="none" shadowIntensity="sm" className="overflow-hidden">
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={onToggle}
         className="w-full p-6 flex items-center justify-between text-left"
       >
         <h3 className="text-lg font-semibold text-white pr-4">{question}</h3>
@@ -37,13 +35,15 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </motion.svg>
       </button>
-      <AnimatePresence initial={false}>
+      <AnimatePresence initial={false} mode="sync">
         {isOpen && (
           <motion.div
+            key="content"
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: 0.2, ease: 'easeInOut' }}
+            style={{ overflow: 'hidden' }}
           >
             <div className="px-6 pb-6 pt-0">
               <div className="text-gray-400 whitespace-pre-line" dangerouslySetInnerHTML={{ __html: answer }} />
@@ -112,6 +112,7 @@ export default function Home() {
     return true;
   });
   const [individualLimitPrices, setIndividualLimitPrices] = useState<(number | undefined)[]>([]);
+  const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
 
   // Test functions for toast notifications
   const testSuccessToast = () => {
@@ -441,36 +442,50 @@ export default function Home() {
                     <FAQItem
                       question="What is AgoráX?"
                       answer="AgoráX is a peer-to-peer OTC trading platform built on PulseChain. It allows users to create and fill limit orders directly from their wallets - no KYC, no slippage, and minimal fees."
+                      isOpen={openFaqIndex === 0}
+                      onToggle={() => setOpenFaqIndex(openFaqIndex === 0 ? null : 0)}
                     />
                     <FAQItem
                       question="How does it work?"
                       answer="You create an order by specifying what tokens you want to sell and what you want to receive, and at what price. Your tokens are held in a smart contract until someone fills your order or you cancel it."
+                      isOpen={openFaqIndex === 1}
+                      onToggle={() => setOpenFaqIndex(openFaqIndex === 1 ? null : 1)}
                     />
-                                        <FAQItem
+                    <FAQItem
                       question="What are the fees?"
                       answer="AgoráX charges a flat <strong class='text-white'>100 PLS</strong> listing fee + a <strong class='text-white'>0.2%</strong> fee deducted from the seller's received tokens on order completion.<br/><br/>These are the lowest fees of any DEX on PulseChain:<br/><br/><span class='text-green-400'>✓ AgoráX: 0.2%</span><br/><span class='text-gray-500'>• 9inch V2: 0.22%</span><br/><span class='text-gray-500'>• 9mm V2/V3: 0.25%</span><br/><span class='text-gray-500'>• 9inch V3: 0.25%</span><br/><span class='text-gray-500'>• PulseX V1/V2: 0.29%</span><br/><span class='text-gray-500'>• Uniswap V2/V3: 0.3%</span><br/><span class='text-gray-500'>• PHUX/TIDE: 0.3%</span>"
+                      isOpen={openFaqIndex === 2}
+                      onToggle={() => setOpenFaqIndex(openFaqIndex === 2 ? null : 2)}
                     />
-                                        <FAQItem
+                    <FAQItem
                       question="What is the liquidity & slippage like?"
                       answer="AgoráX uses peer-to-peer limit order logic to complete your trades. This means that there is no slippage on your orders whatsoever. You either get filled at your exact price or you don't."
+                      isOpen={openFaqIndex === 3}
+                      onToggle={() => setOpenFaqIndex(openFaqIndex === 3 ? null : 3)}
                     />
                     <FAQItem
                       question="Is it safe?"
                       answer="AgoráX is a decentralized, immutable smart contract. Your tokens never leave the smart contract until a trade executes. There's no centralized person, or entity that can take or freeze your funds. All code is on chain and verifiable."
+                      isOpen={openFaqIndex === 4}
+                      onToggle={() => setOpenFaqIndex(openFaqIndex === 4 ? null : 4)}
                     />
                     <FAQItem
                       question="Are there admin keys?"
                       answer="Yes. There are a few basic owner functions, but they are primarily for whitelist and fee management, but even for those users are protected. Their original fee and tokens listed are protected for the remainder of their order's life. The Owner CANNOT access a users funds, but there is an emergency pause that prevents placing and filling orders. Cancelling orders and collecting proceeds are both still possible in the event of a pause."
+                      isOpen={openFaqIndex === 5}
+                      onToggle={() => setOpenFaqIndex(openFaqIndex === 5 ? null : 5)}
                     />
                     <FAQItem
                       question="Is the code immutable?"
                       answer="Yes. 100% immutable. No upgrades, no proxy contracts."
+                      isOpen={openFaqIndex === 6}
+                      onToggle={() => setOpenFaqIndex(openFaqIndex === 6 ? null : 6)}
                     />
-
-
                     <FAQItem
                       question="Which tokens can I trade?"
                       answer="You can sell any PRC-20 token on PulseChain and buy from a whitelist of 100+ tokens. For whitelist additions DM us at https://x.com/Time_Haven"
+                      isOpen={openFaqIndex === 7}
+                      onToggle={() => setOpenFaqIndex(openFaqIndex === 7 ? null : 7)}
                     />
                   </div>
                 </motion.section>
@@ -529,6 +544,12 @@ export default function Home() {
                           individualLimitPrices={individualLimitPrices}
                           onLimitPriceChange={(newPrice) => {
                             setLimitOrderPrice(newPrice);
+                            // Always update individualLimitPrices[0] to keep in sync
+                            setIndividualLimitPrices(prev => {
+                              const newPrices = [...prev];
+                              newPrices[0] = newPrice;
+                              return newPrices;
+                            });
                           }}
                           onIndividualLimitPriceChange={(index, newPrice) => {
                             setIndividualLimitPrices(prev => {
@@ -536,6 +557,11 @@ export default function Home() {
                               newPrices[index] = newPrice;
                               return newPrices;
                             });
+                            // When the first token's price is changed, also update the main limit price
+                            // so the form input stays in sync
+                            if (index === 0) {
+                              setLimitOrderPrice(newPrice);
+                            }
                           }}
                           onCurrentPriceChange={(price) => {
                             setCurrentMarketPrice(price);
@@ -559,6 +585,13 @@ export default function Home() {
                           }}
                           onLimitPriceChange={(price) => {
                             setLimitOrderPrice(price);
+                            // Always update individualLimitPrices[0] to keep in sync
+                            // When unbound, this moves the first token's line on the chart
+                            setIndividualLimitPrices(prev => {
+                              const newPrices = [...prev];
+                              newPrices[0] = price;
+                              return newPrices;
+                            });
                           }}
                           onInvertPriceDisplayChange={(inverted) => {
                             setInvertPriceDisplay(inverted);
