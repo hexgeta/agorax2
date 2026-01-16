@@ -225,6 +225,10 @@ export function LimitOrderForm({
   const [isBuyInputFocused, setIsBuyInputFocused] = useState<boolean[]>([false]);
   const [isSellInputFocused, setIsSellInputFocused] = useState(false);
   const [duplicateTokenError, setDuplicateTokenError] = useState<string | null>(null);
+  const [limitPriceInputValue, setLimitPriceInputValue] = useState<string>('');
+  const [isLimitPriceInputFocused, setIsLimitPriceInputFocused] = useState(false);
+  const [individualPriceInputValues, setIndividualPriceInputValues] = useState<string[]>([]);
+  const [individualPriceInputFocused, setIndividualPriceInputFocused] = useState<boolean[]>([]);
   const [expirationError, setExpirationError] = useState<string | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
 
@@ -1273,8 +1277,9 @@ export function LimitOrderForm({
   }, [marketPrice, onLimitPriceChange]);
 
   // Sync external limit price changes (from chart dragging)
+  // Skip when user is typing in the input to prevent feedback loops
   useEffect(() => {
-    if (externalLimitPrice !== undefined) {
+    if (externalLimitPrice !== undefined && !isLimitPriceInputFocused) {
       limitPriceSetByUserRef.current = true;
       isInitialLoadRef.current = false;
 
@@ -1346,7 +1351,9 @@ export function LimitOrderForm({
   useEffect(() => {
     if (!externalIndividualLimitPrices) return;
     // Only sync when dragging from chart (isDragging is true)
+    // Also skip when user is typing in any individual price input
     if (!isDragging) return;
+    if (individualPriceInputFocused.some(focused => focused)) return;
 
     isReceivingExternalIndividualPriceRef.current = true;
 
@@ -3023,27 +3030,61 @@ export function LimitOrderForm({
               )}
             </div>
             <div className="relative">
-              <div className="w-full bg-black/40 border-accent-pink p-3 text-[#FF0080] text-lg min-h-[52px] flex items-center rounded-lg">
-                {limitPrice && parseFloat(limitPrice) > 0 ? (
-                  <NumberFlow
-                    value={(() => {
-                      const price = parseFloat(limitPrice);
-                      if (invertPriceDisplay && price > 0) {
-                        return 1 / price;
-                      }
-                      return price;
-                    })()}
-                    format={{
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 8
-                    }}
-                    animated={!isDragging}
-                  />
-                ) : (
-                  <span className="text-[#FF0080]/30">0.00000000</span>
-                )}
-              </div>
-              {sellToken && buyTokens[0] && limitPrice && parseFloat(limitPrice) > 0 && (
+              <input
+                type="text"
+                inputMode="decimal"
+                className="w-full bg-black/40 border border-[#FF0080]/30 p-3 text-[#FF0080] text-lg min-h-[52px] rounded-lg focus:outline-none focus:border-[#FF0080]/60 transition-colors"
+                placeholder="0.00000000"
+                value={isLimitPriceInputFocused ? limitPriceInputValue : (() => {
+                  if (!limitPrice || parseFloat(limitPrice) <= 0) return '';
+                  const price = parseFloat(limitPrice);
+                  if (invertPriceDisplay && price > 0) {
+                    return (1 / price).toFixed(8).replace(/\.?0+$/, '');
+                  }
+                  return price.toFixed(8).replace(/\.?0+$/, '');
+                })()}
+                onChange={(e) => {
+                  const inputValue = e.target.value.replace(/[^0-9.]/g, '');
+                  setLimitPriceInputValue(inputValue);
+                  if (inputValue === '' || inputValue === '.') {
+                    setLimitPrice('');
+                    setPricePercentage(null);
+                    if (onLimitPriceChange) {
+                      onLimitPriceChange(undefined);
+                    }
+                    return;
+                  }
+                  const displayPrice = parseFloat(inputValue);
+                  if (!isNaN(displayPrice) && displayPrice > 0) {
+                    const basePrice = invertPriceDisplay ? 1 / displayPrice : displayPrice;
+                    setLimitPrice(basePrice.toString());
+                    // Update percentage based on market price
+                    if (marketPrice > 0) {
+                      const percentageAboveMarket = ((basePrice - marketPrice) / marketPrice) * 100;
+                      setPricePercentage(Math.abs(percentageAboveMarket) > 0.01 ? percentageAboveMarket : null);
+                    }
+                    // Update chart line position
+                    if (onLimitPriceChange) {
+                      onLimitPriceChange(basePrice);
+                    }
+                  }
+                }}
+                onFocus={() => {
+                  setIsLimitPriceInputFocused(true);
+                  // Initialize with current display value
+                  if (limitPrice && parseFloat(limitPrice) > 0) {
+                    const price = parseFloat(limitPrice);
+                    const displayValue = invertPriceDisplay && price > 0
+                      ? (1 / price).toFixed(8).replace(/\.?0+$/, '')
+                      : price.toFixed(8).replace(/\.?0+$/, '');
+                    setLimitPriceInputValue(displayValue);
+                  } else {
+                    setLimitPriceInputValue('');
+                  }
+                }}
+                onBlur={() => setIsLimitPriceInputFocused(false)}
+              />
+              {sellToken && buyTokens[0] && (
                 <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[#FF0080]/70 text-sm font-medium pointer-events-none">
                   {invertPriceDisplay ? formatTokenTicker(sellToken.ticker, chainId) : formatTokenTicker(buyTokens[0].ticker, chainId)}
                 </div>
@@ -3206,24 +3247,83 @@ export function LimitOrderForm({
                 )}
               </div>
               <div className="relative">
-                <div
-                  className="w-full bg-black/40 p-3 text-lg min-h-[52px] flex items-center rounded-lg border"
-                  style={{ borderColor: `${colors.accent}40`, color: colors.accent }}
-                >
-                  {tokenLimitPrice && tokenLimitPrice > 0 ? (
-                    <NumberFlow
-                      value={invertPriceDisplay && tokenLimitPrice > 0 ? 1 / tokenLimitPrice : tokenLimitPrice}
-                      format={{
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 8
-                      }}
-                      animated={!isDragging}
-                    />
-                  ) : (
-                    <span style={{ color: `${colors.accent}50` }}>0.00000000</span>
-                  )}
-                </div>
-                {sellToken && token && tokenLimitPrice && tokenLimitPrice > 0 && (
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  className="w-full bg-black/40 p-3 text-lg min-h-[52px] rounded-lg focus:outline-none transition-colors"
+                  style={{
+                    borderColor: `${colors.accent}40`,
+                    color: colors.accent,
+                    border: `1px solid ${colors.accent}40`
+                  }}
+                  placeholder="0.00000000"
+                  value={individualPriceInputFocused[index] ? (individualPriceInputValues[index] || '') : (() => {
+                    if (!tokenLimitPrice || tokenLimitPrice <= 0) return '';
+                    if (invertPriceDisplay && tokenLimitPrice > 0) {
+                      return (1 / tokenLimitPrice).toFixed(8).replace(/\.?0+$/, '');
+                    }
+                    return tokenLimitPrice.toFixed(8).replace(/\.?0+$/, '');
+                  })()}
+                  onChange={(e) => {
+                    const inputValue = e.target.value.replace(/[^0-9.]/g, '');
+                    setIndividualPriceInputValues(prev => {
+                      const newValues = [...prev];
+                      newValues[index] = inputValue;
+                      return newValues;
+                    });
+                    if (inputValue === '' || inputValue === '.') {
+                      setIndividualLimitPrices(prev => {
+                        const newPrices = [...prev];
+                        newPrices[index] = undefined;
+                        return newPrices;
+                      });
+                      return;
+                    }
+                    const displayPrice = parseFloat(inputValue);
+                    if (!isNaN(displayPrice) && displayPrice > 0) {
+                      const basePrice = invertPriceDisplay ? 1 / displayPrice : displayPrice;
+                      setIndividualLimitPrices(prev => {
+                        const newPrices = [...prev];
+                        newPrices[index] = basePrice;
+                        return newPrices;
+                      });
+                    }
+                  }}
+                  onFocus={(e) => {
+                    e.target.style.borderColor = `${colors.accent}80`;
+                    setIndividualPriceInputFocused(prev => {
+                      const newFocused = [...prev];
+                      newFocused[index] = true;
+                      return newFocused;
+                    });
+                    // Initialize with current display value
+                    if (tokenLimitPrice && tokenLimitPrice > 0) {
+                      const displayValue = invertPriceDisplay
+                        ? (1 / tokenLimitPrice).toFixed(8).replace(/\.?0+$/, '')
+                        : tokenLimitPrice.toFixed(8).replace(/\.?0+$/, '');
+                      setIndividualPriceInputValues(prev => {
+                        const newValues = [...prev];
+                        newValues[index] = displayValue;
+                        return newValues;
+                      });
+                    } else {
+                      setIndividualPriceInputValues(prev => {
+                        const newValues = [...prev];
+                        newValues[index] = '';
+                        return newValues;
+                      });
+                    }
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = `${colors.accent}40`;
+                    setIndividualPriceInputFocused(prev => {
+                      const newFocused = [...prev];
+                      newFocused[index] = false;
+                      return newFocused;
+                    });
+                  }}
+                />
+                {sellToken && token && (
                   <div
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-medium pointer-events-none"
                     style={{ color: `${colors.accent}B3` }}
