@@ -540,6 +540,13 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
           <div
             ref={containerRef}
             className="relative flex-1 bg-black/10 rounded select-none"
+            onMouseDown={() => {
+              // Blur any focused input when clicking on the chart to prevent
+              // focus state from blocking price updates during drag
+              if (document.activeElement instanceof HTMLElement) {
+                document.activeElement.blur();
+              }
+            }}
           >
             {/* Y-axis tick marks - using percentage-based positioning */}
             {[-30, -25, -20, -15, -10, -5, 0, 5, 10, 15, 20, 25, 30].map((percentDiff) => {

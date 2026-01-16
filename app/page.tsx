@@ -595,7 +595,7 @@ export default function Home() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.4 }}
-            className="w-full px-2 md:px-8 mt-2 relative z-10"
+            className="w-full px-2 md:px-8 mt-0 relative z-10"
           >
             <div className="max-w-[1200px] mx-auto">
               <OpenPositionsTable ref={openPositionsTableRef} />

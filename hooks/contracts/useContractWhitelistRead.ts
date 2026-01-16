@@ -12,7 +12,9 @@ export interface WhitelistedToken {
 
 export function useContractWhitelistRead() {
   const { chainId } = useAccount();
-  const contractAddress = getContractAddress(chainId);
+  // Default to PulseChain mainnet (369) when no wallet connected to enable token lookups
+  const effectiveChainId = chainId || 369;
+  const contractAddress = getContractAddress(effectiveChainId);
 
   // Get ALL whitelisted tokens to preserve correct indices for order lookups
   // viewWhitelisted returns TokenInfo[] with {tokenAddress, isActive}
@@ -52,7 +54,9 @@ export function useContractWhitelistRead() {
 // Hook to get token info by index
 export function useTokenInfoAt(index: number) {
   const { chainId } = useAccount();
-  const contractAddress = getContractAddress(chainId);
+  // Default to PulseChain mainnet (369) when no wallet connected
+  const effectiveChainId = chainId || 369;
+  const contractAddress = getContractAddress(effectiveChainId);
   
   const { data, isLoading, error } = useContractRead({
     address: contractAddress as Address,
