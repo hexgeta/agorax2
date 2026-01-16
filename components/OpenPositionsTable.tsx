@@ -16,6 +16,7 @@ import { useOpenPositions, CompleteOrderDetails } from '@/hooks/contracts/useOpe
 import { useTokenPrices } from '@/hooks/crypto/useTokenPrices';
 import { useTokenStats } from '@/hooks/crypto/useTokenStats';
 import { useContractWhitelist } from '@/hooks/contracts/useContractWhitelist';
+import { useContractWhitelistRead } from '@/hooks/contracts/useContractWhitelistRead';
 import { CONTRACT_ABI } from '@/config/abis';
 import { formatEther, parseEther, parseAbiItem } from 'viem';
 import { getTokenInfo, getTokenInfoByIndex, formatAddress, formatTokenTicker, parseTokenAmount, formatTokenAmount } from '@/utils/tokenUtils';
@@ -299,6 +300,9 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
   // Token-gating - use centralized validation
   const { hasTokenAccess, partyBalance, teamBalance, isChecking: checkingTokenBalance } = useTokenAccess();
 
+  // Load whitelist from contract to populate the cache for token lookups
+  useContractWhitelistRead();
+
   // Expose refresh function to parent component
   useImperativeHandle(ref, () => ({
     refreshAndNavigateToMyActiveOrders: (sellToken?: any, buyToken?: any) => {
@@ -341,6 +345,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
   const [searchQuery, setSearchQuery] = useState<string>('');
   // All or Nothing filter
   const [aonFilterEnabled, setAonFilterEnabled] = useState<boolean>(false);
+  // Hide my orders filter (marketplace mode only)
+  const [hideMyOrders, setHideMyOrders] = useState<boolean>(false);
   // Advanced options shelf state (persisted to localStorage)
   const [showAdvancedOptions, setShowAdvancedOptions] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
@@ -1801,13 +1807,21 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     let orders = allOrders;
 
     // Level 2: Filter by ownership (Mine vs Non-Mine vs Order History)
-    if (ownershipFilter === 'mine') {
+    // In marketplace mode, show ALL orders by default, but allow hiding user's orders via toggle
+    if (!isMarketplaceMode) {
+      if (ownershipFilter === 'mine') {
+        orders = orders.filter(order =>
+          address && order.userDetails.orderOwner.toLowerCase() === address.toLowerCase()
+        );
+      } else if (ownershipFilter === 'non-mine') {
+        orders = orders.filter(order =>
+          !address || order.userDetails.orderOwner.toLowerCase() !== address.toLowerCase()
+        );
+      }
+    } else if (hideMyOrders && address) {
+      // In marketplace mode with "Hide my orders" enabled, filter out user's orders
       orders = orders.filter(order =>
-        address && order.userDetails.orderOwner.toLowerCase() === address.toLowerCase()
-      );
-    } else if (ownershipFilter === 'non-mine') {
-      orders = orders.filter(order =>
-        !address || order.userDetails.orderOwner.toLowerCase() !== address.toLowerCase()
+        order.userDetails.orderOwner.toLowerCase() !== address.toLowerCase()
       );
     }
 
@@ -2030,7 +2044,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     });
 
     return sortedOrders;
-  }, [allOrders, tokenFilter, ownershipFilter, statusFilter, searchQuery, aonFilterEnabled, getActiveDateRange, sortField, sortDirection, tokenPrices, tokenStats, address, purchasedOrderIds, purchaseTransactions]);
+  }, [allOrders, tokenFilter, ownershipFilter, statusFilter, searchQuery, aonFilterEnabled, hideMyOrders, isMarketplaceMode, getActiveDateRange, sortField, sortDirection, tokenPrices, tokenStats, address, purchasedOrderIds, purchaseTransactions]);
 
   // Helper functions
   const formatTimestamp = (timestamp: number) => {
@@ -2100,6 +2114,49 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
       return level1Orders.filter(order =>
         !address || order.userDetails.orderOwner.toLowerCase() !== address.toLowerCase()
       );
+    }
+  };
+
+  // Get orders for tab counts - uses same logic as displayOrders for marketplace mode
+  const getOrdersForTabCount = (status: 'active' | 'expired' | 'completed' | 'cancelled') => {
+    let orders = allOrders;
+
+    // Apply ownership filter - same logic as displayOrders
+    if (!isMarketplaceMode) {
+      if (ownershipFilter === 'mine') {
+        orders = orders.filter(order =>
+          address && order.userDetails.orderOwner.toLowerCase() === address.toLowerCase()
+        );
+      } else if (ownershipFilter === 'non-mine') {
+        orders = orders.filter(order =>
+          !address || order.userDetails.orderOwner.toLowerCase() !== address.toLowerCase()
+        );
+      }
+    } else if (hideMyOrders && address) {
+      // In marketplace mode with "Hide my orders" enabled, filter out user's orders
+      orders = orders.filter(order =>
+        order.userDetails.orderOwner.toLowerCase() !== address.toLowerCase()
+      );
+    }
+
+    // Apply status filter
+    switch (status) {
+      case 'active':
+        return orders.filter(order =>
+          order.orderDetailsWithID.status === 0 &&
+          Number(order.orderDetailsWithID.orderDetails.expirationTime) >= Math.floor(Date.now() / 1000)
+        );
+      case 'expired':
+        return orders.filter(order =>
+          order.orderDetailsWithID.status === 0 &&
+          Number(order.orderDetailsWithID.orderDetails.expirationTime) < Math.floor(Date.now() / 1000)
+        );
+      case 'completed':
+        return orders.filter(order => order.orderDetailsWithID.status === 2);
+      case 'cancelled':
+        return orders.filter(order => order.orderDetailsWithID.status === 1);
+      default:
+        return orders;
     }
   };
 
@@ -2271,7 +2328,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
             : 'bg-black/40 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'
             }`}
         >
-          Active ({getLevel3Orders(tokenFilter, ownershipFilter, 'active').length})
+          Active ({getOrdersForTabCount('active').length})
         </button>
         <button
           onClick={() => {
@@ -2283,7 +2340,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
             : 'bg-black/40 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'
             }`}
         >
-          Expired ({getLevel3Orders(tokenFilter, ownershipFilter, 'expired').length})
+          Expired ({getOrdersForTabCount('expired').length})
         </button>
         <button
           onClick={() => {
@@ -2295,7 +2352,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
             : 'bg-black/40 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'
             }`}
         >
-          Completed ({getLevel3Orders(tokenFilter, ownershipFilter, 'completed').length})
+          Completed ({getOrdersForTabCount('completed').length})
         </button>
         <button
           onClick={() => {
@@ -2307,7 +2364,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
             : 'bg-black/40 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'
             }`}
         >
-          Cancelled ({getLevel3Orders(tokenFilter, ownershipFilter, 'cancelled').length})
+          Cancelled ({getOrdersForTabCount('cancelled').length})
         </button>
         {/* Tx History tab - hidden for now */}
         {false && (
@@ -2428,6 +2485,29 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
               />
             </div>
 
+            {/* Hide My Orders Toggle - only show if wallet connected */}
+            {address && (
+              <div className="flex items-center justify-between max-w-[480px]">
+                <div className="flex flex-col">
+                  <span className="text-white/70 text-sm">Hide my orders</span>
+                  <span className="text-white/40 text-xs">Don't show orders I created</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setHideMyOrders(!hideMyOrders)}
+                  className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${
+                    hideMyOrders ? 'bg-green-500' : 'bg-white/20'
+                  }`}
+                >
+                  <span
+                    className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform duration-200 ${
+                      hideMyOrders ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+            )}
+
             {/* All or Nothing Toggle */}
             <div className="flex items-center justify-between max-w-[480px]">
               <div className="flex flex-col">
@@ -2449,7 +2529,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
               </button>
             </div>
 
-            {/* Date Filter */}
+            {/* Date Filter - only show for active orders */}
+            {statusFilter === 'active' && (
             <div className="space-y-2">
               <span className="text-white/70 text-sm">Expiration Date</span>
               <div className="flex flex-wrap items-center gap-2">
@@ -2539,6 +2620,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                 </div>
               )}
             </div>
+            )}
           </div>
         )}
       </div>
@@ -2955,7 +3037,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
 
                             return (
                               <div
-                                className={`h-full transition-all duration-300 ${fillPercentage === 0 ? 'bg-gray-500' : 'bg-[rgba(255, 255, 255, 1)]'} rounded-full`}
+                                className={`h-full transition-all duration-300 ${fillPercentage === 0 ? 'bg-gray-500' : 'bg-blue-500'} rounded-full`}
                                 style={{
                                   width: `${fillPercentage}%`
                                 }}
@@ -3129,16 +3211,16 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                       {/* Expandable Actions Shelf */}
                       {expandedPositions.has(order.orderDetailsWithID.orderID.toString()) && (
                         <div
-                          className="col-span-full mt-2 rounded-xl border border-white/20 bg-black/60 backdrop-blur-sm w-full shadow-[0_0_20px_rgba(255,255,255,0.1)]"
+                          className="col-span-full mt-2 rounded-xl border border-white/20 bg-black/60 backdrop-blur-sm w-full max-w-[calc(100vw-48px)] md:max-w-full shadow-[0_0_20px_rgba(255,255,255,0.1)]"
                         >
-                          <div className="p-3">
+                          <div className="p-3 overflow-x-auto">
                             <div className="flex flex-col space-y-2">
                               <h4 className="text-white font-medium text-xl">Your Trade</h4>
 
                               {/* Offer Input Fields */}
                               <div className="mt-3 pt-3 border-t border-white/10">
                                 <h5 className="text-white font-medium text-sm mb-2">You pay:</h5>
-                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                                   {order.orderDetailsWithID.orderDetails.buyTokensIndex.map((tokenIndex: bigint, idx: number) => {
                                     const tokenInfo = getTokenInfoByIndex(Number(tokenIndex));
                                     const orderId = order.orderDetailsWithID.orderID.toString();

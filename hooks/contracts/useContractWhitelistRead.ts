@@ -2,6 +2,8 @@ import { useContractRead, useAccount } from 'wagmi'
 import { Address } from 'viem'
 import { getContractAddress } from '@/config/testing'
 import { CONTRACT_ABI } from '@/config/abis'
+import { useEffect } from 'react'
+import { setWhitelistCache } from '@/utils/tokenUtils'
 
 export interface WhitelistedToken {
   tokenAddress: Address
@@ -11,24 +13,35 @@ export interface WhitelistedToken {
 export function useContractWhitelistRead() {
   const { chainId } = useAccount();
   const contractAddress = getContractAddress(chainId);
-  
-  // Get all active whitelisted tokens directly from contract
-  // Using viewActiveWhitelisted which returns only active tokens (no filtering needed)
-  const { data: activeWhitelistData, isLoading } = useContractRead({
+
+  // Get ALL whitelisted tokens to preserve correct indices for order lookups
+  // viewWhitelisted returns TokenInfo[] with {tokenAddress, isActive}
+  const { data: whitelistData, isLoading } = useContractRead({
     address: contractAddress as Address,
     abi: CONTRACT_ABI,
-    functionName: 'viewActiveWhitelisted',
-    args: [0n, 1000n], // Start from 0, fetch up to 1000 (will return all available)
+    functionName: 'viewWhitelisted',
+    args: [0n, 1000n], // Start from 0, fetch up to 1000
     query: {
       enabled: !!contractAddress,
     },
   })
 
-  // Process the active token addresses to include indices
-  const activeTokens: WhitelistedToken[] = activeWhitelistData?.[0]?.map((tokenAddress, index) => ({
-    tokenAddress: tokenAddress as Address,
-    index: index
-  })) || []
+  // Update the whitelist cache - preserves indices so getTokenInfoByIndex works
+  useEffect(() => {
+    if (whitelistData?.[0] && whitelistData[0].length > 0) {
+      const addresses = whitelistData[0].map((t: { tokenAddress: Address }) => t.tokenAddress as string);
+      setWhitelistCache(addresses);
+    }
+  }, [whitelistData]);
+
+  // Filter to only active tokens for dropdowns, preserving original indices
+  const activeTokens: WhitelistedToken[] = whitelistData?.[0]
+    ?.map((t: { tokenAddress: Address; isActive: boolean }, index: number) => ({
+      tokenAddress: t.tokenAddress as Address,
+      index: index,
+      isActive: t.isActive
+    }))
+    .filter((t: { isActive: boolean }) => t.isActive) || []
 
   return {
     activeTokens,

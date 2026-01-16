@@ -145,40 +145,26 @@ export function formatTokenTicker(ticker: string, chainId?: number): string {
   return ticker;
 }
 
-// Testnet/Mainnet contract token whitelist mapping (index -> address)
-// Based on the AgoraX contract's whitelist order
-const CONTRACT_TOKEN_MAP: Record<number, string> = {
-  0: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE', // tPLS - Native Pulse
-  1: '0x2b591e99afE9f32eAA6214f7B7629768c40Eeb39', // HEX
-  2: '0x8a810ea8B121d08342E9e7696f4a9915cBE494B7', // tPLSX - PulseX
-  3: '0x826e4e896CC2f5B371Cd7Bb0bd929DB3e3DB67c0', // tDAI
-  4: '0x3819f64f282bf135d62168C1e513280dAF905e06', // HDRN - Hedron
-  5: '0xfc4913214444aF5c715cc9F7b52655e788A569ed', // ICSA
-  6: '0xe9f84d418B008888A992Ff8c6D22389C2C3504e0', // BASE
-  7: '0xF55cD1e399e1cc3D95303048897a680be3313308', // TRIO
-  8: '0x6B0956258fF7bd7645aa35369B55B61b8e6d6140', // LUCKY
-  9: '0x6b32022693210cD2Cfc466b9Ac0085DE8fC34eA6', // DECI
-  10: '0x0d86EB9f43C57f6FF3BC9E23D8F9d82503f0e84b', // MAXI
-};
+// Cached whitelist from contract - populated by useContractWhitelistRead hook
+let cachedWhitelist: string[] = [];
 
-// Create reverse mapping (address -> index) for quick lookups
-const ADDRESS_TO_INDEX_MAP = new Map<string, number>();
-Object.entries(CONTRACT_TOKEN_MAP).forEach(([index, address]) => {
-  ADDRESS_TO_INDEX_MAP.set(address.toLowerCase(), parseInt(index));
-});
+// Function to set the whitelist cache (called from useContractWhitelistRead hook)
+export function setWhitelistCache(whitelist: string[]) {
+  cachedWhitelist = whitelist.map(addr => addr.toLowerCase());
+}
 
-// Function to get token info by index (for buy tokens)
-// This maps contract token indices to actual token addresses
+// Function to get token info by whitelist index (for buy tokens)
+// Uses the cached whitelist to look up the address, then gets token info from TOKEN_CONSTANTS
 export function getTokenInfoByIndex(index: number) {
-  const address = CONTRACT_TOKEN_MAP[index];
-  if (address) {
-    const tokenInfo = getTokenInfo(address);
-    return {
-      ...tokenInfo,
-      address: address
-    };
+  // Get address from cached whitelist
+  if (cachedWhitelist.length > index && index >= 0) {
+    const address = cachedWhitelist[index];
+    if (address) {
+      // Look up token info from TOKEN_CONSTANTS via getTokenInfo
+      return getTokenInfo(address);
+    }
   }
-  
+
   return {
     address: '0x0000000000000000000000000000000000000000',
     ticker: 'UNKNOWN',
@@ -192,7 +178,8 @@ export function getTokenInfoByIndex(index: number) {
 // Returns -1 if token is not in the whitelist
 export function getContractWhitelistIndex(address: string): number {
   const normalizedAddress = address.toLowerCase();
-  return ADDRESS_TO_INDEX_MAP.get(normalizedAddress) ?? -1;
+  const index = cachedWhitelist.indexOf(normalizedAddress);
+  return index;
 }
 
 // Function to parse token amount to wei based on token decimals

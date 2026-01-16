@@ -275,7 +275,7 @@ export const TOKEN_CONSTANTS = [{
   chain: 369,
   a: "0x518076cce3729ef1a3877ea3647a26e278e764fe",
   dexs: "0x441da3eb677b23e498a3ea9fb11af15030b14d09",
-  ticker: "WBNB",
+  ticker: "WBNB (TE)",
   decimals: 18,
   name: "Wrapped BNB from BSC"
 }, {
@@ -1173,14 +1173,6 @@ export const TOKEN_CONSTANTS = [{
   decimals: 18,
   name: "NeckBeard Coin"
 },
-{
-  chain: 369,
-  a: "eee",
-  dexs: "0x5137a308dbf822aae9fb34467633baaa516ed099",
-  ticker: "stCOM",
-  decimals: 12,
-  name: "Staked Communis on PulseChain"
-}, 
 {
     chain: 369,
     a: "0x5EE84583f67D5EcEa5420dBb42b462896E7f8D06",
@@ -3803,21 +3795,21 @@ export const TOKEN_CONSTANTS = [{
   chain: 369,
   a: "0x7f4db854f2231c6c90749386db83e8d3089389a5",
   dexs: "0x0000000000000000000000000000000000000000",
-  ticker: "rETH",
+  ticker: "werETH",
   decimals: 18,
   name: "Rocket Pool ETH from Ethereum"
 }, {
   chain: 369,
   a: "0x08edb18cb120676ff4c3435726df424cc8e18638",
   dexs: "0x0000000000000000000000000000000000000000",
-  ticker: "BUSD",
+  ticker: "BUSD (TE)",
   decimals: 18,
   name: "BUSD Token from BSC (TokensExpress)"
 }, {
   chain: 369,
   a: "0xec345429357e75e81d162372a48b6c4307e1922d",
   dexs: "0x0000000000000000000000000000000000000000",
-  ticker: "USDT",
+  ticker: "USDT (TE)",
   decimals: 18,
   name: "Tether USD from BSC (TokensExpress)"
 }, {
@@ -3831,14 +3823,14 @@ export const TOKEN_CONSTANTS = [{
   chain: 369,
   a: "0xe986610b69d362493bba34fbbca98db430643db9",
   dexs: "0x0000000000000000000000000000000000000000",
-  ticker: "eTEAM",
+  ticker: "weTEAM",
   decimals: 8,
   name: "Maximus Team from Ethereum"
 }, {
   chain: 369,
   a: "0xdaef4fd0901624777eb8d290d694ba6f2d55a7db",
   dexs: "0x0000000000000000000000000000000000000000",
-  ticker: "ePARTY",
+  ticker: "wePARTY",
   decimals: 18,
   name: "Maximus Pool Party from Ethereum"
 }, {
@@ -3887,7 +3879,7 @@ export const TOKEN_CONSTANTS = [{
   chain: 369,
   a: "0xf6703dbff070f231eed966d33b1b6d7ef5207d26",
   dexs: "0x0000000000000000000000000000000000000000",
-  ticker: "ZERO",
+  ticker: "ZERØ",
   decimals: 18,
   name: "ZeroTrust"
 }, {
@@ -3901,14 +3893,14 @@ export const TOKEN_CONSTANTS = [{
   chain: 369,
   a: "0x0195d5990a7d6d7ee7a3a4610e357bb660494ba0",
   dexs: "0x0000000000000000000000000000000000000000",
-  ticker: "COM",
+  ticker: "weCOM",
   decimals: 12,
   name: "Communis from Ethereum"
 }, {
   chain: 369,
   a: "0xefbe5d24ea08aaff31163d05eabf75ef658196ba",
   dexs: "0x0000000000000000000000000000000000000000",
-  ticker: "gCOMM",
+  ticker: "wegCOMM",
   decimals: 12,
   name: "Giga Communis from Ethereum"
 }, {

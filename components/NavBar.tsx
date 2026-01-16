@@ -25,12 +25,30 @@ const NavBar = () => {
   // Prevent body scroll when mobile menu is open
   useEffect(() => {
     if (mobileMenuOpen) {
+      // Lock both html and body to prevent scrolling on all browsers/devices
+      document.documentElement.style.overflow = 'hidden';
       document.body.style.overflow = 'hidden';
+      document.body.style.position = 'fixed';
+      document.body.style.width = '100%';
+      document.body.style.top = `-${window.scrollY}px`;
     } else {
+      const scrollY = document.body.style.top;
+      document.documentElement.style.overflow = '';
       document.body.style.overflow = '';
+      document.body.style.position = '';
+      document.body.style.width = '';
+      document.body.style.top = '';
+      // Restore scroll position
+      if (scrollY) {
+        window.scrollTo(0, parseInt(scrollY || '0') * -1);
+      }
     }
     return () => {
+      document.documentElement.style.overflow = '';
       document.body.style.overflow = '';
+      document.body.style.position = '';
+      document.body.style.width = '';
+      document.body.style.top = '';
     };
   }, [mobileMenuOpen]);
 
@@ -171,18 +189,18 @@ const NavBar = () => {
       {/* Only render when open to prevent invisible elements from intercepting clicks */}
       {mobileMenuOpen && (
       <div
-        className="fixed inset-0 z-[199] animate-in fade-in duration-150"
+        className="fixed inset-0 z-[199] animate-in fade-in duration-150 overflow-hidden touch-none"
         aria-hidden={!mobileMenuOpen}
       >
-        {/* Backdrop */}
+        {/* Backdrop - fully opaque black */}
         <div
-          className="absolute inset-0 bg-black/90 backdrop-blur-md"
+          className="absolute inset-0 bg-black"
           onClick={() => setMobileMenuOpen(false)}
         />
 
         {/* Menu Content */}
         <div
-          className="absolute inset-x-0 top-[73px] bottom-0 flex flex-col items-center justify-start pt-12 gap-6 animate-in slide-in-from-top-2 duration-150"
+          className="absolute inset-x-0 top-[73px] bottom-0 flex flex-col items-center justify-start pt-12 gap-6 animate-in slide-in-from-top-2 duration-150 overflow-hidden"
         >
           {/* Navigation Links */}
           <nav className="flex flex-col items-center gap-2 w-full px-8">
