@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
 import { createPortal } from 'react-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { CircleDollarSign, ChevronDown, Trash2, Lock, Search, ArrowRight, MoveRight, ChevronRight, Play, CalendarDays } from 'lucide-react';
 import { PixelSpinner } from './ui/PixelSpinner';
 import PaywallModal from './PaywallModal';
@@ -20,6 +20,7 @@ import { useContractWhitelistRead } from '@/hooks/contracts/useContractWhitelist
 import { CONTRACT_ABI } from '@/config/abis';
 import { formatEther, parseEther, parseAbiItem } from 'viem';
 import { getTokenInfo, getTokenInfoByIndex, formatAddress, formatTokenTicker, parseTokenAmount, formatTokenAmount } from '@/utils/tokenUtils';
+import { formatSmartNumber } from '@/utils/format';
 import { isNativeToken } from '@/utils/tokenApproval';
 import { getRemainingPercentage } from '@/utils/orderUtils';
 import { getBlockExplorerTxUrl } from '@/utils/blockExplorer';
@@ -434,36 +435,6 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
   // State for landing page connect button disclaimer
   const [showLandingDisclaimer, setShowLandingDisclaimer] = useState(false);
 
-  // State for horizontal scroll shadows (landing page)
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(true);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-
-  // Handle scroll to update shadow indicators
-  const handleScroll = useCallback(() => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-
-    const { scrollLeft, scrollWidth, clientWidth } = container;
-    setCanScrollLeft(scrollLeft > 0);
-    setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 1);
-  }, []);
-
-  // Check scroll state on mount and resize
-  useEffect(() => {
-    if (!isLandingPageMode) return;
-
-    const container = scrollContainerRef.current;
-    if (!container) return;
-
-    handleScroll();
-
-    const resizeObserver = new ResizeObserver(handleScroll);
-    resizeObserver.observe(container);
-
-    return () => resizeObserver.disconnect();
-  }, [isLandingPageMode, handleScroll]);
-
   // Efficient querying: Pass address for user orders, undefined for marketplace (all orders)
   const {
     contractName,
@@ -644,17 +615,35 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
         newSet.delete(orderId);
       } else {
         newSet.add(orderId);
-        // Scroll the expanded position to the top after a short delay
-        setTimeout(() => {
-          const element = document.querySelector(`[data-order-id="${orderId}"]`);
-          if (element) {
-            element.scrollIntoView({
-              behavior: 'smooth',
-              block: 'start',
-              inline: 'nearest'
-            });
-          }
-        }, 100);
+        // Only scroll on mobile (< 768px) - desktop users can already see the content
+        const isMobile = window.innerWidth < 768;
+        if (isMobile) {
+          // Scroll to the expanded content after a short delay (wait for render)
+          setTimeout(() => {
+            const expandedElement = document.querySelector(`[data-expanded-order-id="${orderId}"]`);
+            if (expandedElement) {
+              // Get the element's position and scroll with offset for header
+              const rect = expandedElement.getBoundingClientRect();
+              const headerOffset = 80; // Account for fixed header
+              const elementTop = rect.top + window.scrollY - headerOffset;
+
+              window.scrollTo({
+                top: elementTop,
+                behavior: 'smooth'
+              });
+            } else {
+              // Fallback to the row element
+              const element = document.querySelector(`[data-order-id="${orderId}"]`);
+              if (element) {
+                element.scrollIntoView({
+                  behavior: 'smooth',
+                  block: 'start',
+                  inline: 'nearest'
+                });
+              }
+            }
+          }, 150);
+        }
       }
       return newSet;
     });
@@ -2298,22 +2287,13 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
 
   return (
     <LiquidGlassCard
-      className={`w-full max-w-[1200px] mx-auto mb-6 mt-2 p-0 ${isLandingPageMode ? 'relative mx-2 md:mx-auto' : ''}`}
+      className={`w-full max-w-[1200px] mb-6 mt-2 p-0 ${isLandingPageMode ? 'overflow-hidden' : 'mx-auto'}`}
       shadowIntensity="sm"
       glowIntensity="sm"
       blurIntensity="xl"
     >
-      {/* Scroll shadow indicators for landing page */}
-      {isLandingPageMode && canScrollLeft && (
-        <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-16 bg-gradient-to-r from-black/60 to-transparent z-10 md:hidden" />
-      )}
-      {isLandingPageMode && canScrollRight && (
-        <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-16 bg-gradient-to-l from-black/60 to-transparent z-10 md:hidden" />
-      )}
       <div
-        ref={isLandingPageMode ? scrollContainerRef : undefined}
-        onScroll={isLandingPageMode ? handleScroll : undefined}
-        className={`p-4 md:p-6 ${isLandingPageMode ? 'overflow-x-scroll pb-0 modern-scrollbar' : ''}`}
+        className={`p-4 md:p-6 ${isLandingPageMode ? 'overflow-x-auto pb-2 modern-scrollbar' : ''}`}
       >
       {/* Status filter buttons - hide in landing page mode */}
       {!isLandingPageMode && (
@@ -3209,10 +3189,21 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                       </div>
 
                       {/* Expandable Actions Shelf */}
-                      {expandedPositions.has(order.orderDetailsWithID.orderID.toString()) && (
-                        <div
-                          className="col-span-full mt-2 rounded-xl border border-white/20 bg-black/60 backdrop-blur-sm w-full max-w-[calc(100vw-48px)] md:max-w-full shadow-[0_0_20px_rgba(255,255,255,0.1)]"
-                        >
+                      <AnimatePresence initial={false} mode="sync">
+                        {expandedPositions.has(order.orderDetailsWithID.orderID.toString()) && (
+                          <motion.div
+                            key="expanded-content"
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{
+                              height: { duration: 0.3, ease: [0.4, 0, 0.2, 1] },
+                              opacity: { duration: 0.25, ease: 'easeInOut' }
+                            }}
+                            style={{ overflow: 'hidden' }}
+                            data-expanded-order-id={order.orderDetailsWithID.orderID.toString()}
+                            className="col-span-full mt-2 w-full max-w-[calc(100vw-48px)] md:max-w-full"
+                          >
                           <div className="p-3 overflow-x-auto">
                             <div className="flex flex-col space-y-2">
                               <h4 className="text-white font-medium text-xl">Your Trade</h4>
@@ -3227,7 +3218,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                     const currentAmount = offerInputs[orderId]?.[tokenInfo.address] || '';
 
                                     return (
-                                      <div key={tokenInfo.address} className="flex items-center space-x-2 bg-gray-400/5 rounded-lg px-3 py-2 min-h-[60px]">
+                                      <div key={tokenInfo.address} className="flex items-center space-x-2 px-3 py-2 min-h-[60px]">
                                         <div className="flex items-center space-x-2 flex-1">
                                           <TokenLogo
                                             src={tokenInfo.logo}
@@ -3248,7 +3239,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                               removeCommas(e.target.value),
                                               order
                                             )}
-                                            className="bg-transparent border border-white/10  px-2 py-1 text-white text-sm w-26 md:w-20 focus:border-white/40 focus:outline-none"
+                                            className="bg-transparent border border-white/10 rounded-md px-2 py-1 text-white text-sm w-26 md:w-20 focus:border-white/40 focus:outline-none"
                                             placeholder="0"
                                           />
                                         </div>
@@ -3258,7 +3249,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                 </div>
 
                                 {/* Percentage buttons and Clear under all inputs */}
-                                <div className="mt-4 flex space-x-2">
+                                <div className="mt-4 ml-2 flex space-x-2">
                                   <button
                                     onClick={() => handlePercentageFill(order, 0.1)}
                                     className="px-3 py-1 text-xs bg-blue-500/20 text-blue-400 border border-blue-400 rounded hover:bg-blue-500/30 transition-colors"
@@ -3317,94 +3308,85 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                     const platformFee = totalBuyAmount * 0.002; // 0.2% fee
                                     const orderOwnerReceives = totalBuyAmount - platformFee;
 
+                                    // Calculate receive amount for the table
+                                    const sellTokenInfo = getTokenInfo(order.orderDetailsWithID.orderDetails.sellToken);
+                                    const sellAmountParsed = parseFloat(formatTokenAmount(order.orderDetailsWithID.orderDetails.sellAmount, sellTokenInfo.decimals));
+                                    const buyAmountParsed = parseFloat(formatTokenAmount(order.orderDetailsWithID.orderDetails.buyAmounts[0], primaryTokenInfo?.decimals || 18));
+                                    const exchangeRate = sellAmountParsed / buyAmountParsed;
+                                    const receiveAmount = totalBuyAmount * exchangeRate;
+
                                     return (
-                                      <div className="mt-4 p-3 bg-white/5 rounded-lg">
+                                      <div className="mt-4 p-3 max-w-lg">
                                         <h5 className="text-white font-medium mb-2">Order Breakdown</h5>
-                                        <div className="space-y-1 text-sm">
-                                          <div className="flex justify-between">
+                                        <div className="text-sm">
+                                          {/* Table-like grid layout */}
+                                          <div className="grid grid-cols-[1fr_auto_auto] gap-x-3 gap-y-1 items-center">
+                                            {/* Row 1: Seller Receives */}
                                             <span className="text-gray-400">Seller Receives:</span>
-                                            <div className="flex items-center space-x-1">
-                                              <span className="text-white">{orderOwnerReceives.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })}</span>
-                                              {primaryTokenInfo !== null && (
-                                                <>
-                                                  <TokenLogo
-                                                    src={primaryTokenInfo.logo}
-                                                    alt={formatTokenTicker(primaryTokenInfo.ticker)}
-                                                    className="w-4 h-4 rounded-full"
-                                                  />
-                                                  <span className="text-white">{formatTokenTicker(primaryTokenInfo.ticker)}</span>
-                                                </>
-                                              )}
-                                            </div>
-                                          </div>
-                                          <div className="flex justify-between">
-                                            <span className="text-gray-400">Platform Fee (0.2%):</span>
-                                            <div className="flex items-center space-x-1">
-                                              <span className="text-white">{platformFee.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })}</span>
-                                              {primaryTokenInfo !== null && (
-                                                <>
-                                                  <TokenLogo
-                                                    src={primaryTokenInfo.logo}
-                                                    alt={formatTokenTicker(primaryTokenInfo.ticker)}
-                                                    className="w-4 h-4 rounded-full"
-                                                  />
-                                                  <span className="text-white">{formatTokenTicker(primaryTokenInfo.ticker)}</span>
-                                                </>
-                                              )}
-                                            </div>
-                                          </div>
-                                          <div className="border-t border-white/10 pt-1">
-                                            <div className="flex justify-between">
-                                              <span className="text-white font-bold">You Pay:</span>
-                                              <div className="flex items-center space-x-1">
-                                                <span className="text-white font-bold">{totalBuyAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })}</span>
-                                                {primaryTokenInfo !== null && (
-                                                  <>
-                                                    <TokenLogo
-                                                      src={primaryTokenInfo.logo}
-                                                      alt={formatTokenTicker(primaryTokenInfo.ticker)}
-                                                      className="w-4 h-4 rounded-full"
-                                                    />
-                                                    <span className="text-white font-bold">{formatTokenTicker(primaryTokenInfo.ticker)}</span>
-                                                  </>
-                                                )}
+                                            <span className="text-white text-right">{formatSmartNumber(orderOwnerReceives)}</span>
+                                            {primaryTokenInfo !== null ? (
+                                              <div className="flex items-center gap-1">
+                                                <TokenLogo
+                                                  src={primaryTokenInfo.logo}
+                                                  alt={formatTokenTicker(primaryTokenInfo.ticker)}
+                                                  className="w-4 h-4 rounded-full"
+                                                />
+                                                <span className="text-white">{formatTokenTicker(primaryTokenInfo.ticker)}</span>
                                               </div>
+                                            ) : (
+                                              <div className="w-16" />
+                                            )}
+
+                                            {/* Row 2: Platform Fee */}
+                                            <span className="text-gray-400">Seller Platform Fee (0.2%):</span>
+                                            <span className="text-red-400 text-right">-{formatSmartNumber(platformFee)}</span>
+                                            {primaryTokenInfo !== null ? (
+                                              <div className="flex items-center gap-1">
+                                                <TokenLogo
+                                                  src={primaryTokenInfo.logo}
+                                                  alt={formatTokenTicker(primaryTokenInfo.ticker)}
+                                                  className="w-4 h-4 rounded-full"
+                                                />
+                                                <span className="text-red-400">{formatTokenTicker(primaryTokenInfo.ticker)}</span>
+                                              </div>
+                                            ) : (
+                                              <div className="w-16" />
+                                            )}
+
+                                            {/* Divider row */}
+                                            <div className="col-span-3 border-t border-white/10 my-1" />
+
+                                            {/* Row 3: You Pay */}
+                                            <span className="text-white font-bold">You Pay:</span>
+                                            <span className="text-white font-bold text-right">{formatSmartNumber(totalBuyAmount)}</span>
+                                            {primaryTokenInfo !== null ? (
+                                              <div className="flex items-center gap-1">
+                                                <TokenLogo
+                                                  src={primaryTokenInfo.logo}
+                                                  alt={formatTokenTicker(primaryTokenInfo.ticker)}
+                                                  className="w-4 h-4 rounded-full"
+                                                />
+                                                <span className="text-white font-bold">{formatTokenTicker(primaryTokenInfo.ticker)}</span>
+                                              </div>
+                                            ) : (
+                                              <div className="w-16" />
+                                            )}
+
+                                            {/* Spacer row */}
+                                            <div className="col-span-3 h-3" />
+
+                                            {/* Row 4: You Receive */}
+                                            <span className="text-white font-medium">You Receive:</span>
+                                            <span className="text-white font-bold text-right">{formatSmartNumber(receiveAmount)}</span>
+                                            <div className="flex items-center gap-1">
+                                              <TokenLogo
+                                                src={sellTokenInfo.logo}
+                                                alt={formatTokenTicker(sellTokenInfo.ticker)}
+                                                className="w-4 h-4 rounded-full"
+                                              />
+                                              <span className="text-white font-bold">{formatTokenTicker(sellTokenInfo.ticker)}</span>
                                             </div>
                                           </div>
-
-                                          {/* Divider */}
-                                          <div className="pt-2 mt-2">
-                                          </div>
-
-                                          {/* What you receive section */}
-                                          {(() => {
-                                            if (!primaryTokenInfo) return null;
-
-                                            const sellTokenInfo = getTokenInfo(order.orderDetailsWithID.orderDetails.sellToken);
-                                            const sellAmount = parseFloat(formatTokenAmount(order.orderDetailsWithID.orderDetails.sellAmount, sellTokenInfo.decimals));
-                                            const buyAmount = parseFloat(formatTokenAmount(order.orderDetailsWithID.orderDetails.buyAmounts[0], primaryTokenInfo.decimals));
-
-                                            // Calculate the exchange rate: sellAmount / buyAmount
-                                            const exchangeRate = sellAmount / buyAmount;
-
-                                            // What you receive = what you pay * exchange rate
-                                            const receiveAmount = totalBuyAmount * exchangeRate;
-
-                                            return (
-                                              <div className="flex justify-between">
-                                                <span className="text-white font-medium">You Receive:</span>
-                                                <div className="flex items-center space-x-1">
-                                                  <span className="text-white font-bold">{receiveAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })}</span>
-                                                  <TokenLogo
-                                                    src={sellTokenInfo.logo}
-                                                    alt={formatTokenTicker(sellTokenInfo.ticker)}
-                                                    className="w-4 h-4 rounded-full"
-                                                  />
-                                                  <span className="text-white font-bold">{formatTokenTicker(sellTokenInfo.ticker)}</span>
-                                                </div>
-                                              </div>
-                                            );
-                                          })()}
                                         </div>
                                       </div>
                                     );
@@ -3420,7 +3402,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                 )}
 
                                 {/* Submit Section */}
-                                <div className="mt-4 pt-3 border-t border-white/10">
+                                <div className="mt-0 pt-3">
                                   {(() => {
                                     const orderId = order.orderDetailsWithID.orderID.toString();
                                     const currentInputs = offerInputs[orderId];
@@ -3443,7 +3425,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                               setShowLandingDisclaimer(true);
                                             }
                                           }}
-                                          className="px-6 py-2 bg-white text-black border border-white/20 rounded-lg hover:bg-gray-100 transition-colors text-sm font-medium"
+                                          className="px-6 py-2 bg-white text-black border border-white/20 rounded-full hover:bg-gray-100 transition-colors text-sm font-medium"
                                         >
                                           Connect Wallet
                                         </button>
@@ -3463,7 +3445,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                 </div>
                               </div>
 
-                              <div className="text-xs text-gray-500 mt-6">
+                              <div className="mt-6 text-xs text-gray-500">
                                 Order ID: {order.orderDetailsWithID.orderID.toString()}
                               </div>
 
@@ -3528,8 +3510,9 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                               )}
                             </div>
                           </div>
-                        </div>
-                      )}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </div>
                   );
                 })}

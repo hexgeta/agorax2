@@ -11,20 +11,20 @@ import { headers } from 'next/headers'
 export const revalidate = 2592000; // 30 days in seconds
 
 export const metadata = {
-  title: 'AgoráX - The best place to trade on PulseChain.',
-  description: 'AgoráX is a limit order DEX for trading tokens on PulseChain at the best rates. Low fees & no slippage.',
-  metadataBase: new URL('https://agorax2.lookintomaxi.com'),
+  title: "AgoráX - PulseChain's On-chain Limit Order DEX",
+  description: 'AgoráX is a limit order DEX for trading tokens on PulseChain with zero slippage, low fees & peer-to-peer.',
+  metadataBase: new URL('https://agorax.win'),
   openGraph: {
-    title: 'AgoráX - Peer-to-peer Trading on PulseChain',
-    description: 'AgoráX is a limit order DEX for trading tokens on PulseChain at the best rates. Low fees & no slippage.',
-    url: 'https://agorax2.lookintomaxi.com',
+    title: "AgoráX - PulseChain's On-chain Limit Order DEX",
+    description: 'AgoráX is a limit order DEX for trading tokens on PulseChain with zero slippage, low fees & peer-to-peer.',
+    url: 'https://agorax.win',
     siteName: 'AgoráX',
     images: [
       {
         url: '/opengraph-image.png',
         width: 1200,
         height: 630,
-        alt: 'AgoráX - Peer-to-peer Trading on PulseChain',
+        alt: "AgoráX - PulseChain's On-chain Limit Order DEX",
       },
     ],
     locale: 'en_US',
@@ -32,8 +32,8 @@ export const metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'AgoráX - Peer-to-peer Trading on PulseChain',
-    description: 'AgoráX is a limit order DEX for trading tokens on PulseChain at the best rates. Low fees & no slippage.',
+    title: "AgoráX - PulseChain's On-chain Limit Order DEX",
+    description: 'AgoráX is a limit order DEX for trading tokens on PulseChain with zero slippage, low fees & peer-to-peer.',
     images: ['/opengraph-image.png'],
   },
   icons: {

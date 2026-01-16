@@ -85,6 +85,24 @@ export function formatPercent(value: number, opts: { alreadyPercentage?: boolean
   });
 }
 
+/**
+ * Format a number with smart decimal handling:
+ * - Removes unnecessary trailing zeros (e.g., 100.00 -> 100, 90.50 -> 90.5)
+ * - Shows 0 with no decimals
+ * - Preserves significant decimals up to maxDecimals
+ */
+export function formatSmartNumber(value: number, maxDecimals = 6): string {
+  if (value === 0) return '0';
+
+  // Format with max decimals, then trim trailing zeros
+  const formatted = value.toLocaleString('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: maxDecimals
+  });
+
+  return formatted;
+}
+
 export function formatPriceSigFig(price: number, sigFigs = 3): string {
   if (price === 0) return '$0.00';
   

@@ -23,8 +23,8 @@ export function DisclaimerDialog({ open, onAccept }: DisclaimerDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={() => {}}>
-      <DialogContent 
-        className="max-w-2xl bg-black border-2 rounded-none border-[rgba(255, 255, 255, 1)]/50 text-white max-h-[90vh] overflow-y-auto z-[9999] p-8 [&>button]:hidden"
+      <DialogContent
+        className="w-full h-full max-w-full max-h-full md:max-w-2xl md:max-h-[90vh] md:h-auto bg-black border-0 md:border-2 rounded-none md:border-white/50 text-white overflow-y-auto z-[9999] p-6 md:p-8 [&>button]:hidden"
         onPointerDownOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
       >

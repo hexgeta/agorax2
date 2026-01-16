@@ -175,7 +175,7 @@ export default function Home() {
 
             {/* Not Connected State - Landing Page */}
             {!isInitializing && !isConnecting && !isConnected && (
-              <div className="pt-12 md:pt-20 pb-16">
+              <div className="pt-12 md:pt-20 pb-16 px-4 md:px-6">
                 {/* Hero Section */}
                 <div className="text-center mb-8 md:mb-12">
                   <motion.h1
@@ -213,7 +213,7 @@ export default function Home() {
                   transition={{ duration: 0.6, delay: 0.5 }}
                   className="mb-16 md:mb-24"
                 >
-                  <h2 className="text-2xl md:text-4xl font-bold text-white mb-4 text-center">A New Paradigm</h2>
+                  <h2 className="text-2xl md:text-4xl font-bold text-white mb-4 text-center">A New Way to Trade</h2>
                   <p className="text-gray-400 text-center max-w-2xl mx-auto mb-10">
                     Crypto was invented to remove middlemen but crypto exchanges became the new middlemen.
                     AgoráX brings decentralized finance{' '}
@@ -465,7 +465,7 @@ export default function Home() {
                     />
                     <FAQItem
                       question="Is it safe?"
-                      answer="AgoráX is a decentralized, immutable smart contract. Your tokens never leave the smart contract until a trade executes. There's no centralized person, or entity that can take or freeze your funds. All code is on chain and verifiable."
+                      answer="AgoráX is a decentralized, immutable smart contract. Your tokens never leave the smart contract until a trade executes. There's no centralized person, or entity that can take or freeze your funds. All code is on-tchain and verifiable."
                       isOpen={openFaqIndex === 4}
                       onToggle={() => setOpenFaqIndex(openFaqIndex === 4 ? null : 4)}
                     />
