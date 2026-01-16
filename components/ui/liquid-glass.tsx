@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 import { cva, type VariantProps } from "class-variance-authority";
 
 const liquidGlassVariants = cva(
-    "relative border border-white/10 overflow-hidden transition-all duration-300 bg-black/10",
+    "relative border border-white/10 overflow-hidden transition-all duration-300 bg-black/10 transform-gpu",
     {
         variants: {
             // Shadow depth beneath the card

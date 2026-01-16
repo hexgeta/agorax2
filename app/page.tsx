@@ -223,9 +223,9 @@ export default function Home() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* The Old Way */}
                     <LiquidGlassCard
-                      blurIntensity="md"
-                      glowIntensity="low"
-                      shadowIntensity="md"
+                      shadowIntensity="sm"
+                      glowIntensity="sm"
+                      blurIntensity="xl"
                       className="p-6 md:p-8"
                     >
                       <h3 className="text-xl font-semibold text-red-400 mb-4">The Old Way</h3>
@@ -266,9 +266,9 @@ export default function Home() {
 
                     {/* New Way */}
                     <LiquidGlassCard
-                      blurIntensity="md"
-                      glowIntensity="low"
-                      shadowIntensity="md"
+                      shadowIntensity="sm"
+                      glowIntensity="sm"
+                      blurIntensity="xl"
                       className="p-6 md:p-8"
                     >
                       <h3 className="text-xl font-semibold text-green-400 mb-4">With AgoráX</h3>
@@ -325,9 +325,9 @@ export default function Home() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     <LiquidGlassCard
-                      blurIntensity="md"
-                      glowIntensity="low"
-                      shadowIntensity="md"
+                      shadowIntensity="sm"
+                      glowIntensity="sm"
+                      blurIntensity="xl"
                       className="p-6 text-center"
                     >
                       <div className="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center mb-4 mx-auto">
@@ -341,9 +341,9 @@ export default function Home() {
                     </LiquidGlassCard>
 
                     <LiquidGlassCard
-                      blurIntensity="md"
-                      glowIntensity="low"
-                      shadowIntensity="md"
+                      shadowIntensity="sm"
+                      glowIntensity="sm"
+                      blurIntensity="xl"
                       className="p-6 text-center"
                     >
                       <div className="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center mb-4 mx-auto">
@@ -359,9 +359,9 @@ export default function Home() {
 
                     
                     <LiquidGlassCard
-                      blurIntensity="md"
-                      glowIntensity="low"
-                      shadowIntensity="md"
+                      shadowIntensity="sm"
+                      glowIntensity="sm"
+                      blurIntensity="xl"
                       className="p-6 text-center"
                     >
                       <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center mb-4 mx-auto">
@@ -374,9 +374,9 @@ export default function Home() {
                     </LiquidGlassCard>
 
                     <LiquidGlassCard
-                      blurIntensity="md"
-                      glowIntensity="low"
-                      shadowIntensity="md"
+                      shadowIntensity="sm"
+                      glowIntensity="sm"
+                      blurIntensity="xl"
                       className="p-6 text-center"
                     >
                       <div className="w-12 h-12 rounded-xl bg-amber-500/20 flex items-center justify-center mb-4 mx-auto">
@@ -393,9 +393,9 @@ export default function Home() {
                     </LiquidGlassCard>
 
                     <LiquidGlassCard
-                      blurIntensity="md"
-                      glowIntensity="low"
-                      shadowIntensity="md"
+                      shadowIntensity="sm"
+                      glowIntensity="sm"
+                      blurIntensity="xl"
                       className="p-6 text-center"
                     >
                       <div className="w-12 h-12 rounded-xl bg-cyan-500/20 flex items-center justify-center mb-4 mx-auto">
@@ -410,9 +410,9 @@ export default function Home() {
                     </LiquidGlassCard>
 
                     <LiquidGlassCard
-                      blurIntensity="md"
-                      glowIntensity="low"
-                      shadowIntensity="md"
+                      shadowIntensity="sm"
+                      glowIntensity="sm"
+                      blurIntensity="xl"
                       className="p-6 text-center"
                     >
                       <div className="w-12 h-12 rounded-xl bg-pink-500/20 flex items-center justify-center mb-4 mx-auto">
