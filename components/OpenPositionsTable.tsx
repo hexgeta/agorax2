@@ -93,6 +93,66 @@ const removeCommas = (value: string) => {
   return value.replace(/,/g, '');
 };
 
+// Calculate combined fill percentage from all token inputs
+// Returns an object with the total percentage and per-token details
+interface TokenFillDetail {
+  tokenInfo: { ticker: string; name: string; decimals: number; logo: string; address: string; };
+  inputAmount: number;
+  maxAmount: number;
+  percentage: number;
+  fee: number;
+  sellerReceives: number;
+}
+
+const calculateCombinedFillPercentage = (
+  order: any,
+  currentInputs: { [tokenAddress: string]: string } | undefined
+): { totalPercentage: number; tokenDetails: TokenFillDetail[] } => {
+  if (!currentInputs) return { totalPercentage: 0, tokenDetails: [] };
+
+  const buyTokensIndex = order.orderDetailsWithID.orderDetails.buyTokensIndex;
+  const buyAmounts = order.orderDetailsWithID.orderDetails.buyAmounts;
+  const sellAmount = order.orderDetailsWithID.orderDetails.sellAmount;
+  const remainingSellAmount = order.orderDetailsWithID.remainingSellAmount;
+
+  // Calculate the remaining percentage of the order
+  const remainingPercentage = Number(remainingSellAmount) / Number(sellAmount);
+
+  let totalPercentage = 0;
+  const tokenDetails: TokenFillDetail[] = [];
+
+  if (buyTokensIndex && buyAmounts && Array.isArray(buyTokensIndex) && Array.isArray(buyAmounts)) {
+    for (let idx = 0; idx < buyTokensIndex.length; idx++) {
+      const tokenIndex = buyTokensIndex[idx];
+      const tokenInfo = getTokenInfoByIndex(Number(tokenIndex));
+      if (tokenInfo.address && currentInputs[tokenInfo.address]) {
+        const inputAmount = parseFloat(removeCommas(currentInputs[tokenInfo.address]));
+        if (!isNaN(inputAmount) && inputAmount > 0) {
+          const maxAmount = parseFloat(formatTokenAmount(buyAmounts[idx], tokenInfo.decimals));
+          // Scale max amount by remaining percentage
+          const scaledMaxAmount = maxAmount * remainingPercentage;
+          // Calculate percentage relative to the scaled max (remaining order)
+          const percentage = scaledMaxAmount > 0 ? (inputAmount / scaledMaxAmount) * 100 : 0;
+          const fee = inputAmount * 0.002; // 0.2% fee
+          const sellerReceives = inputAmount - fee;
+
+          totalPercentage += percentage;
+          tokenDetails.push({
+            tokenInfo,
+            inputAmount,
+            maxAmount: scaledMaxAmount,
+            percentage,
+            fee,
+            sellerReceives
+          });
+        }
+      }
+    }
+  }
+
+  return { totalPercentage, tokenDetails };
+};
+
 // Format USD amount without scientific notation
 const formatUSD = (amount: number) => {
   // Handle zero values cleanly
@@ -399,6 +459,11 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
 
   // Offer input state
   const [offerInputs, setOfferInputs] = useState<{ [orderId: string]: { [tokenAddress: string]: string } }>({});
+
+  // Token selection state for multi-token orders
+  // Tracks which tokens user has selected to pay with, and whether the selection shelf is open
+  const [selectedBuyTokens, setSelectedBuyTokens] = useState<{ [orderId: string]: Set<string> }>({});
+  const [tokenSelectionOpen, setTokenSelectionOpen] = useState<{ [orderId: string]: boolean }>({});
 
   // State for executing orders
   const [executingOrders, setExecutingOrders] = useState<Set<string>>(new Set());
@@ -1046,7 +1111,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     }));
   };
 
-  // Handle executing an order
+  // Handle executing an order - supports multiple sequential fills
   const handleExecuteOrder = async (order: any) => {
     const orderId = order.orderDetailsWithID.orderID.toString();
 
@@ -1080,6 +1145,16 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
       return;
     }
 
+    // Check combined fill percentage
+    const { totalPercentage, tokenDetails } = calculateCombinedFillPercentage(order, currentInputs);
+    if (totalPercentage > 100) {
+      setExecuteErrors(prev => ({
+        ...prev,
+        [orderId]: 'Combined fill exceeds 100%. Reduce one or more token amounts.'
+      }));
+      return;
+    }
+
     setExecuteErrors(prev => {
       const newErrors = { ...prev };
       delete newErrors[orderId];
@@ -1087,144 +1162,156 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     });
     setTransactionPending(true);
 
-    let txHash: string | undefined;
+    const buyTokensIndex = order.orderDetailsWithID.orderDetails.buyTokensIndex;
 
-    try {
-      // For now, we'll execute with the first token that has an input
-      // In a real implementation, you might want to handle multiple tokens
-      const buyTokensIndex = order.orderDetailsWithID.orderDetails.buyTokensIndex;
-      const buyAmounts = order.orderDetailsWithID.orderDetails.buyAmounts;
+    // Collect all tokens with valid inputs
+    const tokensToExecute: { index: number; tokenInfo: any; buyAmount: bigint }[] = [];
 
-      let tokenIndexToExecute = -1;
-      let buyAmount = BigInt(0);
-
-      let buyTokenInfo = null;
-
-      for (let i = 0; i < buyTokensIndex.length; i++) {
-        const tokenInfo = getTokenInfoByIndex(Number(buyTokensIndex[i]));
-        if (tokenInfo.address && currentInputs[tokenInfo.address]) {
-          const inputAmount = parseFloat(removeCommas(currentInputs[tokenInfo.address]));
-          if (inputAmount > 0) {
-            tokenIndexToExecute = i;
-            buyTokenInfo = tokenInfo;
-            buyAmount = parseTokenAmount(inputAmount.toString(), tokenInfo.decimals);
-            break;
-          }
+    for (let i = 0; i < buyTokensIndex.length; i++) {
+      const tokenInfo = getTokenInfoByIndex(Number(buyTokensIndex[i]));
+      if (tokenInfo.address && currentInputs[tokenInfo.address]) {
+        const inputAmount = parseFloat(removeCommas(currentInputs[tokenInfo.address]));
+        if (inputAmount > 0) {
+          const buyAmount = parseTokenAmount(inputAmount.toString(), tokenInfo.decimals);
+          tokensToExecute.push({ index: i, tokenInfo, buyAmount });
         }
       }
+    }
 
-      if (tokenIndexToExecute === -1) {
-        throw new Error('No valid token amount found');
-      }
+    if (tokensToExecute.length === 0) {
+      setExecuteErrors(prev => ({
+        ...prev,
+        [orderId]: 'No valid token amount found'
+      }));
+      setTransactionPending(false);
+      return;
+    }
 
-      if (!buyTokenInfo) {
-        throw new Error('Token information not found');
-      }
+    if (!publicClient) {
+      setExecuteErrors(prev => ({
+        ...prev,
+        [orderId]: 'Public client not available'
+      }));
+      setTransactionPending(false);
+      return;
+    }
 
-      if (!publicClient) {
-        throw new Error('Public client not available');
-      }
+    let successCount = 0;
+    const totalTransactions = tokensToExecute.length;
 
-      // Check if the buy token is native PLS and send value accordingly
-      const value = isNativeToken(buyTokenInfo.address) ? buyAmount : undefined;
+    try {
+      // Execute each token fill sequentially
+      for (let txNum = 0; txNum < tokensToExecute.length; txNum++) {
+        const { index: tokenIndexToExecute, tokenInfo: buyTokenInfo, buyAmount } = tokensToExecute[txNum];
 
-      // For ERC20 tokens, check if we need to approve first
-      if (!isNativeToken(buyTokenInfo.address)) {
+        // Check if the buy token is native PLS and send value accordingly
+        const value = isNativeToken(buyTokenInfo.address) ? buyAmount : undefined;
 
-        // Check current allowance
-        const allowance = await publicClient.readContract({
-          address: buyTokenInfo.address as `0x${string}`,
-          abi: [
-            {
-              "inputs": [
-                { "name": "owner", "type": "address" },
-                { "name": "spender", "type": "address" }
-              ],
-              "name": "allowance",
-              "outputs": [{ "name": "", "type": "uint256" }],
-              "stateMutability": "view",
-              "type": "function"
-            }
-          ],
-          functionName: 'allowance',
-          args: [address as `0x${string}`, OTC_CONTRACT_ADDRESS as `0x${string}`]
-        });
+        // For ERC20 tokens, check if we need to approve first
+        if (!isNativeToken(buyTokenInfo.address)) {
 
-
-        // If allowance is insufficient, approve the token
-        if (allowance < buyAmount) {
-
-          // Set approving state
-          setApprovingOrders(prev => new Set(prev).add(orderId));
-
-          if (!walletClient) {
-            throw new Error('Wallet client not available');
-          }
-
-          const approveTxHash = await walletClient.writeContract({
+          // Check current allowance
+          const allowance = await publicClient.readContract({
             address: buyTokenInfo.address as `0x${string}`,
             abi: [
               {
                 "inputs": [
-                  { "name": "spender", "type": "address" },
-                  { "name": "amount", "type": "uint256" }
+                  { "name": "owner", "type": "address" },
+                  { "name": "spender", "type": "address" }
                 ],
-                "name": "approve",
-                "outputs": [{ "name": "", "type": "bool" }],
-                "stateMutability": "nonpayable",
+                "name": "allowance",
+                "outputs": [{ "name": "", "type": "uint256" }],
+                "stateMutability": "view",
                 "type": "function"
               }
             ],
-            functionName: 'approve',
-            args: [OTC_CONTRACT_ADDRESS as `0x${string}`, buyAmount]
+            functionName: 'allowance',
+            args: [address as `0x${string}`, OTC_CONTRACT_ADDRESS as `0x${string}`]
           });
 
 
-          // Wait for approval confirmation with proper timeout handling
-          await waitForTransactionWithTimeout(
-            publicClient,
-            approveTxHash,
-            TRANSACTION_TIMEOUTS.APPROVAL
-          );
+          // If allowance is insufficient, approve the token
+          if (allowance < buyAmount) {
+
+            // Set approving state
+            setApprovingOrders(prev => new Set(prev).add(orderId));
+
+            if (!walletClient) {
+              throw new Error('Wallet client not available');
+            }
+
+            const approveTxHash = await walletClient.writeContract({
+              address: buyTokenInfo.address as `0x${string}`,
+              abi: [
+                {
+                  "inputs": [
+                    { "name": "spender", "type": "address" },
+                    { "name": "amount", "type": "uint256" }
+                  ],
+                  "name": "approve",
+                  "outputs": [{ "name": "", "type": "bool" }],
+                  "stateMutability": "nonpayable",
+                  "type": "function"
+                }
+              ],
+              functionName: 'approve',
+              args: [OTC_CONTRACT_ADDRESS as `0x${string}`, buyAmount]
+            });
 
 
-          // Clear approving state
-          setApprovingOrders(prev => {
-            const newSet = new Set(prev);
-            newSet.delete(orderId);
-            return newSet;
-          });
+            // Wait for approval confirmation with proper timeout handling
+            await waitForTransactionWithTimeout(
+              publicClient,
+              approveTxHash,
+              TRANSACTION_TIMEOUTS.APPROVAL
+            );
+
+
+            // Clear approving state
+            setApprovingOrders(prev => {
+              const newSet = new Set(prev);
+              newSet.delete(orderId);
+              return newSet;
+            });
+          }
+        }
+
+        // Set executing state before execution
+        setExecutingOrders(prev => new Set(prev).add(orderId));
+
+        // Execute/Fill the order
+        const txHash = await fillOrExecuteOrder(
+          BigInt(orderId),
+          BigInt(tokenIndexToExecute),
+          buyAmount,
+          value
+        );
+
+        successCount++;
+
+        // Show success toast for this transaction
+        const txLabel = totalTransactions > 1 ? ` (${txNum + 1}/${totalTransactions})` : '';
+        toast({
+          title: `✅ Order Fill Submitted${txLabel}`,
+          description: `Transaction for ${formatTokenTicker(buyTokenInfo.ticker)} submitted successfully.`,
+          variant: "success",
+          action: txHash ? (
+            <a
+              href={getBlockExplorerTxUrl(chainId, txHash)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-white hover:underline font-medium"
+            >
+              View Tx
+            </a>
+          ) : undefined,
+        });
+
+        // Wait a bit between transactions to allow state to update
+        if (txNum < tokensToExecute.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
         }
       }
-
-      // Set executing state before execution
-      setExecutingOrders(prev => new Set(prev).add(orderId));
-
-      // Execute/Fill the order
-      txHash = await fillOrExecuteOrder(
-        BigInt(orderId),
-        BigInt(tokenIndexToExecute),
-        buyAmount,
-        value
-      );
-
-
-      // Show immediate success toast (don't wait for receipt - PulseChain RPC is slow to index)
-      toast({
-        title: "✅ Order Fill Submitted!",
-        description: "Your transaction has been submitted successfully. The order will update shortly.",
-        variant: "success",
-        action: txHash ? (
-          <a
-            href={getBlockExplorerTxUrl(chainId, txHash)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-white hover:underline font-medium"
-          >
-            View Tx
-          </a>
-        ) : undefined,
-      });
 
       // Clear the inputs for this order
       handleClearInputs(order);
@@ -1243,17 +1330,31 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     } catch (error: any) {
       const errorMsg = simplifyErrorMessage(error) || 'Failed to execute order. Please try again.';
 
+      // Include info about partial success if some transactions completed
+      const partialSuccessMsg = successCount > 0 && successCount < totalTransactions
+        ? ` (${successCount}/${totalTransactions} transactions completed)`
+        : '';
+
       setExecuteErrors(prev => ({
         ...prev,
-        [orderId]: errorMsg
+        [orderId]: errorMsg + partialSuccessMsg
       }));
 
       // Show error toast
       toast({
-        title: "Fill Order Failed",
-        description: errorMsg,
+        title: successCount > 0 ? "Partial Fill Complete" : "Fill Order Failed",
+        description: errorMsg + partialSuccessMsg,
         variant: "destructive",
       });
+
+      // If some transactions succeeded, still refresh data
+      if (successCount > 0) {
+        handleClearInputs(order);
+        setTimeout(() => {
+          refetch();
+          fetchPurchaseHistory();
+        }, 3000);
+      }
     } finally {
       setExecutingOrders(prev => {
         const newSet = new Set(prev);
@@ -3208,190 +3309,471 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                             <div className="flex flex-col space-y-2">
                               <h4 className="text-white font-medium text-xl">Your Trade</h4>
 
-                              {/* Offer Input Fields */}
+                              {/* Token Selection & Amount Input Flow */}
                               <div className="mt-3 pt-3 border-t border-white/10">
-                                <h5 className="text-white font-medium text-sm mb-2">You pay:</h5>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                                  {order.orderDetailsWithID.orderDetails.buyTokensIndex.map((tokenIndex: bigint, idx: number) => {
-                                    const tokenInfo = getTokenInfoByIndex(Number(tokenIndex));
-                                    const orderId = order.orderDetailsWithID.orderID.toString();
-                                    const currentAmount = offerInputs[orderId]?.[tokenInfo.address] || '';
+                                {(() => {
+                                  const orderId = order.orderDetailsWithID.orderID.toString();
+                                  const buyTokensIndex = order.orderDetailsWithID.orderDetails.buyTokensIndex;
+                                  const hasMultipleTokens = buyTokensIndex.length > 1;
 
-                                    return (
-                                      <div key={tokenInfo.address} className="flex items-center space-x-2 px-3 py-2 min-h-[60px]">
-                                        <div className="flex items-center space-x-2 flex-1">
-                                          <TokenLogo
-                                            src={tokenInfo.logo}
-                                            alt={formatTokenTicker(tokenInfo.ticker)}
-                                            className="w-6 h-6 rounded-full flex-shrink-0"
-                                          />
-                                          <span className="text-white text-sm font-medium">
-                                            {formatTokenTicker(tokenInfo.ticker)}
-                                          </span>
+                                  // Get available tokens
+                                  const availableTokens = buyTokensIndex.map((tokenIndex: bigint) =>
+                                    getTokenInfoByIndex(Number(tokenIndex))
+                                  );
+
+                                  // Get selected tokens (default to all tokens if single, or none if multiple)
+                                  const selected = selectedBuyTokens[orderId] || new Set<string>(
+                                    hasMultipleTokens ? [] : availableTokens.map((t: { address: string }) => t.address)
+                                  );
+                                  const isSelectionOpen = tokenSelectionOpen[orderId] ?? hasMultipleTokens;
+                                  const selectedCount = selected.size;
+
+                                  // Calculate max percentage per token based on selected count
+                                  const maxPercentPerToken = selectedCount > 0 ? Math.floor(100 / selectedCount) : 100;
+
+                                  // Toggle token selection
+                                  const toggleToken = (tokenAddress: string) => {
+                                    setSelectedBuyTokens(prev => {
+                                      const current = prev[orderId] || new Set<string>();
+                                      const newSet = new Set(current);
+                                      if (newSet.has(tokenAddress)) {
+                                        newSet.delete(tokenAddress);
+                                        // Clear input when deselecting
+                                        setOfferInputs(prevInputs => {
+                                          const orderInputs = { ...prevInputs[orderId] };
+                                          delete orderInputs[tokenAddress];
+                                          return { ...prevInputs, [orderId]: orderInputs };
+                                        });
+                                      } else {
+                                        newSet.add(tokenAddress);
+                                      }
+                                      return { ...prev, [orderId]: newSet };
+                                    });
+                                  };
+
+                                  // Handle "Next" - close selection, open inputs
+                                  const handleNextStep = () => {
+                                    if (selectedCount > 0) {
+                                      setTokenSelectionOpen(prev => ({ ...prev, [orderId]: false }));
+                                    }
+                                  };
+
+                                  // Handle "Change tokens" - reopen selection
+                                  const handleChangeTokens = () => {
+                                    setTokenSelectionOpen(prev => ({ ...prev, [orderId]: true }));
+                                  };
+
+                                  // Equal split handler
+                                  const handleEqualSplit = () => {
+                                    const splitPercentage = 1 / selectedCount;
+                                    const buyAmounts = order.orderDetailsWithID.orderDetails.buyAmounts;
+                                    const sellAmount = order.orderDetailsWithID.orderDetails.sellAmount;
+                                    const remainingSellAmount = order.orderDetailsWithID.remainingSellAmount;
+                                    const remainingPercentage = Number(remainingSellAmount) / Number(sellAmount);
+
+                                    const newInputs: { [tokenAddress: string]: string } = {};
+
+                                    buyTokensIndex.forEach((tokenIndex: bigint, idx: number) => {
+                                      const tokenInfo = getTokenInfoByIndex(Number(tokenIndex));
+                                      if (selected.has(tokenInfo.address)) {
+                                        const maxBuyAmount = parseFloat(formatTokenAmount(buyAmounts[idx], tokenInfo.decimals));
+                                        const scaledMax = maxBuyAmount * remainingPercentage;
+                                        const amount = scaledMax * splitPercentage;
+                                        newInputs[tokenInfo.address] = amount.toString();
+                                      }
+                                    });
+
+                                    setOfferInputs(prev => ({ ...prev, [orderId]: newInputs }));
+                                  };
+
+                                  // Percentage fill for selected tokens only
+                                  const handleSelectedPercentageFill = (percentage: number) => {
+                                    const buyAmounts = order.orderDetailsWithID.orderDetails.buyAmounts;
+                                    const sellAmount = order.orderDetailsWithID.orderDetails.sellAmount;
+                                    const remainingSellAmount = order.orderDetailsWithID.remainingSellAmount;
+                                    const remainingPercentage = Number(remainingSellAmount) / Number(sellAmount);
+
+                                    // For multi-token, cap at max per token
+                                    const effectivePercentage = selectedCount > 1
+                                      ? Math.min(percentage, maxPercentPerToken / 100)
+                                      : percentage;
+
+                                    const newInputs: { [tokenAddress: string]: string } = {};
+
+                                    buyTokensIndex.forEach((tokenIndex: bigint, idx: number) => {
+                                      const tokenInfo = getTokenInfoByIndex(Number(tokenIndex));
+                                      if (selected.has(tokenInfo.address)) {
+                                        const maxBuyAmount = parseFloat(formatTokenAmount(buyAmounts[idx], tokenInfo.decimals));
+                                        const scaledMax = maxBuyAmount * remainingPercentage;
+                                        const amount = scaledMax * effectivePercentage;
+                                        newInputs[tokenInfo.address] = amount.toString();
+                                      }
+                                    });
+
+                                    setOfferInputs(prev => ({ ...prev, [orderId]: newInputs }));
+                                  };
+
+                                  return (
+                                    <>
+                                      {/* Token Selection Shelf */}
+                                      {hasMultipleTokens && (
+                                        <div className="mb-4">
+                                          {/* Collapsed state - show selected tokens as chips */}
+                                          {!isSelectionOpen && selectedCount > 0 && (
+                                            <div className="flex flex-wrap items-center gap-2">
+                                              <span className="text-gray-400 text-sm">Paying with:</span>
+                                              {availableTokens
+                                                .filter((t: { address: string }) => selected.has(t.address))
+                                                .map((tokenInfo: { address: string; logo: string; ticker: string }) => (
+                                                  <div
+                                                    key={tokenInfo.address}
+                                                    className="flex items-center gap-1.5 px-2 py-1 bg-white/10 rounded-full"
+                                                  >
+                                                    <TokenLogo
+                                                      src={tokenInfo.logo}
+                                                      alt={formatTokenTicker(tokenInfo.ticker)}
+                                                      className="w-4 h-4 rounded-full"
+                                                    />
+                                                    <span className="text-white text-xs font-medium">
+                                                      {formatTokenTicker(tokenInfo.ticker)}
+                                                    </span>
+                                                  </div>
+                                                ))}
+                                              <button
+                                                onClick={handleChangeTokens}
+                                                className="text-blue-400 text-xs hover:text-blue-300 underline"
+                                              >
+                                                Change
+                                              </button>
+                                            </div>
+                                          )}
+
+                                          {/* Expanded state - token selection */}
+                                          {isSelectionOpen && (
+                                            <div className="space-y-3">
+                                              <h5 className="text-white font-medium text-sm">Select payment token(s):</h5>
+                                              <div className="flex flex-wrap gap-2">
+                                                {availableTokens.map((tokenInfo: { address: string; logo: string; ticker: string }) => {
+                                                  const isSelected = selected.has(tokenInfo.address);
+                                                  return (
+                                                    <button
+                                                      key={tokenInfo.address}
+                                                      onClick={() => toggleToken(tokenInfo.address)}
+                                                      className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all ${
+                                                        isSelected
+                                                          ? 'bg-white/20 border-white/40 text-white'
+                                                          : 'bg-transparent border-white/10 text-gray-400 hover:border-white/30 hover:text-white'
+                                                      }`}
+                                                    >
+                                                      <TokenLogo
+                                                        src={tokenInfo.logo}
+                                                        alt={formatTokenTicker(tokenInfo.ticker)}
+                                                        className="w-5 h-5 rounded-full"
+                                                      />
+                                                      <span className="text-sm font-medium">
+                                                        {formatTokenTicker(tokenInfo.ticker)}
+                                                      </span>
+                                                      {isSelected && (
+                                                        <span className="text-green-400 text-sm">✓</span>
+                                                      )}
+                                                    </button>
+                                                  );
+                                                })}
+                                              </div>
+                                              <button
+                                                onClick={handleNextStep}
+                                                disabled={selectedCount === 0}
+                                                className="px-4 py-2 bg-white text-black rounded-full text-sm font-medium hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                              >
+                                                Next →
+                                              </button>
+                                            </div>
+                                          )}
                                         </div>
-                                        <div className="flex flex-col">
-                                          <input
-                                            type="text"
-                                            value={formatNumberWithCommas(currentAmount)}
-                                            onChange={(e) => handleOfferInputChange(
-                                              orderId,
-                                              tokenInfo.address,
-                                              removeCommas(e.target.value),
-                                              order
-                                            )}
-                                            className="bg-transparent border border-white/10 rounded-md px-2 py-1 text-white text-sm w-26 md:w-20 focus:border-white/40 focus:outline-none"
-                                            placeholder="0"
-                                          />
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
+                                      )}
 
-                                {/* Percentage buttons and Clear under all inputs */}
-                                <div className="mt-4 ml-2 flex space-x-2">
-                                  <button
-                                    onClick={() => handlePercentageFill(order, 0.1)}
-                                    className="px-3 py-1 text-xs bg-blue-500/20 text-blue-400 border border-blue-400 rounded hover:bg-blue-500/30 transition-colors"
-                                  >
-                                    10%
-                                  </button>
-                                  <button
-                                    onClick={() => handlePercentageFill(order, 0.5)}
-                                    className="px-3 py-1 text-xs bg-blue-500/20 text-blue-400 border border-blue-400 rounded hover:bg-blue-500/30 transition-colors"
-                                  >
-                                    50%
-                                  </button>
-                                  <button
-                                    onClick={() => handlePercentageFill(order, 1.0)}
-                                    className="px-3 py-1 text-xs bg-blue-500/20 text-blue-400 border border-blue-400 rounded hover:bg-blue-500/30 transition-colors"
-                                  >
-                                    100%
-                                  </button>
-                                  <button
-                                    onClick={() => handleClearInputs(order)}
-                                    className="px-3 py-1 text-xs bg-red-500/20 text-red-400 border border-red-400 rounded hover:bg-red-500/30 transition-colors"
-                                  >
-                                    Clear
-                                  </button>
-                                </div>
+                                      {/* Amount Input Section - only show when tokens are selected and selection is closed */}
+                                      {((!hasMultipleTokens) || (!isSelectionOpen && selectedCount > 0)) && (
+                                        <>
+                                          <h5 className="text-white font-medium text-sm mb-2">You pay:</h5>
 
-                                {/* Fee Breakdown */}
+                                          {/* Token inputs with individual % buttons */}
+                                          <div className="space-y-4">
+                                            {(() => {
+                                              // Calculate combined fill from all tokens using existing helper
+                                              const currentInputs = offerInputs[orderId];
+                                              const { totalPercentage, tokenDetails } = calculateCombinedFillPercentage(order, currentInputs);
+
+                                              // Create a map of token address -> their current percentage
+                                              const tokenPercentages: { [address: string]: number } = {};
+                                              tokenDetails.forEach(detail => {
+                                                tokenPercentages[detail.tokenInfo.address] = detail.percentage;
+                                              });
+
+                                              return availableTokens
+                                                .filter((t: { address: string }) => !hasMultipleTokens || selected.has(t.address))
+                                                .map((tokenInfo: { address: string; logo: string; ticker: string; decimals: number }, tokenIdx: number) => {
+                                                  const currentAmount = offerInputs[orderId]?.[tokenInfo.address] || '';
+
+                                                  // Find this token's index in buyTokensIndex to get its max amount
+                                                  const buyTokenIdx = buyTokensIndex.findIndex((ti: bigint) =>
+                                                    getTokenInfoByIndex(Number(ti)).address === tokenInfo.address
+                                                  );
+                                                  const buyAmounts = order.orderDetailsWithID.orderDetails.buyAmounts;
+                                                  const sellAmount = order.orderDetailsWithID.orderDetails.sellAmount;
+                                                  const remainingSellAmount = order.orderDetailsWithID.remainingSellAmount;
+                                                  const remainingPercentage = Number(remainingSellAmount) / Number(sellAmount);
+
+                                                  const maxBuyAmount = buyTokenIdx >= 0
+                                                    ? parseFloat(formatTokenAmount(buyAmounts[buyTokenIdx], tokenInfo.decimals))
+                                                    : 0;
+                                                  const scaledMax = maxBuyAmount * remainingPercentage;
+
+                                                  // Calculate this token's current percentage
+                                                  const thisTokenPercentage = tokenPercentages[tokenInfo.address] || 0;
+
+                                                  // Calculate percentage used by OTHER tokens
+                                                  const otherTokensPercentage = totalPercentage - thisTokenPercentage;
+
+                                                  // Max available for this token (what's left after others)
+                                                  const maxAvailablePercentage = Math.max(0, 100 - otherTokensPercentage);
+
+                                                  // Handler to set percentage for this specific token
+                                                  const setTokenPercentage = (percentage: number) => {
+                                                    const amount = scaledMax * percentage;
+                                                    setOfferInputs(prev => ({
+                                                      ...prev,
+                                                      [orderId]: {
+                                                        ...prev[orderId],
+                                                        [tokenInfo.address]: amount.toString()
+                                                      }
+                                                    }));
+                                                  };
+
+                                                  // Clear just this token
+                                                  const clearToken = () => {
+                                                    setOfferInputs(prev => ({
+                                                      ...prev,
+                                                      [orderId]: {
+                                                        ...prev[orderId],
+                                                        [tokenInfo.address]: ''
+                                                      }
+                                                    }));
+                                                  };
+
+                                                  // Check if a percentage is "active" (within 1% tolerance for floating point)
+                                                  const isActivePercentage = (pct: number) => {
+                                                    return Math.abs(thisTokenPercentage - pct) < 1;
+                                                  };
+
+                                                  return (
+                                                    <div key={tokenInfo.address} className="space-y-2">
+                                                      {/* Token label, input */}
+                                                      <div className="flex items-center space-x-3">
+                                                        <div className="flex items-center space-x-2 min-w-[80px]">
+                                                          <TokenLogo
+                                                            src={tokenInfo.logo}
+                                                            alt={formatTokenTicker(tokenInfo.ticker)}
+                                                            className="w-6 h-6 rounded-full flex-shrink-0"
+                                                          />
+                                                          <span className="text-white text-sm font-medium">
+                                                            {formatTokenTicker(tokenInfo.ticker)}
+                                                          </span>
+                                                        </div>
+                                                        <input
+                                                          type="text"
+                                                          value={formatNumberWithCommas(currentAmount)}
+                                                          onChange={(e) => handleOfferInputChange(
+                                                            orderId,
+                                                            tokenInfo.address,
+                                                            removeCommas(e.target.value),
+                                                            order
+                                                          )}
+                                                          className="bg-transparent border border-white/10 rounded-md px-2 py-1 text-white text-sm w-28 focus:border-white/40 focus:outline-none"
+                                                          placeholder="0"
+                                                        />
+                                                        {thisTokenPercentage > 0 && (
+                                                          <span className="text-gray-400 text-xs">
+                                                            ({Math.round(thisTokenPercentage)}%)
+                                                          </span>
+                                                        )}
+                                                      </div>
+
+                                                      {/* Individual percentage buttons for this token */}
+                                                      <div className="flex flex-wrap gap-1 ml-0">
+                                                        {[10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+                                                          .filter(pct => pct <= Math.ceil(maxAvailablePercentage / 10) * 10) // Only show buttons up to max available (rounded up to nearest 10)
+                                                          .map((pct) => {
+                                                            const isActive = isActivePercentage(pct);
+                                                            const isDisabled = pct > maxAvailablePercentage + 0.5; // Small tolerance
+
+                                                            return (
+                                                              <button
+                                                                key={pct}
+                                                                onClick={() => setTokenPercentage(pct / 100)}
+                                                                disabled={isDisabled}
+                                                                className={`px-2 py-0.5 text-xs rounded transition-colors ${
+                                                                  isActive
+                                                                    ? 'bg-blue-500 text-white border border-blue-400 font-medium'
+                                                                    : isDisabled
+                                                                      ? 'bg-gray-800/50 text-gray-600 border border-gray-700 cursor-not-allowed'
+                                                                      : 'bg-blue-500/20 text-blue-400 border border-blue-400/50 hover:bg-blue-500/30'
+                                                                }`}
+                                                              >
+                                                                {pct}%
+                                                              </button>
+                                                            );
+                                                          })}
+                                                        <button
+                                                          onClick={clearToken}
+                                                          className="px-2 py-0.5 text-xs bg-red-500/20 text-red-400 border border-red-400/50 rounded hover:bg-red-500/30 transition-colors"
+                                                        >
+                                                          Clear
+                                                        </button>
+                                                      </div>
+                                                    </div>
+                                                  );
+                                                });
+                                            })()}
+                                          </div>
+
+                                          {/* Equal Split button - only for multi-token */}
+                                          {selectedCount > 1 && (
+                                            <div className="mt-4 pt-3 border-t border-white/10">
+                                              <button
+                                                onClick={handleEqualSplit}
+                                                className="px-4 py-2 text-sm bg-green-500/20 text-green-400 border border-green-400 rounded-lg hover:bg-green-500/30 transition-colors"
+                                              >
+                                                Equal Split ({Math.floor(100 / selectedCount)}% each)
+                                              </button>
+                                              <button
+                                                onClick={() => handleClearInputs(order)}
+                                                className="ml-2 px-4 py-2 text-sm bg-red-500/20 text-red-400 border border-red-400 rounded-lg hover:bg-red-500/30 transition-colors"
+                                              >
+                                                Clear All
+                                              </button>
+                                            </div>
+                                          )}
+                                        </>
+                                      )}
+                                    </>
+                                  );
+                                })()}
+
+                                {/* Order Breakdown - Shows all tokens with inputs */}
                                 {(() => {
                                   const orderId = order.orderDetailsWithID.orderID.toString();
                                   const currentInputs = offerInputs[orderId];
-                                  if (!currentInputs) return null;
 
-                                  // Calculate total buy amount (what buyer will pay)
-                                  let totalBuyAmount = 0;
-                                  let primaryTokenInfo: { ticker: string; name: string; decimals: number; logo: string; address: string; } | null = null;
-                                  const buyTokensIndex = order.orderDetailsWithID.orderDetails.buyTokensIndex;
-                                  const buyAmounts = order.orderDetailsWithID.orderDetails.buyAmounts;
+                                  // Calculate combined fill percentage using the helper function
+                                  const { totalPercentage, tokenDetails } = calculateCombinedFillPercentage(order, currentInputs);
 
-                                  if (buyTokensIndex && buyAmounts && Array.isArray(buyTokensIndex) && Array.isArray(buyAmounts)) {
-                                    buyTokensIndex.forEach((tokenIndex: bigint, idx: number) => {
-                                      const tokenInfo = getTokenInfoByIndex(Number(tokenIndex));
-                                      if (tokenInfo.address && currentInputs[tokenInfo.address]) {
-                                        const inputAmount = parseFloat(removeCommas(currentInputs[tokenInfo.address]));
-                                        if (!isNaN(inputAmount)) {
-                                          totalBuyAmount += inputAmount;
-                                          // Use the first token with an input as the primary token for display
-                                          if (!primaryTokenInfo) {
-                                            primaryTokenInfo = tokenInfo;
-                                          }
-                                        }
-                                      }
-                                    });
-                                  }
+                                  if (tokenDetails.length === 0) return null;
 
-                                  if (totalBuyAmount > 0) {
-                                    const platformFee = totalBuyAmount * 0.002; // 0.2% fee
-                                    const orderOwnerReceives = totalBuyAmount - platformFee;
+                                  // Calculate total receive amount based on combined percentage
+                                  const sellTokenInfo = getTokenInfo(order.orderDetailsWithID.orderDetails.sellToken);
+                                  const remainingSellAmount = parseFloat(formatTokenAmount(order.orderDetailsWithID.remainingSellAmount, sellTokenInfo.decimals));
+                                  const receiveAmount = remainingSellAmount * (totalPercentage / 100);
 
-                                    // Calculate receive amount for the table
-                                    const sellTokenInfo = getTokenInfo(order.orderDetailsWithID.orderDetails.sellToken);
-                                    const sellAmountParsed = parseFloat(formatTokenAmount(order.orderDetailsWithID.orderDetails.sellAmount, sellTokenInfo.decimals));
-                                    const buyAmountParsed = parseFloat(formatTokenAmount(order.orderDetailsWithID.orderDetails.buyAmounts[0], primaryTokenInfo?.decimals || 18));
-                                    const exchangeRate = sellAmountParsed / buyAmountParsed;
-                                    const receiveAmount = totalBuyAmount * exchangeRate;
+                                  const isOverLimit = totalPercentage > 100;
 
-                                    return (
-                                      <div className="mt-4 p-3 max-w-lg">
-                                        <h5 className="text-white font-medium mb-2">Order Breakdown</h5>
-                                        <div className="text-sm">
-                                          {/* Table-like grid layout */}
-                                          <div className="grid grid-cols-[1fr_auto_auto] gap-x-3 gap-y-1 items-center">
-                                            {/* Row 1: Seller Receives */}
-                                            <span className="text-gray-400">Seller Receives:</span>
-                                            <span className="text-white text-right">{formatSmartNumber(orderOwnerReceives)}</span>
-                                            {primaryTokenInfo !== null ? (
+                                  return (
+                                    <div className="mt-4 p-3 max-w-lg">
+                                      <h5 className="text-white font-medium mb-2">Order Breakdown</h5>
+
+                                      {/* Combined Fill Percentage */}
+                                      <div className={`mb-3 p-2 rounded ${isOverLimit ? 'bg-red-900/30 border border-red-500/50' : 'bg-white/5'}`}>
+                                        <div className="flex justify-between items-center">
+                                          <span className="text-gray-400 text-sm">Combined Order Fill:</span>
+                                          <span className={`font-bold ${isOverLimit ? 'text-red-400' : 'text-white'}`}>
+                                            {totalPercentage.toFixed(1)}%
+                                          </span>
+                                        </div>
+                                        {isOverLimit && (
+                                          <p className="text-red-400 text-xs mt-1">
+                                            Combined fill exceeds 100%. Reduce one or more token amounts.
+                                          </p>
+                                        )}
+                                      </div>
+
+                                      <div className="text-sm space-y-3">
+                                        {/* Show breakdown for each token with input */}
+                                        {tokenDetails.map((detail, idx) => (
+                                          <div key={detail.tokenInfo.address} className="space-y-1">
+                                            {/* Show percentage label for each token */}
+                                            {tokenDetails.length > 1 && (
+                                              <div className="text-gray-500 text-xs mb-1">
+                                                {detail.percentage.toFixed(1)}% of order
+                                              </div>
+                                            )}
+                                            <div className="grid grid-cols-[1fr_auto_auto] gap-x-3 gap-y-1 items-center">
+                                              {/* Seller Receives */}
+                                              <span className="text-gray-400">Seller Receives:</span>
+                                              <span className="text-white text-right">{formatSmartNumber(detail.sellerReceives)}</span>
                                               <div className="flex items-center gap-1">
                                                 <TokenLogo
-                                                  src={primaryTokenInfo.logo}
-                                                  alt={formatTokenTicker(primaryTokenInfo.ticker)}
+                                                  src={detail.tokenInfo.logo}
+                                                  alt={formatTokenTicker(detail.tokenInfo.ticker)}
                                                   className="w-4 h-4 rounded-full"
                                                 />
-                                                <span className="text-white">{formatTokenTicker(primaryTokenInfo.ticker)}</span>
+                                                <span className="text-white">{formatTokenTicker(detail.tokenInfo.ticker)}</span>
                                               </div>
-                                            ) : (
-                                              <div className="w-16" />
-                                            )}
 
-                                            {/* Row 2: Platform Fee */}
-                                            <span className="text-gray-400">Seller Platform Fee (0.2%):</span>
-                                            <span className="text-red-400 text-right">-{formatSmartNumber(platformFee)}</span>
-                                            {primaryTokenInfo !== null ? (
+                                              {/* Platform Fee */}
+                                              <span className="text-gray-400">Seller Platform Fee (0.2%):</span>
+                                              <span className="text-red-400 text-right">-{formatSmartNumber(detail.fee)}</span>
                                               <div className="flex items-center gap-1">
                                                 <TokenLogo
-                                                  src={primaryTokenInfo.logo}
-                                                  alt={formatTokenTicker(primaryTokenInfo.ticker)}
+                                                  src={detail.tokenInfo.logo}
+                                                  alt={formatTokenTicker(detail.tokenInfo.ticker)}
                                                   className="w-4 h-4 rounded-full"
                                                 />
-                                                <span className="text-red-400">{formatTokenTicker(primaryTokenInfo.ticker)}</span>
+                                                <span className="text-red-400">{formatTokenTicker(detail.tokenInfo.ticker)}</span>
                                               </div>
-                                            ) : (
-                                              <div className="w-16" />
-                                            )}
 
-                                            {/* Divider row */}
-                                            <div className="col-span-3 border-t border-white/10 my-1" />
+                                              {/* Divider */}
+                                              <div className="col-span-3 border-t border-white/10 my-1" />
 
-                                            {/* Row 3: You Pay */}
-                                            <span className="text-white font-bold">You Pay:</span>
-                                            <span className="text-white font-bold text-right">{formatSmartNumber(totalBuyAmount)}</span>
-                                            {primaryTokenInfo !== null ? (
+                                              {/* You Pay */}
+                                              <span className="text-white font-bold">You Pay:</span>
+                                              <span className="text-white font-bold text-right">{formatSmartNumber(detail.inputAmount)}</span>
                                               <div className="flex items-center gap-1">
                                                 <TokenLogo
-                                                  src={primaryTokenInfo.logo}
-                                                  alt={formatTokenTicker(primaryTokenInfo.ticker)}
+                                                  src={detail.tokenInfo.logo}
+                                                  alt={formatTokenTicker(detail.tokenInfo.ticker)}
                                                   className="w-4 h-4 rounded-full"
                                                 />
-                                                <span className="text-white font-bold">{formatTokenTicker(primaryTokenInfo.ticker)}</span>
+                                                <span className="text-white font-bold">{formatTokenTicker(detail.tokenInfo.ticker)}</span>
                                               </div>
-                                            ) : (
-                                              <div className="w-16" />
+                                            </div>
+                                            {idx < tokenDetails.length - 1 && (
+                                              <div className="border-t border-white/5 my-2" />
                                             )}
+                                          </div>
+                                        ))}
 
-                                            {/* Spacer row */}
-                                            <div className="col-span-3 h-3" />
-
-                                            {/* Row 4: You Receive */}
+                                        {/* Total You Receive */}
+                                        <div className="pt-2 border-t border-white/10">
+                                          <div className="grid grid-cols-[1fr_auto_auto] gap-x-3 items-center">
                                             <span className="text-white font-medium">You Receive:</span>
-                                            <span className="text-white font-bold text-right">{formatSmartNumber(receiveAmount)}</span>
+                                            <span className={`font-bold text-right ${isOverLimit ? 'text-red-400' : 'text-white'}`}>
+                                              {isOverLimit ? '—' : formatSmartNumber(receiveAmount)}
+                                            </span>
                                             <div className="flex items-center gap-1">
                                               <TokenLogo
                                                 src={sellTokenInfo.logo}
                                                 alt={formatTokenTicker(sellTokenInfo.ticker)}
                                                 className="w-4 h-4 rounded-full"
                                               />
-                                              <span className="text-white font-bold">{formatTokenTicker(sellTokenInfo.ticker)}</span>
+                                              <span className={`font-bold ${isOverLimit ? 'text-red-400' : 'text-white'}`}>
+                                                {formatTokenTicker(sellTokenInfo.ticker)}
+                                              </span>
                                             </div>
                                           </div>
                                         </div>
                                       </div>
-                                    );
-                                  }
-                                  return null;
+                                    </div>
+                                  );
                                 })()}
 
                                 {/* Error Display */}
@@ -3407,6 +3789,24 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                     const orderId = order.orderDetailsWithID.orderID.toString();
                                     const currentInputs = offerInputs[orderId];
                                     const buyTokensIndex = order.orderDetailsWithID.orderDetails.buyTokensIndex;
+                                    const hasMultipleBuyTokens = buyTokensIndex.length > 1;
+
+                                    // Check if combined fill exceeds 100%
+                                    const { totalPercentage, tokenDetails } = calculateCombinedFillPercentage(order, currentInputs);
+                                    const isOverLimit = totalPercentage > 100;
+                                    const hasMultipleTokenInputs = tokenDetails.length > 1;
+
+                                    // Check if we're in token selection mode (multi-token order with selection still open)
+                                    const isSelectionOpen = tokenSelectionOpen[orderId] ?? hasMultipleBuyTokens;
+                                    const selectedTokens = selectedBuyTokens[orderId] || new Set<string>();
+
+                                    // For multi-token: order is "ready" when there's input in the selected tokens
+                                    const hasValidInput = tokenDetails.length > 0 && totalPercentage > 0;
+
+                                    // Hide submit section during token selection OR when no valid input yet
+                                    if (hasMultipleBuyTokens && (isSelectionOpen || !hasValidInput)) {
+                                      return null;
+                                    }
 
                                     const hasNativeTokenInput = currentInputs && buyTokensIndex.some((tokenIndex: bigint) => {
                                       const tokenInfo = getTokenInfoByIndex(Number(tokenIndex));
@@ -3432,13 +3832,22 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                       );
                                     }
 
+                                    // Button text based on state
+                                    let buttonText = hasNativeTokenInput ? 'Confirm Trade' : 'Approve & Confirm Trade';
+                                    if (hasMultipleTokenInputs && !isOverLimit) {
+                                      buttonText = `Confirm ${tokenDetails.length} Transactions`;
+                                    }
+                                    if (approvingOrders.has(orderId) || executingOrders.has(orderId)) {
+                                      buttonText = 'Loading';
+                                    }
+
                                     return (
                                       <button
                                         onClick={() => handleExecuteOrder(order)}
-                                        disabled={executingOrders.has(orderId) || approvingOrders.has(orderId) || !isWalletConnected}
+                                        disabled={executingOrders.has(orderId) || approvingOrders.has(orderId) || !isWalletConnected || isOverLimit}
                                         className="px-6 py-2 bg-white text-black border border-white/20 rounded-lg hover:bg-gray-100 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                                       >
-                                        {approvingOrders.has(orderId) || executingOrders.has(orderId) ? 'Loading' : (hasNativeTokenInput ? 'Confirm Trade' : 'Approve & Confirm Trade')}
+                                        {buttonText}
                                       </button>
                                     );
                                   })()}
