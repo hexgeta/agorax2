@@ -88,6 +88,18 @@ module.exports = {
 					}
 				},
 				shimmer: {
+					'0%': {
+						transform: 'translateX(-100%)',
+					},
+					'30%': {
+						transform: 'translateX(-100%)',
+					},
+					'50%': {
+						transform: 'translateX(100%)',
+					},
+					'80%': {
+						transform: 'translateX(100%)',
+					},
 					'100%': {
 						transform: 'translateX(100%)',
 					},
@@ -117,6 +129,7 @@ module.exports = {
 				'accordion-down': 'accordion-down 0.2s ease-out',
 				'accordion-up': 'accordion-up 0.2s ease-out',
 				shine: 'shine 1s linear infinite',
+				shimmer: 'shimmer 2s linear infinite',
 				'gradient-shift': 'gradient-shift 15s ease-in-out infinite',
 				'gradient-shift-reverse': 'gradient-shift-reverse 15s ease-in-out infinite',
 			},

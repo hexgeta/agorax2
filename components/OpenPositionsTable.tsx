@@ -497,6 +497,9 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
   const [updatingOrders, setUpdatingOrders] = useState<Set<string>>(new Set());
   const [updateErrors, setUpdateErrors] = useState<{ [orderId: string]: string }>({});
 
+  // State for ratio price display direction toggle (true = sell per buy, false = buy per sell)
+  const [ratioInverted, setRatioInverted] = useState<{ [orderId: string]: boolean }>({});
+
   // State for landing page connect button disclaimer
   const [showLandingDisclaimer, setShowLandingDisclaimer] = useState(false);
 
@@ -2652,6 +2655,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                   {showDatePicker && (
                     <div className="absolute top-full mt-2 right-0 z-50 bg-black/95 border border-white/20 rounded-lg p-4 shadow-xl">
                       <div className="flex flex-col gap-3">
+                        <span className="text-white/60 text-xs">All times in UTC</span>
                         <div>
                           <label className="text-white/60 text-xs mb-1 block">Start Date</label>
                           <Calendar
@@ -2877,6 +2881,37 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                       isBelowMarket = percentageDifference < 0;
                     }
                   }
+
+                  // Calculate ratio prices for all buy tokens
+                  // Each ratio shows: X sellToken per 1 buyToken OR X buyToken per 1 sellToken
+                  interface RatioPrice {
+                    buyTokenTicker: string;
+                    sellPerBuy: number;  // e.g., 1.10528 PLS per vPLS
+                    buyPerSell: number;  // e.g., 0.90475 vPLS per PLS
+                  }
+                  const ratioPrices: RatioPrice[] = [];
+
+                  if (buyTokensIndex && buyAmounts && Array.isArray(buyTokensIndex) && Array.isArray(buyAmounts)) {
+                    buyTokensIndex.forEach((tokenIndex: bigint, idx: number) => {
+                      const buyTokenInfo = getTokenInfoByIndex(Number(tokenIndex));
+                      const originalBuyAmount = buyAmounts[idx];
+
+                      // Use original amounts for ratio calculation (not remaining)
+                      const buyTokenAmount = parseFloat(formatTokenAmount(originalBuyAmount, buyTokenInfo.decimals));
+                      const sellTokenAmountOriginal = parseFloat(formatTokenAmount(originalSellAmount, sellTokenInfo.decimals));
+
+                      if (buyTokenAmount > 0 && sellTokenAmountOriginal > 0) {
+                        ratioPrices.push({
+                          buyTokenTicker: formatTokenTicker(buyTokenInfo.ticker, chainId),
+                          sellPerBuy: sellTokenAmountOriginal / buyTokenAmount,  // How much sell token per 1 buy token
+                          buyPerSell: buyTokenAmount / sellTokenAmountOriginal,  // How much buy token per 1 sell token
+                        });
+                      }
+                    });
+                  }
+
+                  // Get inverted state for this order
+                  const isRatioInverted = ratioInverted[orderId] ?? false;
 
                   // Calculate backing price discount - simple USD comparison like market price column
                   let backingPriceDiscount = null;
@@ -3150,6 +3185,52 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                           <div className="text-xs text-gray-400 mt-0">
                             {isBelowMarket ? 'below market' : 'above market'}
                           </div>
+                        )}
+                        {/* Ratio prices - clickable to toggle direction */}
+                        {ratioPrices.length > 0 && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setRatioInverted(prev => ({
+                                ...prev,
+                                [orderId]: !prev[orderId]
+                              }));
+                            }}
+                            className="text-xs text-gray-500 hover:text-gray-300 mt-1 cursor-pointer transition-colors"
+                            title="Click to switch ratio direction"
+                          >
+                            {ratioPrices.map((ratio, idx) => {
+                              const sellTicker = formatTokenTicker(sellTokenInfo.ticker, chainId);
+                              const value = isRatioInverted ? ratio.buyPerSell : ratio.sellPerBuy;
+
+                              // Format with at least 2 significant figures
+                              let formattedValue: string;
+                              if (value === 0) {
+                                formattedValue = '0';
+                              } else if (value >= 1000) {
+                                formattedValue = value.toLocaleString('en-US', { maximumFractionDigits: 0 });
+                              } else if (value >= 100) {
+                                formattedValue = value.toLocaleString('en-US', { maximumFractionDigits: 1 });
+                              } else if (value >= 1) {
+                                formattedValue = value.toLocaleString('en-US', { maximumFractionDigits: 2 });
+                              } else {
+                                // For small numbers, ensure at least 2 significant figures
+                                const sigFigs = 2;
+                                const magnitude = Math.floor(Math.log10(Math.abs(value)));
+                                const decimals = Math.max(0, sigFigs - 1 - magnitude);
+                                formattedValue = value.toFixed(decimals);
+                              }
+
+                              return (
+                                <div key={idx}>
+                                  {isRatioInverted
+                                    ? `${formattedValue} ${ratio.buyTokenTicker}/${sellTicker}`
+                                    : `${formattedValue} ${sellTicker}/${ratio.buyTokenTicker}`
+                                  }
+                                </div>
+                              );
+                            })}
+                          </button>
                         )}
                         {/* Add backing price stats as second row */}
                         {backingPriceDiscount !== null && (
@@ -3589,8 +3670,11 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                                             removeCommas(e.target.value),
                                                             order
                                                           )}
-                                                          className="bg-transparent border border-white/10 rounded-md px-2 py-1 text-white text-sm w-28 focus:border-white/40 focus:outline-none"
+                                                          className="bg-transparent border border-white/10 rounded-md px-2 py-1 text-white text-sm min-w-[112px] focus:border-white/40 focus:outline-none"
                                                           placeholder="0"
+                                                          style={{
+                                                            width: `${Math.max(112, formatNumberWithCommas(currentAmount).length * 9 + 20)}px`
+                                                          }}
                                                         />
                                                         {thisTokenPercentage > 0 && (
                                                           <span className="text-gray-400 text-xs">
@@ -3800,11 +3884,20 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                     const isSelectionOpen = tokenSelectionOpen[orderId] ?? hasMultipleBuyTokens;
                                     const selectedTokens = selectedBuyTokens[orderId] || new Set<string>();
 
-                                    // For multi-token: order is "ready" when there's input in the selected tokens
+                                    // For multi-token: order is "ready" when ALL selected tokens have input values
                                     const hasValidInput = tokenDetails.length > 0 && totalPercentage > 0;
 
+                                    // For multi-token orders, also check that all selected tokens have input
+                                    const allSelectedTokensHaveInput = hasMultipleBuyTokens && selectedTokens.size > 0
+                                      ? Array.from(selectedTokens).every(tokenAddress => {
+                                          const inputValue = currentInputs?.[tokenAddress];
+                                          return inputValue && parseFloat(removeCommas(inputValue)) > 0;
+                                        })
+                                      : true;
+
                                     // Hide submit section during token selection OR when no valid input yet
-                                    if (hasMultipleBuyTokens && (isSelectionOpen || !hasValidInput)) {
+                                    // For multi-token, also hide if not all selected tokens have input
+                                    if (hasMultipleBuyTokens && (isSelectionOpen || !hasValidInput || !allSelectedTokensHaveInput)) {
                                       return null;
                                     }
 
@@ -4038,7 +4131,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
               className="bg-black rounded-xl p-6 w-[400px] mx-4 shadow-2xl border border-white/20 animate-in fade-in zoom-in-95 duration-150"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-between mb-2">
                 <h3 className="text-lg font-semibold text-white">Update Expiration Date</h3>
                 <button
                   onClick={() => {
@@ -4054,6 +4147,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                   </svg>
                 </button>
               </div>
+              <span className="text-white/60 text-xs mb-4 block">All times in UTC</span>
 
               <div
                 className="mb-4 overflow-hidden"

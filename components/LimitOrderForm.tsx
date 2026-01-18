@@ -3636,6 +3636,9 @@ export function LimitOrderForm({
                   onClick={(e) => e.stopPropagation()}
                   onMouseDown={(e) => e.stopPropagation()}
                 >
+                  <div className="px-3 pt-3 pb-1">
+                    <span className="text-white/60 text-xs">All times in UTC</span>
+                  </div>
                   <Calendar
                     mode="single"
                     selected={selectedDate}

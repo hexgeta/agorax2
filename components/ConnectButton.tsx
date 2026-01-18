@@ -1,11 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { useAccount, useConnect, useDisconnect } from 'wagmi'
+import { useAccount } from 'wagmi'
 import { PixelSpinner } from './ui/PixelSpinner';
 import { useAppKit } from '@reown/appkit/react'
 import { useTransaction } from '@/context/TransactionContext'
 import { DisclaimerDialog } from './DisclaimerDialog'
+import { PrestigeBadge } from './PrestigeBadge'
 
 export const ConnectButton = () => {
   const { isConnected, address } = useAccount()
@@ -35,23 +36,26 @@ export const ConnectButton = () => {
 
   if (isConnected && address) {
     return (
-      <button
-        onClick={() => open()}
-        disabled={isTransactionPending}
-        className={`px-4 md:px-8 py-2 md:py-3 rounded-full font-semibold transition-colors text-sm md:text-base ${isTransactionPending
-          ? 'bg-white border-2 border-white text-white cursor-not-allowed'
-          : 'bg-white text-black hover:bg-white/80'
-          }`}
-      >
-        {isTransactionPending ? (
-          <div className="flex items-center gap-2">
-            <PixelSpinner size={16} />
-            <span>Loading</span>
-          </div>
-        ) : (
-          `${address.slice(0, 6)}...${address.slice(-4)}`
-        )}
-      </button>
+      <div className="flex items-center gap-2">
+        <PrestigeBadge />
+        <button
+          onClick={() => open()}
+          disabled={isTransactionPending}
+          className={`px-4 md:px-8 py-2 md:py-3 rounded-full font-semibold transition-colors text-sm md:text-base ${isTransactionPending
+            ? 'bg-white border-2 border-white text-white cursor-not-allowed'
+            : 'bg-white text-black hover:bg-white/80'
+            }`}
+        >
+          {isTransactionPending ? (
+            <div className="flex items-center gap-2">
+              <PixelSpinner size={16} />
+              <span>Loading</span>
+            </div>
+          ) : (
+            `${address.slice(0, 6)}...${address.slice(-4)}`
+          )}
+        </button>
+      </div>
     )
   }
 
