@@ -127,6 +127,24 @@ const NavBar = () => {
                   />
                 </span>
               </Link>
+              <Link
+                href="/leaderboard"
+                className={`transition-colors font-medium text-base px-4 py-2 cursor-pointer group ${pathname === '/leaderboard'
+                  ? 'text-white'
+                  : 'text-white/80 hover:text-white'
+                  }`}
+                onMouseEnter={() => setHoveredPath('/leaderboard')}
+                onMouseLeave={() => setHoveredPath(null)}
+              >
+                <span className="relative inline-block">
+                  Leaderboard
+                  <span className={`absolute bottom-[-4px] left-0 w-full h-0.5 bg-white transition-transform duration-300 ease-out ${pathname === '/leaderboard'
+                    ? (hoveredPath && hoveredPath !== '/leaderboard' ? 'scale-x-0 origin-left' : 'scale-x-100 origin-left')
+                    : 'scale-x-0 group-hover:scale-x-100 origin-left'
+                    }`}
+                  />
+                </span>
+              </Link>
 
               {TESTING_MODE && <ChainSwitcher isCheckingConnection={false} />}
               <ConnectButton />
@@ -225,6 +243,16 @@ const NavBar = () => {
                 }`}
             >
               Marketplace
+            </Link>
+            <Link
+              href="/leaderboard"
+              onClick={() => setMobileMenuOpen(false)}
+              className={`text-xl font-medium py-3 px-6 rounded-lg transition-colors w-full text-center ${pathname === '/leaderboard'
+                ? 'text-white bg-white/10'
+                : 'text-white/80 hover:text-white hover:bg-white/5'
+                }`}
+            >
+              Leaderboard
             </Link>
           </nav>
 

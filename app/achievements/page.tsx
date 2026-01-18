@@ -596,9 +596,9 @@ export default function RanksPage() {
               blurIntensity="xl"
               className="p-6"
             >
-              <h3 className="text-lg font-semibold text-white mb-2 text-center">Prestige Track</h3>
+              <h3 className="text-lg font-semibold text-white mb-2 text-center">Your Legion</h3>
               <p className="text-gray-400 text-sm mb-6 text-center">
-                Complete all challenges in a prestige to unlock the next. Click to view challenges.
+                Complete all challenges in each legion to earn it's badge and unlock the next set of challenges.
               </p>
               <div className="flex items-center justify-center gap-3 md:gap-4 flex-wrap">
                 {PRESTIGE_LEVELS.map((prestige, index) => {
