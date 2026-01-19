@@ -183,12 +183,19 @@ const formatUSD = (amount: number) => {
 
 // Helper function to format token amounts without unnecessary decimals
 const formatTokenAmountDisplay = (amount: number): string => {
-  // If it's a whole number, don't show decimals
-  if (amount % 1 === 0) {
-    return amount.toLocaleString();
+  // Round to 2 decimal places first to avoid floating point issues
+  const rounded = Math.round(amount * 100) / 100;
+
+  // Check if it's effectively a whole number (no meaningful decimals)
+  if (rounded % 1 === 0) {
+    return rounded.toLocaleString('en-US');
   }
-  // Otherwise, show 2 decimal places
-  return amount.toFixed(2);
+
+  // Has decimals - format with commas, showing only necessary decimal places
+  return rounded.toLocaleString('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2
+  });
 };
 
 // Helper function to get token price with hardcoded overrides
@@ -420,7 +427,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     return false;
   });
   // Date filter state
-  type DateFilterPreset = '1h' | '6h' | '12h' | '24h' | '7d' | '30d' | '90d' | 'custom' | null;
+  type DateFilterPreset = '1h' | '12h' | '24h' | '7d' | '30d' | '90d' | '180d' | 'custom' | null;
   const [dateFilterPreset, setDateFilterPreset] = useState<DateFilterPreset>(null);
   const [customDateStart, setCustomDateStart] = useState<Date | undefined>(undefined);
   const [customDateEnd, setCustomDateEnd] = useState<Date | undefined>(undefined);
@@ -691,35 +698,36 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     if (!preset || preset === 'custom') return null;
 
     const now = Math.floor(Date.now() / 1000);
-    let start: number;
+    let end: number;
 
+    // "Expires within" means orders expiring between now and X time from now
     switch (preset) {
       case '1h':
-        start = now - (1 * 60 * 60);
-        break;
-      case '6h':
-        start = now - (6 * 60 * 60);
+        end = now + (1 * 60 * 60);
         break;
       case '12h':
-        start = now - (12 * 60 * 60);
+        end = now + (12 * 60 * 60);
         break;
       case '24h':
-        start = now - (24 * 60 * 60);
+        end = now + (24 * 60 * 60);
         break;
       case '7d':
-        start = now - (7 * 24 * 60 * 60);
+        end = now + (7 * 24 * 60 * 60);
         break;
       case '30d':
-        start = now - (30 * 24 * 60 * 60);
+        end = now + (30 * 24 * 60 * 60);
         break;
       case '90d':
-        start = now - (90 * 24 * 60 * 60);
+        end = now + (90 * 24 * 60 * 60);
+        break;
+      case '180d':
+        end = now + (180 * 24 * 60 * 60);
         break;
       default:
         return null;
     }
 
-    return { start, end: now };
+    return { start: now, end };
   }, []);
 
   // Get active date range for filtering
@@ -2064,14 +2072,15 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
       });
     }
 
-    // Level 7: Filter by dust (minimum USD value of sell amount)
+    // Level 7: Filter by dust (minimum USD value of remaining sell amount)
     if (dustFilterEnabled && dustFilterMinValue) {
       const minValue = parseFloat(dustFilterMinValue) || 0;
       if (minValue > 0) {
         filteredOrders = filteredOrders.filter(order => {
           const sellTokenInfo = getTokenInfo(order.orderDetailsWithID.orderDetails.sellToken);
-          const sellAmount = order.orderDetailsWithID.orderDetails.sellAmount;
-          const sellTokenAmount = parseFloat(formatTokenAmount(sellAmount, sellTokenInfo.decimals));
+          // Use remaining sell amount (what's actually for sale) instead of original amount
+          const remainingSellAmount = order.orderDetailsWithID.remainingSellAmount;
+          const sellTokenAmount = parseFloat(formatTokenAmount(remainingSellAmount, sellTokenInfo.decimals));
           const sellTokenPrice = getTokenPrice(sellTokenInfo.address, tokenPrices);
           const sellUsdValue = sellTokenAmount * sellTokenPrice;
           return sellUsdValue >= minValue;
@@ -2242,6 +2251,13 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     const month = date.toLocaleDateString('en-US', { month: 'short' });
     const year = date.getFullYear().toString().slice(-2);
     return `${day} ${month} ${year}`;
+  };
+
+  const formatUtcTime = (timestamp: number) => {
+    const date = new Date(timestamp * 1000);
+    const hours = date.getUTCHours().toString().padStart(2, '0');
+    const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+    return `${hours}:${minutes} UTC`;
   };
 
   const formatPercentage = (percentage: number) => {
@@ -2633,15 +2649,157 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
               </div>
 
               {/* All or Nothing Filter Toggle */}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center justify-between max-w-[480px]">
+                <div className="flex flex-col">
+                  <span className="text-white/70 text-sm">All or Nothing</span>
+                  <span className="text-white/40 text-xs">Show only orders that must be filled completely</span>
+                </div>
                 <button
+                  type="button"
                   onClick={() => setAonFilterEnabled(!aonFilterEnabled)}
-                  className={`relative w-10 h-5 rounded-full transition-colors ${aonFilterEnabled ? 'bg-green-400' : 'bg-white/20'}`}
+                  className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${
+                    aonFilterEnabled ? 'bg-green-500' : 'bg-white/20'
+                  }`}
                 >
-                  <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${aonFilterEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
+                  <span
+                    className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform duration-200 ${
+                      aonFilterEnabled ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
                 </button>
-                <span className="text-sm text-white/60">All or Nothing</span>
               </div>
+
+              {/* Dust Filter Toggle */}
+              <div className="flex items-center justify-between max-w-[480px]">
+                <div className="flex flex-col">
+                  <span className="text-white/70 text-sm">Hide dust orders</span>
+                  <span className="text-white/40 text-xs">Filter out low value orders</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {dustFilterEnabled && (
+                    <div className="flex items-center gap-1">
+                      <span className="text-white/40 text-xs">&lt; $</span>
+                      <input
+                        type="text"
+                        value={dustFilterMinValue}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/[^0-9.]/g, '');
+                          setDustFilterMinValue(val);
+                        }}
+                        className="w-16 px-2 py-1 bg-black/40 border border-white/20 rounded text-white text-xs text-right focus:outline-none focus:border-white/40"
+                        placeholder="0"
+                      />
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setDustFilterEnabled(!dustFilterEnabled)}
+                    className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${
+                      dustFilterEnabled ? 'bg-green-500' : 'bg-white/20'
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform duration-200 ${
+                        dustFilterEnabled ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+
+              {/* Date Filter - only show for active orders */}
+              {statusFilter === 'active' && (
+              <div className="space-y-2">
+                <span className="text-white/70 text-sm">Expires within</span>
+                <div className="flex flex-wrap items-center gap-2">
+                  {(['1h', '12h', '24h', '7d', '30d', '90d', '180d'] as const).map((preset) => (
+                    <button
+                      key={preset}
+                      onClick={() => {
+                        setDateFilterPreset(dateFilterPreset === preset ? null : preset);
+                        setShowDatePicker(false);
+                      }}
+                      className={`px-4 py-2 rounded-full border text-sm font-medium transition-all duration-200 ${
+                        dateFilterPreset === preset
+                          ? 'bg-white text-black border-white'
+                          : 'bg-black/40 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'
+                      }`}
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                  {/* Custom Date Picker Button */}
+                  <div className="relative" ref={datePickerRef}>
+                    <button
+                      onClick={() => {
+                        setShowDatePicker(!showDatePicker);
+                        if (!showDatePicker) {
+                          setDateFilterPreset('custom');
+                        }
+                      }}
+                      className={`px-3 py-2 rounded-full border text-sm font-medium transition-all duration-200 flex items-center gap-1 ${
+                        dateFilterPreset === 'custom'
+                          ? 'bg-white text-black border-white'
+                          : 'bg-black/40 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'
+                      }`}
+                    >
+                      <CalendarDays className="w-4 h-4" />
+                    </button>
+                    {/* Date Picker Dropdown */}
+                    {showDatePicker && (
+                      <div className="absolute top-full mt-2 right-0 z-50 bg-black/95 border border-white/20 rounded-lg p-4 shadow-xl">
+                        <div className="flex flex-col gap-3">
+                          <span className="text-white/60 text-xs">All times in UTC</span>
+                          <div>
+                            <label className="text-white/60 text-xs mb-1 block">Start Date</label>
+                            <Calendar
+                              mode="single"
+                              selected={customDateStart}
+                              onSelect={setCustomDateStart}
+                              className="rounded-md border border-white/10"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-white/60 text-xs mb-1 block">End Date</label>
+                            <Calendar
+                              mode="single"
+                              selected={customDateEnd}
+                              onSelect={setCustomDateEnd}
+                              className="rounded-md border border-white/10"
+                            />
+                          </div>
+                          <button
+                            onClick={() => setShowDatePicker(false)}
+                            className="w-full py-2 bg-white text-black rounded-lg text-sm font-medium hover:bg-white/90 transition-colors"
+                          >
+                            Apply
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {/* Clear Filter Button */}
+                  {dateFilterPreset && (
+                    <button
+                      onClick={() => {
+                        setDateFilterPreset(null);
+                        setCustomDateStart(undefined);
+                        setCustomDateEnd(undefined);
+                        setShowDatePicker(false);
+                      }}
+                      className="px-3 py-2 text-red-400 hover:text-red-300 text-sm transition-colors"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                {dateFilterPreset === 'custom' && customDateStart && customDateEnd && (
+                  <div className="text-white/50 text-xs mt-1">
+                    {customDateStart.toLocaleDateString()} - {customDateEnd.toLocaleDateString()}
+                  </div>
+                )}
+              </div>
+              )}
             </div>
           )}
         </div>
@@ -2718,7 +2876,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
               <div className="flex items-center gap-2">
                 {dustFilterEnabled && (
                   <div className="flex items-center gap-1">
-                    <span className="text-white/40 text-xs">Min $</span>
+                    <span className="text-white/40 text-xs">&lt; $</span>
                     <input
                       type="text"
                       value={dustFilterMinValue}
@@ -2727,7 +2885,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                         setDustFilterMinValue(val);
                       }}
                       className="w-16 px-2 py-1 bg-black/40 border border-white/20 rounded text-white text-xs text-right focus:outline-none focus:border-white/40"
-                      placeholder="10"
+                      placeholder="0"
                     />
                   </div>
                 )}
@@ -2752,7 +2910,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
             <div className="space-y-2">
               <span className="text-white/70 text-sm">Expires within</span>
               <div className="flex flex-wrap items-center gap-2">
-                {(['1h', '6h', '12h', '24h', '7d', '30d', '90d'] as const).map((preset) => (
+                {(['1h', '12h', '24h', '7d', '30d', '90d', '180d'] as const).map((preset) => (
                   <button
                     key={preset}
                     onClick={() => {
@@ -2991,31 +3149,44 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                     askingUsdValue = tokenValues.length > 0 ? Math.min(...tokenValues) : 0;
                   }
 
-                  // Calculate how much below/above market the seller is pricing their token
+                  // Calculate how much below/above market the seller is pricing their token for EACH buy token
                   // Matches the form's calculation using USD-based comparison
-                  let percentageDifference = null;
-                  let isBelowMarket = false;
+                  interface TokenPercentage {
+                    percentage: number | null;
+                    isBelowMarket: boolean;
+                    buyTokenTicker: string;
+                  }
+                  const tokenPercentages: TokenPercentage[] = [];
 
-                  // Calculate the effective price per buy token (first buy token)
+                  // Calculate the effective price per buy token for each buy token
                   if (buyTokensIndex && buyAmounts && Array.isArray(buyTokensIndex) && Array.isArray(buyAmounts) && buyTokensIndex.length > 0) {
-                    const firstBuyTokenIndex = Number(buyTokensIndex[0]);
-                    const firstBuyTokenInfo = getTokenInfoByIndex(firstBuyTokenIndex);
-                    const firstBuyAmount = buyAmounts[0];
+                    buyTokensIndex.forEach((tokenIndex: bigint, idx: number) => {
+                      const buyTokenInfo = getTokenInfoByIndex(Number(tokenIndex));
+                      const buyAmount = buyAmounts[idx];
 
-                    const buyAmountToUse = isCompletedOrCancelled
-                      ? firstBuyAmount
-                      : (firstBuyAmount * BigInt(Math.floor(remainingPercentage * 1e18))) / BigInt(1e18);
+                      const buyAmountToUse = isCompletedOrCancelled
+                        ? buyAmount
+                        : (buyAmount * BigInt(Math.floor(remainingPercentage * 1e18))) / BigInt(1e18);
 
-                    const buyTokenAmount = parseFloat(formatTokenAmount(buyAmountToUse, firstBuyTokenInfo.decimals));
-                    const buyTokenMarketPrice = getTokenPrice(firstBuyTokenInfo.address, tokenPrices);
+                      const buyTokenAmount = parseFloat(formatTokenAmount(buyAmountToUse, buyTokenInfo.decimals));
+                      const buyTokenMarketPrice = getTokenPrice(buyTokenInfo.address, tokenPrices);
 
-                    if (sellUsdValue > 0 && buyTokenAmount > 0 && buyTokenMarketPrice > 0) {
-                      const limitBuyTokenPrice = sellUsdValue / buyTokenAmount;
-                      const marketBuyTokenPrice = buyTokenMarketPrice;
-
-                      percentageDifference = ((limitBuyTokenPrice - marketBuyTokenPrice) / marketBuyTokenPrice) * 100;
-                      isBelowMarket = percentageDifference < 0;
-                    }
+                      if (sellUsdValue > 0 && buyTokenAmount > 0 && buyTokenMarketPrice > 0) {
+                        const limitBuyTokenPrice = sellUsdValue / buyTokenAmount;
+                        const percentageDiff = ((limitBuyTokenPrice - buyTokenMarketPrice) / buyTokenMarketPrice) * 100;
+                        tokenPercentages.push({
+                          percentage: percentageDiff,
+                          isBelowMarket: percentageDiff < 0,
+                          buyTokenTicker: formatTokenTicker(buyTokenInfo.ticker, chainId)
+                        });
+                      } else {
+                        tokenPercentages.push({
+                          percentage: null,
+                          isBelowMarket: false,
+                          buyTokenTicker: formatTokenTicker(buyTokenInfo.ticker, chainId)
+                        });
+                      }
+                    });
                   }
 
                   // Calculate ratio prices for all buy tokens
@@ -3238,7 +3409,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
 
 
                                   return (
-                                    <div key={idx} className="flex items-center space-x-2 mb-3">
+                                    <div key={idx} className="flex items-center space-x-2 mb-1.5">
                                       <TokenLogo
                                         src={tokenInfo.logo}
                                         alt={formatTokenTicker(tokenInfo.ticker)}
@@ -3293,80 +3464,88 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                         </div>
                       </div>
 
-                      {/* COLUMN 4: OTC % Content */}
+                      {/* COLUMN 4: OTC % Content - show percentage for each buy token */}
                       <div className="text-center min-w-0">
-                        <div className="text-sm">
-                          {percentageDifference !== null ? (
-                            <span className={`font-medium ${isBelowMarket
-                              ? 'text-red-400'    // Red - below market (discount)
-                              : 'text-green-400'  // Green - above market (premium)
-                              }`}>
-                              {percentageDifference.toLocaleString('en-US', {
-                                maximumFractionDigits: 1,
-                                minimumFractionDigits: 1,
-                                signDisplay: 'always'
-                              })}%
-                            </span>
-                          ) : (
-                            <span className="text-gray-500">--</span>
-                          )}
-                        </div>
-                        {percentageDifference !== null && (
-                          <div className="text-xs text-gray-400 mt-0">
-                            {isBelowMarket ? 'below market' : 'above market'}
-                          </div>
-                        )}
-                        {/* Ratio prices - clickable to toggle direction */}
-                        {ratioPrices.length > 0 && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setRatioInverted(prev => ({
-                                ...prev,
-                                [orderId]: !prev[orderId]
-                              }));
-                            }}
-                            className="text-xs text-gray-500 hover:text-gray-300 mt-1 cursor-pointer transition-colors"
-                            title="Click to switch ratio direction"
-                          >
-                            {ratioPrices.map((ratio, idx) => {
+                        {tokenPercentages.length > 0 ? (
+                          <div className="flex flex-col">
+                            {tokenPercentages.map((tokenPct, idx) => {
+                              const ratio = ratioPrices[idx];
                               const sellTicker = formatTokenTicker(sellTokenInfo.ticker, chainId);
-                              const value = isRatioInverted ? ratio.buyPerSell : ratio.sellPerBuy;
 
-                              // Format with at least 4 significant figures
-                              let formattedValue: string;
-                              if (value === 0) {
-                                formattedValue = '0';
-                              } else if (value >= 10000) {
-                                formattedValue = value.toLocaleString('en-US', { maximumFractionDigits: 0 });
-                              } else if (value >= 1000) {
-                                formattedValue = value.toLocaleString('en-US', { maximumFractionDigits: 1 });
-                              } else if (value >= 100) {
-                                formattedValue = value.toLocaleString('en-US', { maximumFractionDigits: 2 });
-                              } else if (value >= 10) {
-                                formattedValue = value.toLocaleString('en-US', { maximumFractionDigits: 3 });
-                              } else if (value >= 1) {
-                                formattedValue = value.toLocaleString('en-US', { maximumFractionDigits: 4 });
-                              } else {
-                                // For small numbers, ensure at least 4 significant figures
-                                const sigFigs = 4;
-                                const magnitude = Math.floor(Math.log10(Math.abs(value)));
-                                const decimals = Math.max(0, sigFigs - 1 - magnitude);
-                                formattedValue = value.toFixed(decimals);
+                              // Format ratio value
+                              let formattedRatio = '';
+                              if (ratio) {
+                                const value = (ratioInverted[orderId] ?? false) ? ratio.buyPerSell : ratio.sellPerBuy;
+                                if (value === 0) {
+                                  formattedRatio = '0';
+                                } else if (value >= 10000) {
+                                  formattedRatio = value.toLocaleString('en-US', { maximumFractionDigits: 0 });
+                                } else if (value >= 1000) {
+                                  formattedRatio = value.toLocaleString('en-US', { maximumFractionDigits: 1 });
+                                } else if (value >= 100) {
+                                  formattedRatio = value.toLocaleString('en-US', { maximumFractionDigits: 2 });
+                                } else if (value >= 10) {
+                                  formattedRatio = value.toLocaleString('en-US', { maximumFractionDigits: 3 });
+                                } else if (value >= 1) {
+                                  formattedRatio = value.toLocaleString('en-US', { maximumFractionDigits: 4 });
+                                } else {
+                                  const sigFigs = 4;
+                                  const magnitude = Math.floor(Math.log10(Math.abs(value)));
+                                  const decimals = Math.max(0, sigFigs - 1 - magnitude);
+                                  formattedRatio = value.toFixed(decimals);
+                                }
                               }
 
                               return (
-                                <div key={idx}>
-                                  {isRatioInverted
-                                    ? `${formattedValue} ${ratio.buyTokenTicker}/${sellTicker}`
-                                    : `${formattedValue} ${sellTicker}/${ratio.buyTokenTicker}`
-                                  }
+                                <div key={idx} className="mb-1.5 text-center">
+                                  <div className={`text-sm font-medium ${tokenPct.isBelowMarket
+                                    ? 'text-red-400'
+                                    : 'text-green-400'
+                                    }`}>
+                                    {tokenPct.percentage !== null ? (
+                                      <>
+                                        {tokenPct.percentage.toLocaleString('en-US', {
+                                          maximumFractionDigits: 1,
+                                          minimumFractionDigits: 1,
+                                          signDisplay: 'always'
+                                        })}%
+                                      </>
+                                    ) : (
+                                      <span className="text-gray-500">--</span>
+                                    )}
+                                  </div>
+                                  {tokenPct.percentage !== null && (
+                                    <div className="text-xs text-gray-400">
+                                      {tokenPct.isBelowMarket ? 'below market' : 'above market'}
+                                    </div>
+                                  )}
+                                  {/* Ratio price for this token - clickable to toggle */}
+                                  {ratio && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setRatioInverted(prev => ({
+                                          ...prev,
+                                          [orderId]: !prev[orderId]
+                                        }));
+                                      }}
+                                      className="text-xs text-gray-500 hover:text-gray-300 cursor-pointer transition-colors"
+                                      title="Click to switch ratio direction"
+                                    >
+                                      {(ratioInverted[orderId] ?? false)
+                                        ? `${formattedRatio} ${ratio.buyTokenTicker}/${sellTicker}`
+                                        : `${formattedRatio} ${sellTicker}/${ratio.buyTokenTicker}`
+                                      }
+                                    </button>
+                                  )}
                                 </div>
                               );
                             })}
-                          </button>
+                          </div>
+                        ) : (
+                          <span className="text-gray-500">--</span>
                         )}
-                        {/* Add backing price stats as second row */}
+                        {/* Add backing price stats as last row */}
                         {backingPriceDiscount !== null && (
                           <div className="text-xs text-gray-400 mt-1">
                             {(PAYWALL_ENABLED && !hasTokenAccess) ? (
@@ -3415,8 +3594,13 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                       </div>
 
                       {/* COLUMN 7: Expires Content */}
-                      <div className="text-gray-400 text-sm text-center min-w-0 mt-1.5">
-                        {formatTimestamp(Number(order.orderDetailsWithID.orderDetails.expirationTime))}
+                      <div className="text-center min-w-0 mt-1.5">
+                        <div className="text-gray-400 text-sm">
+                          {formatTimestamp(Number(order.orderDetailsWithID.orderDetails.expirationTime))}
+                        </div>
+                        <div className="text-gray-500 text-xs">
+                          {formatUtcTime(Number(order.orderDetailsWithID.orderDetails.expirationTime))}
+                        </div>
                       </div>
 
                       {/* COLUMN 8: Actions / Order ID Content */}
