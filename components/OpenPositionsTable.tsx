@@ -1382,10 +1382,12 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
         successCount++;
 
         // Show success toast for this transaction
-        const txLabel = totalTransactions > 1 ? ` (${txNum + 1}/${totalTransactions})` : '';
+        const txLabel = totalTransactions > 1 ? ` (${formatTokenTicker(buyTokenInfo.ticker)})` : '';
         toast({
           title: `✅ Order Fill Submitted${txLabel}`,
-          description: `Transaction for ${formatTokenTicker(buyTokenInfo.ticker)} submitted successfully.`,
+          description: totalTransactions > 1
+            ? `Transaction ${txNum + 1} of ${totalTransactions} submitted successfully.`
+            : `Transaction for ${formatTokenTicker(buyTokenInfo.ticker)} submitted successfully.`,
           variant: "success",
           action: txHash ? (
             <a
@@ -1424,7 +1426,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
 
       // Include info about partial success if some transactions completed
       const partialSuccessMsg = successCount > 0 && successCount < totalTransactions
-        ? ` (${successCount}/${totalTransactions} transactions completed)`
+        ? ` (${successCount} of ${totalTransactions} transactions completed)`
         : '';
 
       setExecuteErrors(prev => ({

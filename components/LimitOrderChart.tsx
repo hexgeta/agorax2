@@ -632,32 +632,57 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                 className="absolute top-1/2 -translate-y-1/2 left-[58px] right-0 h-[2px] bg-[#00D9FF] rounded-full transition-all duration-500 pointer-events-none"
               />
               <LiquidGlassCard
-                className={`absolute right-0 flex items-center justify-between bg-cyan-500/10 px-3 py-1 border-cyan-500/30 w-[250px] ${limitPricePosition && limitPricePosition < currentPricePosition ? 'top-0 -translate-y-[calc(45%-0px)]' : 'bottom-0 translate-y-[calc(45%-0px)]'
+                className={`absolute right-0 flex items-center justify-between bg-cyan-500/10 px-3 py-1 border-cyan-500/30 w-[250px] ${displayQuoteTokenInfos.length > 1 ? 'cursor-pointer pointer-events-auto' : 'pointer-events-none'} ${limitPricePosition && limitPricePosition < currentPricePosition ? 'top-0 -translate-y-[calc(45%-0px)]' : 'bottom-0 translate-y-[calc(45%-0px)]'
                   }`}
                 borderRadius="8px"
                 shadowIntensity="none"
                 glowIntensity="none"
+                onClick={displayQuoteTokenInfos.length > 1 ? cycleDisplayedToken : undefined}
               >
-                <span className="text-xs text-white/70 whitespace-nowrap">Current Price:</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-white">
-                    {displayCurrentPrice?.toLocaleString(undefined, {
-                      minimumSignificantDigits: 1,
-                      maximumSignificantDigits: 4
-                    }) || '0'}
-                  </span>
-                  {displayQuoteTokenInfo && (
+                {(() => {
+                  // Get the currently displayed token (same as limit price)
+                  const tokenInfo = displayQuoteTokenInfos[displayedTokenIndex] || displayQuoteTokenInfos[0];
+                  if (!tokenInfo) return null;
+
+                  // Calculate current market price for this specific token
+                  const tokenAddress = tokenInfo?.a?.toLowerCase();
+                  const tokenCurrentPrice = tokenAddress && sellTokenUsdPrice && buyTokenUsdPrices[tokenAddress]
+                    ? (invertPriceDisplay
+                        ? buyTokenUsdPrices[tokenAddress] / sellTokenUsdPrice  // inverted: buy/sell
+                        : sellTokenUsdPrice / buyTokenUsdPrices[tokenAddress]) // normal: sell/buy
+                    : displayCurrentPrice;
+
+                  // When inverted, show sell token as unit; otherwise show buy token
+                  const unitTokenInfo = invertPriceDisplay ? sellTokenInfo : tokenInfo;
+
+                  return (
                     <>
-                      <span className="text-xs text-[#00D9FF]">
-                        {formatTokenTicker(displayQuoteTokenInfo.ticker)}
+                      <span className="text-xs text-white/70 whitespace-nowrap flex items-center gap-1">
+                        Current Price:
+                        {displayQuoteTokenInfos.length > 1 && (
+                          <span className="text-[10px] text-white/40">
+                            ({formatTokenTicker(tokenInfo?.ticker || '')})
+                          </span>
+                        )}
                       </span>
-                      <TokenLogo
-                        ticker={displayQuoteTokenInfo.ticker}
-                        className="w-[16px] h-[16px] object-contain"
-                      />
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-white">
+                          {tokenCurrentPrice?.toLocaleString(undefined, {
+                            minimumSignificantDigits: 1,
+                            maximumSignificantDigits: 4
+                          }) || '0'}
+                        </span>
+                        <span className="text-xs text-[#00D9FF]">
+                          {formatTokenTicker(unitTokenInfo?.ticker || '')}
+                        </span>
+                        <TokenLogo
+                          ticker={unitTokenInfo?.ticker || ''}
+                          className="w-[16px] h-[16px] object-contain"
+                        />
+                      </div>
                     </>
-                  )}
-                </div>
+                  );
+                })()}
               </LiquidGlassCard>
             </div>
 
@@ -715,7 +740,7 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                             Limit Price:
                             {displayQuoteTokenInfos.length > 1 && (
                               <span className="text-[10px] text-white/40">
-                                ({displayedTokenIndex + 1}/{displayQuoteTokenInfos.length})
+                                ({formatTokenTicker(tokenInfo?.ticker || '')})
                               </span>
                             )}
                           </span>
