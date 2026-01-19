@@ -408,6 +408,9 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
   const [aonFilterEnabled, setAonFilterEnabled] = useState<boolean>(false);
   // Hide my orders filter (marketplace mode only)
   const [hideMyOrders, setHideMyOrders] = useState<boolean>(false);
+  // Dust filter - hide low value orders
+  const [dustFilterEnabled, setDustFilterEnabled] = useState<boolean>(false);
+  const [dustFilterMinValue, setDustFilterMinValue] = useState<string>('10');
   // Advanced options shelf state (persisted to localStorage)
   const [showAdvancedOptions, setShowAdvancedOptions] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
@@ -502,6 +505,9 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
 
   // State for landing page connect button disclaimer
   const [showLandingDisclaimer, setShowLandingDisclaimer] = useState(false);
+
+  // State for token balances (for displaying user's balance under inputs)
+  const [tokenBalances, setTokenBalances] = useState<{ [tokenAddress: string]: string }>({});
 
   // Efficient querying: Pass address for user orders, undefined for marketplace (all orders)
   const {
@@ -615,6 +621,71 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     };
   }, [showDatePicker]);
 
+  // Fetch token balances for expanded orders
+  useEffect(() => {
+    const fetchBalances = async () => {
+      if (!address || !publicClient || expandedPositions.size === 0 || !allOrders) return;
+
+      // Collect all unique token addresses from expanded orders
+      const tokenAddresses = new Set<string>();
+      expandedPositions.forEach(orderId => {
+        const order = allOrders.find(
+          o => o.orderDetailsWithID.orderID.toString() === orderId
+        );
+        if (order) {
+          const buyTokensIndex = order.orderDetailsWithID.orderDetails.buyTokensIndex;
+          if (buyTokensIndex && Array.isArray(buyTokensIndex)) {
+            buyTokensIndex.forEach((idx: bigint) => {
+              const tokenInfo = getTokenInfoByIndex(Number(idx));
+              if (tokenInfo.address) {
+                tokenAddresses.add(tokenInfo.address.toLowerCase());
+              }
+            });
+          }
+        }
+      });
+
+      // Fetch balances for each token
+      const balances: { [tokenAddress: string]: string } = {};
+      const ERC20_BALANCE_ABI = [
+        {
+          inputs: [{ name: 'account', type: 'address' }],
+          name: 'balanceOf',
+          outputs: [{ name: '', type: 'uint256' }],
+          stateMutability: 'view',
+          type: 'function',
+        },
+      ] as const;
+
+      for (const tokenAddr of tokenAddresses) {
+        try {
+          // Check if it's native token (PLS)
+          if (isNativeToken(tokenAddr)) {
+            const balance = await publicClient.getBalance({ address });
+            const tokenInfo = getTokenInfo(tokenAddr);
+            balances[tokenAddr] = formatTokenAmount(balance, tokenInfo.decimals);
+          } else {
+            const balance = await publicClient.readContract({
+              address: tokenAddr as `0x${string}`,
+              abi: ERC20_BALANCE_ABI,
+              functionName: 'balanceOf',
+              args: [address],
+            });
+            const tokenInfo = getTokenInfo(tokenAddr);
+            balances[tokenAddr] = formatTokenAmount(balance as bigint, tokenInfo.decimals);
+          }
+        } catch (err) {
+          // If balance fetch fails, set to '0'
+          balances[tokenAddr] = '0';
+        }
+      }
+
+      setTokenBalances(prev => ({ ...prev, ...balances }));
+    };
+
+    fetchBalances();
+  }, [expandedPositions, address, publicClient, allOrders]);
+
   // Helper function to get date range from preset
   const getDateRangeFromPreset = useCallback((preset: DateFilterPreset): { start: number; end: number } | null => {
     if (!preset || preset === 'custom') return null;
@@ -690,6 +761,16 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
           setTimeout(() => {
             const expandedElement = document.querySelector(`[data-expanded-order-id="${orderId}"]`);
             if (expandedElement) {
+              // First, scroll the horizontal container back to left (0)
+              // The expanded order form is designed to fit viewport width, not the wide table
+              const horizontalScrollContainer = document.querySelector('[data-horizontal-scroll-container]');
+              if (horizontalScrollContainer) {
+                horizontalScrollContainer.scrollTo({
+                  left: 0,
+                  behavior: 'smooth'
+                });
+              }
+
               // Get the element's position and scroll with offset for header
               const rect = expandedElement.getBoundingClientRect();
               const headerOffset = 80; // Account for fixed header
@@ -1983,6 +2064,21 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
       });
     }
 
+    // Level 7: Filter by dust (minimum USD value of sell amount)
+    if (dustFilterEnabled && dustFilterMinValue) {
+      const minValue = parseFloat(dustFilterMinValue) || 0;
+      if (minValue > 0) {
+        filteredOrders = filteredOrders.filter(order => {
+          const sellTokenInfo = getTokenInfo(order.orderDetailsWithID.orderDetails.sellToken);
+          const sellAmount = order.orderDetailsWithID.orderDetails.sellAmount;
+          const sellTokenAmount = parseFloat(formatTokenAmount(sellAmount, sellTokenInfo.decimals));
+          const sellTokenPrice = getTokenPrice(sellTokenInfo.address, tokenPrices);
+          const sellUsdValue = sellTokenAmount * sellTokenPrice;
+          return sellUsdValue >= minValue;
+        });
+      }
+    }
+
     // Apply sorting
     const sortedOrders = [...filteredOrders].sort((a, b) => {
       let comparison = 0;
@@ -2137,7 +2233,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     });
 
     return sortedOrders;
-  }, [allOrders, tokenFilter, ownershipFilter, statusFilter, searchQuery, aonFilterEnabled, hideMyOrders, isMarketplaceMode, getActiveDateRange, sortField, sortDirection, tokenPrices, tokenStats, address, purchasedOrderIds, purchaseTransactions]);
+  }, [allOrders, tokenFilter, ownershipFilter, statusFilter, searchQuery, aonFilterEnabled, hideMyOrders, dustFilterEnabled, dustFilterMinValue, isMarketplaceMode, getActiveDateRange, sortField, sortDirection, tokenPrices, tokenStats, address, purchasedOrderIds, purchaseTransactions]);
 
   // Helper functions
   const formatTimestamp = (timestamp: number) => {
@@ -2613,10 +2709,48 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
               </button>
             </div>
 
+            {/* Dust Filter Toggle */}
+            <div className="flex items-center justify-between max-w-[480px]">
+              <div className="flex flex-col">
+                <span className="text-white/70 text-sm">Hide dust orders</span>
+                <span className="text-white/40 text-xs">Filter out low value orders</span>
+              </div>
+              <div className="flex items-center gap-2">
+                {dustFilterEnabled && (
+                  <div className="flex items-center gap-1">
+                    <span className="text-white/40 text-xs">Min $</span>
+                    <input
+                      type="text"
+                      value={dustFilterMinValue}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/[^0-9.]/g, '');
+                        setDustFilterMinValue(val);
+                      }}
+                      className="w-16 px-2 py-1 bg-black/40 border border-white/20 rounded text-white text-xs text-right focus:outline-none focus:border-white/40"
+                      placeholder="10"
+                    />
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setDustFilterEnabled(!dustFilterEnabled)}
+                  className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${
+                    dustFilterEnabled ? 'bg-green-500' : 'bg-white/20'
+                  }`}
+                >
+                  <span
+                    className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform duration-200 ${
+                      dustFilterEnabled ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+
             {/* Date Filter - only show for active orders */}
             {statusFilter === 'active' && (
             <div className="space-y-2">
-              <span className="text-white/70 text-sm">Expiration Date</span>
+              <span className="text-white/70 text-sm">Expires within</span>
               <div className="flex flex-wrap items-center gap-2">
                 {(['1h', '6h', '12h', '24h', '7d', '30d', '90d'] as const).map((preset) => (
                   <button
@@ -2724,7 +2858,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
         </div>
       ) : (
         /* Horizontal scroll container with hidden scrollbar */
-        <div className="overflow-x-auto scrollbar-hide -mx-6 px-6">
+        <div className="overflow-x-auto scrollbar-hide -mx-6 px-6" data-horizontal-scroll-container>
           {!displayOrders || displayOrders.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-gray-400 mb-2">No {statusFilter} {ownershipFilter === 'mine' ? 'deals' : 'orders'} found</p>
@@ -2738,19 +2872,21 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                 {/* COLUMN 1: Token For Sale */}
                 <button
                   onClick={() => handleSort('sellAmount')}
-                  className={`text-sm font-medium text-left hover:text-white transition-colors ${sortField === 'sellAmount' ? 'text-white' : 'text-white/60'
+                  className={`text-left hover:text-white transition-colors ${sortField === 'sellAmount' ? 'text-white' : 'text-white/60'
                     }`}
                 >
-                  {statusFilter === 'completed' ? 'Sold' : 'For sale'} {sortField === 'sellAmount' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                  <div className="text-sm font-medium">{statusFilter === 'completed' ? 'Sold' : 'For sale'} {sortField === 'sellAmount' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}</div>
+                  <div className="text-xs text-white/40 font-normal">(Limit Price)</div>
                 </button>
 
                 {/* COLUMN 2: Asking For */}
                 <button
                   onClick={() => handleSort('askingFor')}
-                  className={`text-sm font-medium text-left hover:text-white transition-colors ${sortField === 'askingFor' ? 'text-white' : 'text-white/60'
+                  className={`text-left hover:text-white transition-colors ${sortField === 'askingFor' ? 'text-white' : 'text-white/60'
                     }`}
                 >
-                  {statusFilter === 'completed' ? 'Bought' : 'Asking for'} {sortField === 'askingFor' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                  <div className="text-sm font-medium">{statusFilter === 'completed' ? 'Bought' : 'Asking for'} {sortField === 'askingFor' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}</div>
+                  <div className="text-xs text-white/40 font-normal">(Market Price)</div>
                 </button>
 
                 {/* COLUMN 3: Fill Status % */}
@@ -3027,10 +3163,6 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
 
                           return (
                             <div className="inline-block">
-                              <span className={`text-lg font-medium ${tokenPrice > 0 ? 'text-white' : 'text-gray-500'} ${tokenPrice === 0 ? 'py-1' : ''}`}>
-                                {tokenPrice > 0 ? formatUSD(usdValue) : '--'}
-                              </span>
-                              <div className="w-1/2 h-px bg-[rgba(255, 255, 255, 1)]/5 my-2"></div>
                               <div className="flex items-center space-x-2">
                                 <TokenLogo
                                   src={getTokenInfo(order.orderDetailsWithID.orderDetails.sellToken).logo}
@@ -3044,7 +3176,11 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                   <span className="text-white/60 text-xs whitespace-nowrap">
                                     {formatTokenAmountDisplay(tokenAmount)}
                                   </span>
-                                  {/* Hide individual USD price for single token (redundant with total) */}
+                                  {tokenPrice > 0 && (
+                                    <span className="text-gray-500 text-xs">
+                                      {formatUSD(usdValue)}
+                                    </span>
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -3076,13 +3212,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
 
                           return (
                             <div className="inline-block">
-                              <span className={`text-lg font-medium ${totalUsdValue > 0 ? 'text-white' : 'text-gray-500'} ${totalUsdValue === 0 ? 'py-1' : ''}`}>
-                                {totalUsdValue > 0 ? formatUSD(totalUsdValue) : '--'}
-                              </span>
-                              <div className="w-1/2 h-px bg-[rgba(255, 255, 255, 1)]/5 my-2"></div>
                               {(() => {
                                 // For completed and active orders
-                                const hasMultipleTokens = buyTokensIndex.length > 1;
                                 return buyTokensIndex.map((tokenIndex: bigint, idx: number) => {
                                   const tokenInfo = getTokenInfoByIndex(Number(tokenIndex));
                                   const originalAmount = buyAmounts[idx];
@@ -3120,8 +3251,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                         <span className="text-white/60 text-xs whitespace-nowrap">
                                           {formatTokenAmountDisplay(tokenAmount)}
                                         </span>
-                                        {/* Only show individual USD price if there are multiple tokens */}
-                                        {hasMultipleTokens && tokenPrice > 0 && (
+                                        {tokenPrice > 0 && (
                                           <span className="text-gray-500 text-xs">
                                             {formatUSD(usdValue)}
                                           </span>
@@ -3203,19 +3333,23 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                               const sellTicker = formatTokenTicker(sellTokenInfo.ticker, chainId);
                               const value = isRatioInverted ? ratio.buyPerSell : ratio.sellPerBuy;
 
-                              // Format with at least 2 significant figures
+                              // Format with at least 4 significant figures
                               let formattedValue: string;
                               if (value === 0) {
                                 formattedValue = '0';
-                              } else if (value >= 1000) {
+                              } else if (value >= 10000) {
                                 formattedValue = value.toLocaleString('en-US', { maximumFractionDigits: 0 });
-                              } else if (value >= 100) {
+                              } else if (value >= 1000) {
                                 formattedValue = value.toLocaleString('en-US', { maximumFractionDigits: 1 });
-                              } else if (value >= 1) {
+                              } else if (value >= 100) {
                                 formattedValue = value.toLocaleString('en-US', { maximumFractionDigits: 2 });
+                              } else if (value >= 10) {
+                                formattedValue = value.toLocaleString('en-US', { maximumFractionDigits: 3 });
+                              } else if (value >= 1) {
+                                formattedValue = value.toLocaleString('en-US', { maximumFractionDigits: 4 });
                               } else {
-                                // For small numbers, ensure at least 2 significant figures
-                                const sigFigs = 2;
+                                // For small numbers, ensure at least 4 significant figures
+                                const sigFigs = 4;
                                 const magnitude = Math.floor(Math.log10(Math.abs(value)));
                                 const decimals = Math.max(0, sigFigs - 1 - magnitude);
                                 formattedValue = value.toFixed(decimals);
@@ -3534,32 +3668,52 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                             <div className="space-y-3">
                                               <h5 className="text-white font-medium text-sm">Select payment token(s):</h5>
                                               <div className="flex flex-wrap gap-2">
-                                                {availableTokens.map((tokenInfo: { address: string; logo: string; ticker: string }) => {
-                                                  const isSelected = selected.has(tokenInfo.address);
-                                                  return (
-                                                    <button
-                                                      key={tokenInfo.address}
-                                                      onClick={() => toggleToken(tokenInfo.address)}
-                                                      className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all ${
-                                                        isSelected
-                                                          ? 'bg-white/20 border-white/40 text-white'
-                                                          : 'bg-transparent border-white/10 text-gray-400 hover:border-white/30 hover:text-white'
-                                                      }`}
-                                                    >
-                                                      <TokenLogo
-                                                        src={tokenInfo.logo}
-                                                        alt={formatTokenTicker(tokenInfo.ticker)}
-                                                        className="w-5 h-5 rounded-full"
-                                                      />
-                                                      <span className="text-sm font-medium">
-                                                        {formatTokenTicker(tokenInfo.ticker)}
-                                                      </span>
-                                                      {isSelected && (
-                                                        <span className="text-green-400 text-sm">✓</span>
-                                                      )}
-                                                    </button>
-                                                  );
-                                                })}
+                                                {(() => {
+                                                  // Find the token with the cheapest market price (better deal for buyer)
+                                                  const tokenPricesMap = availableTokens.map((t: { address: string }) => ({
+                                                    address: t.address,
+                                                    price: getTokenPrice(t.address, tokenPrices)
+                                                  }));
+                                                  const validPrices = tokenPricesMap.filter((t: { price: number }) => t.price > 0);
+                                                  const cheapestToken = validPrices.length > 1
+                                                    ? validPrices.reduce((min: { address: string; price: number }, t: { address: string; price: number }) =>
+                                                        t.price < min.price ? t : min
+                                                      )
+                                                    : null;
+
+                                                  return availableTokens.map((tokenInfo: { address: string; logo: string; ticker: string }) => {
+                                                    const isSelected = selected.has(tokenInfo.address);
+                                                    const isBetterDeal = cheapestToken && tokenInfo.address === cheapestToken.address;
+                                                    return (
+                                                      <button
+                                                        key={tokenInfo.address}
+                                                        onClick={() => toggleToken(tokenInfo.address)}
+                                                        className={`relative flex items-center gap-2 px-3 py-2 rounded-lg border transition-all ${
+                                                          isSelected
+                                                            ? 'bg-white/20 border-white/40 text-white'
+                                                            : 'bg-transparent border-white/10 text-gray-400 hover:border-white/30 hover:text-white'
+                                                        }`}
+                                                      >
+                                                        {isBetterDeal && (
+                                                          <span className="absolute -top-2.5 -right-2 px-1 py-0.5 bg-green-500/90 text-white text-[8px] font-medium rounded leading-none">
+                                                            Better deal
+                                                          </span>
+                                                        )}
+                                                        <TokenLogo
+                                                          src={tokenInfo.logo}
+                                                          alt={formatTokenTicker(tokenInfo.ticker)}
+                                                          className="w-5 h-5 rounded-full"
+                                                        />
+                                                        <span className="text-sm font-medium">
+                                                          {formatTokenTicker(tokenInfo.ticker)}
+                                                        </span>
+                                                        {isSelected && (
+                                                          <span className="text-green-400 text-sm">✓</span>
+                                                        )}
+                                                      </button>
+                                                    );
+                                                  });
+                                                })()}
                                               </div>
                                               <button
                                                 onClick={handleNextStep}
@@ -3682,6 +3836,21 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                                           </span>
                                                         )}
                                                       </div>
+
+                                                      {/* User's balance for this token */}
+                                                      {address && tokenBalances[tokenInfo.address.toLowerCase()] && (() => {
+                                                        const balanceStr = tokenBalances[tokenInfo.address.toLowerCase()];
+                                                        const balance = parseFloat(removeCommas(balanceStr)) || 0;
+                                                        const inputAmount = parseFloat(removeCommas(currentAmount)) || 0;
+                                                        const exceedsBalance = inputAmount > balance;
+
+                                                        return (
+                                                          <div className={`text-xs ml-[92px] ${exceedsBalance ? 'text-red-400' : 'text-gray-500'}`}>
+                                                            {exceedsBalance && <span className="mr-1">Insufficient balance -</span>}
+                                                            Balance: {formatNumberWithCommas(tokenBalances[tokenInfo.address.toLowerCase()])}
+                                                          </div>
+                                                        );
+                                                      })()}
 
                                                       {/* Individual percentage buttons for this token */}
                                                       <div className="flex flex-wrap gap-1 ml-0">

@@ -5,7 +5,7 @@ import NumberFlow from '@number-flow/react';
 import { useAccount, useBalance, usePublicClient } from 'wagmi';
 import { TOKEN_CONSTANTS } from '@/constants/crypto';
 import { useTokenPrices } from '@/hooks/crypto/useTokenPrices';
-import { formatEther, parseEther } from 'viem';
+import { formatEther, formatUnits, parseEther } from 'viem';
 import logoManifest from '@/constants/logo-manifest.json';
 import { formatTokenTicker, parseTokenAmount, getTokenInfoByIndex, getContractWhitelistIndex } from '@/utils/tokenUtils';
 import { getBlockExplorerTxUrl } from '@/utils/blockExplorer';
@@ -213,6 +213,8 @@ export function LimitOrderForm({
   });
   const [showSellDropdown, setShowSellDropdown] = useState(false);
   const [showBuyDropdowns, setShowBuyDropdowns] = useState<boolean[]>([false]);
+  const [showSellTokenMenu, setShowSellTokenMenu] = useState(false);
+  const [showBuyTokenMenus, setShowBuyTokenMenus] = useState<boolean[]>([false]);
   const [sellSearchQuery, setSellSearchQuery] = useState('');
   const [buySearchQueries, setBuySearchQueries] = useState<string[]>(['']);
   const [invertPriceDisplay, setInvertPriceDisplay] = useState(() => {
@@ -286,6 +288,9 @@ export function LimitOrderForm({
   const [isLoadingCustomToken, setIsLoadingCustomToken] = useState(false);
   const [customTokenError, setCustomTokenError] = useState<string | null>(null);
 
+  // Token balances for dropdown sorting (address -> balance in token units)
+  const [dropdownTokenBalances, setDropdownTokenBalances] = useState<Record<string, string>>({});
+
   // Individual limit prices for each buy token (used when pricesBound is false)
   const [individualLimitPrices, setIndividualLimitPrices] = useState<(number | undefined)[]>([]);
 
@@ -293,6 +298,8 @@ export function LimitOrderForm({
   const buyDropdownRefs = useRef<(HTMLDivElement | null)[]>([]);
   const sellSearchRef = useRef<HTMLInputElement>(null);
   const buySearchRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const sellTokenMenuRef = useRef<HTMLDivElement>(null);
+  const buyTokenMenuRefs = useRef<(HTMLDivElement | null)[]>([]);
   const buyInputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const sellInputRef = useRef<HTMLInputElement>(null);
   const datePickerRef = useRef<HTMLDivElement>(null);
@@ -386,6 +393,73 @@ export function LimitOrderForm({
     }
   }, [availableTokens.length, activeTokens.length]);
 
+  // Fetch all token balances for dropdown sorting
+  // Include all TOKEN_CONSTANTS if showMoreTokens is enabled, otherwise just availableTokens
+  const tokensToFetchBalances = showMoreTokens ? TOKEN_CONSTANTS.filter(t => t.a) : availableTokens;
+
+  useEffect(() => {
+    const fetchAllBalances = async () => {
+      if (!address || !publicClient || tokensToFetchBalances.length === 0) return;
+
+      const ERC20_BALANCE_ABI = [
+        {
+          inputs: [{ name: 'account', type: 'address' }],
+          name: 'balanceOf',
+          outputs: [{ name: '', type: 'uint256' }],
+          stateMutability: 'view',
+          type: 'function',
+        },
+      ] as const;
+
+      const balances: Record<string, string> = {};
+
+      // Batch fetch balances using multicall
+      try {
+        const calls = tokensToFetchBalances
+          .filter(token => token.a && !isNativeToken(token.a))
+          .map(token => ({
+            address: token.a as `0x${string}`,
+            abi: ERC20_BALANCE_ABI,
+            functionName: 'balanceOf' as const,
+            args: [address] as const,
+          }));
+
+        if (calls.length > 0) {
+          const results = await publicClient.multicall({
+            contracts: calls,
+            allowFailure: true,
+          });
+
+          // Process results
+          const erc20Tokens = tokensToFetchBalances.filter(t => t.a && !isNativeToken(t.a));
+          results.forEach((result, index) => {
+            const token = erc20Tokens[index];
+            if (token?.a && result.status === 'success' && result.result !== undefined) {
+              const balanceWei = result.result as bigint;
+              // Use formatUnits with the token's actual decimals
+              const formatted = formatUnits(balanceWei, token.decimals || 18);
+              balances[token.a.toLowerCase()] = formatted;
+            }
+          });
+        }
+
+        // Fetch native token (PLS) balance separately
+        const nativeToken = tokensToFetchBalances.find(t => t.a && isNativeToken(t.a));
+        if (nativeToken?.a) {
+          const nativeBalance = await publicClient.getBalance({ address });
+          balances[nativeToken.a.toLowerCase()] = formatEther(nativeBalance);
+        }
+
+        console.log('📊 Dropdown balances fetched:', Object.keys(balances).length, 'tokens with balances');
+        setDropdownTokenBalances(balances);
+      } catch (error) {
+        console.error('Failed to fetch token balances for dropdown:', error);
+      }
+    };
+
+    fetchAllBalances();
+  }, [address, publicClient, tokensToFetchBalances]);
+
   // Detect if sell search query is a contract address and fetch token info from DexScreener
   useEffect(() => {
     const isContractAddress = /^0x[a-fA-F0-9]{40}$/.test(sellSearchQuery.trim());
@@ -469,7 +543,7 @@ export function LimitOrderForm({
   // Filter tokens based on search queries and exclude already selected tokens
   // When showMoreTokens is true, show ALL tokens from TOKEN_CONSTANTS (not just whitelisted)
   const sellTokenSource = showMoreTokens ? TOKEN_CONSTANTS.filter(t => t.a) : availableTokens;
-  const filteredSellTokens = sellTokenSource.filter(token => {
+  const filteredSellTokensUnsorted = sellTokenSource.filter(token => {
     if (!token.a) return false;
 
     // Exclude if it's already selected in any buy token
@@ -483,35 +557,9 @@ export function LimitOrderForm({
     return token.ticker.toLowerCase().includes(searchLower) ||
       token.name.toLowerCase().includes(searchLower) ||
       (token.a && token.a.toLowerCase().includes(searchLower));
-  }).sort((a, b) => {
-    const searchLower = sellSearchQuery.toLowerCase();
-    const aLower = a.ticker.toLowerCase();
-    const bLower = b.ticker.toLowerCase();
-    const aTickerMatches = aLower.includes(searchLower);
-    const bTickerMatches = bLower.includes(searchLower);
-
-    // 1. Exact ticker match goes first
-    const aExact = aLower === searchLower;
-    const bExact = bLower === searchLower;
-    if (aExact && !bExact) return -1;
-    if (bExact && !aExact) return 1;
-
-    // 2. Tokens with prefix (e, p, st, we) + search term come next (e.g., eHEX, pHEX for "hex")
-    const prefixes = ['e', 'p', 'st', 'we'];
-    const aIsPrefixed = prefixes.some(prefix => aLower === prefix + searchLower);
-    const bIsPrefixed = prefixes.some(prefix => bLower === prefix + searchLower);
-    if (aIsPrefixed && !bIsPrefixed) return -1;
-    if (bIsPrefixed && !aIsPrefixed) return 1;
-
-    // 3. Ticker contains search term comes before name-only matches
-    if (aTickerMatches && !bTickerMatches) return -1;
-    if (bTickerMatches && !aTickerMatches) return 1;
-
-    // 4. Then alphabetically
-    return a.ticker.localeCompare(b.ticker);
   });
 
-  const getFilteredBuyTokens = (index: number) => {
+  const getFilteredBuyTokensUnsorted = (index: number) => {
     const searchQuery = buySearchQueries[index] || '';
     return availableTokens.filter(token => {
       if (!token.a) return false;
@@ -534,32 +582,6 @@ export function LimitOrderForm({
       return token.ticker.toLowerCase().includes(searchLower) ||
         token.name.toLowerCase().includes(searchLower) ||
         (token.a && token.a.toLowerCase().includes(searchLower));
-    }).sort((a, b) => {
-      const searchLower = searchQuery.toLowerCase();
-      const aLower = a.ticker.toLowerCase();
-      const bLower = b.ticker.toLowerCase();
-      const aTickerMatches = aLower.includes(searchLower);
-      const bTickerMatches = bLower.includes(searchLower);
-
-      // 1. Exact ticker match goes first
-      const aExact = aLower === searchLower;
-      const bExact = bLower === searchLower;
-      if (aExact && !bExact) return -1;
-      if (bExact && !aExact) return 1;
-
-      // 2. Tokens with prefix (e, p, st, we) + search term come next (e.g., eHEX, pHEX for "hex")
-      const prefixes = ['e', 'p', 'st', 'we'];
-      const aIsPrefixed = prefixes.some(prefix => aLower === prefix + searchLower);
-      const bIsPrefixed = prefixes.some(prefix => bLower === prefix + searchLower);
-      if (aIsPrefixed && !bIsPrefixed) return -1;
-      if (bIsPrefixed && !aIsPrefixed) return 1;
-
-      // 3. Ticker contains search term comes before name-only matches
-      if (aTickerMatches && !bTickerMatches) return -1;
-      if (bTickerMatches && !aTickerMatches) return 1;
-
-      // 4. Then alphabetically
-      return a.ticker.localeCompare(b.ticker);
     });
   };
 
@@ -621,6 +643,110 @@ export function LimitOrderForm({
     const lowerAddr = address.toLowerCase();
     const entry = Object.entries(prices).find(([addr]) => addr.toLowerCase() === lowerAddr);
     return entry ? entry[1].price : 0;
+  };
+
+  // Sorted filtered sell tokens (sorted by USD value)
+  const filteredSellTokens = useMemo(() => {
+    // Debug: log first few tokens' balances and prices
+    if (Object.keys(dropdownTokenBalances).length > 0) {
+      const sampleTokens = filteredSellTokensUnsorted.slice(0, 3);
+      sampleTokens.forEach(t => {
+        const bal = dropdownTokenBalances[t.a?.toLowerCase() || ''];
+        const price = getPrice(t.a);
+        if (bal && parseFloat(bal) > 0) {
+          console.log(`📊 ${t.ticker}: balance=${bal}, price=${price}, USD=${parseFloat(bal) * price}`);
+        }
+      });
+    }
+    return [...filteredSellTokensUnsorted].sort((a, b) => {
+      const searchLower = sellSearchQuery.toLowerCase();
+      const aLower = a.ticker.toLowerCase();
+      const bLower = b.ticker.toLowerCase();
+      const aTickerMatches = aLower.includes(searchLower);
+      const bTickerMatches = bLower.includes(searchLower);
+
+      // 0. If user is searching, prioritize search matches first
+      if (searchLower) {
+        // Exact ticker match goes first
+        const aExact = aLower === searchLower;
+        const bExact = bLower === searchLower;
+        if (aExact && !bExact) return -1;
+        if (bExact && !aExact) return 1;
+
+        // Tokens with prefix (e, p, st, we) + search term come next
+        const prefixes = ['e', 'p', 'st', 'we'];
+        const aIsPrefixed = prefixes.some(prefix => aLower === prefix + searchLower);
+        const bIsPrefixed = prefixes.some(prefix => bLower === prefix + searchLower);
+        if (aIsPrefixed && !bIsPrefixed) return -1;
+        if (bIsPrefixed && !aIsPrefixed) return 1;
+
+        // Ticker contains search term comes before name-only matches
+        if (aTickerMatches && !bTickerMatches) return -1;
+        if (bTickerMatches && !aTickerMatches) return 1;
+      }
+
+      // 1. Primary sort: by user's USD holding (balance * price) - highest first
+      const aBalance = parseFloat(dropdownTokenBalances[a.a?.toLowerCase() || ''] || '0');
+      const bBalance = parseFloat(dropdownTokenBalances[b.a?.toLowerCase() || ''] || '0');
+      const aPrice = getPrice(a.a);
+      const bPrice = getPrice(b.a);
+      const aUsdValue = aBalance * (aPrice > 0 ? aPrice : 0);
+      const bUsdValue = bBalance * (bPrice > 0 ? bPrice : 0);
+
+      if (aUsdValue !== bUsdValue) {
+        return bUsdValue - aUsdValue; // Descending order (highest USD value first)
+      }
+
+      // 2. Then alphabetically
+      return a.ticker.localeCompare(b.ticker);
+    });
+  }, [filteredSellTokensUnsorted, sellSearchQuery, dropdownTokenBalances, prices]);
+
+  // Get sorted filtered buy tokens
+  const getFilteredBuyTokens = (index: number) => {
+    const searchQuery = buySearchQueries[index] || '';
+    return [...getFilteredBuyTokensUnsorted(index)].sort((a, b) => {
+      const searchLower = searchQuery.toLowerCase();
+      const aLower = a.ticker.toLowerCase();
+      const bLower = b.ticker.toLowerCase();
+      const aTickerMatches = aLower.includes(searchLower);
+      const bTickerMatches = bLower.includes(searchLower);
+
+      // 0. If user is searching, prioritize search matches first
+      if (searchLower) {
+        // Exact ticker match goes first
+        const aExact = aLower === searchLower;
+        const bExact = bLower === searchLower;
+        if (aExact && !bExact) return -1;
+        if (bExact && !aExact) return 1;
+
+        // Tokens with prefix (e, p, st, we) + search term come next
+        const prefixes = ['e', 'p', 'st', 'we'];
+        const aIsPrefixed = prefixes.some(prefix => aLower === prefix + searchLower);
+        const bIsPrefixed = prefixes.some(prefix => bLower === prefix + searchLower);
+        if (aIsPrefixed && !bIsPrefixed) return -1;
+        if (bIsPrefixed && !aIsPrefixed) return 1;
+
+        // Ticker contains search term comes before name-only matches
+        if (aTickerMatches && !bTickerMatches) return -1;
+        if (bTickerMatches && !aTickerMatches) return 1;
+      }
+
+      // 1. Primary sort: by user's USD holding (balance * price) - highest first
+      const aBalance = parseFloat(dropdownTokenBalances[a.a?.toLowerCase() || ''] || '0');
+      const bBalance = parseFloat(dropdownTokenBalances[b.a?.toLowerCase() || ''] || '0');
+      const aPrice = getPrice(a.a);
+      const bPrice = getPrice(b.a);
+      const aUsdValue = aBalance * (aPrice > 0 ? aPrice : 0);
+      const bUsdValue = bBalance * (bPrice > 0 ? bPrice : 0);
+
+      if (aUsdValue !== bUsdValue) {
+        return bUsdValue - aUsdValue; // Descending order (highest USD value first)
+      }
+
+      // 2. Then alphabetically
+      return a.ticker.localeCompare(b.ticker);
+    });
   };
 
   // Token-gating - use centralized validation
@@ -1225,6 +1351,20 @@ export function LimitOrderForm({
       if (datePickerRef.current && !datePickerRef.current.contains(event.target as Node)) {
         setShowDatePicker(false);
       }
+
+      // Close token menus if clicking outside
+      if (sellTokenMenuRef.current && !sellTokenMenuRef.current.contains(event.target as Node)) {
+        setShowSellTokenMenu(false);
+      }
+      buyTokenMenuRefs.current.forEach((ref, index) => {
+        if (ref && !ref.contains(event.target as Node)) {
+          setShowBuyTokenMenus(prev => {
+            const newMenus = [...prev];
+            newMenus[index] = false;
+            return newMenus;
+          });
+        }
+      });
     };
 
     document.addEventListener('mousedown', handleClickOutside);
@@ -1605,7 +1745,7 @@ export function LimitOrderForm({
       });
 
       const sellAmountForOrder = parseTokenAmount(removeCommas(sellAmount), sellToken.decimals);
-      const expirationTime = BigInt(Math.floor(Date.now() / 1000) + (expirationDays * 24 * 60 * 60));
+      const expirationTime = BigInt(Math.floor(Date.now() / 1000 + expirationDays * 24 * 60 * 60));
 
       toast({
         title: "Creating Order",
@@ -2441,10 +2581,10 @@ export function LimitOrderForm({
           <label className="text-white/80 text-sm mb-2 block font-semibold text-left">SELL</label>
 
           {/* Token Selector */}
-          <div className="relative mb-3" ref={sellDropdownRef}>
+          <div className="relative mb-3 flex gap-2" ref={sellDropdownRef}>
             <button
               onClick={() => setShowSellDropdown(!showSellDropdown)}
-              className="w-full bg-black/40 border border-white/10 p-3 flex items-center justify-between hover:bg-white/5 transition-all shadow-sm rounded-lg"
+              className="flex-1 bg-black/40 border border-white/10 p-3 flex items-center justify-between hover:bg-white/5 transition-all shadow-sm rounded-lg"
             >
               <div className="flex items-center space-x-3">
                 {sellToken ? (
@@ -2460,6 +2600,69 @@ export function LimitOrderForm({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
             </button>
+
+            {/* 3-dot menu for sell token */}
+            {sellToken && (
+              <div className="relative" ref={sellTokenMenuRef}>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowSellTokenMenu(!showSellTokenMenu);
+                  }}
+                  className="h-full px-3 bg-black/40 border border-white/10 hover:bg-white/5 transition-all rounded-lg flex items-center justify-center"
+                  title="Token options"
+                >
+                  <svg className="w-5 h-5 text-white/50" fill="currentColor" viewBox="0 0 24 24">
+                    <circle cx="12" cy="6" r="2" />
+                    <circle cx="12" cy="12" r="2" />
+                    <circle cx="12" cy="18" r="2" />
+                  </svg>
+                </button>
+
+                {showSellTokenMenu && (
+                  <div className="absolute top-full right-0 mt-1 bg-black/95 border border-white/10 z-50 shadow-xl backdrop-blur-md rounded-lg overflow-hidden min-w-[180px]">
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(sellToken.a);
+                        toast({ title: "Address copied", description: sellToken.a.slice(0, 10) + '...' + sellToken.a.slice(-8) });
+                        setShowSellTokenMenu(false);
+                      }}
+                      className="w-full px-4 py-3 flex items-center gap-3 hover:bg-white/10 transition-colors text-left"
+                    >
+                      <svg className="w-4 h-4 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2" strokeWidth={2} />
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" strokeWidth={2} />
+                      </svg>
+                      <span className="text-white text-sm">Copy Address</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        window.open(`https://midgard.wtf/address/${sellToken.a}`, '_blank');
+                        setShowSellTokenMenu(false);
+                      }}
+                      className="w-full px-4 py-3 flex items-center gap-3 hover:bg-white/10 transition-colors text-left"
+                    >
+                      <svg className="w-4 h-4 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                      <span className="text-white text-sm">View on Explorer</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        window.open(`https://dexscreener.com/pulsechain/${sellToken.a}`, '_blank');
+                        setShowSellTokenMenu(false);
+                      }}
+                      className="w-full px-4 py-3 flex items-center gap-3 hover:bg-white/10 transition-colors text-left"
+                    >
+                      <svg className="w-4 h-4 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      </svg>
+                      <span className="text-white text-sm">View on DexScreener</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Dropdown */}
             {showSellDropdown && (
@@ -2845,6 +3048,85 @@ export function LimitOrderForm({
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                           </svg>
                         </button>
+
+                        {/* 3-dot menu for buy token */}
+                        {buyToken && (
+                          <div className="relative" ref={el => { buyTokenMenuRefs.current[index] = el; }}>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShowBuyTokenMenus(prev => {
+                                  const newMenus = [...prev];
+                                  newMenus[index] = !newMenus[index];
+                                  return newMenus;
+                                });
+                              }}
+                              className="h-[52px] px-3 bg-black/40 border border-white/10 hover:bg-white/5 transition-all rounded-lg flex items-center justify-center"
+                              title="Token options"
+                            >
+                              <svg className="w-5 h-5 text-white/50" fill="currentColor" viewBox="0 0 24 24">
+                                <circle cx="12" cy="6" r="2" />
+                                <circle cx="12" cy="12" r="2" />
+                                <circle cx="12" cy="18" r="2" />
+                              </svg>
+                            </button>
+
+                            {showBuyTokenMenus[index] && (
+                              <div className="absolute top-full right-0 mt-1 bg-black/95 border border-white/10 z-50 shadow-xl backdrop-blur-md rounded-lg overflow-hidden min-w-[180px]">
+                                <button
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(buyToken.a);
+                                    toast({ title: "Address copied", description: buyToken.a.slice(0, 10) + '...' + buyToken.a.slice(-8) });
+                                    setShowBuyTokenMenus(prev => {
+                                      const newMenus = [...prev];
+                                      newMenus[index] = false;
+                                      return newMenus;
+                                    });
+                                  }}
+                                  className="w-full px-4 py-3 flex items-center gap-3 hover:bg-white/10 transition-colors text-left"
+                                >
+                                  <svg className="w-4 h-4 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" strokeWidth={2} />
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" strokeWidth={2} />
+                                  </svg>
+                                  <span className="text-white text-sm">Copy Address</span>
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    window.open(`https://midgard.wtf/address/${buyToken.a}`, '_blank');
+                                    setShowBuyTokenMenus(prev => {
+                                      const newMenus = [...prev];
+                                      newMenus[index] = false;
+                                      return newMenus;
+                                    });
+                                  }}
+                                  className="w-full px-4 py-3 flex items-center gap-3 hover:bg-white/10 transition-colors text-left"
+                                >
+                                  <svg className="w-4 h-4 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                  </svg>
+                                  <span className="text-white text-sm">View on Explorer</span>
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    window.open(`https://dexscreener.com/pulsechain/${buyToken.a}`, '_blank');
+                                    setShowBuyTokenMenus(prev => {
+                                      const newMenus = [...prev];
+                                      newMenus[index] = false;
+                                      return newMenus;
+                                    });
+                                  }}
+                                  className="w-full px-4 py-3 flex items-center gap-3 hover:bg-white/10 transition-colors text-left"
+                                >
+                                  <svg className="w-4 h-4 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                                  </svg>
+                                  <span className="text-white text-sm">View on DexScreener</span>
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
 
                         {/* Delete button */}
                         {index > 0 && (
@@ -3346,7 +3628,7 @@ export function LimitOrderForm({
               </div>
 
               {/* Percentage Buttons for this token */}
-              {tokenMarketPrice > 0 && (
+              {tokenMarketPrice > 0 ? (
                 <div className="flex gap-2 mt-4">
                   <button
                     onClick={() => handleIndividualPercentageClick(index, 0, 'above')}
@@ -3429,6 +3711,10 @@ export function LimitOrderForm({
                   >
                     {invertPriceDisplay ? '-10%' : '+10%'} {invertPriceDisplay ? '↓' : '↑'}
                   </button>
+                </div>
+              ) : (
+                <div className="mt-4 text-center text-xs text-white/40 py-2">
+                  No market price data available - enter price manually
                 </div>
               )}
             </LiquidGlassCard>
@@ -3644,6 +3930,7 @@ export function LimitOrderForm({
                     selected={selectedDate}
                     onSelect={handleDateSelect}
                     captionLayout="dropdown"
+                    defaultMonth={selectedDate || new Date()}
                     disabled={(date: Date) => {
                       const today = new Date();
                       today.setHours(0, 0, 0, 0);

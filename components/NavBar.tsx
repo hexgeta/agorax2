@@ -127,7 +127,7 @@ const NavBar = () => {
                   />
                 </span>
               </Link>
-              <Link
+              {/* <Link
                 href="/leaderboard"
                 className={`transition-colors font-medium text-base px-4 py-2 cursor-pointer group ${pathname === '/leaderboard'
                   ? 'text-white'
@@ -144,7 +144,7 @@ const NavBar = () => {
                     }`}
                   />
                 </span>
-              </Link>
+              </Link> */}
 
               {TESTING_MODE && <ChainSwitcher isCheckingConnection={false} />}
               <ConnectButton />
@@ -244,7 +244,7 @@ const NavBar = () => {
             >
               Marketplace
             </Link>
-            <Link
+            {/* <Link
               href="/leaderboard"
               onClick={() => setMobileMenuOpen(false)}
               className={`text-xl font-medium py-3 px-6 rounded-lg transition-colors w-full text-center ${pathname === '/leaderboard'
@@ -253,7 +253,7 @@ const NavBar = () => {
                 }`}
             >
               Leaderboard
-            </Link>
+            </Link> */}
           </nav>
 
           {/* Divider */}

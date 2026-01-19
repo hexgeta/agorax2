@@ -1,9 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
+import { useAccount } from 'wagmi';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 import PixelBlastBackground from '@/components/ui/PixelBlastBackground';
+import { useOpenPositions, CompleteOrderDetails } from '@/hooks/contracts/useOpenPositions';
+import { getTokenInfo, getTokenInfoByIndex, formatTokenAmount } from '@/utils/tokenUtils';
+import { PixelSpinner } from '@/components/ui/PixelSpinner';
 
 // Prestige levels for display
 const PRESTIGE_LEVELS = [
@@ -18,54 +22,26 @@ const PRESTIGE_LEVELS = [
   { symbol: 'Ω', name: 'Omega', color: 'text-yellow-400', bgColor: 'bg-yellow-500/20' },
 ];
 
-// Mock leaderboard data
-const MOCK_LEADERBOARD = [
-  { rank: 1, address: '0x1234...5678', prestigeLevel: 7, totalVolume: 2450000, historicalOrders: 342, activeOrders: 12, completedTrades: 298 },
-  { rank: 2, address: '0x8765...4321', prestigeLevel: 6, totalVolume: 1890000, historicalOrders: 256, activeOrders: 8, completedTrades: 221 },
-  { rank: 3, address: '0xABCD...EFGH', prestigeLevel: 6, totalVolume: 1650000, historicalOrders: 198, activeOrders: 15, completedTrades: 176 },
-  { rank: 4, address: '0x5b87...0f1c', prestigeLevel: 0, totalVolume: 1420000, historicalOrders: 167, activeOrders: 5, completedTrades: 154 }, // Current user
-  { rank: 5, address: '0x9999...1111', prestigeLevel: 5, totalVolume: 1180000, historicalOrders: 145, activeOrders: 3, completedTrades: 132 },
-  { rank: 6, address: '0x2222...3333', prestigeLevel: 4, totalVolume: 980000, historicalOrders: 123, activeOrders: 7, completedTrades: 108 },
-  { rank: 7, address: '0x4444...5555', prestigeLevel: 4, totalVolume: 756000, historicalOrders: 98, activeOrders: 2, completedTrades: 89 },
-  { rank: 8, address: '0x6666...7777', prestigeLevel: 3, totalVolume: 543000, historicalOrders: 76, activeOrders: 4, completedTrades: 68 },
-  { rank: 9, address: '0x8888...9999', prestigeLevel: 3, totalVolume: 421000, historicalOrders: 54, activeOrders: 1, completedTrades: 49 },
-  { rank: 10, address: '0xAAAA...BBBB', prestigeLevel: 2, totalVolume: 298000, historicalOrders: 42, activeOrders: 6, completedTrades: 35 },
-  { rank: 11, address: '0xCCCC...DDDD', prestigeLevel: 2, totalVolume: 187000, historicalOrders: 31, activeOrders: 2, completedTrades: 27 },
-  { rank: 12, address: '0xEEEE...FFFF', prestigeLevel: 1, totalVolume: 125000, historicalOrders: 23, activeOrders: 3, completedTrades: 19 },
-  { rank: 13, address: '0x1111...2222', prestigeLevel: 1, totalVolume: 89000, historicalOrders: 18, activeOrders: 1, completedTrades: 15 },
-  { rank: 14, address: '0x3333...4444', prestigeLevel: 0, totalVolume: 54000, historicalOrders: 12, activeOrders: 2, completedTrades: 9 },
-  { rank: 15, address: '0x5555...6666', prestigeLevel: 0, totalVolume: 32000, historicalOrders: 8, activeOrders: 1, completedTrades: 6 },
-];
+// Interface for aggregated user stats
+interface UserStats {
+  address: string;
+  totalOrders: number;
+  activeOrders: number;
+  completedOrders: number;
+  cancelledOrders: number;
+}
 
-// Current user address (mock)
-const CURRENT_USER = '0x5b87...0f1c';
-
-// Mock all orders data
-const MOCK_ALL_ORDERS = [
-  { id: 1, maker: '0x1234...5678', type: 'sell', sellToken: 'HEX', buyToken: 'PLS', sellAmount: 500000, buyAmount: 85000000, pricePerToken: 170, status: 'active', filled: 0, createdAt: '2024-01-15 14:32' },
-  { id: 2, maker: '0x8765...4321', type: 'buy', sellToken: 'PLS', buyToken: 'HEX', sellAmount: 50000000, buyAmount: 300000, pricePerToken: 166.67, status: 'active', filled: 45, createdAt: '2024-01-15 12:18' },
-  { id: 3, maker: '0x5b87...0f1c', type: 'sell', sellToken: 'PLSX', buyToken: 'PLS', sellAmount: 1000000, buyAmount: 2500000, pricePerToken: 2.5, status: 'active', filled: 0, createdAt: '2024-01-15 10:45' },
-  { id: 4, maker: '0xABCD...EFGH', type: 'sell', sellToken: 'HEX', buyToken: 'USDC', sellAmount: 250000, buyAmount: 12500, pricePerToken: 0.05, status: 'partial', filled: 62, createdAt: '2024-01-14 22:11' },
-  { id: 5, maker: '0x9999...1111', type: 'buy', sellToken: 'DAI', buyToken: 'HEX', sellAmount: 10000, buyAmount: 200000, pricePerToken: 0.05, status: 'active', filled: 0, createdAt: '2024-01-14 18:55' },
-  { id: 6, maker: '0x2222...3333', type: 'sell', sellToken: 'PLSX', buyToken: 'HEX', sellAmount: 5000000, buyAmount: 150000, pricePerToken: 0.03, status: 'filled', filled: 100, createdAt: '2024-01-14 15:30' },
-  { id: 7, maker: '0x1234...5678', type: 'buy', sellToken: 'PLS', buyToken: 'PLSX', sellAmount: 100000000, buyAmount: 40000000, pricePerToken: 2.5, status: 'active', filled: 20, createdAt: '2024-01-14 11:22' },
-  { id: 8, maker: '0x4444...5555', type: 'sell', sellToken: 'HEX', buyToken: 'PLS', sellAmount: 100000, buyAmount: 16500000, pricePerToken: 165, status: 'cancelled', filled: 0, createdAt: '2024-01-13 19:44' },
-  { id: 9, maker: '0x6666...7777', type: 'sell', sellToken: 'INC', buyToken: 'PLS', sellAmount: 50, buyAmount: 500000000, pricePerToken: 10000000, status: 'active', filled: 0, createdAt: '2024-01-13 16:08' },
-  { id: 10, maker: '0x5b87...0f1c', type: 'buy', sellToken: 'USDC', buyToken: 'PLSX', sellAmount: 5000, buyAmount: 2500000, pricePerToken: 0.002, status: 'filled', filled: 100, createdAt: '2024-01-13 09:33' },
-  { id: 11, maker: '0x8888...9999', type: 'sell', sellToken: 'HEX', buyToken: 'DAI', sellAmount: 1000000, buyAmount: 50000, pricePerToken: 0.05, status: 'active', filled: 15, createdAt: '2024-01-12 21:17' },
-  { id: 12, maker: '0xAAAA...BBBB', type: 'buy', sellToken: 'PLS', buyToken: 'INC', sellAmount: 1000000000, buyAmount: 100, pricePerToken: 10000000, status: 'partial', filled: 35, createdAt: '2024-01-12 14:52' },
-  { id: 13, maker: '0xCCCC...DDDD', type: 'sell', sellToken: 'PLSX', buyToken: 'USDC', sellAmount: 10000000, buyAmount: 25000, pricePerToken: 0.0025, status: 'active', filled: 0, createdAt: '2024-01-12 08:29' },
-  { id: 14, maker: '0xEEEE...FFFF', type: 'buy', sellToken: 'HEX', buyToken: 'PLS', sellAmount: 50000, buyAmount: 8500000, pricePerToken: 170, status: 'filled', filled: 100, createdAt: '2024-01-11 17:41' },
-  { id: 15, maker: '0x1111...2222', type: 'sell', sellToken: 'INC', buyToken: 'HEX', sellAmount: 10, buyAmount: 2000000, pricePerToken: 200000, status: 'active', filled: 0, createdAt: '2024-01-11 10:15' },
-];
-
-function formatVolume(volume: number): string {
-  if (volume >= 1000000) {
-    return `$${(volume / 1000000).toFixed(2)}M`;
-  } else if (volume >= 1000) {
-    return `$${(volume / 1000).toFixed(1)}K`;
-  }
-  return `$${volume.toLocaleString()}`;
+// Interface for formatted order data
+interface FormattedOrder {
+  id: number;
+  maker: string;
+  sellToken: string;
+  buyToken: string;
+  sellAmount: string;
+  buyAmount: string;
+  status: 'active' | 'completed' | 'cancelled';
+  filled: number;
+  createdAt: string;
 }
 
 function getRankDisplay(rank: number) {
@@ -75,42 +51,141 @@ function getRankDisplay(rank: number) {
   return { text: `${rank}th`, color: 'text-gray-400' };
 }
 
-function formatAmount(amount: number): string {
-  if (amount >= 1000000000) {
-    return `${(amount / 1000000000).toFixed(2)}B`;
-  } else if (amount >= 1000000) {
-    return `${(amount / 1000000).toFixed(2)}M`;
-  } else if (amount >= 1000) {
-    return `${(amount / 1000).toFixed(1)}K`;
+function formatDisplayAmount(amount: string): string {
+  const num = parseFloat(amount);
+  if (isNaN(num)) return amount;
+  if (num >= 1000000000) {
+    return `${(num / 1000000000).toFixed(2)}B`;
+  } else if (num >= 1000000) {
+    return `${(num / 1000000).toFixed(2)}M`;
+  } else if (num >= 1000) {
+    return `${(num / 1000).toFixed(1)}K`;
   }
-  return amount.toLocaleString();
+  return num.toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
 function getStatusColor(status: string) {
   switch (status) {
     case 'active': return 'text-green-400 bg-green-500/20';
-    case 'partial': return 'text-yellow-400 bg-yellow-500/20';
-    case 'filled': return 'text-blue-400 bg-blue-500/20';
+    case 'completed': return 'text-blue-400 bg-blue-500/20';
     case 'cancelled': return 'text-red-400 bg-red-500/20';
     default: return 'text-gray-400 bg-gray-500/20';
   }
 }
 
-export default function LeaderboardPage() {
-  const [sortBy, setSortBy] = useState<'volume' | 'trades' | 'orders'>('volume');
-  const [orderFilter, setOrderFilter] = useState<'all' | 'active' | 'filled' | 'cancelled'>('all');
+function formatAddress(address: string): string {
+  if (address.length > 10) {
+    return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  }
+  return address;
+}
 
-  const filteredOrders = MOCK_ALL_ORDERS.filter(order => {
-    if (orderFilter === 'all') return true;
-    if (orderFilter === 'active') return order.status === 'active' || order.status === 'partial';
-    return order.status === orderFilter;
+function formatTimestamp(timestamp: number): string {
+  if (!timestamp) return '-';
+  const date = new Date(timestamp * 1000);
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
   });
+}
 
-  const sortedLeaderboard = [...MOCK_LEADERBOARD].sort((a, b) => {
-    if (sortBy === 'volume') return b.totalVolume - a.totalVolume;
-    if (sortBy === 'trades') return b.completedTrades - a.completedTrades;
-    return b.historicalOrders - a.historicalOrders;
-  }).map((user, idx) => ({ ...user, rank: idx + 1 }));
+export default function LeaderboardPage() {
+  const [orderFilter, setOrderFilter] = useState<'all' | 'active' | 'completed' | 'cancelled'>('all');
+  const { address: connectedAddress } = useAccount();
+
+  // Fetch all orders from the contract (fetchAllOrders = true)
+  const { allOrders, isLoading } = useOpenPositions(undefined, true);
+
+  // Process orders into formatted order list and aggregate user stats
+  const { formattedOrders, userStats } = useMemo(() => {
+    const formatted: FormattedOrder[] = [];
+    const statsMap = new Map<string, UserStats>();
+
+    allOrders.forEach((order: CompleteOrderDetails) => {
+      const maker = order.userDetails.orderOwner;
+      const orderDetails = order.orderDetailsWithID;
+      const sellTokenInfo = getTokenInfo(orderDetails.orderDetails.sellToken);
+
+      // Get buy token info - use first buy token if available
+      let buyTokenTicker = 'UNKNOWN';
+      if (orderDetails.orderDetails.buyTokensIndex.length > 0) {
+        const buyTokenInfo = getTokenInfoByIndex(Number(orderDetails.orderDetails.buyTokensIndex[0]));
+        buyTokenTicker = buyTokenInfo.ticker;
+      }
+
+      // Calculate filled percentage
+      const originalSellAmount = orderDetails.remainingSellAmount + orderDetails.redeemedSellAmount;
+      const filledPercent = originalSellAmount > 0n
+        ? Number((orderDetails.redeemedSellAmount * 100n) / originalSellAmount)
+        : 0;
+
+      // Map status: 0 = Active, 1 = Cancelled, 2 = Completed
+      let status: 'active' | 'completed' | 'cancelled' = 'active';
+      if (orderDetails.status === 1) status = 'cancelled';
+      if (orderDetails.status === 2) status = 'completed';
+
+      // Format sell amount
+      const sellAmount = formatTokenAmount(
+        orderDetails.remainingSellAmount + orderDetails.redeemedSellAmount,
+        sellTokenInfo.decimals
+      );
+
+      // Format buy amount (first buy token)
+      let buyAmount = '0';
+      if (orderDetails.orderDetails.buyAmounts.length > 0 && orderDetails.orderDetails.buyTokensIndex.length > 0) {
+        const buyTokenInfo = getTokenInfoByIndex(Number(orderDetails.orderDetails.buyTokensIndex[0]));
+        buyAmount = formatTokenAmount(orderDetails.orderDetails.buyAmounts[0], buyTokenInfo.decimals);
+      }
+
+      formatted.push({
+        id: Number(orderDetails.orderID),
+        maker,
+        sellToken: sellTokenInfo.ticker,
+        buyToken: buyTokenTicker,
+        sellAmount,
+        buyAmount,
+        status,
+        filled: filledPercent,
+        createdAt: formatTimestamp(orderDetails.lastUpdateTime),
+      });
+
+      // Aggregate user stats
+      const makerLower = maker.toLowerCase();
+      if (!statsMap.has(makerLower)) {
+        statsMap.set(makerLower, {
+          address: maker,
+          totalOrders: 0,
+          activeOrders: 0,
+          completedOrders: 0,
+          cancelledOrders: 0,
+        });
+      }
+      const stats = statsMap.get(makerLower)!;
+      stats.totalOrders++;
+      if (orderDetails.status === 0) stats.activeOrders++;
+      if (orderDetails.status === 1) stats.cancelledOrders++;
+      if (orderDetails.status === 2) stats.completedOrders++;
+    });
+
+    return {
+      formattedOrders: formatted.sort((a, b) => b.id - a.id), // Sort by order ID descending (newest first)
+      userStats: Array.from(statsMap.values()).sort((a, b) => b.totalOrders - a.totalOrders),
+    };
+  }, [allOrders]);
+
+  // Filter orders based on selected filter
+  const filteredOrders = useMemo(() => {
+    if (orderFilter === 'all') return formattedOrders;
+    return formattedOrders.filter(order => order.status === orderFilter);
+  }, [formattedOrders, orderFilter]);
+
+  // Add rank to user stats
+  const rankedUsers = userStats.map((user, idx) => ({
+    ...user,
+    rank: idx + 1,
+    prestigeLevel: Math.min(Math.floor(user.completedOrders / 10), 8), // Simple prestige calculation based on completed orders
+  }));
 
   return (
     <main className="min-h-screen bg-black text-white relative overflow-hidden">
@@ -122,58 +197,6 @@ export default function LeaderboardPage() {
       {/* Main Content */}
       <div className="w-full px-4 md:px-8 mt-20 mb-12 relative z-10">
         <div className="max-w-[1200px] mx-auto">
-          {/* Header */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="text-center mb-8"
-          >
-            <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">Leaderboard</h1>
-            <p className="text-gray-400 text-lg max-w-2xl mx-auto">
-              Top traders ranked by total volume. Climb the ranks by trading more.
-            </p>
-          </motion.div>
-
-          {/* Sort Options */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-            className="flex justify-center gap-2 mb-6"
-          >
-            <button
-              onClick={() => setSortBy('volume')}
-              className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                sortBy === 'volume'
-                  ? 'bg-white/10 text-white border border-white/20'
-                  : 'bg-white/5 text-gray-400 border border-transparent hover:bg-white/10 hover:text-white'
-              }`}
-            >
-              Volume
-            </button>
-            <button
-              onClick={() => setSortBy('trades')}
-              className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                sortBy === 'trades'
-                  ? 'bg-white/10 text-white border border-white/20'
-                  : 'bg-white/5 text-gray-400 border border-transparent hover:bg-white/10 hover:text-white'
-              }`}
-            >
-              Trades
-            </button>
-            <button
-              onClick={() => setSortBy('orders')}
-              className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                sortBy === 'orders'
-                  ? 'bg-white/10 text-white border border-white/20'
-                  : 'bg-white/5 text-gray-400 border border-transparent hover:bg-white/10 hover:text-white'
-              }`}
-            >
-              Orders
-            </button>
-          </motion.div>
-
           {/* Leaderboard Table */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -186,6 +209,12 @@ export default function LeaderboardPage() {
               blurIntensity="xl"
               className="p-4 md:p-6"
             >
+              {isLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <PixelSpinner size={32} />
+                  <span className="ml-3 text-gray-400">Loading leaderboard...</span>
+                </div>
+              ) : (
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
@@ -193,76 +222,79 @@ export default function LeaderboardPage() {
                       <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Rank</th>
                       <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Trader</th>
                       <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm">Level</th>
-                      <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm">Total Volume</th>
-                      <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm hidden sm:table-cell">Trades</th>
-                      <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm hidden md:table-cell">Historical Orders</th>
+                      <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm hidden sm:table-cell">Completed</th>
+                      <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm hidden md:table-cell">Total Orders</th>
                       <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm hidden lg:table-cell">Active Orders</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {sortedLeaderboard.map((user) => {
-                      const isCurrentUser = user.address === CURRENT_USER;
-                      const prestige = PRESTIGE_LEVELS[user.prestigeLevel];
-                      const rankDisplay = getRankDisplay(user.rank);
+                    {rankedUsers.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="py-8 text-center text-gray-500">
+                          No traders found yet.
+                        </td>
+                      </tr>
+                    ) : (
+                      rankedUsers.map((user) => {
+                        const isCurrentUser = connectedAddress?.toLowerCase() === user.address.toLowerCase();
+                        const prestige = PRESTIGE_LEVELS[user.prestigeLevel];
+                        const rankDisplay = getRankDisplay(user.rank);
 
-                      return (
-                        <tr
-                          key={user.address}
-                          className={`border-b border-white/5 transition-colors ${
-                            isCurrentUser ? 'bg-white/5' : 'hover:bg-white/5'
-                          }`}
-                        >
-                          <td className="py-4 px-2">
-                            <span className={`font-bold ${rankDisplay.color}`}>
-                              {rankDisplay.text}
-                            </span>
-                          </td>
-                          <td className="py-4 px-2">
-                            <div className="flex items-center gap-2">
-                              <span className={`font-mono ${isCurrentUser ? 'text-white' : 'text-gray-300'}`}>
-                                {user.address}
+                        return (
+                          <tr
+                            key={user.address}
+                            className={`border-b border-white/5 transition-colors ${
+                              isCurrentUser ? 'bg-white/5' : 'hover:bg-white/5'
+                            }`}
+                          >
+                            <td className="py-4 px-2">
+                              <span className={`font-bold ${rankDisplay.color}`}>
+                                {rankDisplay.text}
                               </span>
-                              {isCurrentUser && (
-                                <span className="text-xs bg-white/10 px-2 py-0.5 rounded text-gray-300">You</span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="py-4 px-2">
-                            <div className="flex justify-center">
-                              <div
-                                className={`w-8 h-8 rounded-full flex items-center justify-center ${prestige.bgColor}`}
-                                title={prestige.name}
-                              >
-                                <span className={`text-sm font-bold ${prestige.color}`}>
-                                  {prestige.symbol}
+                            </td>
+                            <td className="py-4 px-2">
+                              <div className="flex items-center gap-2">
+                                <span className={`font-mono ${isCurrentUser ? 'text-white' : 'text-gray-300'}`}>
+                                  {formatAddress(user.address)}
                                 </span>
+                                {isCurrentUser && (
+                                  <span className="text-xs bg-white/10 px-2 py-0.5 rounded text-gray-300">You</span>
+                                )}
                               </div>
-                            </div>
-                          </td>
-                          <td className="py-4 px-2 text-right">
-                            <span className={`font-semibold ${sortBy === 'volume' ? 'text-white' : 'text-gray-300'}`}>
-                              {formatVolume(user.totalVolume)}
-                            </span>
-                          </td>
-                          <td className="py-4 px-2 text-right hidden sm:table-cell">
-                            <span className={`${sortBy === 'trades' ? 'text-white font-semibold' : 'text-gray-400'}`}>
-                              {user.completedTrades}
-                            </span>
-                          </td>
-                          <td className="py-4 px-2 text-right hidden md:table-cell">
-                            <span className={`${sortBy === 'orders' ? 'text-white font-semibold' : 'text-gray-400'}`}>
-                              {user.historicalOrders}
-                            </span>
-                          </td>
-                          <td className="py-4 px-2 text-right hidden lg:table-cell">
-                            <span className="text-gray-400">{user.activeOrders}</span>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                            </td>
+                            <td className="py-4 px-2">
+                              <div className="flex justify-center">
+                                <div
+                                  className={`w-8 h-8 rounded-full flex items-center justify-center ${prestige.bgColor}`}
+                                  title={prestige.name}
+                                >
+                                  <span className={`text-sm font-bold ${prestige.color}`}>
+                                    {prestige.symbol}
+                                  </span>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-4 px-2 text-right hidden sm:table-cell">
+                              <span className="text-gray-400">
+                                {user.completedOrders}
+                              </span>
+                            </td>
+                            <td className="py-4 px-2 text-right hidden md:table-cell">
+                              <span className="text-gray-400">
+                                {user.totalOrders}
+                              </span>
+                            </td>
+                            <td className="py-4 px-2 text-right hidden lg:table-cell">
+                              <span className="text-gray-400">{user.activeOrders}</span>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
                   </tbody>
                 </table>
               </div>
+              )}
             </LiquidGlassCard>
           </motion.div>
 
@@ -277,7 +309,7 @@ export default function LeaderboardPage() {
 
             {/* Order Filters */}
             <div className="flex flex-wrap gap-2 mb-4">
-              {(['all', 'active', 'filled', 'cancelled'] as const).map((filter) => (
+              {(['all', 'active', 'completed', 'cancelled'] as const).map((filter) => (
                 <button
                   key={filter}
                   onClick={() => setOrderFilter(filter)}
@@ -298,81 +330,91 @@ export default function LeaderboardPage() {
               blurIntensity="xl"
               className="p-4 md:p-6"
             >
+              {isLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <PixelSpinner size={32} />
+                  <span className="ml-3 text-gray-400">Loading orders...</span>
+                </div>
+              ) : (
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-white/10">
+                      <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">ID</th>
                       <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Maker</th>
-                      <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Type</th>
                       <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Pair</th>
                       <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm">Sell Amount</th>
                       <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm hidden sm:table-cell">Buy Amount</th>
                       <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm hidden md:table-cell">Filled</th>
                       <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm">Status</th>
-                      <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm hidden lg:table-cell">Created</th>
+                      <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm hidden lg:table-cell">Date</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredOrders.map((order) => {
-                      const isCurrentUser = order.maker === CURRENT_USER;
-                      const statusColors = getStatusColor(order.status);
+                    {filteredOrders.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="py-8 text-center text-gray-500">
+                          No orders found with this filter.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredOrders.map((order) => {
+                        const isCurrentUser = connectedAddress?.toLowerCase() === order.maker.toLowerCase();
+                        const statusColors = getStatusColor(order.status);
 
-                      return (
-                        <tr
-                          key={order.id}
-                          className={`border-b border-white/5 transition-colors ${
-                            isCurrentUser ? 'bg-white/5' : 'hover:bg-white/5'
-                          }`}
-                        >
-                          <td className="py-4 px-2">
-                            <div className="flex items-center gap-2">
-                              <span className={`font-mono text-sm ${isCurrentUser ? 'text-white' : 'text-gray-300'}`}>
-                                {order.maker}
+                        return (
+                          <tr
+                            key={order.id}
+                            className={`border-b border-white/5 transition-colors ${
+                              isCurrentUser ? 'bg-white/5' : 'hover:bg-white/5'
+                            }`}
+                          >
+                            <td className="py-4 px-2">
+                              <span className="text-gray-500 text-sm">#{order.id}</span>
+                            </td>
+                            <td className="py-4 px-2">
+                              <div className="flex items-center gap-2">
+                                <span className={`font-mono text-sm ${isCurrentUser ? 'text-white' : 'text-gray-300'}`}>
+                                  {formatAddress(order.maker)}
+                                </span>
+                                {isCurrentUser && (
+                                  <span className="text-xs bg-white/10 px-2 py-0.5 rounded text-gray-300">You</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-4 px-2">
+                              <span className="text-white text-sm">
+                                {order.sellToken}/{order.buyToken}
                               </span>
-                              {isCurrentUser && (
-                                <span className="text-xs bg-white/10 px-2 py-0.5 rounded text-gray-300">You</span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="py-4 px-2">
-                            <span className={`text-sm font-medium ${order.type === 'sell' ? 'text-red-400' : 'text-green-400'}`}>
-                              {order.type.toUpperCase()}
-                            </span>
-                          </td>
-                          <td className="py-4 px-2">
-                            <span className="text-white text-sm">
-                              {order.sellToken}/{order.buyToken}
-                            </span>
-                          </td>
-                          <td className="py-4 px-2 text-right">
-                            <span className="text-gray-300 text-sm">
-                              {formatAmount(order.sellAmount)} {order.sellToken}
-                            </span>
-                          </td>
-                          <td className="py-4 px-2 text-right hidden sm:table-cell">
-                            <span className="text-gray-300 text-sm">
-                              {formatAmount(order.buyAmount)} {order.buyToken}
-                            </span>
-                          </td>
-                          <td className="py-4 px-2 text-center hidden md:table-cell">
-                            <span className="text-gray-400 text-sm">{order.filled}%</span>
-                          </td>
-                          <td className="py-4 px-2 text-center">
-                            <span className={`text-xs px-2 py-1 rounded capitalize ${statusColors}`}>
-                              {order.status}
-                            </span>
-                          </td>
-                          <td className="py-4 px-2 text-right hidden lg:table-cell">
-                            <span className="text-gray-500 text-sm">{order.createdAt}</span>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                            </td>
+                            <td className="py-4 px-2 text-right">
+                              <span className="text-gray-300 text-sm">
+                                {formatDisplayAmount(order.sellAmount)} {order.sellToken}
+                              </span>
+                            </td>
+                            <td className="py-4 px-2 text-right hidden sm:table-cell">
+                              <span className="text-gray-300 text-sm">
+                                {formatDisplayAmount(order.buyAmount)} {order.buyToken}
+                              </span>
+                            </td>
+                            <td className="py-4 px-2 text-center hidden md:table-cell">
+                              <span className="text-gray-400 text-sm">{order.filled}%</span>
+                            </td>
+                            <td className="py-4 px-2 text-center">
+                              <span className={`text-xs px-2 py-1 rounded capitalize ${statusColors}`}>
+                                {order.status}
+                              </span>
+                            </td>
+                            <td className="py-4 px-2 text-right hidden lg:table-cell">
+                              <span className="text-gray-500 text-sm">{order.createdAt}</span>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
                   </tbody>
                 </table>
               </div>
-              {filteredOrders.length === 0 && (
-                <p className="text-center text-gray-500 py-8">No orders found with this filter.</p>
               )}
             </LiquidGlassCard>
           </motion.div>

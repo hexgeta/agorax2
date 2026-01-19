@@ -778,8 +778,11 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                       : sellTokenUsdPrice / buyTokenUsdPrices[tokenAddress]) // normal: sell/buy
                   : null;
 
+                // Don't show line if no market price data available
+                if (!tokenMarketPrice) return null;
+
                 // Calculate percentage deviation from this token's market price
-                const percentDeviation = tokenMarketPrice && displayIndividualPrice
+                const percentDeviation = displayIndividualPrice
                   ? ((displayIndividualPrice - tokenMarketPrice) / tokenMarketPrice) * 100
                   : 0;
 
@@ -788,9 +791,11 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
 
                 if (individualPricePosition === null) return null;
 
-                // Generate a unique color for each token line
-                const colors = ['#FF0080', '#8000FF', '#FF8000', '#0080FF', '#00FF80'];
-                const lineColor = colors[index % colors.length];
+                // Generate a unique color for each token line - must match LimitOrderForm tokenColors
+                // First token (index 0) is always pink to match the primary LIMIT PRICE section
+                // Additional tokens use the tokenColors array from LimitOrderForm
+                const additionalTokenColors = ['#8B5CF6', '#F59E0B', '#10B981', '#EF4444', '#3B82F6', '#EC4899', '#14B8A6', '#F97316', '#6366F1'];
+                const lineColor = index === 0 ? '#FF0080' : additionalTokenColors[(index - 1) % additionalTokenColors.length];
 
                 const isThisLineDragging = isDragging && draggingLineIndex === index;
 

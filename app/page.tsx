@@ -353,8 +353,8 @@ export default function Home() {
                           <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
                         </svg>
                       </div>
-                      <h3 className="text-lg font-semibold text-white mb-2">0.2% Fee</h3>
-                      <p className="text-gray-400 text-sm">Low fees on sells. Zero fees on buys. The cheapest place on PulseChain to trade.</p>
+                      <h3 className="text-lg font-semibold text-white mb-2">Lowest Fees</h3>
+                      <p className="text-gray-400 text-sm">Low 0.2% fee on sells. Zero fees on buys. The #1 cheapest place on PulseChain to trade.</p>
                     </LiquidGlassCard>
 
                     

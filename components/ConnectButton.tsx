@@ -6,7 +6,7 @@ import { PixelSpinner } from './ui/PixelSpinner';
 import { useAppKit } from '@reown/appkit/react'
 import { useTransaction } from '@/context/TransactionContext'
 import { DisclaimerDialog } from './DisclaimerDialog'
-import { PrestigeBadge } from './PrestigeBadge'
+// import { PrestigeBadge } from './PrestigeBadge'
 
 export const ConnectButton = () => {
   const { isConnected, address } = useAccount()
@@ -37,7 +37,7 @@ export const ConnectButton = () => {
   if (isConnected && address) {
     return (
       <div className="flex items-center gap-2">
-        <PrestigeBadge />
+        {/* <PrestigeBadge /> */}
         <button
           onClick={() => open()}
           disabled={isTransactionPending}
