@@ -632,7 +632,7 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                 className="absolute top-1/2 -translate-y-1/2 left-[58px] right-0 h-[2px] bg-[#00D9FF] rounded-full transition-all duration-500 pointer-events-none"
               />
               <LiquidGlassCard
-                className={`absolute right-0 flex items-center justify-between bg-cyan-500/10 px-3 py-1 border-cyan-500/30 w-[250px] ${displayQuoteTokenInfos.length > 1 ? 'cursor-pointer pointer-events-auto' : 'pointer-events-none'} ${limitPricePosition && limitPricePosition < currentPricePosition ? 'top-0 -translate-y-[calc(45%-0px)]' : 'bottom-0 translate-y-[calc(45%-0px)]'
+                className={`group absolute right-0 flex items-center justify-between bg-cyan-500/10 px-3 py-1 border-cyan-500/30 w-[250px] ${displayQuoteTokenInfos.length > 1 ? 'cursor-pointer pointer-events-auto' : 'pointer-events-none'} ${limitPricePosition && limitPricePosition < currentPricePosition ? 'top-0 -translate-y-[calc(45%-0px)]' : 'bottom-0 translate-y-[calc(45%-0px)]'
                   }`}
                 borderRadius="8px"
                 shadowIntensity="none"
@@ -660,7 +660,7 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                       <span className="text-xs text-white/70 whitespace-nowrap flex items-center gap-1">
                         Current Price:
                         {displayQuoteTokenInfos.length > 1 && (
-                          <span className="text-[10px] text-white/40">
+                          <span className="text-[10px] text-white/40 group-hover:text-white transition-colors">
                             ({formatTokenTicker(tokenInfo?.ticker || '')})
                           </span>
                         )}
@@ -709,7 +709,7 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                     }}
                   />
                   <LiquidGlassCard
-                    className={`absolute right-0 flex items-center justify-between bg-pink-500/10 px-3 py-1 border-pink-500/30 w-[250px] ${displayQuoteTokenInfos.length > 1 ? 'cursor-pointer pointer-events-auto' : 'pointer-events-none'} ${limitPricePosition < currentPricePosition ? 'bottom-0 translate-y-[calc(45%-0px)]' : 'top-0 -translate-y-[calc(45%-0px)]'}`}
+                    className={`group absolute right-0 flex items-center justify-between bg-pink-500/10 px-3 py-1 border-pink-500/30 w-[250px] ${displayQuoteTokenInfos.length > 1 ? 'cursor-pointer pointer-events-auto' : 'pointer-events-none'} ${limitPricePosition < currentPricePosition ? 'bottom-0 translate-y-[calc(45%-0px)]' : 'top-0 -translate-y-[calc(45%-0px)]'}`}
                     borderRadius="8px"
                     shadowIntensity="none"
                     glowIntensity="none"
@@ -739,7 +739,7 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                           <span className="text-xs text-white/70 whitespace-nowrap flex items-center gap-1">
                             Limit Price:
                             {displayQuoteTokenInfos.length > 1 && (
-                              <span className="text-[10px] text-white/40">
+                              <span className="text-[10px] text-white/40 group-hover:text-white transition-colors">
                                 ({formatTokenTicker(tokenInfo?.ticker || '')})
                               </span>
                             )}
