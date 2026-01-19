@@ -2385,12 +2385,26 @@ export function LimitOrderForm({
     // Store with commas for display
     setSellAmount(newValue);
 
-    // Calculate new cursor position based on comma difference
+    // Calculate new cursor position
+    // Count digits before cursor in old value
+    const digitsBeforeCursor = removeCommas(oldValue.slice(0, cursorPos)).length;
+
+    // Find position in new value that has same number of digits before it
+    let newCursorPos = 0;
+    let digitCount = 0;
+    for (let i = 0; i < newValue.length; i++) {
+      if (digitCount >= digitsBeforeCursor) {
+        newCursorPos = i;
+        break;
+      }
+      if (newValue[i] !== ',') {
+        digitCount++;
+      }
+      newCursorPos = i + 1;
+    }
+
     requestAnimationFrame(() => {
       if (sellInputRef.current) {
-        const commasBefore = (oldValue.slice(0, cursorPos).match(/,/g) || []).length;
-        const commasAfter = (newValue.slice(0, cursorPos + (newValue.length - oldValue.length)).match(/,/g) || []).length;
-        const newCursorPos = Math.max(0, cursorPos + (commasAfter - commasBefore));
         sellInputRef.current.setSelectionRange(newCursorPos, newCursorPos);
       }
     });
@@ -2417,16 +2431,125 @@ export function LimitOrderForm({
     newAmounts[index] = newValue;
     setBuyAmounts(newAmounts);
 
-    // Calculate new cursor position based on comma difference
+    // Calculate new cursor position
+    // Count digits before cursor in old value
+    const digitsBeforeCursor = removeCommas(oldValue.slice(0, cursorPos)).length;
+
+    // Find position in new value that has same number of digits before it
+    let newCursorPos = 0;
+    let digitCount = 0;
+    for (let i = 0; i < newValue.length; i++) {
+      if (digitCount >= digitsBeforeCursor) {
+        newCursorPos = i;
+        break;
+      }
+      if (newValue[i] !== ',') {
+        digitCount++;
+      }
+      newCursorPos = i + 1;
+    }
+
     requestAnimationFrame(() => {
       const buyInput = buyInputRefs.current[index];
       if (buyInput) {
-        const commasBefore = (oldValue.slice(0, cursorPos).match(/,/g) || []).length;
-        const commasAfter = (newValue.slice(0, cursorPos + (newValue.length - oldValue.length)).match(/,/g) || []).length;
-        const newCursorPos = Math.max(0, cursorPos + (commasAfter - commasBefore));
         buyInput.setSelectionRange(newCursorPos, newCursorPos);
       }
     });
+  };
+
+  // Handle keydown for backspace on comma - delete the digit before the comma
+  const handleSellKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace') {
+      const input = e.currentTarget;
+      const cursorPos = input.selectionStart || 0;
+      const value = input.value;
+
+      // If cursor is right after a comma, delete the digit before the comma
+      if (cursorPos > 0 && value[cursorPos - 1] === ',') {
+        e.preventDefault();
+        // Find the digit before the comma and remove it
+        const beforeComma = value.slice(0, cursorPos - 1);
+        const afterComma = value.slice(cursorPos);
+        const lastDigitIndex = beforeComma.length - 1;
+
+        if (lastDigitIndex >= 0) {
+          const newValue = beforeComma.slice(0, lastDigitIndex) + afterComma;
+          const cleanValue = removeCommas(newValue).replace(/[^0-9.]/g, '');
+          const formattedValue = formatNumberWithCommas(cleanValue);
+          setSellAmount(formattedValue);
+
+          // Set cursor position
+          const digitsBeforeCursor = removeCommas(beforeComma.slice(0, lastDigitIndex)).length;
+          let newCursorPos = 0;
+          let digitCount = 0;
+          for (let i = 0; i < formattedValue.length; i++) {
+            if (digitCount >= digitsBeforeCursor) {
+              newCursorPos = i;
+              break;
+            }
+            if (formattedValue[i] !== ',') {
+              digitCount++;
+            }
+            newCursorPos = i + 1;
+          }
+
+          requestAnimationFrame(() => {
+            if (sellInputRef.current) {
+              sellInputRef.current.setSelectionRange(newCursorPos, newCursorPos);
+            }
+          });
+        }
+      }
+    }
+  };
+
+  const handleBuyKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, index: number) => {
+    if (e.key === 'Backspace') {
+      const input = e.currentTarget;
+      const cursorPos = input.selectionStart || 0;
+      const value = input.value;
+
+      // If cursor is right after a comma, delete the digit before the comma
+      if (cursorPos > 0 && value[cursorPos - 1] === ',') {
+        e.preventDefault();
+        // Find the digit before the comma and remove it
+        const beforeComma = value.slice(0, cursorPos - 1);
+        const afterComma = value.slice(cursorPos);
+        const lastDigitIndex = beforeComma.length - 1;
+
+        if (lastDigitIndex >= 0) {
+          const newValue = beforeComma.slice(0, lastDigitIndex) + afterComma;
+          const cleanValue = removeCommas(newValue).replace(/[^0-9.]/g, '');
+          const formattedValue = formatNumberWithCommas(cleanValue);
+
+          const newAmounts = [...buyAmounts];
+          newAmounts[index] = formattedValue;
+          setBuyAmounts(newAmounts);
+
+          // Set cursor position
+          const digitsBeforeCursor = removeCommas(beforeComma.slice(0, lastDigitIndex)).length;
+          let newCursorPos = 0;
+          let digitCount = 0;
+          for (let i = 0; i < formattedValue.length; i++) {
+            if (digitCount >= digitsBeforeCursor) {
+              newCursorPos = i;
+              break;
+            }
+            if (formattedValue[i] !== ',') {
+              digitCount++;
+            }
+            newCursorPos = i + 1;
+          }
+
+          requestAnimationFrame(() => {
+            const buyInput = buyInputRefs.current[index];
+            if (buyInput) {
+              buyInput.setSelectionRange(newCursorPos, newCursorPos);
+            }
+          });
+        }
+      }
+    }
   };
 
   const handleAddBuyToken = () => {
@@ -2786,6 +2909,7 @@ export function LimitOrderForm({
                 type="text"
                 value={sellAmount}
                 onChange={handleSellAmountChange}
+                onKeyDown={handleSellKeyDown}
                 onFocus={() => setIsSellInputFocused(true)}
                 onBlur={() => setIsSellInputFocused(false)}
                 placeholder="0.00"
@@ -3218,6 +3342,7 @@ export function LimitOrderForm({
                           type="text"
                           value={buyAmounts[index] || ''}
                           onChange={(e) => handleBuyAmountChange(e, index)}
+                          onKeyDown={(e) => handleBuyKeyDown(e, index)}
                           onFocus={() => {
                             const newFocused = [...isBuyInputFocused];
                             newFocused[index] = true;

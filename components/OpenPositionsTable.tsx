@@ -3667,19 +3667,26 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                 </button>
                               </div>
                             ) : ownershipFilter === 'non-mine' && order.orderDetailsWithID.status === 0 && statusFilter === 'active' ? (
-                              <button
-                                onClick={() => togglePositionExpansion(order.orderDetailsWithID.orderID.toString())}
-                                className={`flex items-center gap-1 ml-4 px-4 py-2 text-xs rounded-full transition-colors ${expandedPositions.has(order.orderDetailsWithID.orderID.toString())
-                                  ? 'bg-transparent border border-white/10 text-white hover:bg-white/10'
-                                  : 'bg-white text-black hover:bg-gray-200'
-                                  }`}
-                              >
-                                <span>Buy</span>
-                                <ChevronDown
-                                  className={`w-3 h-3 transition-transform duration-200 ${expandedPositions.has(order.orderDetailsWithID.orderID.toString()) ? 'rotate-180' : ''
+                              // Check if this is user's own order in marketplace mode
+                              isMarketplaceMode && address && order.userDetails.orderOwner.toLowerCase() === address.toLowerCase() ? (
+                                <span className="ml-4 px-4 py-2 text-xs rounded-full bg-white/10 text-white/60 border border-white/20">
+                                  You
+                                </span>
+                              ) : (
+                                <button
+                                  onClick={() => togglePositionExpansion(order.orderDetailsWithID.orderID.toString())}
+                                  className={`flex items-center gap-1 ml-4 px-4 py-2 text-xs rounded-full transition-colors ${expandedPositions.has(order.orderDetailsWithID.orderID.toString())
+                                    ? 'bg-transparent border border-white/10 text-white hover:bg-white/10'
+                                    : 'bg-white text-black hover:bg-gray-200'
                                     }`}
-                                />
-                              </button>
+                                >
+                                  <span>Buy</span>
+                                  <ChevronDown
+                                    className={`w-3 h-3 transition-transform duration-200 ${expandedPositions.has(order.orderDetailsWithID.orderID.toString()) ? 'rotate-180' : ''
+                                      }`}
+                                  />
+                                </button>
+                              )
                             ) : (
                               // No action button for completed/expired/cancelled orders
                               <div className="w-16 h-8"></div>
@@ -3714,6 +3721,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                   const orderId = order.orderDetailsWithID.orderID.toString();
                                   const buyTokensIndex = order.orderDetailsWithID.orderDetails.buyTokensIndex;
                                   const hasMultipleTokens = buyTokensIndex.length > 1;
+                                  const isAllOrNothing = order.orderDetailsWithID.orderDetails.allOrNothing;
+                                  const isAonMultiToken = hasMultipleTokens && isAllOrNothing;
 
                                   // Get available tokens
                                   const availableTokens = buyTokensIndex.map((tokenIndex: bigint) =>
@@ -3735,16 +3744,38 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                     setSelectedBuyTokens(prev => {
                                       const current = prev[orderId] || new Set<string>();
                                       const newSet = new Set(current);
-                                      if (newSet.has(tokenAddress)) {
-                                        newSet.delete(tokenAddress);
-                                        // Clear input when deselecting
-                                        setOfferInputs(prevInputs => {
-                                          const orderInputs = { ...prevInputs[orderId] };
-                                          delete orderInputs[tokenAddress];
-                                          return { ...prevInputs, [orderId]: orderInputs };
-                                        });
-                                      } else {
+
+                                      // For AON multi-token orders, enforce single selection (like radio buttons)
+                                      if (isAonMultiToken) {
+                                        // If clicking the already selected token, do nothing (keep it selected)
+                                        if (newSet.has(tokenAddress)) {
+                                          return prev;
+                                        }
+                                        // Clear all previous selections and their inputs
+                                        const previousAddresses = Array.from(newSet);
+                                        newSet.clear();
                                         newSet.add(tokenAddress);
+                                        // Clear inputs for previously selected tokens
+                                        if (previousAddresses.length > 0) {
+                                          setOfferInputs(prevInputs => {
+                                            const orderInputs = { ...prevInputs[orderId] };
+                                            previousAddresses.forEach(addr => delete orderInputs[addr]);
+                                            return { ...prevInputs, [orderId]: orderInputs };
+                                          });
+                                        }
+                                      } else {
+                                        // Normal multi-select behavior
+                                        if (newSet.has(tokenAddress)) {
+                                          newSet.delete(tokenAddress);
+                                          // Clear input when deselecting
+                                          setOfferInputs(prevInputs => {
+                                            const orderInputs = { ...prevInputs[orderId] };
+                                            delete orderInputs[tokenAddress];
+                                            return { ...prevInputs, [orderId]: orderInputs };
+                                          });
+                                        } else {
+                                          newSet.add(tokenAddress);
+                                        }
                                       }
                                       return { ...prev, [orderId]: newSet };
                                     });
@@ -3850,7 +3881,12 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                           {/* Expanded state - token selection */}
                                           {isSelectionOpen && (
                                             <div className="space-y-3">
-                                              <h5 className="text-white font-medium text-sm">Select payment token(s):</h5>
+                                              <h5 className="text-white font-medium text-sm">
+                                                {isAonMultiToken ? 'Select payment token:' : 'Select payment token(s):'}
+                                              </h5>
+                                              {isAonMultiToken && (
+                                                <p className="text-gray-400 text-xs">All-or-Nothing orders require payment in a single token</p>
+                                              )}
                                               <div className="flex flex-wrap gap-2">
                                                 {(() => {
                                                   // Find the token with the cheapest market price (better deal for buyer)
