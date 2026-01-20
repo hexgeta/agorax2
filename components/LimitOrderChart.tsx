@@ -760,7 +760,6 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                             <TokenLogo
                               ticker={unitTokenInfo?.ticker || ''}
                               className="w-[16px] h-[16px] object-contain"
-                              style={{ filter: 'brightness(0) saturate(100%) invert(47%) sepia(99%) saturate(6544%) hue-rotate(312deg) brightness(103%) contrast(103%)' }}
                             />
                           </div>
                         </>

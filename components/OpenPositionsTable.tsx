@@ -3671,9 +3671,30 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                             ) : ownershipFilter === 'non-mine' && order.orderDetailsWithID.status === 0 && statusFilter === 'active' ? (
                               // Check if this is user's own order in marketplace mode
                               isMarketplaceMode && address && order.userDetails.orderOwner.toLowerCase() === address.toLowerCase() ? (
-                                <span className="ml-4 px-4 py-2 text-xs rounded-full bg-white/10 text-white/60 border border-white/20">
-                                  You
-                                </span>
+                                <div className="flex items-center gap-2 ml-4">
+                                  <button
+                                    onClick={() => {
+                                      setShowExpirationCalendar(order.orderDetailsWithID.orderID.toString());
+                                      setSelectedExpirationDate(new Date(Number(order.orderDetailsWithID.expirationTime) * 1000));
+                                    }}
+                                    className="p-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
+                                    title="Change expiration"
+                                  >
+                                    <CalendarDays className="w-5 h-5 text-blue-400 hover:text-blue-300" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleCancelOrder(order)}
+                                    disabled={cancelingOrders.has(order.orderDetailsWithID.orderID.toString())}
+                                    className="p-2 rounded-lg bg-white/5 border border-white/10 hover:bg-red-500/20 transition-colors disabled:opacity-50"
+                                    title="Cancel order"
+                                  >
+                                    {cancelingOrders.has(order.orderDetailsWithID.orderID.toString()) ? (
+                                      <PixelSpinner size={20} />
+                                    ) : (
+                                      <Trash2 className="w-5 h-5 text-red-400 hover:text-red-300" />
+                                    )}
+                                  </button>
+                                </div>
                               ) : (
                                 <button
                                   onClick={() => togglePositionExpansion(order.orderDetailsWithID.orderID.toString())}

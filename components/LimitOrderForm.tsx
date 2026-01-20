@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import NumberFlow from '@number-flow/react';
 import { useAccount, useBalance, usePublicClient } from 'wagmi';
 import { TOKEN_CONSTANTS } from '@/constants/crypto';
@@ -394,71 +394,85 @@ export function LimitOrderForm({
   }, [availableTokens.length, activeTokens.length]);
 
   // Fetch all token balances for dropdown sorting
-  // Include all TOKEN_CONSTANTS if showMoreTokens is enabled, otherwise just availableTokens
-  const tokensToFetchBalances = showMoreTokens ? TOKEN_CONSTANTS.filter(t => t.a) : availableTokens;
+  // Runs on wallet connect, page load, and every 5 minutes
+  const tokensToFetchBalances = useMemo(() => {
+    return showMoreTokens ? TOKEN_CONSTANTS.filter(t => t.a) : availableTokens;
+  }, [showMoreTokens, availableTokens]);
 
-  useEffect(() => {
-    const fetchAllBalances = async () => {
-      if (!address || !publicClient || tokensToFetchBalances.length === 0) return;
+  // Use ref to track if currently fetching to prevent concurrent fetches
+  const isFetchingBalances = useRef(false);
 
-      const ERC20_BALANCE_ABI = [
-        {
-          inputs: [{ name: 'account', type: 'address' }],
-          name: 'balanceOf',
-          outputs: [{ name: '', type: 'uint256' }],
-          stateMutability: 'view',
-          type: 'function',
-        },
-      ] as const;
+  const fetchAllBalances = useCallback(async () => {
+    if (!address || !publicClient || tokensToFetchBalances.length === 0 || isFetchingBalances.current) return;
 
-      const balances: Record<string, string> = {};
+    isFetchingBalances.current = true;
 
-      // Batch fetch balances using multicall
-      try {
-        const calls = tokensToFetchBalances
-          .filter(token => token.a && !isNativeToken(token.a))
-          .map(token => ({
+    const ERC20_BALANCE_ABI = [
+      {
+        inputs: [{ name: 'account', type: 'address' }],
+        name: 'balanceOf',
+        outputs: [{ name: '', type: 'uint256' }],
+        stateMutability: 'view',
+        type: 'function',
+      },
+    ] as const;
+
+    const balances: Record<string, string> = {};
+
+    try {
+      const erc20Tokens = tokensToFetchBalances.filter(t => t.a && !isNativeToken(t.a));
+
+      // Fetch all ERC20 balances in parallel using individual readContract calls
+      const balancePromises = erc20Tokens.map(async (token) => {
+        try {
+          const balance = await publicClient.readContract({
             address: token.a as `0x${string}`,
             abi: ERC20_BALANCE_ABI,
-            functionName: 'balanceOf' as const,
-            args: [address] as const,
-          }));
-
-        if (calls.length > 0) {
-          const results = await publicClient.multicall({
-            contracts: calls,
-            allowFailure: true,
+            functionName: 'balanceOf',
+            args: [address],
           });
-
-          // Process results
-          const erc20Tokens = tokensToFetchBalances.filter(t => t.a && !isNativeToken(t.a));
-          results.forEach((result, index) => {
-            const token = erc20Tokens[index];
-            if (token?.a && result.status === 'success' && result.result !== undefined) {
-              const balanceWei = result.result as bigint;
-              // Use formatUnits with the token's actual decimals
-              const formatted = formatUnits(balanceWei, token.decimals || 18);
-              balances[token.a.toLowerCase()] = formatted;
-            }
-          });
+          return { token, balance: balance as bigint, success: true };
+        } catch {
+          return { token, balance: 0n, success: false };
         }
+      });
 
-        // Fetch native token (PLS) balance separately
-        const nativeToken = tokensToFetchBalances.find(t => t.a && isNativeToken(t.a));
-        if (nativeToken?.a) {
-          const nativeBalance = await publicClient.getBalance({ address });
-          balances[nativeToken.a.toLowerCase()] = formatEther(nativeBalance);
+      const results = await Promise.all(balancePromises);
+
+      results.forEach(({ token, balance, success }) => {
+        if (token?.a && success) {
+          const formatted = formatUnits(balance, token.decimals || 18);
+          balances[token.a.toLowerCase()] = formatted;
         }
+      });
 
-        console.log('📊 Dropdown balances fetched:', Object.keys(balances).length, 'tokens with balances');
-        setDropdownTokenBalances(balances);
-      } catch (error) {
-        console.error('Failed to fetch token balances for dropdown:', error);
+      // Fetch native token (PLS) balance separately
+      const nativeToken = tokensToFetchBalances.find(t => t.a && isNativeToken(t.a));
+      if (nativeToken?.a) {
+        const nativeBalance = await publicClient.getBalance({ address });
+        balances[nativeToken.a.toLowerCase()] = formatEther(nativeBalance);
       }
-    };
 
-    fetchAllBalances();
+      setDropdownTokenBalances(balances);
+    } catch (error) {
+      console.error('Failed to fetch token balances for dropdown:', error);
+    } finally {
+      isFetchingBalances.current = false;
+    }
   }, [address, publicClient, tokensToFetchBalances]);
+
+  // Fetch balances on wallet connect/change and set up 5-minute interval
+  useEffect(() => {
+    if (!address) return;
+
+    // Fetch immediately on wallet connect or page load
+    fetchAllBalances();
+
+    // Set up 5-minute interval for background refresh
+    const intervalId = setInterval(fetchAllBalances, 5 * 60 * 1000);
+
+    return () => clearInterval(intervalId);
+  }, [address, fetchAllBalances]);
 
   // Detect if sell search query is a contract address and fetch token info from DexScreener
   useEffect(() => {
@@ -546,6 +560,11 @@ export function LimitOrderForm({
   const filteredSellTokensUnsorted = sellTokenSource.filter(token => {
     if (!token.a) return false;
 
+    // Exclude the currently selected sell token from the dropdown
+    if (sellToken && sellToken.a && token.a.toLowerCase() === sellToken.a.toLowerCase()) {
+      return false;
+    }
+
     // Exclude if it's already selected in any buy token
     const isSelectedInBuy = buyTokens.some(buyToken =>
       buyToken && buyToken.a && token.a && buyToken.a.toLowerCase() === token.a.toLowerCase()
@@ -561,10 +580,16 @@ export function LimitOrderForm({
 
   const getFilteredBuyTokensUnsorted = (index: number) => {
     const searchQuery = buySearchQueries[index] || '';
+    const currentBuyToken = buyTokens[index];
     return availableTokens.filter(token => {
       if (!token.a) return false;
 
       // Tokens are already filtered to be in whitelist via availableTokens
+
+      // Exclude the currently selected buy token at this index from the dropdown
+      if (currentBuyToken && currentBuyToken.a && token.a.toLowerCase() === currentBuyToken.a.toLowerCase()) {
+        return false;
+      }
 
       // Exclude if it's the sell token
       if (sellToken && sellToken.a && token.a.toLowerCase() === sellToken.a.toLowerCase()) {
@@ -594,15 +619,17 @@ export function LimitOrderForm({
     return Array.from(addresses);
   }, [sellToken, buyTokens]);
 
+  // Only fetch prices for tokens the user has a balance of (for dropdown sorting)
   const backgroundAddresses = useMemo(() => {
     const addresses = new Set<string>();
-    availableTokens.forEach(t => {
-      if (t.a && !priorityAddresses.includes(t.a)) {
-        addresses.add(t.a);
+    // Only include tokens that user has balance > 0
+    Object.entries(dropdownTokenBalances).forEach(([addr, balance]) => {
+      if (parseFloat(balance) > 0 && !priorityAddresses.includes(addr)) {
+        addresses.add(addr);
       }
     });
     return Array.from(addresses);
-  }, [availableTokens, priorityAddresses]);
+  }, [dropdownTokenBalances, priorityAddresses]);
 
   // Build custom tokens array for price fetching (tokens not in TOKEN_CONSTANTS)
   const customTokensForPricing = useMemo(() => {
@@ -647,17 +674,18 @@ export function LimitOrderForm({
 
   // Sorted filtered sell tokens (sorted by USD value)
   const filteredSellTokens = useMemo(() => {
-    // Debug: log first few tokens' balances and prices
-    if (Object.keys(dropdownTokenBalances).length > 0) {
-      const sampleTokens = filteredSellTokensUnsorted.slice(0, 3);
-      sampleTokens.forEach(t => {
-        const bal = dropdownTokenBalances[t.a?.toLowerCase() || ''];
-        const price = getPrice(t.a);
-        if (bal && parseFloat(bal) > 0) {
-          console.log(`📊 ${t.ticker}: balance=${bal}, price=${price}, USD=${parseFloat(bal) * price}`);
-        }
-      });
-    }
+    // Helper to get price with case-insensitive lookup (inside useMemo to capture prices)
+    // Returns 0 for tokens with no price data (price is -1 or 0 or undefined)
+    const getPriceForSort = (address: string | undefined) => {
+      if (!address) return 0;
+      const data = prices[address];
+      if (data && data.price !== undefined && data.price > 0) return data.price;
+      const lowerAddr = address.toLowerCase();
+      const entry = Object.entries(prices).find(([addr]) => addr.toLowerCase() === lowerAddr);
+      if (entry && entry[1].price > 0) return entry[1].price;
+      return 0;
+    };
+
     return [...filteredSellTokensUnsorted].sort((a, b) => {
       const searchLower = sellSearchQuery.toLowerCase();
       const aLower = a.ticker.toLowerCase();
@@ -665,7 +693,35 @@ export function LimitOrderForm({
       const aTickerMatches = aLower.includes(searchLower);
       const bTickerMatches = bLower.includes(searchLower);
 
-      // 0. If user is searching, prioritize search matches first
+      // Get balances and prices
+      const aBalance = parseFloat(dropdownTokenBalances[a.a?.toLowerCase() || ''] || '0');
+      const bBalance = parseFloat(dropdownTokenBalances[b.a?.toLowerCase() || ''] || '0');
+      const aPrice = getPriceForSort(a.a);
+      const bPrice = getPriceForSort(b.a);
+      const aUsdValue = aBalance * aPrice;
+      const bUsdValue = bBalance * bPrice;
+
+      // 1. First: tokens with balance come before tokens without balance
+      const aHasBalance = aBalance > 0;
+      const bHasBalance = bBalance > 0;
+      if (aHasBalance && !bHasBalance) return -1;
+      if (bHasBalance && !aHasBalance) return 1;
+
+      // 2. Among tokens with balance, sort by USD value (highest first)
+      if (aHasBalance && bHasBalance) {
+        // If both have USD values, sort by USD
+        if (aUsdValue > 0 || bUsdValue > 0) {
+          if (aUsdValue !== bUsdValue) {
+            return bUsdValue - aUsdValue;
+          }
+        }
+        // If USD values are both 0 (no price data), sort by raw balance
+        if (aBalance !== bBalance) {
+          return bBalance - aBalance;
+        }
+      }
+
+      // 3. If searching, prioritize search matches
       if (searchLower) {
         // Exact ticker match goes first
         const aExact = aLower === searchLower;
@@ -685,26 +741,27 @@ export function LimitOrderForm({
         if (bTickerMatches && !aTickerMatches) return 1;
       }
 
-      // 1. Primary sort: by user's USD holding (balance * price) - highest first
-      const aBalance = parseFloat(dropdownTokenBalances[a.a?.toLowerCase() || ''] || '0');
-      const bBalance = parseFloat(dropdownTokenBalances[b.a?.toLowerCase() || ''] || '0');
-      const aPrice = getPrice(a.a);
-      const bPrice = getPrice(b.a);
-      const aUsdValue = aBalance * (aPrice > 0 ? aPrice : 0);
-      const bUsdValue = bBalance * (bPrice > 0 ? bPrice : 0);
-
-      if (aUsdValue !== bUsdValue) {
-        return bUsdValue - aUsdValue; // Descending order (highest USD value first)
-      }
-
-      // 2. Then alphabetically
+      // 4. Then alphabetically
       return a.ticker.localeCompare(b.ticker);
     });
-  }, [filteredSellTokensUnsorted, sellSearchQuery, dropdownTokenBalances, prices]);
+  }, [filteredSellTokensUnsorted, sellSearchQuery, dropdownTokenBalances, prices, Object.keys(prices).length]);
 
   // Get sorted filtered buy tokens
   const getFilteredBuyTokens = (index: number) => {
     const searchQuery = buySearchQueries[index] || '';
+
+    // Helper to get price with case-insensitive lookup
+    // Returns 0 for tokens with no price data (price is -1 or 0 or undefined)
+    const getPriceForSort = (address: string | undefined) => {
+      if (!address) return 0;
+      const data = prices[address];
+      if (data && data.price !== undefined && data.price > 0) return data.price;
+      const lowerAddr = address.toLowerCase();
+      const entry = Object.entries(prices).find(([addr]) => addr.toLowerCase() === lowerAddr);
+      if (entry && entry[1].price > 0) return entry[1].price;
+      return 0;
+    };
+
     return [...getFilteredBuyTokensUnsorted(index)].sort((a, b) => {
       const searchLower = searchQuery.toLowerCase();
       const aLower = a.ticker.toLowerCase();
@@ -712,7 +769,35 @@ export function LimitOrderForm({
       const aTickerMatches = aLower.includes(searchLower);
       const bTickerMatches = bLower.includes(searchLower);
 
-      // 0. If user is searching, prioritize search matches first
+      // Get balances and prices
+      const aBalance = parseFloat(dropdownTokenBalances[a.a?.toLowerCase() || ''] || '0');
+      const bBalance = parseFloat(dropdownTokenBalances[b.a?.toLowerCase() || ''] || '0');
+      const aPrice = getPriceForSort(a.a);
+      const bPrice = getPriceForSort(b.a);
+      const aUsdValue = aBalance * aPrice;
+      const bUsdValue = bBalance * bPrice;
+
+      // 1. First: tokens with balance come before tokens without balance
+      const aHasBalance = aBalance > 0;
+      const bHasBalance = bBalance > 0;
+      if (aHasBalance && !bHasBalance) return -1;
+      if (bHasBalance && !aHasBalance) return 1;
+
+      // 2. Among tokens with balance, sort by USD value (highest first)
+      if (aHasBalance && bHasBalance) {
+        // If both have USD values, sort by USD
+        if (aUsdValue > 0 || bUsdValue > 0) {
+          if (aUsdValue !== bUsdValue) {
+            return bUsdValue - aUsdValue;
+          }
+        }
+        // If USD values are both 0 (no price data), sort by raw balance
+        if (aBalance !== bBalance) {
+          return bBalance - aBalance;
+        }
+      }
+
+      // 3. If searching, prioritize search matches
       if (searchLower) {
         // Exact ticker match goes first
         const aExact = aLower === searchLower;
@@ -732,19 +817,7 @@ export function LimitOrderForm({
         if (bTickerMatches && !aTickerMatches) return 1;
       }
 
-      // 1. Primary sort: by user's USD holding (balance * price) - highest first
-      const aBalance = parseFloat(dropdownTokenBalances[a.a?.toLowerCase() || ''] || '0');
-      const bBalance = parseFloat(dropdownTokenBalances[b.a?.toLowerCase() || ''] || '0');
-      const aPrice = getPrice(a.a);
-      const bPrice = getPrice(b.a);
-      const aUsdValue = aBalance * (aPrice > 0 ? aPrice : 0);
-      const bUsdValue = bBalance * (bPrice > 0 ? bPrice : 0);
-
-      if (aUsdValue !== bUsdValue) {
-        return bUsdValue - aUsdValue; // Descending order (highest USD value first)
-      }
-
-      // 2. Then alphabetically
+      // 3. Then alphabetically
       return a.ticker.localeCompare(b.ticker);
     });
   };
@@ -2724,8 +2797,8 @@ export function LimitOrderForm({
               </svg>
             </button>
 
-            {/* 3-dot menu for sell token */}
-            {sellToken && (
+            {/* 3-dot menu for sell token - hide for native PLS */}
+            {sellToken && sellToken.a.toLowerCase() !== '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' && (
               <div className="relative" ref={sellTokenMenuRef}>
                 <button
                   onClick={(e) => {
@@ -2847,37 +2920,47 @@ export function LimitOrderForm({
                   {filteredSellTokens.length === 0 && !customToken && !isLoadingCustomToken && !customTokenError ? (
                     <div className="p-4 text-center text-white/50 text-sm">No tokens found</div>
                   ) : (
-                    filteredSellTokens.map((token) => (
-                      <button
-                        key={token.a}
-                        onClick={() => {
-                          if (token.a) {
-                            setSellToken({ a: token.a, ticker: token.ticker, name: token.name, decimals: token.decimals });
-                            localStorage.setItem('limitOrderSellToken', token.a);
-                            // Clear custom token storage when selecting a regular token
-                            localStorage.removeItem('limitOrderCustomSellToken');
-                            setShowSellDropdown(false);
-                            setSellSearchQuery('');
-                          }
-                        }}
-                        className="w-full p-3 flex items-center space-x-3 hover:bg-white/5 transition-all text-left border-b border-white/5 last:border-b-0"
-                      >
-                        <TokenLogo ticker={token.ticker} className="w-6 h-6" />
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <div className="text-white font-medium">{formatTokenTicker(token.ticker, chainId)}</div>
-                              <div className="text-white/50 text-xs">{token.name}</div>
+                    filteredSellTokens.map((token) => {
+                      const tokenBalance = parseFloat(dropdownTokenBalances[token.a?.toLowerCase() || ''] || '0');
+                      const tokenPrice = getPrice(token.a);
+                      const tokenUsdValue = tokenBalance * (tokenPrice > 0 ? tokenPrice : 0);
+                      return (
+                        <button
+                          key={token.a}
+                          onClick={() => {
+                            if (token.a) {
+                              setSellToken({ a: token.a, ticker: token.ticker, name: token.name, decimals: token.decimals });
+                              localStorage.setItem('limitOrderSellToken', token.a);
+                              // Clear custom token storage when selecting a regular token
+                              localStorage.removeItem('limitOrderCustomSellToken');
+                              setShowSellDropdown(false);
+                              setSellSearchQuery('');
+                            }
+                          }}
+                          className="w-full p-3 flex items-center space-x-3 hover:bg-white/5 transition-all text-left border-b border-white/5 last:border-b-0"
+                        >
+                          <TokenLogo ticker={token.ticker} className="w-6 h-6" />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between">
+                              <div className="min-w-0 flex-1">
+                                <div className="text-white font-medium">{formatTokenTicker(token.ticker, chainId)}</div>
+                                <div className="text-white/50 text-xs truncate">{token.name}</div>
+                              </div>
+                              <div className="text-right ml-2 flex-shrink-0">
+                                {tokenBalance > 0 && (
+                                  <>
+                                    <div className="text-white text-sm">{tokenBalance.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+                                    <div className="text-white/50 text-xs">
+                                      ${tokenUsdValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </div>
+                                  </>
+                                )}
+                              </div>
                             </div>
-                            {token.a && prices[token.a]?.price === -1 && (
-                              <span className="text-xs px-2 py-0.5 bg-yellow-900/30 border border-yellow-500/30 text-yellow-500 rounded ml-2">
-                                No Price
-                              </span>
-                            )}
                           </div>
-                        </div>
-                      </button>
-                    ))
+                        </button>
+                      );
+                    })
                   )}
                 </div>
               </div>
@@ -3173,8 +3256,8 @@ export function LimitOrderForm({
                           </svg>
                         </button>
 
-                        {/* 3-dot menu for buy token */}
-                        {buyToken && (
+                        {/* 3-dot menu for buy token - hide for native PLS */}
+                        {buyToken && buyToken.a.toLowerCase() !== '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' && (
                           <div className="relative" ref={el => { buyTokenMenuRefs.current[index] = el; }}>
                             <button
                               onClick={(e) => {
@@ -3287,28 +3370,38 @@ export function LimitOrderForm({
                             {getFilteredBuyTokens(index).length === 0 ? (
                               <div className="p-4 text-center text-white/50 text-sm">No tokens found</div>
                             ) : (
-                              getFilteredBuyTokens(index).map((token) => (
-                                <button
-                                  key={token.a}
-                                  onClick={() => handleBuyTokenSelect(token, index)}
-                                  className="w-full p-3 flex items-center space-x-3 hover:bg-white/5 transition-all text-left border-b border-white/5 last:border-b-0"
-                                >
-                                  <TokenLogo ticker={token.ticker} className="w-6 h-6" />
-                                  <div className="flex-1">
-                                    <div className="flex items-center justify-between">
-                                      <div>
-                                        <div className="text-white font-medium">{formatTokenTicker(token.ticker, chainId)}</div>
-                                        <div className="text-white/70 text-xs">{token.name}</div>
+                              getFilteredBuyTokens(index).map((token) => {
+                                const tokenBalance = parseFloat(dropdownTokenBalances[token.a?.toLowerCase() || ''] || '0');
+                                const tokenPrice = getPrice(token.a);
+                                const tokenUsdValue = tokenBalance * (tokenPrice > 0 ? tokenPrice : 0);
+                                return (
+                                  <button
+                                    key={token.a}
+                                    onClick={() => handleBuyTokenSelect(token, index)}
+                                    className="w-full p-3 flex items-center space-x-3 hover:bg-white/5 transition-all text-left border-b border-white/5 last:border-b-0"
+                                  >
+                                    <TokenLogo ticker={token.ticker} className="w-6 h-6" />
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center justify-between">
+                                        <div className="min-w-0 flex-1">
+                                          <div className="text-white font-medium">{formatTokenTicker(token.ticker, chainId)}</div>
+                                          <div className="text-white/50 text-xs truncate">{token.name}</div>
+                                        </div>
+                                        <div className="text-right ml-2 flex-shrink-0">
+                                          {tokenBalance > 0 && (
+                                            <>
+                                              <div className="text-white text-sm">{tokenBalance.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+                                              <div className="text-white/50 text-xs">
+                                                ${tokenUsdValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                              </div>
+                                            </>
+                                          )}
+                                        </div>
                                       </div>
-                                      {token.a && prices[token.a]?.price === -1 && (
-                                        <span className="text-xs px-2 py-0.5 bg-yellow-900/30 border border-yellow-500/30 text-yellow-500 rounded ml-2">
-                                          No Price
-                                        </span>
-                                      )}
                                     </div>
-                                  </div>
-                                </button>
-                              ))
+                                  </button>
+                                );
+                              })
                             )}
                           </div>
                         </div>

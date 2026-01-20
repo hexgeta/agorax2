@@ -41,44 +41,62 @@ const DEFAULT_PRICE_DATA: TokenPriceData = {
   txns: {}
 };
 
+// Cache for pair address lookups to avoid repeated API calls
+const pairAddressCache: { [contractAddress: string]: { pairAddress: string | null; timestamp: number } } = {};
+const PAIR_CACHE_TTL = 30 * 1000; // 30 seconds
+
 // Function to find the best pair address for a token contract
 async function findBestPairAddress(contractAddress: string, chainId: number): Promise<string | null> {
+  const cacheKey = `${contractAddress.toLowerCase()}_${chainId}`;
+  const cached = pairAddressCache[cacheKey];
+
+  // Return cached result if still valid
+  if (cached && Date.now() - cached.timestamp < PAIR_CACHE_TTL) {
+    return cached.pairAddress;
+  }
+
   const chainName = chainId === 1 ? 'ethereum' : 'pulsechain';
-  
+
   try {
     // Search for pairs containing this token
     const response = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${contractAddress}`);
-    
+
     if (!response.ok) {
+      pairAddressCache[cacheKey] = { pairAddress: null, timestamp: Date.now() };
       return null;
     }
-    
+
     const data = await response.json();
     const pairs = data.pairs || [];
-    
+
     if (pairs.length === 0) {
+      pairAddressCache[cacheKey] = { pairAddress: null, timestamp: Date.now() };
       return null;
     }
-    
+
     // Filter pairs for the correct chain
     // DexScreener returns chainId as string (e.g., "pulsechain", "ethereum")
     const chainPairs = pairs.filter((pair: any) => {
       return pair.chainId === chainName;
     });
-    
+
     if (chainPairs.length === 0) {
+      pairAddressCache[cacheKey] = { pairAddress: null, timestamp: Date.now() };
       return null;
     }
-    
+
     // Sort by liquidity (highest first) and return the best pair
     const sortedPairs = chainPairs.sort((a: any, b: any) => {
       const aLiquidity = parseFloat(a.liquidity?.usd || '0');
       const bLiquidity = parseFloat(b.liquidity?.usd || '0');
       return bLiquidity - aLiquidity;
     });
-    
-    return sortedPairs[0].pairAddress;
+
+    const bestPair = sortedPairs[0].pairAddress;
+    pairAddressCache[cacheKey] = { pairAddress: bestPair, timestamp: Date.now() };
+    return bestPair;
   } catch (error) {
+    pairAddressCache[cacheKey] = { pairAddress: null, timestamp: Date.now() };
     return null;
   }
 }
@@ -134,7 +152,8 @@ async function fetchBatchPairData(chainName: string, pairAddresses: string[]): P
 }
 
 async function fetchTokenPrices(contractAddresses: string[], customTokens: any[] = []): Promise<TokenPrices> {
-  
+  const results: TokenPrices = {};
+
   // Group tokens by chain
   const tokensByChain: { [chain: string]: { ticker: string; contractAddress: string; pairAddress: string }[] } = {};
   
@@ -217,7 +236,6 @@ async function fetchTokenPrices(contractAddresses: string[], customTokens: any[]
     });
   }
 
-  const results: TokenPrices = {};
   const successfulTokens: string[] = [];
   const failedTokens: string[] = [];
 
