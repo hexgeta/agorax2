@@ -1651,9 +1651,9 @@ export function LimitOrderForm({
         setBuyAmounts((prevAmounts) => {
           const newAmounts = [...prevAmounts];
           // First buy token uses the limit price directly
-          // limitPrice = sellToken per buyToken, so buyAmount = sellAmount / limitPrice
+          // limitPrice = buyToken per sellToken, so buyAmount = sellAmount * limitPrice
           if (buyTokens[0]) {
-            const newBuyAmount = sellAmountNum / limitPriceNum;
+            const newBuyAmount = sellAmountNum * limitPriceNum;
             newAmounts[0] = formatCalculatedValue(newBuyAmount);
           }
           // Additional buy tokens: calculate based on USD value with same premium
@@ -1662,21 +1662,21 @@ export function LimitOrderForm({
             const sellTokenUsdPrice = sellToken ? getPrice(sellToken.a) : 0;
             if (sellTokenUsdPrice > 0) {
               // Calculate the premium/discount from market for the first token
-              // marketPriceForFirst = how many sell tokens per 1 buy token at market
+              // marketPriceForFirst = how many buy tokens per 1 sell token at market
               const firstBuyTokenUsdPrice = buyTokens[0] ? getPrice(buyTokens[0].a) : 0;
-              const marketPriceForFirst = firstBuyTokenUsdPrice > 0 ? firstBuyTokenUsdPrice / sellTokenUsdPrice : 0;
+              const marketPriceForFirst = firstBuyTokenUsdPrice > 0 ? sellTokenUsdPrice / firstBuyTokenUsdPrice : 0;
               const premiumMultiplier = marketPriceForFirst > 0 ? limitPriceNum / marketPriceForFirst : 1;
 
               for (let i = 1; i < buyTokens.length; i++) {
                 if (buyTokens[i]) {
                   const tokenUsdPrice = getPrice(buyTokens[i]!.a);
                   if (tokenUsdPrice > 0) {
-                    // Calculate market price for this token (sell tokens per buy token)
-                    const marketPriceForThis = tokenUsdPrice / sellTokenUsdPrice;
+                    // Calculate market price for this token (buy tokens per sell token)
+                    const marketPriceForThis = sellTokenUsdPrice / tokenUsdPrice;
                     // Apply same premium/discount ratio
                     const adjustedPrice = marketPriceForThis * premiumMultiplier;
-                    // buyAmount = sellAmount / adjustedPrice
-                    const newAmount = sellAmountNum / adjustedPrice;
+                    // buyAmount = sellAmount * adjustedPrice
+                    const newAmount = sellAmountNum * adjustedPrice;
                     newAmounts[i] = formatCalculatedValue(newAmount);
                   }
                 }
@@ -1700,8 +1700,8 @@ export function LimitOrderForm({
 
       const limitPriceNum = parseFloat(limitPrice);
       if (limitPriceNum > 0) {
-        // limitPrice = sellToken per buyToken, so sellAmount = buyAmount * limitPrice
-        const newSellAmount = buyAmountNum * limitPriceNum;
+        // limitPrice = buyToken per sellToken, so sellAmount = buyAmount / limitPrice
+        const newSellAmount = buyAmountNum / limitPriceNum;
         setSellAmount(formatCalculatedValue(newSellAmount));
       }
     }
@@ -1719,8 +1719,8 @@ export function LimitOrderForm({
 
     const firstBuyTokenUsdPrice = buyTokens[0] ? getPrice(buyTokens[0].a) : 0;
     const limitPriceNum = parseFloat(limitPrice) || 0;
-    // marketPriceForFirst = sell tokens per buy token at market
-    const marketPriceForFirst = firstBuyTokenUsdPrice > 0 ? firstBuyTokenUsdPrice / sellTokenUsdPrice : 0;
+    // marketPriceForFirst = buy tokens per sell token at market
+    const marketPriceForFirst = firstBuyTokenUsdPrice > 0 ? sellTokenUsdPrice / firstBuyTokenUsdPrice : 0;
     const premiumMultiplier = marketPriceForFirst > 0 && limitPriceNum > 0 ? limitPriceNum / marketPriceForFirst : 1;
 
     let hasUpdates = false;
@@ -1734,12 +1734,12 @@ export function LimitOrderForm({
       // Only auto-calculate if amount is empty/zero and we have valid price
       const currentAmount = buyAmounts[i] ? parseFloat(removeCommas(buyAmounts[i])) : 0;
       if (currentAmount === 0 && tokenUsdPrice > 0) {
-        // Calculate market price for this token (sell tokens per buy token)
-        const marketPriceForThis = tokenUsdPrice / sellTokenUsdPrice;
+        // Calculate market price for this token (buy tokens per sell token)
+        const marketPriceForThis = sellTokenUsdPrice / tokenUsdPrice;
         // Apply same premium/discount ratio
         const adjustedPrice = marketPriceForThis * premiumMultiplier;
-        // buyAmount = sellAmount / adjustedPrice
-        const newAmount = sellAmountNum / adjustedPrice;
+        // buyAmount = sellAmount * adjustedPrice
+        const newAmount = sellAmountNum * adjustedPrice;
         newBuyAmounts[i] = formatCalculatedValue(newAmount);
         hasUpdates = true;
       }
@@ -3085,23 +3085,23 @@ export function LimitOrderForm({
                     activeInputRef.current = null;
                   }}
                   placeholder="0.00"
-                  className="w-full h-full bg-transparent border border-white/10 p-3 text-white text-lg placeholder-white/30 focus:outline-none rounded-lg"
+                  className="w-full h-full bg-black/40 border border-white/10 p-3 text-white text-lg placeholder-white/30 focus:outline-none rounded-lg"
                 />
               )}
             </div>
 
             {/* 3-dot menu for sell token - hide for native PLS */}
             {sellToken && sellToken.a.toLowerCase() !== '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' && (
-              <div className="relative" ref={sellTokenMenuRef}>
+              <div className="relative self-stretch" ref={sellTokenMenuRef}>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     setShowSellTokenMenu(!showSellTokenMenu);
                   }}
-                  className="p-3 bg-black/40 border border-white/10 hover:bg-white/5 transition-all rounded-lg flex items-center justify-center"
+                  className="h-full px-2 bg-black/40 border border-white/10 hover:bg-white/5 transition-all rounded-lg flex items-center justify-center"
                   title="Token options"
                 >
-                  <svg className="w-5 h-5 text-white/50" fill="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 text-white/50" fill="currentColor" viewBox="0 0 24 24">
                     <circle cx="12" cy="6" r="2" />
                     <circle cx="12" cy="12" r="2" />
                     <circle cx="12" cy="18" r="2" />
@@ -3554,14 +3554,14 @@ export function LimitOrderForm({
                             activeInputRef.current = null;
                           }}
                           placeholder="0.00"
-                          className="w-full h-full bg-transparent border border-white/10 p-3 text-white text-lg placeholder-white/30 focus:outline-none rounded-lg"
+                          className="w-full h-full bg-black/40 border border-white/10 p-3 text-white text-lg placeholder-white/30 focus:outline-none rounded-lg"
                         />
                       )}
                     </div>
 
                     {/* 3-dot menu for buy token - hide for native PLS */}
                     {buyToken && buyToken.a.toLowerCase() !== '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' && (
-                      <div className="relative" ref={el => { buyTokenMenuRefs.current[index] = el; }}>
+                      <div className="relative self-stretch" ref={el => { buyTokenMenuRefs.current[index] = el; }}>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -3571,10 +3571,10 @@ export function LimitOrderForm({
                               return newMenus;
                             });
                           }}
-                          className="p-3 bg-black/40 border border-white/10 hover:bg-white/5 transition-all rounded-lg flex items-center justify-center"
+                          className="h-full px-2 bg-black/40 border border-white/10 hover:bg-white/5 transition-all rounded-lg flex items-center justify-center"
                           title="Token options"
                         >
-                          <svg className="w-5 h-5 text-white/50" fill="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-4 h-4 text-white/50" fill="currentColor" viewBox="0 0 24 24">
                             <circle cx="12" cy="6" r="2" />
                             <circle cx="12" cy="12" r="2" />
                             <circle cx="12" cy="18" r="2" />
