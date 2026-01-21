@@ -1155,13 +1155,17 @@ export function LimitOrderForm({
     const limitPriceNum = parseFloat(limitPrice);
 
     if (sellAmt > 0 && limitPriceNum > 0) {
-      const newBuyAmount = sellAmt * limitPriceNum;
+      // When invertPriceDisplay is false: limitPrice = buyToken per sellToken, so buyAmount = sellAmount * limitPrice
+      // When invertPriceDisplay is true: limitPrice = sellToken per buyToken, so buyAmount = sellAmount / limitPrice
+      const newBuyAmount = invertPriceDisplay
+        ? sellAmt / limitPriceNum
+        : sellAmt * limitPriceNum;
       const newAmounts = [...buyAmounts];
       newAmounts[0] = formatCalculatedValue(newBuyAmount);
       setBuyAmounts(newAmounts);
       setHasCalculatedInitialBuyAmount(true);
     }
-  }, [sellAmount, limitPrice, hasCalculatedInitialBuyAmount]);
+  }, [sellAmount, limitPrice, hasCalculatedInitialBuyAmount, invertPriceDisplay]);
 
   // Save form values to localStorage
   useEffect(() => {
@@ -1651,9 +1655,12 @@ export function LimitOrderForm({
         setBuyAmounts((prevAmounts) => {
           const newAmounts = [...prevAmounts];
           // First buy token uses the limit price directly
-          // limitPrice = buyToken per sellToken, so buyAmount = sellAmount * limitPrice
+          // When invertPriceDisplay is false: limitPrice = buyToken per sellToken, so buyAmount = sellAmount * limitPrice
+          // When invertPriceDisplay is true: limitPrice = sellToken per buyToken, so buyAmount = sellAmount / limitPrice
           if (buyTokens[0]) {
-            const newBuyAmount = sellAmountNum * limitPriceNum;
+            const newBuyAmount = invertPriceDisplay
+              ? sellAmountNum / limitPriceNum
+              : sellAmountNum * limitPriceNum;
             newAmounts[0] = formatCalculatedValue(newBuyAmount);
           }
           // Additional buy tokens: calculate based on USD value with same premium
@@ -1688,7 +1695,7 @@ export function LimitOrderForm({
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sellAmountNum, limitPrice]);
+  }, [sellAmountNum, limitPrice, invertPriceDisplay]);
 
   // When first buy amount changes, update sell amount based on limit price
   // Only runs when user is typing in BUY - never when typing in sell
@@ -1700,12 +1707,15 @@ export function LimitOrderForm({
 
       const limitPriceNum = parseFloat(limitPrice);
       if (limitPriceNum > 0) {
-        // limitPrice = buyToken per sellToken, so sellAmount = buyAmount / limitPrice
-        const newSellAmount = buyAmountNum / limitPriceNum;
+        // When invertPriceDisplay is false: limitPrice = buyToken per sellToken, so sellAmount = buyAmount / limitPrice
+        // When invertPriceDisplay is true: limitPrice = sellToken per buyToken, so sellAmount = buyAmount * limitPrice
+        const newSellAmount = invertPriceDisplay
+          ? buyAmountNum * limitPriceNum
+          : buyAmountNum / limitPriceNum;
         setSellAmount(formatCalculatedValue(newSellAmount));
       }
     }
-  }, [buyAmountNum, limitPrice]);
+  }, [buyAmountNum, limitPrice, invertPriceDisplay]);
 
   // Recalculate additional buy token amounts when prices change or new tokens are added
   // Only applies when prices are BOUND - when unlinked, each token keeps its own price
@@ -3039,7 +3049,7 @@ export function LimitOrderForm({
           <div className="relative flex items-stretch gap-2" ref={sellDropdownRef}>
             <button
               onClick={() => setShowSellDropdown(!showSellDropdown)}
-              className="w-[140px] shrink-0 bg-black/40 border border-white/10 p-3 flex items-center justify-between hover:bg-white/5 transition-all shadow-sm rounded-lg"
+              className="min-w-[120px] shrink-0 bg-black/40 border border-white/10 p-3 flex items-center justify-between hover:bg-white/5 transition-all shadow-sm rounded-lg"
             >
               <div className="flex items-center space-x-2">
                 {sellToken ? (
@@ -3057,14 +3067,14 @@ export function LimitOrderForm({
             </button>
 
             {/* Amount Input - inline */}
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               {!isSellInputFocused && sellAmountNum > 0 ? (
                 <div
                   onClick={() => {
                     setIsSellInputFocused(true);
                     setTimeout(() => sellInputRef.current?.focus(), 0);
                   }}
-                  className="w-full h-full bg-black/40 border border-white/10 p-3 text-white text-lg flex items-center cursor-text rounded-lg"
+                  className="w-full h-full bg-black/40 border border-white/10 p-3 text-white text-base flex items-center cursor-text rounded-lg overflow-hidden"
                 >
                   <NumberFlow
                     value={formatDisplayValue(sellAmountNum)}
@@ -3088,7 +3098,7 @@ export function LimitOrderForm({
                     activeInputRef.current = null;
                   }}
                   placeholder="0.00"
-                  className="w-full h-full bg-black/40 border border-white/10 p-3 text-white text-lg placeholder-white/30 focus:outline-none rounded-lg"
+                  className="w-full h-full bg-black/40 border border-white/10 p-3 text-white text-base placeholder-white/30 focus:outline-none rounded-lg"
                 />
               )}
             </div>
@@ -3378,7 +3388,7 @@ export function LimitOrderForm({
                         newDropdowns[index] = !newDropdowns[index];
                         setShowBuyDropdowns(newDropdowns);
                       }}
-                      className="w-[140px] shrink-0 bg-black/40 border border-white/10 p-3 flex items-center justify-between hover:bg-white/5 transition-all shadow-sm rounded-lg"
+                      className="min-w-[120px] shrink-0 bg-black/40 border border-white/10 p-3 flex items-center justify-between hover:bg-white/5 transition-all shadow-sm rounded-lg"
                     >
                       <div className="flex items-center space-x-2">
                         {buyToken ? (
@@ -3396,7 +3406,7 @@ export function LimitOrderForm({
                     </button>
 
                     {/* Amount Input - inline */}
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       {!isBuyInputFocused[index] && buyAmounts[index] && parseFloat(removeCommas(buyAmounts[index])) > 0 ? (
                         <div
                           onClick={() => {
@@ -3405,7 +3415,7 @@ export function LimitOrderForm({
                             setIsBuyInputFocused(newFocused);
                             setTimeout(() => buyInputRefs.current[index]?.focus(), 0);
                           }}
-                          className="w-full h-full bg-black/40 border border-white/10 p-3 text-white text-lg flex items-center cursor-text rounded-lg"
+                          className="w-full h-full bg-black/40 border border-white/10 p-3 text-white text-base flex items-center cursor-text rounded-lg overflow-hidden"
                         >
                           <NumberFlow
                             value={formatDisplayValue(parseFloat(removeCommas(buyAmounts[index])))}
@@ -3435,7 +3445,7 @@ export function LimitOrderForm({
                             activeInputRef.current = null;
                           }}
                           placeholder="0.00"
-                          className="w-full h-full bg-black/40 border border-white/10 p-3 text-white text-lg placeholder-white/30 focus:outline-none rounded-lg"
+                          className="w-full h-full bg-black/40 border border-white/10 p-3 text-white text-base placeholder-white/30 focus:outline-none rounded-lg"
                         />
                       )}
                     </div>
