@@ -541,44 +541,53 @@ export default function Home() {
 
                   {/* Chart and Form Section */}
                   <div className="w-full mt-8">
-                    <div className="flex flex-col lg:grid lg:grid-cols-5 gap-4">
-                      {/* Chart - Full width on mobile, 3 columns on desktop */}
-                      <div className="w-full lg:col-span-3 min-h-[400px]">
-                        <LimitOrderChart
-                          sellTokenAddress={sellTokenAddress}
-                          buyTokenAddresses={buyTokenAddresses}
-                          limitOrderPrice={limitOrderPrice}
-                          invertPriceDisplay={invertPriceDisplay}
-                          pricesBound={pricesBound}
-                          individualLimitPrices={individualLimitPrices}
-                          onLimitPriceChange={(newPrice) => {
-                            setLimitOrderPrice(newPrice);
-                            // Always update individualLimitPrices[0] to keep in sync
-                            setIndividualLimitPrices(prev => {
-                              const newPrices = [...prev];
-                              newPrices[0] = newPrice;
-                              return newPrices;
-                            });
-                          }}
-                          onIndividualLimitPriceChange={(index, newPrice) => {
-                            setIndividualLimitPrices(prev => {
-                              const newPrices = [...prev];
-                              newPrices[index] = newPrice;
-                              return newPrices;
-                            });
-                            // When the first token's price is changed, also update the main limit price
-                            // so the form input stays in sync
-                            if (index === 0) {
+                    <div className="flex flex-col lg:grid lg:grid-cols-5 gap-4 lg:items-start">
+                      {/* Left Column - Chart and Table */}
+                      <div className="w-full lg:col-span-3 flex flex-col gap-4">
+                        {/* Chart */}
+                        <div className="min-h-[400px]">
+                          <LimitOrderChart
+                            sellTokenAddress={sellTokenAddress}
+                            buyTokenAddresses={buyTokenAddresses}
+                            limitOrderPrice={limitOrderPrice}
+                            invertPriceDisplay={invertPriceDisplay}
+                            pricesBound={pricesBound}
+                            individualLimitPrices={individualLimitPrices}
+                            onLimitPriceChange={(newPrice) => {
                               setLimitOrderPrice(newPrice);
-                            }
-                          }}
-                          onCurrentPriceChange={(price) => {
-                            setCurrentMarketPrice(price);
-                          }}
-                          onDragStateChange={(dragging) => {
-                            setIsDragging(dragging);
-                          }}
-                        />
+                              // Always update individualLimitPrices[0] to keep in sync
+                              setIndividualLimitPrices(prev => {
+                                const newPrices = [...prev];
+                                newPrices[0] = newPrice;
+                                return newPrices;
+                              });
+                            }}
+                            onIndividualLimitPriceChange={(index, newPrice) => {
+                              setIndividualLimitPrices(prev => {
+                                const newPrices = [...prev];
+                                newPrices[index] = newPrice;
+                                return newPrices;
+                              });
+                              // When the first token's price is changed, also update the main limit price
+                              // so the form input stays in sync
+                              if (index === 0) {
+                                setLimitOrderPrice(newPrice);
+                              }
+                            }}
+                            onCurrentPriceChange={(price) => {
+                              setCurrentMarketPrice(price);
+                            }}
+                            onDragStateChange={(dragging) => {
+                              setIsDragging(dragging);
+                            }}
+                          />
+                        </div>
+
+                        {/* Orders Table - Under the chart */}
+                        <OpenPositionsTable ref={openPositionsTableRef} />
+
+                        {/* Pro Stats container - content rendered via portal from LimitOrderForm */}
+                        <div ref={proStatsContainerRef} />
                       </div>
 
                       {/* Order Form - Full width on mobile, 2 columns on desktop */}
@@ -631,22 +640,6 @@ export default function Home() {
             )}
           </div>
         </div>
-
-        {/* Main Content - Only for connected users */}
-        {!isInitializing && !isConnecting && isConnected && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.4 }}
-            className="w-full px-2 md:px-8 mt-0 relative z-10"
-          >
-            <div className="max-w-[1200px] mx-auto">
-              <OpenPositionsTable ref={openPositionsTableRef} />
-              {/* Pro Stats container - content rendered via portal from LimitOrderForm */}
-              <div ref={proStatsContainerRef} className="mt-4" />
-            </div>
-          </motion.div>
-        )}
       </main>
     </>
   );

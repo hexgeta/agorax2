@@ -3047,7 +3047,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
           ) : (
             <div className="w-full min-w-[800px] text-lg">
               <div
-                className={`grid grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(80px,1fr)_minmax(100px,1.2fr)_minmax(80px,1fr)_minmax(80px,1fr)_minmax(100px,auto)] items-center gap-4 pb-4 border-b border-white/10 ${expandedPositions.size > 0 ? 'opacity-90' : 'opacity-100'
+                className={`grid grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(80px,1fr)_minmax(100px,1.2fr)_minmax(80px,1fr)_minmax(100px,auto)] items-center gap-4 pb-4 border-b border-white/10 ${expandedPositions.size > 0 ? 'opacity-90' : 'opacity-100'
                   }`}
               >
                 {/* COLUMN 1: Token For Sale */}
@@ -3088,16 +3088,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                   Limit order position {sortField === 'otcVsMarket' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
                 </button>
 
-                {/* COLUMN 5: Status */}
-                <button
-                  onClick={() => handleSort('status')}
-                  className={`text-sm font-medium text-center hover:text-white transition-colors ${sortField === 'status' ? 'text-white' : 'text-white/60'
-                    }`}
-                >
-                  Status {sortField === 'status' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
-                </button>
-
-                {/* COLUMN 6: Expires / Expired */}
+                {/* COLUMN 5: Expires / Expired */}
                 <button
                   onClick={() => handleSort('date')}
                   className={`text-sm font-medium text-center hover:text-white transition-colors ${sortField === 'date' ? 'text-white' : 'text-white/60'
@@ -3106,7 +3097,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                   {statusFilter === 'expired' ? 'Expired' : 'Expires'} {sortField === 'date' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
                 </button>
 
-                {/* COLUMN 7: Actions / Order ID */}
+                {/* COLUMN 6: Actions / Order ID */}
                 <div className="text-sm font-medium text-center text-white/60">
                   {(statusFilter === 'completed' || statusFilter === 'cancelled') ? 'Order ID' : 'Order ID'}
                 </div>
@@ -3320,7 +3311,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
 
                   return (
                     <div key={`${orderId}-${tokenFilter}-${ownershipFilter}-${statusFilter}`} data-order-id={orderId}
-                      className={`grid grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(80px,1fr)_minmax(100px,1.2fr)_minmax(80px,1fr)_minmax(80px,1fr)_minmax(100px,auto)] items-start gap-4 py-8 ${index < displayOrders.length - 1 && !expandedPositions.has(orderId) ? 'border-b border-white/10' : ''
+                      className={`grid grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(80px,1fr)_minmax(100px,1.2fr)_minmax(80px,1fr)_minmax(100px,auto)] items-start gap-4 py-8 ${index < displayOrders.length - 1 && !expandedPositions.has(orderId) ? 'border-b border-white/10' : ''
                         }`}
                     >
                       {/* COLUMN 1: Token For Sale Content */}
@@ -3593,21 +3584,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                         )}
                       </div>
 
-                      {/* COLUMN 5: Status Content */}
-                      <div className="text-center min-w-0 mt-1">
-                        <span className={`px-3 py-2 rounded-full text-sm font-medium border ${getStatusText(order) === 'Expired'
-                          ? 'bg-yellow-500/20 text-yellow-400 border-yellow-400'
-                          : order.orderDetailsWithID.status === 0
-                            ? 'bg-green-500/20 text-green-400 border-green-400'
-                            : order.orderDetailsWithID.status === 1
-                              ? 'bg-red-500/20 text-red-400 border-red-400'
-                              : 'bg-blue-500/20 text-blue-400 border-blue-400'
-                          }`}>
-                          {getStatusText(order)}
-                        </span>
-                      </div>
-
-                      {/* COLUMN 6: Expires Content */}
+                      {/* COLUMN 5: Expires Content */}
                       <div className="text-center min-w-0 mt-1.5">
                         <div className="text-gray-400 text-sm">
                           {formatTimestamp(Number(order.orderDetailsWithID.orderDetails.expirationTime))}

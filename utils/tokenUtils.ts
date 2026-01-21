@@ -182,17 +182,51 @@ export function getContractWhitelistIndex(address: string): number {
   return index;
 }
 
+// Helper to convert scientific notation to decimal string
+function scientificToDecimal(num: string): string {
+  // If not in scientific notation, return as-is
+  if (!num.includes('e') && !num.includes('E')) {
+    return num;
+  }
+
+  const [mantissa, exponentStr] = num.toLowerCase().split('e');
+  const exponent = parseInt(exponentStr, 10);
+
+  // Remove decimal from mantissa
+  const [intPart, decPart = ''] = mantissa.split('.');
+  const mantissaDigits = intPart + decPart;
+  const decimalPosition = intPart.length;
+
+  // Calculate new decimal position
+  const newDecimalPosition = decimalPosition + exponent;
+
+  if (newDecimalPosition <= 0) {
+    // Number is less than 1, add leading zeros
+    return '0.' + '0'.repeat(-newDecimalPosition) + mantissaDigits;
+  } else if (newDecimalPosition >= mantissaDigits.length) {
+    // Number is a large integer, add trailing zeros
+    return mantissaDigits + '0'.repeat(newDecimalPosition - mantissaDigits.length);
+  } else {
+    // Insert decimal point in the middle
+    return mantissaDigits.slice(0, newDecimalPosition) + '.' + mantissaDigits.slice(newDecimalPosition);
+  }
+}
+
 // Function to parse token amount to wei based on token decimals
 export function parseTokenAmount(amount: string, decimals: number): bigint {
-  const cleanAmount = amount.replace(/,/g, '');
+  let cleanAmount = amount.replace(/,/g, '');
+
+  // Convert scientific notation to decimal string
+  cleanAmount = scientificToDecimal(cleanAmount);
+
   const [integerPart, decimalPart = ''] = cleanAmount.split('.');
-  
+
   // Pad decimal part to match token decimals
   const paddedDecimalPart = decimalPart.padEnd(decimals, '0').slice(0, decimals);
-  
+
   // Combine integer and decimal parts
   const fullAmount = integerPart + paddedDecimalPart;
-  
+
   return BigInt(fullAmount);
 }
 

@@ -852,7 +852,7 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                       glowIntensity="none"
                     >
                       <span className="text-xs text-white/70 whitespace-nowrap">
-                        Limit Price:
+                        Limit Price: ({formatTokenTicker(tokenInfo.ticker)})
                       </span>
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-bold text-white">
