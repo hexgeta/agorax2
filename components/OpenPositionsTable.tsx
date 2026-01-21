@@ -755,13 +755,34 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
   };
 
   // Handle position expansion
-  const togglePositionExpansion = (orderId: string) => {
+  const togglePositionExpansion = (orderId: string, order?: any) => {
     setExpandedPositions(prev => {
       const newSet = new Set(prev);
       if (newSet.has(orderId)) {
         newSet.delete(orderId);
       } else {
         newSet.add(orderId);
+
+        // For AON orders, auto-set 100% input when expanding
+        if (order?.orderDetailsWithID?.orderDetails?.allOrNothing) {
+          const buyTokensIndex = order.orderDetailsWithID.orderDetails.buyTokensIndex;
+          const buyAmounts = order.orderDetailsWithID.orderDetails.buyAmounts;
+          const sellAmount = order.orderDetailsWithID.orderDetails.sellAmount;
+          const remainingSellAmount = order.orderDetailsWithID.remainingSellAmount;
+          const remainingPercentage = Number(remainingSellAmount) / Number(sellAmount);
+
+          // For single token AON, auto-select and set 100%
+          if (buyTokensIndex.length === 1) {
+            const tokenInfo = getTokenInfoByIndex(Number(buyTokensIndex[0]));
+            const maxBuyAmount = parseFloat(formatTokenAmount(buyAmounts[0], tokenInfo.decimals));
+            const scaledMax = maxBuyAmount * remainingPercentage;
+
+            setOfferInputs(prevInputs => ({
+              ...prevInputs,
+              [orderId]: { [tokenInfo.address]: scaledMax.toString() }
+            }));
+          }
+        }
         // Only scroll on mobile (< 768px) - desktop users can already see the content
         const isMobile = window.innerWidth < 768;
         if (isMobile) {
@@ -1039,9 +1060,9 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     }
   }, [allOrders, ordersForHistory.length]);
 
-  // Lock scrolling when edit modal is open
+  // Lock scrolling when any modal is open
   useEffect(() => {
-    if (editingOrder) {
+    if (editingOrder || showExpirationCalendar) {
       // Lock both html and body to prevent scrolling on all browsers
       document.documentElement.style.overflow = 'hidden';
       document.body.style.overflow = 'hidden';
@@ -1054,7 +1075,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
       document.documentElement.style.overflow = '';
       document.body.style.overflow = '';
     };
-  }, [editingOrder]);
+  }, [editingOrder, showExpirationCalendar]);
 
   // Simplify error messages for user rejections
   const simplifyErrorMessage = (error: any) => {
@@ -3026,7 +3047,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
           ) : (
             <div className="w-full min-w-[800px] text-lg">
               <div
-                className={`grid grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(80px,1fr)_minmax(100px,1.2fr)_minmax(80px,1fr)_minmax(80px,0.8fr)_minmax(80px,1fr)_minmax(100px,auto)] items-center gap-4 pb-4 border-b border-white/10 ${expandedPositions.size > 0 ? 'opacity-90' : 'opacity-100'
+                className={`grid grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(80px,1fr)_minmax(100px,1.2fr)_minmax(80px,1fr)_minmax(80px,1fr)_minmax(100px,auto)] items-center gap-4 pb-4 border-b border-white/10 ${expandedPositions.size > 0 ? 'opacity-90' : 'opacity-100'
                   }`}
               >
                 {/* COLUMN 1: Token For Sale */}
@@ -3076,12 +3097,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                   Status {sortField === 'status' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
                 </button>
 
-                {/* COLUMN 6: Tags */}
-                <div className="text-sm font-medium text-center text-white/60">
-                  Tags
-                </div>
-
-                {/* COLUMN 7: Expires / Expired */}
+                {/* COLUMN 6: Expires / Expired */}
                 <button
                   onClick={() => handleSort('date')}
                   className={`text-sm font-medium text-center hover:text-white transition-colors ${sortField === 'date' ? 'text-white' : 'text-white/60'
@@ -3090,9 +3106,9 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                   {statusFilter === 'expired' ? 'Expired' : 'Expires'} {sortField === 'date' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
                 </button>
 
-                {/* COLUMN 8: Actions / Order ID */}
+                {/* COLUMN 7: Actions / Order ID */}
                 <div className="text-sm font-medium text-center text-white/60">
-                  {(statusFilter === 'completed' || statusFilter === 'cancelled') ? 'Order ID' : ''}
+                  {(statusFilter === 'completed' || statusFilter === 'cancelled') ? 'Order ID' : 'Order ID'}
                 </div>
               </div>
 
@@ -3304,7 +3320,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
 
                   return (
                     <div key={`${orderId}-${tokenFilter}-${ownershipFilter}-${statusFilter}`} data-order-id={orderId}
-                      className={`grid grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(80px,1fr)_minmax(100px,1.2fr)_minmax(80px,1fr)_minmax(80px,0.8fr)_minmax(80px,1fr)_minmax(100px,auto)] items-start gap-4 py-8 ${index < displayOrders.length - 1 && !expandedPositions.has(orderId) ? 'border-b border-white/10' : ''
+                      className={`grid grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(80px,1fr)_minmax(100px,1.2fr)_minmax(80px,1fr)_minmax(80px,1fr)_minmax(100px,auto)] items-start gap-4 py-8 ${index < displayOrders.length - 1 && !expandedPositions.has(orderId) ? 'border-b border-white/10' : ''
                         }`}
                     >
                       {/* COLUMN 1: Token For Sale Content */}
@@ -3464,6 +3480,11 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                             );
                           })()}
                         </div>
+                        {order.orderDetailsWithID.orderDetails.allOrNothing && (
+                          <span className="px-2 py-1 mt-5 rounded-full text-xs font-medium bg-purple-500/20 text-purple-400 border border-purple-400">
+                            AON
+                          </span>
+                        )}
                       </div>
 
                       {/* COLUMN 4: OTC % Content - show percentage for each buy token */}
@@ -3517,7 +3538,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                     )}
                                   </div>
                                   {tokenPct.percentage !== null && (
-                                    <div className="text-xs text-gray-400">
+                                    <div className="text-xs text-gray-400 -mb-0.5">
                                       {tokenPct.isBelowMarket ? 'below market' : 'above market'}
                                     </div>
                                   )}
@@ -3531,7 +3552,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                           [orderId]: !prev[orderId]
                                         }));
                                       }}
-                                      className="text-xs text-gray-500 hover:text-gray-300 cursor-pointer transition-colors"
+                                      className="text-xs text-gray-500 hover:text-gray-300 cursor-pointer transition-colors -mt-0.5"
                                       title="Click to switch ratio direction"
                                     >
                                       {(ratioInverted[orderId] ?? false)
@@ -3586,16 +3607,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                         </span>
                       </div>
 
-                      {/* COLUMN 6: Tags Content */}
-                      <div className="text-center min-w-0 mt-1">
-                        {order.orderDetailsWithID.orderDetails.allOrNothing && (
-                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-purple-500/20 text-purple-400 border border-purple-400">
-                            AON
-                          </span>
-                        )}
-                      </div>
-
-                      {/* COLUMN 7: Expires Content */}
+                      {/* COLUMN 6: Expires Content */}
                       <div className="text-center min-w-0 mt-1.5">
                         <div className="text-gray-400 text-sm">
                           {formatTimestamp(Number(order.orderDetailsWithID.orderDetails.expirationTime))}
@@ -3605,14 +3617,14 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                         </div>
                       </div>
 
-                      {/* COLUMN 8: Actions / Order ID Content */}
-                      <div className="text-center min-w-0">
+                      {/* COLUMN 7: Actions / Order ID Content */}
+                      <div className="flex flex-col items-center justify-center min-w-0">
                         {(statusFilter === 'completed' || statusFilter === 'cancelled') ? (
                           <div className="text-gray-400 mt-1.5 text-sm">{order.orderDetailsWithID.orderID.toString()}</div>
                         ) : (
-                          <>
+                          <div className="flex flex-col items-center">
                             {ownershipFilter === 'mine' && order.orderDetailsWithID.status === 0 ? (
-                              <div className="flex items-center gap-2 justify-center">
+                              <div className="flex items-center gap-2">
                                 {/* Collect Proceeds Button - Show if there are proceeds to collect */}
                                 {(() => {
                                   const sellAmount = order.orderDetailsWithID.orderDetails.sellAmount;
@@ -3644,7 +3656,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                     setSelectedExpirationDate(new Date(currentExpiration));
                                   }}
                                   disabled={updatingOrders.has(order.orderDetailsWithID.orderID.toString())}
-                                  className="p-2 -mt-1.5 rounded hover:bg-blue-700/50 transition-colors disabled:opacity-50"
+                                  className="p-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors disabled:opacity-50"
                                   title="Update Expiration"
                                 >
                                   {updatingOrders.has(order.orderDetailsWithID.orderID.toString()) ? (
@@ -3658,7 +3670,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                 <button
                                   onClick={() => handleCancelOrder(order)}
                                   disabled={cancelingOrders.has(order.orderDetailsWithID.orderID.toString())}
-                                  className="p-2 -mt-1.5 rounded hover:bg-gray-700/50 transition-colors disabled:opacity-50"
+                                  className="p-2 rounded-lg bg-white/5 border border-white/10 hover:bg-red-500/20 transition-colors disabled:opacity-50"
                                   title="Cancel Order"
                                 >
                                   {cancelingOrders.has(order.orderDetailsWithID.orderID.toString()) ? (
@@ -3671,11 +3683,11 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                             ) : ownershipFilter === 'non-mine' && order.orderDetailsWithID.status === 0 && statusFilter === 'active' ? (
                               // Check if this is user's own order in marketplace mode
                               isMarketplaceMode && address && order.userDetails.orderOwner.toLowerCase() === address.toLowerCase() ? (
-                                <div className="flex items-center gap-2 ml-4">
+                                <div className="flex items-center gap-2">
                                   <button
                                     onClick={() => {
                                       setShowExpirationCalendar(order.orderDetailsWithID.orderID.toString());
-                                      setSelectedExpirationDate(new Date(Number(order.orderDetailsWithID.expirationTime) * 1000));
+                                      setSelectedExpirationDate(new Date(Number(order.orderDetailsWithID.orderDetails.expirationTime) * 1000));
                                     }}
                                     className="p-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
                                     title="Change expiration"
@@ -3697,8 +3709,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                 </div>
                               ) : (
                                 <button
-                                  onClick={() => togglePositionExpansion(order.orderDetailsWithID.orderID.toString())}
-                                  className={`flex items-center gap-1 ml-4 px-4 py-2 text-xs rounded-full transition-colors ${expandedPositions.has(order.orderDetailsWithID.orderID.toString())
+                                  onClick={() => togglePositionExpansion(order.orderDetailsWithID.orderID.toString(), order)}
+                                  className={`flex items-center gap-1 px-4 py-2 text-xs rounded-full transition-colors ${expandedPositions.has(order.orderDetailsWithID.orderID.toString())
                                     ? 'bg-transparent border border-white/10 text-white hover:bg-white/10'
                                     : 'bg-white text-black hover:bg-gray-200'
                                     }`}
@@ -3714,7 +3726,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                               // No action button for completed/expired/cancelled orders
                               <div className="w-16 h-8"></div>
                             )}
-                          </>
+                            <div className="text-gray-400 text-sm mt-1">{order.orderDetailsWithID.orderID.toString()}</div>
+                          </div>
                         )}
                       </div>
 
@@ -3778,14 +3791,29 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                         const previousAddresses = Array.from(newSet);
                                         newSet.clear();
                                         newSet.add(tokenAddress);
-                                        // Clear inputs for previously selected tokens
-                                        if (previousAddresses.length > 0) {
-                                          setOfferInputs(prevInputs => {
-                                            const orderInputs = { ...prevInputs[orderId] };
-                                            previousAddresses.forEach(addr => delete orderInputs[addr]);
-                                            return { ...prevInputs, [orderId]: orderInputs };
-                                          });
+
+                                        // Auto-set 100% input for the selected token
+                                        const buyAmounts = order.orderDetailsWithID.orderDetails.buyAmounts;
+                                        const sellAmount = order.orderDetailsWithID.orderDetails.sellAmount;
+                                        const remainingSellAmount = order.orderDetailsWithID.remainingSellAmount;
+                                        const remainingPercentage = Number(remainingSellAmount) / Number(sellAmount);
+
+                                        const tokenIdx = buyTokensIndex.findIndex((ti: bigint) =>
+                                          getTokenInfoByIndex(Number(ti)).address === tokenAddress
+                                        );
+                                        if (tokenIdx >= 0) {
+                                          const tokenInfo = getTokenInfoByIndex(Number(buyTokensIndex[tokenIdx]));
+                                          const maxBuyAmount = parseFloat(formatTokenAmount(buyAmounts[tokenIdx], tokenInfo.decimals));
+                                          const scaledMax = maxBuyAmount * remainingPercentage;
+
+                                          setOfferInputs(prevInputs => ({
+                                            ...prevInputs,
+                                            [orderId]: { [tokenAddress]: scaledMax.toString() }
+                                          }));
                                         }
+
+                                        // Auto-close selection panel for AON orders
+                                        setTokenSelectionOpen(prevOpen => ({ ...prevOpen, [orderId]: false }));
                                       } else {
                                         // Normal multi-select behavior
                                         if (newSet.has(tokenAddress)) {
@@ -3908,7 +3936,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                                 {isAonMultiToken ? 'Select payment token:' : 'Select payment token(s):'}
                                               </h5>
                                               {isAonMultiToken && (
-                                                <p className="text-gray-400 text-xs">All-or-Nothing orders require payment in a single token</p>
+                                                <p className="text-gray-400 text-xs py-1">All-or-Nothing orders require <span className="underline">100% payment</span> in a <span className="underline">single token</span></p>
                                               )}
                                               <div className="flex flex-wrap gap-2">
                                                 {(() => {
@@ -4043,6 +4071,44 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                                   const isActivePercentage = (pct: number) => {
                                                     return Math.abs(thisTokenPercentage - pct) < 1;
                                                   };
+
+                                                  // For AON orders, just show the fixed amount (no input/buttons)
+                                                  if (isAllOrNothing) {
+                                                    return (
+                                                      <div key={tokenInfo.address} className="space-y-2">
+                                                        <div className="flex items-center space-x-3">
+                                                          <div className="flex items-center space-x-2 min-w-[80px]">
+                                                            <TokenLogo
+                                                              src={tokenInfo.logo}
+                                                              alt={formatTokenTicker(tokenInfo.ticker)}
+                                                              className="w-6 h-6 rounded-full flex-shrink-0"
+                                                            />
+                                                            <span className="text-white text-sm font-medium">
+                                                              {formatTokenTicker(tokenInfo.ticker)}
+                                                            </span>
+                                                          </div>
+                                                          <span className="text-white text-sm font-medium">
+                                                            {formatNumberWithCommas(scaledMax.toString())}
+                                                          </span>
+                                                          <span className="text-gray-400 text-xs">(100%)</span>
+                                                        </div>
+
+                                                        {/* User's balance for this token */}
+                                                        {address && tokenBalances[tokenInfo.address.toLowerCase()] && (() => {
+                                                          const balanceStr = tokenBalances[tokenInfo.address.toLowerCase()];
+                                                          const balance = parseFloat(removeCommas(balanceStr)) || 0;
+                                                          const exceedsBalance = scaledMax > balance;
+
+                                                          return (
+                                                            <div className={`text-xs ml-[92px] ${exceedsBalance ? 'text-red-400' : 'text-gray-500'}`}>
+                                                              {exceedsBalance && <span className="mr-1">Insufficient balance -</span>}
+                                                              Balance: {formatNumberWithCommas(tokenBalances[tokenInfo.address.toLowerCase()])}
+                                                            </div>
+                                                          );
+                                                        })()}
+                                                      </div>
+                                                    );
+                                                  }
 
                                                   return (
                                                     <div key={tokenInfo.address} className="space-y-2">
@@ -4532,7 +4598,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
       {
         showExpirationCalendar && typeof document !== 'undefined' && createPortal(
           <div
-            className="fixed inset-0 bg-black/80 flex items-start justify-center pt-[15vh] z-[9999] animate-in fade-in duration-150"
+            className="fixed inset-0 bg-black/80 flex items-start justify-center pt-[8vh] z-[9999] animate-in fade-in duration-150"
             onClick={() => {
               setShowExpirationCalendar(null);
               setSelectedExpirationDate(undefined);
@@ -4559,7 +4625,6 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                   </svg>
                 </button>
               </div>
-              <span className="text-white/60 text-xs mb-4 block">All times in UTC</span>
 
               <div
                 className="mb-4 overflow-hidden"
@@ -4569,11 +4634,12 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                 <Calendar
                   mode="single"
                   selected={selectedExpirationDate}
+                  defaultMonth={selectedExpirationDate}
                   onSelect={(date) => {
                     if (!date) return;
-                    // Preserve time from existing selection or use current time
+                    // Preserve time from existing selection or use current time (in UTC)
                     const timeSource = selectedExpirationDate || new Date();
-                    date.setHours(timeSource.getHours(), timeSource.getMinutes(), timeSource.getSeconds());
+                    date.setUTCHours(timeSource.getUTCHours(), timeSource.getUTCMinutes(), timeSource.getUTCSeconds());
                     setSelectedExpirationDate(date);
 
                     // Validate that resulting datetime is in the future
@@ -4593,17 +4659,17 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                   }}
                 />
                 <div className="px-3 pb-3 border-b border-white/10 pt-3">
-                  <label className="text-white/60 text-xs mb-2 block">Time</label>
+                  <label className="text-white/60 text-xs mb-2 block">Time (UTC)</label>
                   <input
                     type="time"
-                    step="1"
-                    value={selectedExpirationDate ? `${String(selectedExpirationDate.getHours()).padStart(2, '0')}:${String(selectedExpirationDate.getMinutes()).padStart(2, '0')}:${String(selectedExpirationDate.getSeconds()).padStart(2, '0')}` : ''}
+                    step="60"
+                    value={selectedExpirationDate ? `${String(selectedExpirationDate.getUTCHours()).padStart(2, '0')}:${String(selectedExpirationDate.getUTCMinutes()).padStart(2, '0')}` : ''}
                     onChange={(e) => {
                       const timeValue = e.target.value;
                       if (!timeValue) return;
-                      const [hours, minutes, seconds] = timeValue.split(':').map(Number);
+                      const [hours, minutes] = timeValue.split(':').map(Number);
                       const newDate = selectedExpirationDate ? new Date(selectedExpirationDate) : new Date();
-                      newDate.setHours(hours, minutes, seconds || 0);
+                      newDate.setUTCHours(hours, minutes, 0);
                       setSelectedExpirationDate(newDate);
 
                       // Validate that time is in the future
@@ -4615,7 +4681,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                         setExpirationTimeError(null);
                       }
                     }}
-                    className="w-full bg-black text-white border border-white/20 rounded-md px-3 py-2 text-sm appearance-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none focus:outline-none focus:border-white/50 selection:bg-white/30 selection:text-white [&::-webkit-datetime-edit-hour-field:focus]:bg-white/30 [&::-webkit-datetime-edit-minute-field:focus]:bg-white/30 [&::-webkit-datetime-edit-second-field:focus]:bg-white/30 [&::-webkit-datetime-edit-hour-field:focus]:text-white [&::-webkit-datetime-edit-minute-field:focus]:text-white [&::-webkit-datetime-edit-second-field:focus]:text-white"
+                    className="w-full bg-black text-white border border-white/20 rounded-md px-3 py-2 text-sm appearance-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none focus:outline-none focus:border-white/50 selection:bg-white/30 selection:text-white [&::-webkit-datetime-edit-hour-field:focus]:bg-white/30 [&::-webkit-datetime-edit-minute-field:focus]:bg-white/30 [&::-webkit-datetime-edit-hour-field:focus]:text-white [&::-webkit-datetime-edit-minute-field:focus]:text-white"
                   />
                   {expirationTimeError && (
                     <p className="text-red-400 text-xs mt-2">{expirationTimeError}</p>
@@ -4636,7 +4702,17 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                 </button>
                 <button
                   onClick={() => handleQuickExpirationUpdate(showExpirationCalendar)}
-                  disabled={!selectedExpirationDate || updatingOrders.has(showExpirationCalendar) || !!expirationTimeError}
+                  disabled={(() => {
+                    if (!selectedExpirationDate || updatingOrders.has(showExpirationCalendar) || !!expirationTimeError) return true;
+                    // Check if the selected date is the same as the current expiration
+                    const order = displayOrders.find(o => o.orderDetailsWithID.orderID.toString() === showExpirationCalendar);
+                    if (order) {
+                      const currentExpiration = Number(order.orderDetailsWithID.orderDetails.expirationTime);
+                      const selectedTimestamp = Math.floor(selectedExpirationDate.getTime() / 1000);
+                      if (currentExpiration === selectedTimestamp) return true;
+                    }
+                    return false;
+                  })()}
                   className="flex-1 px-4 py-2 bg-white text-black rounded-lg hover:bg-white/90 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                 >
                   {updatingOrders.has(showExpirationCalendar) ? 'Loading' : 'Update Expiration'}

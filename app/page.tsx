@@ -61,6 +61,8 @@ export default function Home() {
   const { isConnected, isConnecting } = useAccount();
   const { toast } = useToast();
   const openPositionsTableRef = useRef<any>(null);
+  const proStatsContainerRef = useRef<HTMLDivElement>(null);
+  const [proStatsContainerMounted, setProStatsContainerMounted] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
 
   useEffect(() => {
@@ -89,6 +91,13 @@ export default function Home() {
     }, 2000); // 2 second max wait
     return () => clearTimeout(maxTimeout);
   }, []);
+
+  // Set proStatsContainerMounted when the ref is available
+  useEffect(() => {
+    if (proStatsContainerRef.current && !proStatsContainerMounted) {
+      setProStatsContainerMounted(true);
+    }
+  });
 
   // Chart and form state
   const [sellTokenAddress, setSellTokenAddress] = useState<string | undefined>();
@@ -354,7 +363,7 @@ export default function Home() {
                         </svg>
                       </div>
                       <h3 className="text-lg font-semibold text-white mb-2">Lowest Fees</h3>
-                      <p className="text-gray-400 text-sm">Low 0.2% fee on sells. Zero fees on buys. The #1 cheapest place on PulseChain to trade.</p>
+                      <p className="text-gray-400 text-sm">Low 0.2% fee on sells. Zero fees on buys. The #1cheapest place on PulseChain to trade.</p>
                     </LiquidGlassCard>
 
                     
@@ -612,6 +621,7 @@ export default function Home() {
                               openPositionsTableRef.current.refreshAndNavigateToMyActiveOrders();
                             }
                           }}
+                          proStatsContainerRef={proStatsContainerRef}
                         />
                       </div>
                     </div>
@@ -632,6 +642,8 @@ export default function Home() {
           >
             <div className="max-w-[1200px] mx-auto">
               <OpenPositionsTable ref={openPositionsTableRef} />
+              {/* Pro Stats container - content rendered via portal from LimitOrderForm */}
+              <div ref={proStatsContainerRef} className="mt-4" />
             </div>
           </motion.div>
         )}

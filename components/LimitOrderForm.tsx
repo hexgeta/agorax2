@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import NumberFlow from '@number-flow/react';
 import { useAccount, useBalance, usePublicClient } from 'wagmi';
 import { TOKEN_CONSTANTS } from '@/constants/crypto';
@@ -37,6 +38,7 @@ interface LimitOrderFormProps {
   isDragging?: boolean;
   onCreateOrderClick?: (sellToken: TokenOption | null, buyTokens: (TokenOption | null)[], sellAmount: string, buyAmounts: string[], expirationDays: number) => void;
   onOrderCreated?: () => void;
+  proStatsContainerRef?: React.RefObject<HTMLDivElement | null>;
 }
 
 interface TokenOption {
@@ -146,6 +148,7 @@ export function LimitOrderForm({
   isDragging = false,
   onCreateOrderClick,
   onOrderCreated,
+  proStatsContainerRef,
 }: LimitOrderFormProps) {
   const { isConnected, address, chainId } = useAccount();
 
@@ -239,6 +242,7 @@ export function LimitOrderForm({
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
+  const [showConfirmation, setShowConfirmation] = useState(false);
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('limitOrderShowAdvanced') === 'true';
@@ -276,11 +280,13 @@ export function LimitOrderForm({
   });
 
   // Accept multiple tokens as buy - when true, shows the "Add alternative token" button
+  // Default to true for new users (no localStorage value)
   const [acceptMultipleTokens, setAcceptMultipleTokens] = useState(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('limitOrderAcceptMultipleTokens') === 'true';
+      const saved = localStorage.getItem('limitOrderAcceptMultipleTokens');
+      return saved === null ? true : saved === 'true';
     }
-    return false;
+    return true;
   });
 
   // Custom token state for pasted contract addresses (sell only)
@@ -1912,6 +1918,9 @@ export function LimitOrderForm({
         onOrderCreated();
       }
 
+      // Reset confirmation step
+      setShowConfirmation(false);
+
     } catch (error: any) {
 
 
@@ -2776,26 +2785,60 @@ export function LimitOrderForm({
         >
           <label className="text-white/80 text-sm mb-2 block font-semibold text-left">SELL</label>
 
-          {/* Token Selector */}
-          <div className="relative mb-3 flex gap-2" ref={sellDropdownRef}>
+          {/* Token Selector and Amount Input Row */}
+          <div className="relative flex items-stretch gap-2" ref={sellDropdownRef}>
             <button
               onClick={() => setShowSellDropdown(!showSellDropdown)}
-              className="flex-1 bg-black/40 border border-white/10 p-3 flex items-center justify-between hover:bg-white/5 transition-all shadow-sm rounded-lg"
+              className="w-[140px] shrink-0 bg-black/40 border border-white/10 p-3 flex items-center justify-between hover:bg-white/5 transition-all shadow-sm rounded-lg"
             >
-              <div className="flex items-center space-x-3">
+              <div className="flex items-center space-x-2">
                 {sellToken ? (
                   <>
                     <TokenLogo ticker={sellToken.ticker} className="w-6 h-6" />
                     <span className="text-white font-medium">{formatTokenTicker(sellToken.ticker, chainId)}</span>
                   </>
                 ) : (
-                  <span className="text-white/50">Select token</span>
+                  <span className="text-white/50">Select</span>
                 )}
               </div>
-              <svg className="w-5 h-5 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
             </button>
+
+            {/* Amount Input - inline */}
+            <div className="flex-1">
+              {!isSellInputFocused && sellAmountNum > 0 ? (
+                <div
+                  onClick={() => {
+                    setIsSellInputFocused(true);
+                    setTimeout(() => sellInputRef.current?.focus(), 0);
+                  }}
+                  className="w-full h-full bg-black/40 border border-white/10 p-3 text-white text-lg flex items-center cursor-text rounded-lg"
+                >
+                  <NumberFlow
+                    value={formatDisplayValue(sellAmountNum)}
+                    format={{
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 4
+                    }}
+                    animated={!isDragging}
+                  />
+                </div>
+              ) : (
+                <input
+                  ref={sellInputRef}
+                  type="text"
+                  value={sellAmount}
+                  onChange={handleSellAmountChange}
+                  onKeyDown={handleSellKeyDown}
+                  onFocus={() => setIsSellInputFocused(true)}
+                  onBlur={() => setIsSellInputFocused(false)}
+                  placeholder="0.00"
+                  className="w-full h-full bg-transparent border border-white/10 p-3 text-white text-lg placeholder-white/30 focus:outline-none rounded-lg"
+                />
+              )}
+            </div>
 
             {/* 3-dot menu for sell token - hide for native PLS */}
             {sellToken && sellToken.a.toLowerCase() !== '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' && (
@@ -2805,7 +2848,7 @@ export function LimitOrderForm({
                     e.stopPropagation();
                     setShowSellTokenMenu(!showSellTokenMenu);
                   }}
-                  className="h-full px-3 bg-black/40 border border-white/10 hover:bg-white/5 transition-all rounded-lg flex items-center justify-center"
+                  className="p-3 bg-black/40 border border-white/10 hover:bg-white/5 transition-all rounded-lg flex items-center justify-center"
                   title="Token options"
                 >
                   <svg className="w-5 h-5 text-white/50" fill="currentColor" viewBox="0 0 24 24">
@@ -2967,59 +3010,7 @@ export function LimitOrderForm({
             )}
           </div>
 
-          {/* Amount Input */}
-          <div className="relative">
-            {!isSellInputFocused && sellAmountNum > 0 ? (
-              <div
-                onClick={() => {
-                  setIsSellInputFocused(true);
-                  setTimeout(() => sellInputRef.current?.focus(), 0);
-                }}
-                className="w-full bg-black/40 border border-white/10 p-3 text-white text-2xl min-h-[58px] flex items-center cursor-text rounded-lg"
-              >
-                <NumberFlow
-                  value={formatDisplayValue(sellAmountNum)}
-                  format={{
-                    minimumFractionDigits: 0,
-                    maximumFractionDigits: 4
-                  }}
-                  animated={!isDragging}
-                />
-              </div>
-            ) : (
-              <input
-                ref={sellInputRef}
-                type="text"
-                value={sellAmount}
-                onChange={handleSellAmountChange}
-                onKeyDown={handleSellKeyDown}
-                onFocus={() => setIsSellInputFocused(true)}
-                onBlur={() => setIsSellInputFocused(false)}
-                placeholder="0.00"
-                className="w-full bg-transparent border border-white/10 p-3 text-white text-2xl placeholder-white/30 focus:outline-none rounded-lg"
-              />
-            )}
-          </div>
           <div className="flex justify-between items-center mt-2">
-            <div className="text-white/50 text-sm font-semibold">
-              {(pricesLoading || sellTokenPrice === 0) && sellAmountNum > 0 ? (
-                <div className="flex items-center gap-1.5 animate-pulse">
-                  <span className="w-1.5 h-1.5 rounded-full bg-white/30" />
-                  <span>Loading price...</span>
-                </div>
-              ) : sellUsdValue > 0 ? (
-                <NumberFlow
-                  value={sellUsdValue}
-                  format={{
-                    style: 'currency',
-                    currency: 'USD',
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2
-                  }}
-                  animated={!isDragging}
-                />
-              ) : '$0.00'}
-            </div>
             {sellToken && isConnected && (
               <div className="flex items-center gap-2">
                 <span className="text-white/50 text-xs">
@@ -3042,6 +3033,25 @@ export function LimitOrderForm({
                 )}
               </div>
             )}
+            <div className="text-white/50 text-sm font-semibold">
+              {pricesLoading && sellTokenPrice === 0 && sellAmountNum > 0 ? (
+                <div className="flex items-center gap-1.5 animate-pulse">
+                  <span className="w-1.5 h-1.5 rounded-full bg-white/30" />
+                  <span>Loading price...</span>
+                </div>
+              ) : sellUsdValue > 0 ? (
+                <NumberFlow
+                  value={sellUsdValue}
+                  format={{
+                    style: 'currency',
+                    currency: 'USD',
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                  }}
+                  animated={!isDragging}
+                />
+              ) : '$0.00'}
+            </div>
           </div>
 
           {/* Advanced Options */}
@@ -3228,188 +3238,34 @@ export function LimitOrderForm({
                   </div>
                 )}
 
-                <div className="flex items-start space-x-2">
-                  <div className="flex-1">
-                    {/* Token Selector */}
-                    <div className="relative mb-3" ref={el => { buyDropdownRefs.current[index] = el; }}>
+                {/* Token Selector and Amount Input Row */}
+                <div className="relative" ref={el => { buyDropdownRefs.current[index] = el; }}>
+                  <div className="flex items-stretch gap-2">
+                    <button
+                      onClick={() => {
+                        const newDropdowns = [...showBuyDropdowns];
+                        newDropdowns[index] = !newDropdowns[index];
+                        setShowBuyDropdowns(newDropdowns);
+                      }}
+                      className="w-[140px] shrink-0 bg-black/40 border border-white/10 p-3 flex items-center justify-between hover:bg-white/5 transition-all shadow-sm rounded-lg"
+                    >
                       <div className="flex items-center space-x-2">
-                        <button
-                          onClick={() => {
-                            const newDropdowns = [...showBuyDropdowns];
-                            newDropdowns[index] = !newDropdowns[index];
-                            setShowBuyDropdowns(newDropdowns);
-                          }}
-                          className="flex-1 bg-black/40 border border-white/10 p-3 flex items-center justify-between hover:bg-white/5 transition-all shadow-sm rounded-lg"
-                        >
-                          <div className="flex items-center space-x-3">
-                            {buyToken ? (
-                              <>
-                                <TokenLogo ticker={buyToken.ticker} className="w-6 h-6" />
-                                <span className="text-white font-medium">{formatTokenTicker(buyToken.ticker, chainId)}</span>
-                              </>
-                            ) : (
-                              <span className="text-white/50">Select token</span>
-                            )}
-                          </div>
-                          <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                          </svg>
-                        </button>
-
-                        {/* 3-dot menu for buy token - hide for native PLS */}
-                        {buyToken && buyToken.a.toLowerCase() !== '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' && (
-                          <div className="relative" ref={el => { buyTokenMenuRefs.current[index] = el; }}>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setShowBuyTokenMenus(prev => {
-                                  const newMenus = [...prev];
-                                  newMenus[index] = !newMenus[index];
-                                  return newMenus;
-                                });
-                              }}
-                              className="h-[52px] px-3 bg-black/40 border border-white/10 hover:bg-white/5 transition-all rounded-lg flex items-center justify-center"
-                              title="Token options"
-                            >
-                              <svg className="w-5 h-5 text-white/50" fill="currentColor" viewBox="0 0 24 24">
-                                <circle cx="12" cy="6" r="2" />
-                                <circle cx="12" cy="12" r="2" />
-                                <circle cx="12" cy="18" r="2" />
-                              </svg>
-                            </button>
-
-                            {showBuyTokenMenus[index] && (
-                              <div className="absolute top-full right-0 mt-1 bg-black/95 border border-white/10 z-50 shadow-xl backdrop-blur-md rounded-lg overflow-hidden min-w-[180px]">
-                                <button
-                                  onClick={() => {
-                                    navigator.clipboard.writeText(buyToken.a);
-                                    toast({ title: "Address copied", description: buyToken.a.slice(0, 10) + '...' + buyToken.a.slice(-8) });
-                                    setShowBuyTokenMenus(prev => {
-                                      const newMenus = [...prev];
-                                      newMenus[index] = false;
-                                      return newMenus;
-                                    });
-                                  }}
-                                  className="w-full px-4 py-3 flex items-center gap-3 hover:bg-white/10 transition-colors text-left"
-                                >
-                                  <svg className="w-4 h-4 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" strokeWidth={2} />
-                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" strokeWidth={2} />
-                                  </svg>
-                                  <span className="text-white text-sm">Copy Address</span>
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    window.open(`https://midgard.wtf/address/${buyToken.a}`, '_blank');
-                                    setShowBuyTokenMenus(prev => {
-                                      const newMenus = [...prev];
-                                      newMenus[index] = false;
-                                      return newMenus;
-                                    });
-                                  }}
-                                  className="w-full px-4 py-3 flex items-center gap-3 hover:bg-white/10 transition-colors text-left"
-                                >
-                                  <svg className="w-4 h-4 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                  </svg>
-                                  <span className="text-white text-sm">View on Explorer</span>
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    window.open(`https://dexscreener.com/pulsechain/${buyToken.a}`, '_blank');
-                                    setShowBuyTokenMenus(prev => {
-                                      const newMenus = [...prev];
-                                      newMenus[index] = false;
-                                      return newMenus;
-                                    });
-                                  }}
-                                  className="w-full px-4 py-3 flex items-center gap-3 hover:bg-white/10 transition-colors text-left"
-                                >
-                                  <svg className="w-4 h-4 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                                  </svg>
-                                  <span className="text-white text-sm">View on DexScreener</span>
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Delete button */}
-                        {index > 0 && (
-                          <button
-                            onClick={() => handleRemoveBuyToken(index)}
-                            className="p-3 h-[52px] hover:bg-white/10 transition-colors flex items-center justify-center rounded-lg"
-                            title="Remove token"
-                          >
-                            <svg className="w-5 h-5 text-red-400 hover:text-red-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
+                        {buyToken ? (
+                          <>
+                            <TokenLogo ticker={buyToken.ticker} className="w-6 h-6" />
+                            <span className="text-white font-medium">{formatTokenTicker(buyToken.ticker, chainId)}</span>
+                          </>
+                        ) : (
+                          <span className="text-white/50">Select</span>
                         )}
                       </div>
+                      <svg className="w-4 h-4 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
 
-                      {/* Dropdown */}
-                      {showBuyDropdowns[index] && (
-                        <div className="absolute top-full left-0 right-0 mt-1 bg-black/90 border border-white/10 z-10 shadow-xl backdrop-blur-md rounded-lg overflow-hidden">
-                          <div className="sticky top-0 p-2 bg-black/50 border-b border-white/10">
-                            <input
-                              ref={el => { buySearchRefs.current[index] = el; }}
-                              type="text"
-                              value={buySearchQueries[index] || ''}
-                              onChange={(e) => {
-                                const newQueries = [...buySearchQueries];
-                                newQueries[index] = e.target.value;
-                                setBuySearchQueries(newQueries);
-                              }}
-                              placeholder={`Search tokens... (${getFilteredBuyTokens(index).length})`}
-                              className="w-full bg-transparent border border-white/10 p-2 text-white text-sm placeholder-white/30 focus:outline-none rounded"
-                            />
-                          </div>
-                          <div className="max-h-60 overflow-y-auto modern-scrollbar">
-                            {getFilteredBuyTokens(index).length === 0 ? (
-                              <div className="p-4 text-center text-white/50 text-sm">No tokens found</div>
-                            ) : (
-                              getFilteredBuyTokens(index).map((token) => {
-                                const tokenBalance = parseFloat(dropdownTokenBalances[token.a?.toLowerCase() || ''] || '0');
-                                const tokenPrice = getPrice(token.a);
-                                const tokenUsdValue = tokenBalance * (tokenPrice > 0 ? tokenPrice : 0);
-                                return (
-                                  <button
-                                    key={token.a}
-                                    onClick={() => handleBuyTokenSelect(token, index)}
-                                    className="w-full p-3 flex items-center space-x-3 hover:bg-white/5 transition-all text-left border-b border-white/5 last:border-b-0"
-                                  >
-                                    <TokenLogo ticker={token.ticker} className="w-6 h-6" />
-                                    <div className="flex-1 min-w-0">
-                                      <div className="flex items-center justify-between">
-                                        <div className="min-w-0 flex-1">
-                                          <div className="text-white font-medium">{formatTokenTicker(token.ticker, chainId)}</div>
-                                          <div className="text-white/50 text-xs truncate">{token.name}</div>
-                                        </div>
-                                        <div className="text-right ml-2 flex-shrink-0">
-                                          {tokenBalance > 0 && (
-                                            <>
-                                              <div className="text-white text-sm">{tokenBalance.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
-                                              <div className="text-white/50 text-xs">
-                                                ${tokenUsdValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                              </div>
-                                            </>
-                                          )}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </button>
-                                );
-                              })
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Amount Input */}
-                    <div className="relative">
+                    {/* Amount Input - inline */}
+                    <div className="flex-1">
                       {!isBuyInputFocused[index] && buyAmounts[index] && parseFloat(removeCommas(buyAmounts[index])) > 0 ? (
                         <div
                           onClick={() => {
@@ -3418,7 +3274,7 @@ export function LimitOrderForm({
                             setIsBuyInputFocused(newFocused);
                             setTimeout(() => buyInputRefs.current[index]?.focus(), 0);
                           }}
-                          className="w-full bg-black/40 border border-white/10 p-3 text-white text-2xl min-h-[58px] flex items-center cursor-text rounded-lg"
+                          className="w-full h-full bg-black/40 border border-white/10 p-3 text-white text-lg flex items-center cursor-text rounded-lg"
                         >
                           <NumberFlow
                             value={formatDisplayValue(parseFloat(removeCommas(buyAmounts[index])))}
@@ -3447,11 +3303,161 @@ export function LimitOrderForm({
                             setIsBuyInputFocused(newFocused);
                           }}
                           placeholder="0.00"
-                          className="w-full bg-transparent border border-white/10 p-3 text-white text-2xl placeholder-white/30 focus:outline-none rounded-lg"
+                          className="w-full h-full bg-transparent border border-white/10 p-3 text-white text-lg placeholder-white/30 focus:outline-none rounded-lg"
                         />
                       )}
                     </div>
+
+                    {/* 3-dot menu for buy token - hide for native PLS */}
+                    {buyToken && buyToken.a.toLowerCase() !== '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' && (
+                      <div className="relative" ref={el => { buyTokenMenuRefs.current[index] = el; }}>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowBuyTokenMenus(prev => {
+                              const newMenus = [...prev];
+                              newMenus[index] = !newMenus[index];
+                              return newMenus;
+                            });
+                          }}
+                          className="p-3 bg-black/40 border border-white/10 hover:bg-white/5 transition-all rounded-lg flex items-center justify-center"
+                          title="Token options"
+                        >
+                          <svg className="w-5 h-5 text-white/50" fill="currentColor" viewBox="0 0 24 24">
+                            <circle cx="12" cy="6" r="2" />
+                            <circle cx="12" cy="12" r="2" />
+                            <circle cx="12" cy="18" r="2" />
+                          </svg>
+                        </button>
+
+                        {showBuyTokenMenus[index] && (
+                          <div className="absolute top-full right-0 mt-1 bg-black/95 border border-white/10 z-50 shadow-xl backdrop-blur-md rounded-lg overflow-hidden min-w-[180px]">
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(buyToken.a);
+                                toast({ title: "Address copied", description: buyToken.a.slice(0, 10) + '...' + buyToken.a.slice(-8) });
+                                setShowBuyTokenMenus(prev => {
+                                  const newMenus = [...prev];
+                                  newMenus[index] = false;
+                                  return newMenus;
+                                });
+                              }}
+                              className="w-full px-4 py-3 flex items-center gap-3 hover:bg-white/10 transition-colors text-left"
+                            >
+                              <svg className="w-4 h-4 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" strokeWidth={2} />
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" strokeWidth={2} />
+                              </svg>
+                              <span className="text-white text-sm">Copy Address</span>
+                            </button>
+                            <button
+                              onClick={() => {
+                                window.open(`https://midgard.wtf/address/${buyToken.a}`, '_blank');
+                                setShowBuyTokenMenus(prev => {
+                                  const newMenus = [...prev];
+                                  newMenus[index] = false;
+                                  return newMenus;
+                                });
+                              }}
+                              className="w-full px-4 py-3 flex items-center gap-3 hover:bg-white/10 transition-colors text-left"
+                            >
+                              <svg className="w-4 h-4 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                              </svg>
+                              <span className="text-white text-sm">View on Explorer</span>
+                            </button>
+                            <button
+                              onClick={() => {
+                                window.open(`https://dexscreener.com/pulsechain/${buyToken.a}`, '_blank');
+                                setShowBuyTokenMenus(prev => {
+                                  const newMenus = [...prev];
+                                  newMenus[index] = false;
+                                  return newMenus;
+                                });
+                              }}
+                              className="w-full px-4 py-3 flex items-center gap-3 hover:bg-white/10 transition-colors text-left"
+                            >
+                              <svg className="w-4 h-4 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                              </svg>
+                              <span className="text-white text-sm">View on DexScreener</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Delete button */}
+                    {index > 0 && (
+                      <button
+                        onClick={() => handleRemoveBuyToken(index)}
+                        className="p-3 hover:bg-white/10 transition-colors flex items-center justify-center rounded-lg"
+                        title="Remove token"
+                      >
+                        <svg className="w-5 h-5 text-red-400 hover:text-red-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    )}
                   </div>
+
+                  {/* Dropdown */}
+                  {showBuyDropdowns[index] && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-black/90 border border-white/10 z-10 shadow-xl backdrop-blur-md rounded-lg overflow-hidden">
+                      <div className="sticky top-0 p-2 bg-black/50 border-b border-white/10">
+                        <input
+                          ref={el => { buySearchRefs.current[index] = el; }}
+                          type="text"
+                          value={buySearchQueries[index] || ''}
+                          onChange={(e) => {
+                            const newQueries = [...buySearchQueries];
+                            newQueries[index] = e.target.value;
+                            setBuySearchQueries(newQueries);
+                          }}
+                          placeholder={`Search tokens... (${getFilteredBuyTokens(index).length})`}
+                          className="w-full bg-transparent border border-white/10 p-2 text-white text-sm placeholder-white/30 focus:outline-none rounded"
+                        />
+                      </div>
+                      <div className="max-h-60 overflow-y-auto modern-scrollbar">
+                        {getFilteredBuyTokens(index).length === 0 ? (
+                          <div className="p-4 text-center text-white/50 text-sm">No tokens found</div>
+                        ) : (
+                          getFilteredBuyTokens(index).map((token) => {
+                            const tokenBalance = parseFloat(dropdownTokenBalances[token.a?.toLowerCase() || ''] || '0');
+                            const tokenPrice = getPrice(token.a);
+                            const tokenUsdValue = tokenBalance * (tokenPrice > 0 ? tokenPrice : 0);
+                            return (
+                              <button
+                                key={token.a}
+                                onClick={() => handleBuyTokenSelect(token, index)}
+                                className="w-full p-3 flex items-center space-x-3 hover:bg-white/5 transition-all text-left border-b border-white/5 last:border-b-0"
+                              >
+                                <TokenLogo ticker={token.ticker} className="w-6 h-6" />
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center justify-between">
+                                    <div className="min-w-0 flex-1">
+                                      <div className="text-white font-medium">{formatTokenTicker(token.ticker, chainId)}</div>
+                                      <div className="text-white/50 text-xs truncate">{token.name}</div>
+                                    </div>
+                                    <div className="text-right ml-2 flex-shrink-0">
+                                      {tokenBalance > 0 && (
+                                        <>
+                                          <div className="text-white text-sm">{tokenBalance.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+                                          <div className="text-white/50 text-xs">
+                                            ${tokenUsdValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                          </div>
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Add another token button - only show when acceptMultipleTokens is enabled */}
@@ -4140,9 +4146,6 @@ export function LimitOrderForm({
                   onClick={(e) => e.stopPropagation()}
                   onMouseDown={(e) => e.stopPropagation()}
                 >
-                  <div className="px-3 pt-3 pb-1">
-                    <span className="text-white/60 text-xs">All times in UTC</span>
-                  </div>
                   <Calendar
                     mode="single"
                     selected={selectedDate}
@@ -4171,98 +4174,6 @@ export function LimitOrderForm({
           </div>
         </LiquidGlassCard>
 
-        {/* Order Summary */}
-        {sellAmount && sellToken && parseFloat(removeCommas(sellAmount)) > 0 && !duplicateTokenError && (
-          <LiquidGlassCard
-            className="mb-6 p-4 bg-white/5 border-white/10"
-            borderRadius="12px"
-            shadowIntensity="xs"
-            glowIntensity="none"
-          >
-            <h3 className="text-white font-semibold mb-3 text-sm text-left">ORDER SUMMARY</h3>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between items-center">
-                <span className="text-white/70">Your Offer:</span>
-                <span className="text-white font-medium">{formatBalanceDisplay(removeCommas(sellAmount))} {formatTokenTicker(sellToken.ticker, chainId)}</span>
-              </div>
-
-              {/* Listing Fee - always required, paid in native PLS */}
-              <div className="flex justify-between items-center">
-                <span className="text-white/70">Flat listing fee:</span>
-                <span className="text-red-400 font-medium">
-                  -{parseFloat(formatEther(listingFee)).toString()} {formatTokenTicker('PLS', chainId)}
-                </span>
-              </div>
-
-              {/* You Pay - only show when selling native PLS */}
-              {isNativeToken(sellToken.a) && (
-                <div className="flex justify-between items-center pt-0">
-                  <span className="text-white">You Pay:</span>
-                  <span className="text-white font-medium">
-                    {(parseFloat(removeCommas(sellAmount)) + parseFloat(formatEther(listingFee))).toLocaleString('en-US', {
-                      minimumFractionDigits: 0,
-                      maximumFractionDigits: 8
-                    })} {formatTokenTicker(sellToken.ticker, chainId)}
-                  </span>
-                </div>
-              )}
-
-              {buyTokens.map((token, index) => {
-                const amount = buyAmounts[index];
-                if (!token || !amount || amount.trim() === '') return null;
-                const filteredBuyTokens = buyTokens.filter((t, idx) => t && buyAmounts[idx] && buyAmounts[idx].trim() !== '');
-                const isFirst = filteredBuyTokens[0] === token;
-                return (
-                  <div key={`ask-${index}`} className={`flex justify-between items-center ${isFirst ? 'border-t border-white/20 pt-2' : ''}`}>
-                    <span className="text-white/70">
-                      {isFirst ? `Your Ask${filteredBuyTokens.length > 1 ? ' (Either of)' : ''}:` : ''}
-                    </span>
-                    <span className="text-white font-medium">
-                      {formatBalanceDisplay(removeCommas(amount))} {formatTokenTicker(token.ticker, chainId)}
-                    </span>
-                  </div>
-                );
-              })}
-
-              {/* Fee deducted from buyer */}
-              {buyTokens.filter((t, idx) => t && buyAmounts[idx] && buyAmounts[idx].trim() !== '').map((token, index) => {
-                const filteredBuyTokens = buyTokens.filter((t, idx) => t && buyAmounts[idx] && buyAmounts[idx].trim() !== '');
-                const amount = buyAmounts[buyTokens.indexOf(token)];
-                if (!token || !amount || amount.trim() === '') return null;
-                const feeAmount = parseFloat(removeCommas(amount)) * 0.002;
-                return (
-                  <div key={`fee-${index}`} className="flex justify-between items-center">
-                    <span className="text-white/70">
-                      {index === 0 ? `Platform Fee (0.2%)${filteredBuyTokens.length > 1 ? ' (Either of)' : ''}:` : ''}
-                    </span>
-                    <span className="text-red-400 font-medium">
-                      -{formatBalanceDisplay(feeAmount.toString())} {formatTokenTicker(token.ticker, chainId)}
-                    </span>
-                  </div>
-                );
-              })}
-
-              <div className="border-t border-white/20 pt-2 mt-2">
-                {buyTokens.filter((t, idx) => t && buyAmounts[idx] && buyAmounts[idx].trim() !== '').map((token, index) => {
-                  const filteredBuyTokens = buyTokens.filter((t, idx) => t && buyAmounts[idx] && buyAmounts[idx].trim() !== '');
-                  const amount = buyAmounts[buyTokens.indexOf(token)];
-                  if (!token || !amount || amount.trim() === '') return null;
-                  const amountAfterFee = parseFloat(removeCommas(amount)) * 0.998; // Subtract 0.2% fee
-                  return (
-                    <div key={`receive-${index}`} className="flex justify-between items-center">
-                      <span className="text-white font-semibold">
-                        {index === 0 ? `You Receive${filteredBuyTokens.length > 1 ? ' (Either of)' : ''}:` : ''}
-                      </span>
-                      <span className="text-white font-bold">
-                        {formatBalanceDisplay(amountAfterFee.toFixed(6))} {formatTokenTicker(token.ticker, chainId)}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </LiquidGlassCard>
-        )}
 
         {/* Pro Plan - Show when maxiStats is enabled:
             - If user has NO access: always show (blurred) to tease the feature
@@ -4273,6 +4184,7 @@ export function LimitOrderForm({
           (hasTokenAccess && sellToken && buyTokens.length > 0 && buyTokens[0] && (showSellStats || showBuyStats || (isTokenEligibleForStats(sellToken) || buyTokens.some(t => isTokenEligibleForStats(t)))) && !duplicateTokenError &&
             !(MAXI_TOKENS.includes(sellToken.a.toLowerCase()) && buyTokens.every(t => t && MAXI_TOKENS.includes(t.a.toLowerCase()))))
         ) && (
+          proStatsContainerRef?.current ? createPortal(
             <LiquidGlassCard
               className="mb-4 p-4 bg-white/5 border-white/10"
               borderRadius="12px"
@@ -4577,7 +4489,9 @@ export function LimitOrderForm({
                   </button>
                 </div>
               )}
-            </LiquidGlassCard>
+            </LiquidGlassCard>,
+            proStatsContainerRef.current
+          ) : null
           )}
 
         {/* Connect/Submit Button */}
@@ -4585,16 +4499,127 @@ export function LimitOrderForm({
           <button className="w-full py-4 bg-black text-white border border-white/30 font-bold hover:bg-white hover:text-black transition-all shadow-lg hover:shadow-white/30 text-lg tracking-wider rounded-lg">
             CONNECT WALLET
           </button>
-        ) : (
+        ) : !showConfirmation ? (
           <button
-            onClick={handleCreateOrder}
-            disabled={!sellToken || !sellAmount || buyTokens.some(t => !t) || buyAmounts.some(a => !a || a.trim() === '') || !!duplicateTokenError || !!expirationError || isCreatingOrder || isApproving}
+            onClick={() => setShowConfirmation(true)}
+            disabled={!sellToken || !sellAmount || buyTokens.some(t => !t) || buyAmounts.some(a => !a || a.trim() === '') || !!duplicateTokenError || !!expirationError}
             className="w-full py-4 bg-white text-black border border-white font-bold hover:bg-white/80 hover:text-black text-lg tracking-wider disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 rounded-full"
           >
-            {isApproving && <PixelSpinner size={20} />}
-            {isCreatingOrder && !isApproving && <PixelSpinner size={20} />}
-            {isApproving ? 'APPROVING...' : isCreatingOrder ? 'CREATING ORDER...' : 'CREATE LIMIT ORDER'}
+            CREATE LIMIT ORDER
           </button>
+        ) : (
+          /* Confirmation Step */
+          <div className="space-y-4">
+            <LiquidGlassCard
+              className="p-4 bg-white/5 border-white/10"
+              borderRadius="12px"
+              shadowIntensity="xs"
+              glowIntensity="none"
+            >
+              <h3 className="text-white font-semibold mb-3 text-sm text-left">ORDER SUMMARY</h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between items-center">
+                  <span className="text-white/70">Your Offer:</span>
+                  <span className="text-white font-medium">{sellToken && formatBalanceDisplay(removeCommas(sellAmount))} {sellToken && formatTokenTicker(sellToken.ticker, chainId)}</span>
+                </div>
+
+                {/* Listing Fee - always required, paid in native PLS */}
+                <div className="flex justify-between items-center">
+                  <span className="text-white/70">Flat listing fee:</span>
+                  <span className="text-red-400 font-medium">
+                    -{parseFloat(formatEther(listingFee)).toString()} {formatTokenTicker('PLS', chainId)}
+                  </span>
+                </div>
+
+                {/* You Pay - only show when selling native PLS */}
+                {sellToken && isNativeToken(sellToken.a) && (
+                  <div className="flex justify-between items-center pt-0">
+                    <span className="text-white">You Pay:</span>
+                    <span className="text-white font-medium">
+                      {(parseFloat(removeCommas(sellAmount)) + parseFloat(formatEther(listingFee))).toLocaleString('en-US', {
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 8
+                      })} {formatTokenTicker(sellToken.ticker, chainId)}
+                    </span>
+                  </div>
+                )}
+
+                {buyTokens.map((token, index) => {
+                  const amount = buyAmounts[index];
+                  if (!token || !amount || amount.trim() === '') return null;
+                  const filteredBuyTokens = buyTokens.filter((t, idx) => t && buyAmounts[idx] && buyAmounts[idx].trim() !== '');
+                  const isFirst = filteredBuyTokens[0] === token;
+                  return (
+                    <div key={`ask-${index}`} className={`flex justify-between items-center ${isFirst ? 'border-t border-white/20 pt-2' : ''}`}>
+                      <span className="text-white/70">
+                        {isFirst ? `Your Ask${filteredBuyTokens.length > 1 ? ' (Either of)' : ''}:` : ''}
+                      </span>
+                      <span className="text-white font-medium">
+                        {formatBalanceDisplay(removeCommas(amount))} {formatTokenTicker(token.ticker, chainId)}
+                      </span>
+                    </div>
+                  );
+                })}
+
+                {/* Fee deducted from buyer */}
+                {buyTokens.filter((t, idx) => t && buyAmounts[idx] && buyAmounts[idx].trim() !== '').map((token, index) => {
+                  const filteredBuyTokens = buyTokens.filter((t, idx) => t && buyAmounts[idx] && buyAmounts[idx].trim() !== '');
+                  const amount = buyAmounts[buyTokens.indexOf(token)];
+                  if (!token || !amount || amount.trim() === '') return null;
+                  const feeAmount = parseFloat(removeCommas(amount)) * 0.002;
+                  return (
+                    <div key={`fee-${index}`} className="flex justify-between items-center">
+                      <span className="text-white/70">
+                        {index === 0 ? `Platform Fee (0.2%)${filteredBuyTokens.length > 1 ? ' (Either of)' : ''}:` : ''}
+                      </span>
+                      <span className="text-red-400 font-medium">
+                        -{formatBalanceDisplay(feeAmount.toString())} {formatTokenTicker(token.ticker, chainId)}
+                      </span>
+                    </div>
+                  );
+                })}
+
+                <div className="border-t border-white/20 pt-2 mt-2">
+                  {buyTokens.filter((t, idx) => t && buyAmounts[idx] && buyAmounts[idx].trim() !== '').map((token, index) => {
+                    const filteredBuyTokens = buyTokens.filter((t, idx) => t && buyAmounts[idx] && buyAmounts[idx].trim() !== '');
+                    const amount = buyAmounts[buyTokens.indexOf(token)];
+                    if (!token || !amount || amount.trim() === '') return null;
+                    const amountAfterFee = parseFloat(removeCommas(amount)) * 0.998; // Subtract 0.2% fee
+                    return (
+                      <div key={`receive-${index}`} className="flex justify-between items-center">
+                        <span className="text-white font-semibold">
+                          {index === 0 ? `You Receive${filteredBuyTokens.length > 1 ? ' (Either of)' : ''}:` : ''}
+                        </span>
+                        <span className="text-white font-bold">
+                          {formatBalanceDisplay(amountAfterFee.toFixed(6))} {formatTokenTicker(token.ticker, chainId)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </LiquidGlassCard>
+
+            {/* Back and Submit Buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowConfirmation(false)}
+                disabled={isCreatingOrder || isApproving}
+                className="flex-1 py-4 bg-transparent text-white border border-white/30 font-bold hover:bg-white/10 text-lg tracking-wider disabled:opacity-50 disabled:cursor-not-allowed rounded-full"
+              >
+                BACK
+              </button>
+              <button
+                onClick={handleCreateOrder}
+                disabled={isCreatingOrder || isApproving}
+                className="flex-1 py-4 bg-white text-black border border-white font-bold hover:bg-white/80 text-lg tracking-wider disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 rounded-full"
+              >
+                {isApproving && <PixelSpinner size={20} />}
+                {isCreatingOrder && !isApproving && <PixelSpinner size={20} />}
+                {isApproving ? 'APPROVING...' : isCreatingOrder ? 'SUBMITTING...' : 'SUBMIT ORDER'}
+              </button>
+            </div>
+          </div>
         )}
       </LiquidGlassCard >
 
