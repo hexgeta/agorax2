@@ -1752,6 +1752,9 @@ export function LimitOrderForm({
   }, [buyTokens.length, prices, sellAmountNum, limitPrice, pricesBound]);
 
   const handleCreateOrder = async () => {
+    // Smooth scroll to top when confirming order
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+
     // Capture address early to avoid closure issues
     const userAddress = address;
 
@@ -3260,9 +3263,28 @@ export function LimitOrderForm({
             )}
           </div>
 
-          <div className="flex justify-between items-center mt-2">
+          <div className="flex items-center gap-2 mt-2">
+            <div className="w-[140px] shrink-0 text-white/50 text-sm font-semibold">
+              {pricesLoading && sellTokenPrice === 0 && sellAmountNum > 0 ? (
+                <div className="flex items-center gap-1.5 animate-pulse">
+                  <span className="w-1.5 h-1.5 rounded-full bg-white/30" />
+                  <span>Loading price...</span>
+                </div>
+              ) : sellUsdValue > 0 ? (
+                <NumberFlow
+                  value={sellUsdValue}
+                  format={{
+                    style: 'currency',
+                    currency: 'USD',
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                  }}
+                  animated={!isDragging}
+                />
+              ) : '$0.00'}
+            </div>
             {sellToken && isConnected && (
-              <div className="flex items-center gap-2">
+              <div className="flex-1 flex items-center gap-2">
                 <span className="text-white/50 text-xs">
                   {isBalanceLoading ? (
                     'Loading balance...'
@@ -3283,170 +3305,29 @@ export function LimitOrderForm({
                 )}
               </div>
             )}
-            <div className="text-white/50 text-sm font-semibold">
-              {pricesLoading && sellTokenPrice === 0 && sellAmountNum > 0 ? (
-                <div className="flex items-center gap-1.5 animate-pulse">
-                  <span className="w-1.5 h-1.5 rounded-full bg-white/30" />
-                  <span>Loading price...</span>
-                </div>
-              ) : sellUsdValue > 0 ? (
-                <NumberFlow
-                  value={sellUsdValue}
-                  format={{
-                    style: 'currency',
-                    currency: 'USD',
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2
-                  }}
-                  animated={!isDragging}
-                />
-              ) : '$0.00'}
-            </div>
           </div>
 
-          {/* Advanced Options */}
-          <div className="border-t border-white/10 mt-3 pt-3">
+          {/* Swap Button Divider */}
+          <div className="flex items-center gap-4 my-4">
+            <div className="flex-1 h-px bg-white/10"></div>
             <button
-              type="button"
-              onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
-              className="flex items-center gap-2 text-white/60 hover:text-white/80 transition-colors text-sm"
+              onClick={handleSwapTokens}
+              disabled={buyTokens.length > 1}
+              className={`p-2 rounded-full transition-all bg-black/40 border border-white/10 ${buyTokens.length > 1
+                ? 'cursor-not-allowed opacity-30'
+                : 'hover:border-white/30 hover:bg-white/5 cursor-pointer'
+                }`}
+              title={buyTokens.length > 1 ? "Cannot swap with multiple tokens" : "Swap tokens and amounts"}
             >
-              <span>Advanced Options</span>
-              <svg
-                className={`w-4 h-4 transition-transform duration-200 ${showAdvancedOptions ? 'rotate-180' : ''}`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-              </svg>
+              <ArrowLeftRight className={`w-4 h-4 text-white/60 rotate-90 ${buyTokens.length > 1
+                ? ''
+                : 'group-hover:text-white'
+                } transition-colors`} />
             </button>
-
-            {showAdvancedOptions && (
-              <div className="mt-3 space-y-3">
-                {/* Accept Multiple Tokens Toggle */}
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-white/70 text-sm">Accept multiple buy tokens</span>
-                    <span className="text-white/40 text-xs">Allow buyers to pay with different tokens</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const newValue = !acceptMultipleTokens;
-                      setAcceptMultipleTokens(newValue);
-                      // If turning off, remove all extra buy tokens (keep only the first one)
-                      if (!newValue && buyTokens.length > 1) {
-                        setBuyTokens([buyTokens[0]]);
-                        setBuyAmounts([buyAmounts[0]]);
-                        setIndividualLimitPrices([individualLimitPrices[0]]);
-                      }
-                    }}
-                    className={`relative w-11 h-6 flex-shrink-0 rounded-full transition-colors duration-200 ${
-                      acceptMultipleTokens ? 'bg-green-500' : 'bg-white/20'
-                    }`}
-                  >
-                    <span
-                      className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform duration-200 ${
-                        acceptMultipleTokens ? 'translate-x-5' : 'translate-x-0'
-                      }`}
-                    />
-                  </button>
-                </div>
-
-                {/* Show More Tokens Toggle */}
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-white/70 text-sm">Show more tokens</span>
-                    <span className="text-white/40 text-xs">Display more sell tokens & enable custom tokens</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowMoreTokens(!showMoreTokens)}
-                    className={`relative w-11 h-6 flex-shrink-0 rounded-full transition-colors duration-200 ${
-                      showMoreTokens ? 'bg-green-500' : 'bg-white/20'
-                    }`}
-                  >
-                    <span
-                      className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform duration-200 ${
-                        showMoreTokens ? 'translate-x-5' : 'translate-x-0'
-                      }`}
-                    />
-                  </button>
-                </div>
-
-                {/* All or Nothing Toggle */}
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-white/70 text-sm">All or Nothing?</span>
-                    <span className="text-white/40 text-xs">Order must be filled completely in one transaction</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setAllOrNothing(!allOrNothing)}
-                    className={`relative w-11 h-6 flex-shrink-0 rounded-full transition-colors duration-200 ${
-                      allOrNothing ? 'bg-green-500' : 'bg-white/20'
-                    }`}
-                  >
-                    <span
-                      className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform duration-200 ${
-                        allOrNothing ? 'translate-x-5' : 'translate-x-0'
-                      }`}
-                    />
-                  </button>
-                </div>
-
-                {/* Maxi Stats Toggle */}
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-white/70 text-sm">Maxi stats</span>
-                    <span className="text-white/40 text-xs">Show pro stats and backing data for MAXI tokens</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setMaxiStats(!maxiStats)}
-                    className={`relative w-11 h-6 flex-shrink-0 rounded-full transition-colors duration-200 ${
-                      maxiStats ? 'bg-green-500' : 'bg-white/20'
-                    }`}
-                  >
-                    <span
-                      className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform duration-200 ${
-                        maxiStats ? 'translate-x-5' : 'translate-x-0'
-                      }`}
-                    />
-                  </button>
-                </div>
-              </div>
-            )}
+            <div className="flex-1 h-px bg-white/10"></div>
           </div>
-        </LiquidGlassCard>
 
-        {/* Swap Button */}
-        <div className="flex justify-center items-center my-4">
-          <button
-            onClick={handleSwapTokens}
-            disabled={buyTokens.length > 1}
-            className={`p-0 rounded-full transition-all ${buyTokens.length > 1
-              ? 'cursor-not-allowed opacity-30'
-              : 'hover:border-white/10 hover:bg-white/5 cursor-pointer'
-              } border-0 border-white/30 ${buyTokens.length === 1 && 'hover:border-white/50'
-              }`}
-            title={buyTokens.length > 1 ? "Cannot swap with multiple tokens" : "Swap tokens and amounts"}
-          >
-            <ArrowLeftRight className={`w-5 h-5 text-white rotate-90 ${buyTokens.length > 1
-              ? ''
-              : 'group-hover:text-white'
-              } transition-colors`} />
-          </button>
-        </div>
-
-        {/* Buy Section - Multiple Tokens */}
-        <LiquidGlassCard
-          className="mb-4 p-4 bg-white/5 border-white/10 overflow-visible relative z-20"
-          borderRadius="12px"
-          shadowIntensity="xs"
-          glowIntensity="none"
-        >
+          {/* Buy Section - Multiple Tokens */}
           <div className="flex items-center justify-between mb-2">
             <label className="text-white/80 text-sm font-semibold text-left">BUY</label>
 
@@ -4184,6 +4065,122 @@ export function LimitOrderForm({
               <p className="text-red-400 text-xs">⚠️ {duplicateTokenError}</p>
             </div>
           )}
+
+          {/* Advanced Options */}
+          <div className="border-t border-white/10 mt-4 pt-3">
+            <button
+              type="button"
+              onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
+              className="flex items-center gap-2 text-white/60 hover:text-white/80 transition-colors text-sm"
+            >
+              <span>Advanced Options</span>
+              <svg
+                className={`w-4 h-4 transition-transform duration-200 ${showAdvancedOptions ? 'rotate-180' : ''}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+              </svg>
+            </button>
+
+            {showAdvancedOptions && (
+              <div className="mt-3 space-y-3">
+                {/* Accept Multiple Tokens Toggle */}
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-white/70 text-sm">Accept multiple buy tokens</span>
+                    <span className="text-white/40 text-xs">Allow buyers to pay with different tokens</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newValue = !acceptMultipleTokens;
+                      setAcceptMultipleTokens(newValue);
+                      // If turning off, remove all extra buy tokens (keep only the first one)
+                      if (!newValue && buyTokens.length > 1) {
+                        setBuyTokens([buyTokens[0]]);
+                        setBuyAmounts([buyAmounts[0]]);
+                        setIndividualLimitPrices([individualLimitPrices[0]]);
+                      }
+                    }}
+                    className={`relative w-11 h-6 flex-shrink-0 rounded-full transition-colors duration-200 ${
+                      acceptMultipleTokens ? 'bg-green-500' : 'bg-white/20'
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform duration-200 ${
+                        acceptMultipleTokens ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {/* Show More Tokens Toggle */}
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-white/70 text-sm">Show more tokens</span>
+                    <span className="text-white/40 text-xs">Display more sell tokens & enable custom tokens</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowMoreTokens(!showMoreTokens)}
+                    className={`relative w-11 h-6 flex-shrink-0 rounded-full transition-colors duration-200 ${
+                      showMoreTokens ? 'bg-green-500' : 'bg-white/20'
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform duration-200 ${
+                        showMoreTokens ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {/* All or Nothing Toggle */}
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-white/70 text-sm">All or Nothing?</span>
+                    <span className="text-white/40 text-xs">Order must be filled completely in one transaction</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setAllOrNothing(!allOrNothing)}
+                    className={`relative w-11 h-6 flex-shrink-0 rounded-full transition-colors duration-200 ${
+                      allOrNothing ? 'bg-green-500' : 'bg-white/20'
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform duration-200 ${
+                        allOrNothing ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {/* Maxi Stats Toggle */}
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-white/70 text-sm">Maxi stats</span>
+                    <span className="text-white/40 text-xs">Show pro stats and backing data for MAXI tokens</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setMaxiStats(!maxiStats)}
+                    className={`relative w-11 h-6 flex-shrink-0 rounded-full transition-colors duration-200 ${
+                      maxiStats ? 'bg-green-500' : 'bg-white/20'
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform duration-200 ${
+                        maxiStats ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </LiquidGlassCard>
 
         {/* Add another token button - only show when acceptMultipleTokens is enabled */}
@@ -4209,13 +4206,13 @@ export function LimitOrderForm({
 
         {/* Expiration */}
         <LiquidGlassCard
-          className="mb-4 p-4 bg-white/5 border-white/10 overflow-visible relative z-10"
+          className="mb-4 p-4 bg-white/5 border-white/10 !overflow-visible relative z-10"
           borderRadius="12px"
           shadowIntensity="xs"
           glowIntensity="none"
         >
-          <div className="flex items-center justify-between mb-2">
-            <label className="text-white text-sm font-semibold">EXPIRATION (DAYS)</label>
+          <div className="flex items-center justify-between mb-3">
+            <label className="text-white text-sm font-semibold">EXPIRATION</label>
             {selectedDate && (
               <span className="text-white/50 text-xs">
                 {expirationDays <= 1 ? (
@@ -4236,89 +4233,9 @@ export function LimitOrderForm({
               </span>
             )}
           </div>
-          <div className="relative">
-            <input
-              type="text"
-              inputMode="decimal"
-              value={expirationInput}
-              onChange={(e) => {
-                const value = e.target.value;
-                const MIN_EXPIRATION_SECONDS = 10;
-                const MIN_EXPIRATION_DAYS = MIN_EXPIRATION_SECONDS / 86400; // 10 seconds in days
-
-                // Allow empty input
-                if (value === '') {
-                  setExpirationInput('');
-                  setExpirationDays(0);
-                  setSelectedDate(undefined);
-                  setExpirationError(null);
-                  return;
-                }
-
-                // Only allow valid decimal patterns
-                if (!value.match(/^\d*\.?\d*$/)) {
-                  return; // Reject invalid input
-                }
-
-                // Always update the input string to allow typing
-                setExpirationInput(value);
-
-                // Try to parse and update the numeric value
-                const numValue = parseFloat(value);
-                if (!isNaN(numValue) && numValue > 0) {
-                  // Check minimum expiration
-                  if (numValue < MIN_EXPIRATION_DAYS) {
-                    setExpirationError(`Minimum expiration is ${MIN_EXPIRATION_SECONDS} seconds (${MIN_EXPIRATION_DAYS.toFixed(8)} days)`);
-                    setExpirationDays(0);
-                    setSelectedDate(undefined);
-                  } else {
-                    setExpirationError(null);
-                    setExpirationDays(numValue);
-                    // Calculate and set the date using milliseconds for accurate calculation
-                    const futureDate = new Date();
-                    const millisecondsToAdd = numValue * 24 * 60 * 60 * 1000;
-                    futureDate.setTime(futureDate.getTime() + millisecondsToAdd);
-                    setSelectedDate(futureDate);
-                  }
-                } else {
-                  // For partial entries like "0." keep the numeric value at 0
-                  setExpirationError(null);
-                  setExpirationDays(0);
-                  setSelectedDate(undefined);
-                }
-              }}
-              placeholder="Enter days"
-              className="w-full bg-black/40 border-white/20 p-3 text-white placeholder-white/30 focus:outline-none rounded-lg"
-            />
-            {expirationDays > 0 && selectedDate && (
-              <div className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 text-xs pointer-events-none">
-                {(() => {
-                  const now = new Date();
-                  const diffMs = selectedDate.getTime() - now.getTime();
-                  const hoursLeft = Math.floor(diffMs / (1000 * 60 * 60));
-                  const minutesLeft = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-
-                  if (hoursLeft < 24) {
-                    return `${hoursLeft}h ${minutesLeft}m left`;
-                  } else {
-                    const daysLeft = Math.floor(hoursLeft / 24);
-                    const remainingHours = hoursLeft % 24;
-                    return `${daysLeft}d ${remainingHours}h left`;
-                  }
-                })()}
-              </div>
-            )}
-          </div>
-
-          {/* Expiration Error Message */}
-          {expirationError && (
-            <div className="mt-2 text-red-400 text-xs">
-              {expirationError}
-            </div>
-          )}
 
           {/* Expiration Preset Buttons */}
-          <div className="mt-3 flex gap-2 w-full">
+          <div className="flex gap-2 w-full">
             <button
               onClick={() => handleExpirationPreset(1 / 24)} // 1 hour = 1/24 day
               className={`flex-1 py-1.5 text-xs text-white transition-all h-[32px] flex items-center justify-center rounded-full border ${Math.abs(expirationDays - (1 / 24)) < 0.0001

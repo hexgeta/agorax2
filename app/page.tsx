@@ -62,8 +62,10 @@ export default function Home() {
   const { toast } = useToast();
   const openPositionsTableRef = useRef<any>(null);
   const proStatsContainerRef = useRef<HTMLDivElement>(null);
+  const formCardRef = useRef<HTMLDivElement>(null);
   const [proStatsContainerMounted, setProStatsContainerMounted] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
+  const [formCardHeight, setFormCardHeight] = useState<number | null>(null);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -98,6 +100,20 @@ export default function Home() {
       setProStatsContainerMounted(true);
     }
   });
+
+  // Track form card height to sync chart height on desktop
+  useEffect(() => {
+    if (!formCardRef.current) return;
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setFormCardHeight(entry.contentRect.height);
+      }
+    });
+
+    resizeObserver.observe(formCardRef.current);
+    return () => resizeObserver.disconnect();
+  }, []);
 
   // Chart and form state
   const [sellTokenAddress, setSellTokenAddress] = useState<string | undefined>();
@@ -157,7 +173,7 @@ export default function Home() {
     <>
       <DisclaimerDialog open={showDisclaimer} onAccept={() => setShowDisclaimer(false)} />
       <LogoPreloader />
-      <main className="flex min-h-screen flex-col items-center relative overflow-hidden">
+      <main className="flex min-h-screen flex-col items-center relative overflow-x-hidden">
         {/* Animated background effect - fades in after UI loads */}
         <motion.div
           initial={{ opacity: 0 }}
@@ -540,58 +556,47 @@ export default function Home() {
                   )}
 
                   {/* Chart and Form Section */}
-                  <div className="w-full mt-8">
-                    <div className="flex flex-col lg:grid lg:grid-cols-5 gap-4 lg:items-start">
-                      {/* Left Column - Chart and Table */}
-                      <div className="w-full lg:col-span-3 flex flex-col gap-4">
-                        {/* Chart */}
-                        <div className="min-h-[400px]">
-                          <LimitOrderChart
-                            sellTokenAddress={sellTokenAddress}
-                            buyTokenAddresses={buyTokenAddresses}
-                            limitOrderPrice={limitOrderPrice}
-                            invertPriceDisplay={invertPriceDisplay}
-                            pricesBound={pricesBound}
-                            individualLimitPrices={individualLimitPrices}
-                            onLimitPriceChange={(newPrice) => {
+                  <div className="w-full mt-2 pb-8">
+                    {/* Mobile layout: uses flex with order */}
+                    <div className="flex flex-col gap-4 lg:hidden">
+                      {/* Chart - order 1 on mobile */}
+                      <div className="order-1 w-full h-[350px]">
+                        <LimitOrderChart
+                          sellTokenAddress={sellTokenAddress}
+                          buyTokenAddresses={buyTokenAddresses}
+                          limitOrderPrice={limitOrderPrice}
+                          invertPriceDisplay={invertPriceDisplay}
+                          pricesBound={pricesBound}
+                          individualLimitPrices={individualLimitPrices}
+                          onLimitPriceChange={(newPrice) => {
+                            setLimitOrderPrice(newPrice);
+                            setIndividualLimitPrices(prev => {
+                              const newPrices = [...prev];
+                              newPrices[0] = newPrice;
+                              return newPrices;
+                            });
+                          }}
+                          onIndividualLimitPriceChange={(index, newPrice) => {
+                            setIndividualLimitPrices(prev => {
+                              const newPrices = [...prev];
+                              newPrices[index] = newPrice;
+                              return newPrices;
+                            });
+                            if (index === 0) {
                               setLimitOrderPrice(newPrice);
-                              // Always update individualLimitPrices[0] to keep in sync
-                              setIndividualLimitPrices(prev => {
-                                const newPrices = [...prev];
-                                newPrices[0] = newPrice;
-                                return newPrices;
-                              });
-                            }}
-                            onIndividualLimitPriceChange={(index, newPrice) => {
-                              setIndividualLimitPrices(prev => {
-                                const newPrices = [...prev];
-                                newPrices[index] = newPrice;
-                                return newPrices;
-                              });
-                              // When the first token's price is changed, also update the main limit price
-                              // so the form input stays in sync
-                              if (index === 0) {
-                                setLimitOrderPrice(newPrice);
-                              }
-                            }}
-                            onCurrentPriceChange={(price) => {
-                              setCurrentMarketPrice(price);
-                            }}
-                            onDragStateChange={(dragging) => {
-                              setIsDragging(dragging);
-                            }}
-                          />
-                        </div>
-
-                        {/* Orders Table - Under the chart */}
-                        <OpenPositionsTable ref={openPositionsTableRef} />
-
-                        {/* Pro Stats container - content rendered via portal from LimitOrderForm */}
-                        <div ref={proStatsContainerRef} />
+                            }
+                          }}
+                          onCurrentPriceChange={(price) => {
+                            setCurrentMarketPrice(price);
+                          }}
+                          onDragStateChange={(dragging) => {
+                            setIsDragging(dragging);
+                          }}
+                        />
                       </div>
 
-                      {/* Order Form - Full width on mobile, 2 columns on desktop */}
-                      <div className="w-full lg:col-span-2">
+                      {/* Order Form - order 2 on mobile (after chart) */}
+                      <div className="order-2 w-full">
                         <LimitOrderForm
                           externalLimitPrice={limitOrderPrice}
                           externalMarketPrice={currentMarketPrice}
@@ -603,8 +608,6 @@ export default function Home() {
                           }}
                           onLimitPriceChange={(price) => {
                             setLimitOrderPrice(price);
-                            // Always update individualLimitPrices[0] to keep in sync
-                            // When unbound, this moves the first token's line on the chart
                             setIndividualLimitPrices(prev => {
                               const newPrices = [...prev];
                               newPrices[0] = price;
@@ -621,11 +624,100 @@ export default function Home() {
                             setIndividualLimitPrices(prices);
                           }}
                           onCreateOrderClick={(sellToken, buyTokens, sellAmount, buyAmounts, expirationDays) => {
-                            // Order creation is now handled directly in the form
-                            // No need to open the modal
                           }}
                           onOrderCreated={() => {
-                            // Refresh the positions table when a new order is created
+                            if (openPositionsTableRef.current?.refreshAndNavigateToMyActiveOrders) {
+                              openPositionsTableRef.current.refreshAndNavigateToMyActiveOrders();
+                            }
+                          }}
+                        />
+                      </div>
+
+                      {/* Orders Table - order 3 on mobile */}
+                      <div className="order-3 w-full">
+                        <OpenPositionsTable ref={openPositionsTableRef} />
+                      </div>
+
+                    </div>
+
+                    {/* Desktop layout: uses grid with columns */}
+                    <div className="hidden lg:grid lg:grid-cols-5 gap-4 lg:items-start">
+                      {/* Left Column - Chart, Table, Pro Stats */}
+                      <div className="lg:col-span-3 flex flex-col gap-4">
+                        {/* Chart - height synced with form card on desktop */}
+                        <div
+                          className="lg:min-h-0"
+                          style={{ height: formCardHeight ? `${formCardHeight}px` : '400px' }}
+                        >
+                          <LimitOrderChart
+                            sellTokenAddress={sellTokenAddress}
+                            buyTokenAddresses={buyTokenAddresses}
+                            limitOrderPrice={limitOrderPrice}
+                            invertPriceDisplay={invertPriceDisplay}
+                            pricesBound={pricesBound}
+                            individualLimitPrices={individualLimitPrices}
+                            onLimitPriceChange={(newPrice) => {
+                              setLimitOrderPrice(newPrice);
+                              setIndividualLimitPrices(prev => {
+                                const newPrices = [...prev];
+                                newPrices[0] = newPrice;
+                                return newPrices;
+                              });
+                            }}
+                            onIndividualLimitPriceChange={(index, newPrice) => {
+                              setIndividualLimitPrices(prev => {
+                                const newPrices = [...prev];
+                                newPrices[index] = newPrice;
+                                return newPrices;
+                              });
+                              if (index === 0) {
+                                setLimitOrderPrice(newPrice);
+                              }
+                            }}
+                            onCurrentPriceChange={(price) => {
+                              setCurrentMarketPrice(price);
+                            }}
+                            onDragStateChange={(dragging) => {
+                              setIsDragging(dragging);
+                            }}
+                          />
+                        </div>
+
+                        {/* Orders Table */}
+                        <OpenPositionsTable ref={openPositionsTableRef} />
+                      </div>
+
+                      {/* Right Column - Order Form, sticky on desktop */}
+                      <div ref={formCardRef} className="lg:col-span-2 lg:sticky lg:top-4 lg:self-start">
+                        <LimitOrderForm
+                          externalLimitPrice={limitOrderPrice}
+                          externalMarketPrice={currentMarketPrice}
+                          externalIndividualLimitPrices={individualLimitPrices}
+                          isDragging={isDragging}
+                          onTokenChange={(sell, buyTokens) => {
+                            setSellTokenAddress(sell);
+                            setBuyTokenAddresses(buyTokens);
+                          }}
+                          onLimitPriceChange={(price) => {
+                            setLimitOrderPrice(price);
+                            setIndividualLimitPrices(prev => {
+                              const newPrices = [...prev];
+                              newPrices[0] = price;
+                              return newPrices;
+                            });
+                          }}
+                          onInvertPriceDisplayChange={(inverted) => {
+                            setInvertPriceDisplay(inverted);
+                          }}
+                          onPricesBoundChange={(bound) => {
+                            setPricesBound(bound);
+                          }}
+                          onIndividualLimitPricesChange={(prices) => {
+                            setIndividualLimitPrices(prices);
+                          }}
+                          onCreateOrderClick={(sellToken, buyTokens, sellAmount, buyAmounts, expirationDays) => {
+                          }}
+                          onOrderCreated={() => {
                             if (openPositionsTableRef.current?.refreshAndNavigateToMyActiveOrders) {
                               openPositionsTableRef.current.refreshAndNavigateToMyActiveOrders();
                             }
@@ -634,6 +726,9 @@ export default function Home() {
                         />
                       </div>
                     </div>
+
+                    {/* Pro Stats container - shared between mobile and desktop */}
+                    <div ref={proStatsContainerRef} className="w-full lg:max-w-[60%]" />
                   </div>
                 </div>
               </motion.div>

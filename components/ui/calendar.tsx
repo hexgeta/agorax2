@@ -31,54 +31,65 @@ function Calendar({
       captionLayout={captionLayout}
       startMonth={defaultStartMonth}
       endMonth={defaultEndMonth}
-      className={cn("bg-black p-3 [&_select]:bg-black [&_select]:text-white [&_select]:border-white/20 [&_select]:rounded-md [&_select]:px-2 [&_select]:py-1 [&_select]:appearance-none [&_select]:cursor-pointer [&_select:focus]:outline-none [&_select:focus]:border-white/50 [&_select_option]:bg-black [&_select_option]:text-white", className)}
+      className={cn(
+        "bg-black p-3 [--cell-size:2.25rem]",
+        "[&_select]:bg-black [&_select]:text-white [&_select]:border-white/20 [&_select]:rounded-md [&_select]:px-2 [&_select]:py-1 [&_select]:appearance-none [&_select]:cursor-pointer [&_select:focus]:outline-none [&_select:focus]:border-white/50 [&_select_option]:bg-black [&_select_option]:text-white",
+        className
+      )}
       formatters={{
         formatMonthDropdown: (date) =>
           date.toLocaleString("default", { month: "short" }),
         ...formatters,
       }}
       classNames={{
-        root: cn("w-full", defaultClassNames.root),
-        months: cn("flex gap-4 flex-col md:flex-row relative w-full", defaultClassNames.months),
-        month: cn("flex flex-col w-full gap-4", defaultClassNames.month),
-        nav: cn("flex items-center gap-1 w-full absolute top-0 inset-x-0 justify-between", defaultClassNames.nav),
+        root: cn("w-fit", defaultClassNames.root),
+        months: cn("flex gap-4 flex-col md:flex-row relative", defaultClassNames.months),
+        month: cn("flex flex-col gap-4", defaultClassNames.month),
+        nav: cn("flex items-center gap-1 absolute top-0 inset-x-0 justify-between z-10", defaultClassNames.nav),
         button_previous: cn(
           buttonVariants({ variant: "ghost" }),
-          "size-8 p-0 text-white hover:bg-white/20 hover:text-white",
+          "size-7 p-0 text-white hover:bg-white/20 hover:text-white",
           defaultClassNames.button_previous
         ),
         button_next: cn(
           buttonVariants({ variant: "ghost" }),
-          "size-8 p-0 text-white hover:bg-white/20 hover:text-white",
+          "size-7 p-0 text-white hover:bg-white/20 hover:text-white",
           defaultClassNames.button_next
         ),
-        month_caption: cn("flex items-center justify-center h-8 w-full px-8", defaultClassNames.month_caption),
-        dropdowns: cn("w-full flex items-center text-sm font-medium justify-center h-8 gap-1.5", defaultClassNames.dropdowns),
+        month_caption: cn("flex items-center justify-center h-7 relative px-10", defaultClassNames.month_caption),
+        dropdowns: cn("flex items-center text-sm font-medium justify-center gap-1.5", defaultClassNames.dropdowns),
         dropdown_root: cn("relative has-focus:border-white/50 border border-white/20 has-focus:ring-white/20 has-focus:ring-[3px] rounded-md", defaultClassNames.dropdown_root),
         dropdown: cn("absolute bg-black inset-0 opacity-0", defaultClassNames.dropdown),
         caption_label: cn(
           "select-none font-medium text-white",
           captionLayout === "label"
             ? "text-sm"
-            : "rounded-md pl-2 pr-1 flex items-center gap-1 text-sm h-8 [&>svg]:text-white/60 [&>svg]:size-3.5",
+            : "rounded-md pl-2 pr-1 flex items-center gap-1 text-sm h-7 [&>svg]:text-white/60 [&>svg]:size-3.5",
           defaultClassNames.caption_label
         ),
         table: "w-full border-collapse",
         weekdays: cn("flex", defaultClassNames.weekdays),
-        weekday: cn("text-white/60 rounded-md flex-1 font-normal text-[0.8rem] select-none", defaultClassNames.weekday),
-        week: cn("flex w-full mt-2", defaultClassNames.week),
-        day: cn("relative w-full p-0 text-center group/day select-none", defaultClassNames.day),
+        weekday: cn(
+          "text-white/60 font-normal text-[0.8rem] select-none w-[var(--cell-size)] text-center",
+          defaultClassNames.weekday
+        ),
+        week: cn("flex w-full mt-1", defaultClassNames.week),
+        day: cn(
+          "relative p-0 text-center select-none w-[var(--cell-size)] h-[var(--cell-size)]",
+          defaultClassNames.day
+        ),
         day_button: cn(
           buttonVariants({ variant: "ghost" }),
-          "w-full h-9 p-0 font-normal text-white hover:bg-white/20 hover:text-white rounded-md"
+          "w-[var(--cell-size)] h-[var(--cell-size)] p-0 font-normal text-white text-sm hover:bg-white/20 hover:text-white rounded-md"
         ),
-        range_start: "rounded-l-md bg-white/20",
-        range_middle: "rounded-none",
-        range_end: "rounded-r-md bg-white/20",
-        selected: "[&>button]:!bg-white [&>button]:!text-black [&>button]:hover:!bg-white [&>button]:hover:!text-black rounded-md",
-        today: "bg-white/20 text-white rounded-md",
-        outside: cn("text-white/30 opacity-50", defaultClassNames.outside),
-        disabled: cn("text-white/20 opacity-50", defaultClassNames.disabled),
+        // Range styling - background on the cell itself
+        range_start: "bg-white/20 rounded-l-md [&>button]:!bg-white [&>button]:!text-black [&>button]:hover:!bg-white [&>button]:hover:!text-black",
+        range_middle: "bg-white/20 rounded-none [&>button]:!bg-transparent [&>button]:!text-white [&>button]:hover:!bg-white/10",
+        range_end: "bg-white/20 rounded-r-md [&>button]:!bg-white [&>button]:!text-black [&>button]:hover:!bg-white [&>button]:hover:!text-black",
+        selected: "",
+        today: "[&>button]:ring-1 [&>button]:ring-white/50",
+        outside: cn("text-white/30 opacity-50 [&>button]:text-white/30", defaultClassNames.outside),
+        disabled: cn("text-white/20 opacity-50 pointer-events-none", defaultClassNames.disabled),
         hidden: cn("invisible", defaultClassNames.hidden),
         ...classNames,
       }}

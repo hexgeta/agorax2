@@ -2756,53 +2756,55 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                     <button
                       onClick={() => {
                         setShowDatePicker(!showDatePicker);
-                        if (!showDatePicker) {
-                          setDateFilterPreset('custom');
-                        }
                       }}
                       className={`px-3 py-2 rounded-full border text-sm font-medium transition-all duration-200 flex items-center gap-1 ${
-                        dateFilterPreset === 'custom'
+                        dateFilterPreset === 'custom' && customDateStart && customDateEnd
                           ? 'bg-white text-black border-white'
                           : 'bg-black/40 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'
                       }`}
                     >
                       <CalendarDays className="w-4 h-4" />
                     </button>
-                    {/* Date Picker Dropdown */}
+                    {/* Date Picker Dropdown - uses fixed positioning for proper containment */}
                     {showDatePicker && (
-                      <div className="absolute top-full mt-2 right-0 z-50 bg-black/95 border border-white/20 rounded-lg p-4 shadow-xl">
-                        <div className="flex flex-col gap-3">
-                          <span className="text-white/60 text-xs">All times in UTC</span>
-                          <div>
-                            <label className="text-white/60 text-xs mb-1 block">Start Date</label>
+                      <div className="fixed inset-0 z-50 flex items-start justify-center pt-32 px-4">
+                        <div
+                          className="fixed inset-0 bg-black/50"
+                          onClick={() => setShowDatePicker(false)}
+                        />
+                        <div className="relative bg-black border border-white/20 rounded-lg p-4 shadow-xl max-w-[95vw] max-h-[60vh] overflow-y-auto">
+                          <div className="flex flex-col gap-3">
+                            <span className="text-white/60 text-xs">Select date range (UTC)</span>
                             <Calendar
-                              mode="single"
-                              selected={customDateStart}
-                              onSelect={setCustomDateStart}
-                              className="rounded-md border border-white/10"
+                              mode="range"
+                              defaultMonth={customDateStart || new Date()}
+                              selected={{ from: customDateStart, to: customDateEnd }}
+                              onSelect={(range) => {
+                                setCustomDateStart(range?.from);
+                                setCustomDateEnd(range?.to);
+                              }}
+                              numberOfMonths={2}
+                              className="[&_.rdp-months]:flex-col [&_.rdp-months]:md:flex-row"
                             />
+                            <button
+                              onClick={() => {
+                                // Only apply custom filter if both dates are selected
+                                if (customDateStart && customDateEnd) {
+                                  setDateFilterPreset('custom');
+                                }
+                                setShowDatePicker(false);
+                              }}
+                              className="w-full py-2 bg-white text-black rounded-lg text-sm font-medium hover:bg-white/90 transition-colors"
+                            >
+                              Apply
+                            </button>
                           </div>
-                          <div>
-                            <label className="text-white/60 text-xs mb-1 block">End Date</label>
-                            <Calendar
-                              mode="single"
-                              selected={customDateEnd}
-                              onSelect={setCustomDateEnd}
-                              className="rounded-md border border-white/10"
-                            />
-                          </div>
-                          <button
-                            onClick={() => setShowDatePicker(false)}
-                            className="w-full py-2 bg-white text-black rounded-lg text-sm font-medium hover:bg-white/90 transition-colors"
-                          >
-                            Apply
-                          </button>
                         </div>
                       </div>
                     )}
                   </div>
-                  {/* Clear Filter Button */}
-                  {dateFilterPreset && (
+                  {/* Clear Filter Button - only show when a filter is actually applied */}
+                  {dateFilterPreset && (dateFilterPreset !== 'custom' || (customDateStart && customDateEnd)) && (
                     <button
                       onClick={() => {
                         setDateFilterPreset(null);
@@ -2954,53 +2956,55 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                   <button
                     onClick={() => {
                       setShowDatePicker(!showDatePicker);
-                      if (!showDatePicker) {
-                        setDateFilterPreset('custom');
-                      }
                     }}
                     className={`px-3 py-2 rounded-full border text-sm font-medium transition-all duration-200 flex items-center gap-1 ${
-                      dateFilterPreset === 'custom'
+                      dateFilterPreset === 'custom' && customDateStart && customDateEnd
                         ? 'bg-white text-black border-white'
                         : 'bg-black/40 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'
                     }`}
                   >
                     <CalendarDays className="w-4 h-4" />
                   </button>
-                  {/* Date Picker Dropdown */}
+                  {/* Date Picker Dropdown - uses fixed positioning for proper containment */}
                   {showDatePicker && (
-                    <div className="absolute top-full mt-2 right-0 z-50 bg-black/95 border border-white/20 rounded-lg p-4 shadow-xl">
-                      <div className="flex flex-col gap-3">
-                        <span className="text-white/60 text-xs">All times in UTC</span>
-                        <div>
-                          <label className="text-white/60 text-xs mb-1 block">Start Date</label>
+                    <div className="fixed inset-0 z-50 flex items-start justify-center pt-32 px-4">
+                      <div
+                        className="fixed inset-0 bg-black/50"
+                        onClick={() => setShowDatePicker(false)}
+                      />
+                      <div className="relative bg-black border border-white/20 rounded-lg p-4 shadow-xl max-w-[95vw] max-h-[60vh] overflow-y-auto">
+                        <div className="flex flex-col gap-3">
+                          <span className="text-white/60 text-xs">Select date range (UTC)</span>
                           <Calendar
-                            mode="single"
-                            selected={customDateStart}
-                            onSelect={setCustomDateStart}
-                            className="rounded-md border border-white/10"
+                            mode="range"
+                            defaultMonth={customDateStart || new Date()}
+                            selected={{ from: customDateStart, to: customDateEnd }}
+                            onSelect={(range) => {
+                              setCustomDateStart(range?.from);
+                              setCustomDateEnd(range?.to);
+                            }}
+                            numberOfMonths={2}
+                            className="[&_.rdp-months]:flex-col [&_.rdp-months]:md:flex-row"
                           />
+                          <button
+                            onClick={() => {
+                              // Only apply custom filter if both dates are selected
+                              if (customDateStart && customDateEnd) {
+                                setDateFilterPreset('custom');
+                              }
+                              setShowDatePicker(false);
+                            }}
+                            className="w-full py-2 bg-white text-black rounded-lg text-sm font-medium hover:bg-white/90 transition-colors"
+                          >
+                            Apply
+                          </button>
                         </div>
-                        <div>
-                          <label className="text-white/60 text-xs mb-1 block">End Date</label>
-                          <Calendar
-                            mode="single"
-                            selected={customDateEnd}
-                            onSelect={setCustomDateEnd}
-                            className="rounded-md border border-white/10"
-                          />
-                        </div>
-                        <button
-                          onClick={() => setShowDatePicker(false)}
-                          className="w-full py-2 bg-white text-black rounded-lg text-sm font-medium hover:bg-white/90 transition-colors"
-                        >
-                          Apply
-                        </button>
                       </div>
                     </div>
                   )}
                 </div>
-                {/* Clear Filter Button */}
-                {dateFilterPreset && (
+                {/* Clear Filter Button - only show when a filter is actually applied */}
+                {dateFilterPreset && (dateFilterPreset !== 'custom' || (customDateStart && customDateEnd)) && (
                   <button
                     onClick={() => {
                       setDateFilterPreset(null);
@@ -3038,8 +3042,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
           />
         </div>
       ) : (
-        /* Horizontal scroll container with hidden scrollbar */
-        <div className="overflow-x-auto scrollbar-hide -mx-6 px-6" data-horizontal-scroll-container>
+        /* Horizontal scroll container with visible scrollbar */
+        <div className="overflow-x-auto -mx-6 px-6 pb-2 modern-scrollbar" data-horizontal-scroll-container>
           {!displayOrders || displayOrders.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-gray-400 mb-2">No {statusFilter} {ownershipFilter === 'mine' ? 'deals' : 'orders'} found</p>

@@ -537,7 +537,7 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
 
   return (
     <LiquidGlassCard
-      className="w-full h-full min-h-[400px] max-h-[calc(100vh-200px)] flex flex-col overflow-y-auto p-6"
+      className="w-full h-full flex flex-col overflow-y-auto p-6"
       shadowIntensity="sm"
       glowIntensity="sm"
       blurIntensity="xl"
