@@ -17,13 +17,15 @@ interface LimitOrderChartProps {
   invertPriceDisplay?: boolean;
   pricesBound?: boolean;
   individualLimitPrices?: (number | undefined)[];
+  displayedTokenIndex?: number;
   onLimitPriceChange?: (newPrice: number) => void;
   onIndividualLimitPriceChange?: (index: number, newPrice: number) => void;
   onCurrentPriceChange?: (price: number) => void;
   onDragStateChange?: (isDragging: boolean) => void;
+  onDisplayedTokenIndexChange?: (index: number) => void;
 }
 
-export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limitOrderPrice, invertPriceDisplay = true, pricesBound = true, individualLimitPrices = [], onLimitPriceChange, onIndividualLimitPriceChange, onCurrentPriceChange, onDragStateChange }: LimitOrderChartProps) {
+export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limitOrderPrice, invertPriceDisplay = true, pricesBound = true, individualLimitPrices = [], displayedTokenIndex: externalDisplayedTokenIndex, onLimitPriceChange, onIndividualLimitPriceChange, onCurrentPriceChange, onDragStateChange, onDisplayedTokenIndexChange }: LimitOrderChartProps) {
   const [currentPrice, setCurrentPrice] = useState<number | null>(null);
   const [buyTokenUsdPrices, setBuyTokenUsdPrices] = useState<Record<string, number>>({});
   const [sellTokenUsdPrice, setSellTokenUsdPrice] = useState<number>(0);
@@ -31,7 +33,14 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
   const [isDragging, setIsDragging] = useState(false);
   const [draggedPrice, setDraggedPrice] = useState<number | null>(null);
   const [draggingLineIndex, setDraggingLineIndex] = useState<number | null>(null); // Track which line is being dragged (for unbound mode)
-  const [displayedTokenIndex, setDisplayedTokenIndex] = useState(0); // For cycling through tokens
+  const [internalDisplayedTokenIndex, setInternalDisplayedTokenIndex] = useState(0); // For cycling through tokens
+
+  // Use external index if provided (controlled mode), otherwise use internal state
+  const displayedTokenIndex = externalDisplayedTokenIndex ?? internalDisplayedTokenIndex;
+  const setDisplayedTokenIndex = (index: number) => {
+    setInternalDisplayedTokenIndex(index);
+    onDisplayedTokenIndexChange?.(index);
+  };
   const containerRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number | null>(null);
   const justReleasedRef = useRef<boolean>(false);
@@ -209,12 +218,16 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
       // Calculate current ratio for the first buy token
       const firstBuyTokenPrice = newBuyTokenPrices[buyToken.toLowerCase()];
       if (firstBuyTokenPrice) {
+        // currentRatio is in buy/sell format (buy tokens per sell token)
+        // e.g., 1.1 eDAI per BSP when BSP is $1.10 and eDAI is $1.00
         const currentRatio = sellPriceUsd / firstBuyTokenPrice;
         setCurrentPrice(currentRatio);
 
-        // Notify parent of current price change (always in base direction)
+        // Notify parent of current price change
+        // Parent (LimitOrderForm) expects sell/buy format (sell tokens per buy token)
+        // So we send 1/currentRatio = buyTokenPrice/sellTokenPrice
         if (onCurrentPriceChange) {
-          onCurrentPriceChange(currentRatio);
+          onCurrentPriceChange(firstBuyTokenPrice / sellPriceUsd);
         }
       }
 
@@ -260,9 +273,10 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
   const cycleDisplayedToken = useCallback((e: React.MouseEvent) => {
     e.stopPropagation(); // Don't trigger drag
     if (displayQuoteTokenInfos.length > 1) {
-      setDisplayedTokenIndex(prev => (prev + 1) % displayQuoteTokenInfos.length);
+      const nextIndex = (displayedTokenIndex + 1) % displayQuoteTokenInfos.length;
+      setDisplayedTokenIndex(nextIndex);
     }
-  }, [displayQuoteTokenInfos.length]);
+  }, [displayQuoteTokenInfos.length, displayedTokenIndex]);
 
   // Calculate limit price for each buy token based on USD prices
   // The limitOrderPrice is expressed as "sellToken per first buyToken"
@@ -535,6 +549,22 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
     };
   }, []);
 
+  // Proactively send calculated individual limit prices to parent when values change
+  // This makes the chart the single source of truth for limit prices across all tokens
+  useEffect(() => {
+    if (!onIndividualLimitPriceChange || !limitOrderPrice || !sellTokenUsdPrice || isDragging) return;
+
+    // Calculate and send prices for all buy tokens
+    buyTokenAddresses.forEach((tokenAddress, index) => {
+      if (!tokenAddress) return;
+
+      const calculatedPrice = calculateLimitPriceForToken(tokenAddress);
+      if (calculatedPrice !== null && calculatedPrice > 0) {
+        onIndividualLimitPriceChange(index, calculatedPrice);
+      }
+    });
+  }, [limitOrderPrice, buyTokenUsdPrices, sellTokenUsdPrice, buyTokenAddresses, isDragging]);
+
   return (
     <LiquidGlassCard
       className="w-full h-full flex flex-col overflow-y-auto p-6"
@@ -632,7 +662,7 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                 className="absolute top-1/2 -translate-y-1/2 left-[58px] right-0 h-[2px] bg-[#00D9FF] rounded-full transition-all duration-500 pointer-events-none"
               />
               <LiquidGlassCard
-                className={`group absolute right-0 flex items-center justify-between bg-cyan-500/10 px-3 py-1 border-cyan-500/30 w-[250px] ${displayQuoteTokenInfos.length > 1 ? 'cursor-pointer pointer-events-auto' : 'pointer-events-none'} ${limitPricePosition && limitPricePosition < currentPricePosition ? 'top-0 -translate-y-[calc(45%-0px)]' : 'bottom-0 translate-y-[calc(45%-0px)]'
+                className={`group absolute right-0 flex items-center justify-between bg-cyan-500/10 px-3 py-1 border-cyan-500/30 w-fit min-w-[250px] ${displayQuoteTokenInfos.length > 1 ? 'cursor-pointer pointer-events-auto' : 'pointer-events-none'} ${limitPricePosition && limitPricePosition < currentPricePosition ? 'top-0 -translate-y-[calc(45%-0px)]' : 'bottom-0 translate-y-[calc(45%-0px)]'
                   }`}
                 borderRadius="8px"
                 shadowIntensity="none"
@@ -709,7 +739,7 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                     }}
                   />
                   <LiquidGlassCard
-                    className={`group absolute right-0 flex items-center justify-between bg-pink-500/10 px-3 py-1 border-pink-500/30 w-[250px] ${displayQuoteTokenInfos.length > 1 ? 'cursor-pointer pointer-events-auto' : 'pointer-events-none'} ${limitPricePosition < currentPricePosition ? 'bottom-0 translate-y-[calc(45%-0px)]' : 'top-0 -translate-y-[calc(45%-0px)]'}`}
+                    className={`group absolute right-0 flex items-center justify-between bg-pink-500/10 px-3 py-1 border-pink-500/30 w-fit min-w-[250px] ${displayQuoteTokenInfos.length > 1 ? 'cursor-pointer pointer-events-auto' : 'pointer-events-none'} ${limitPricePosition < currentPricePosition ? 'bottom-0 translate-y-[calc(45%-0px)]' : 'top-0 -translate-y-[calc(45%-0px)]'}`}
                     borderRadius="8px"
                     shadowIntensity="none"
                     glowIntensity="none"
@@ -842,7 +872,7 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                       style={{ backgroundColor: lineColor, transition: isThisLineDragging ? 'none' : 'all 200ms' }}
                     />
                     <LiquidGlassCard
-                      className={`absolute right-0 flex items-center justify-between px-3 py-1 w-[250px] pointer-events-none ${individualPricePosition < currentPricePosition ? 'bottom-0 translate-y-[calc(45%-0px)]' : 'top-0 -translate-y-[calc(45%-0px)]'}`}
+                      className={`absolute right-0 flex items-center justify-between px-3 py-1 pointer-events-none w-fit min-w-[250px] ${individualPricePosition < currentPricePosition ? 'bottom-0 translate-y-[calc(45%-0px)]' : 'top-0 -translate-y-[calc(45%-0px)]'}`}
                       style={{
                         backgroundColor: `${lineColor}10`,
                         borderColor: `${lineColor}30`

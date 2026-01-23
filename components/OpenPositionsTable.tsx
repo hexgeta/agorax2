@@ -3475,6 +3475,27 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                             );
                           })()}
                         </div>
+                        {/* Claimable amount label under progress bar - for My Orders */}
+                        {ownershipFilter === 'mine' && (() => {
+                          const sellAmount = order.orderDetailsWithID.orderDetails.sellAmount;
+                          const remainingSellAmount = order.orderDetailsWithID.remainingSellAmount;
+                          const redeemedSellAmount = order.orderDetailsWithID.redeemedSellAmount;
+                          const filledAmount = sellAmount - remainingSellAmount;
+                          const unclaimedAmount = filledAmount - redeemedSellAmount;
+                          const hasUnclaimed = unclaimedAmount > 0n;
+                          const unclaimedAmountFormatted = formatTokenAmountDisplay(parseFloat(formatTokenAmount(unclaimedAmount, sellTokenInfo.decimals)));
+                          const claimedAmountFormatted = formatTokenAmountDisplay(parseFloat(formatTokenAmount(redeemedSellAmount, sellTokenInfo.decimals)));
+
+                          if (filledAmount > 0n) {
+                            return (
+                              <div className={`flex flex-col items-center text-[10px] mt-1 px-2 py-1 rounded-lg ${hasUnclaimed ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-white/10 text-gray-400 border border-white/10'}`}>
+                                <span className="font-medium">{hasUnclaimed ? 'Claimable' : 'Claimed'}</span>
+                                <span>{hasUnclaimed ? unclaimedAmountFormatted : claimedAmountFormatted} {formatTokenTicker(sellTokenInfo.ticker, chainId)}</span>
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
                         {order.orderDetailsWithID.orderDetails.allOrNothing && (
                           <span className="px-2 py-1 mt-5 rounded-full text-xs font-medium bg-purple-500/20 text-purple-400 border border-purple-400">
                             AON

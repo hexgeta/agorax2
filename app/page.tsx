@@ -14,6 +14,8 @@ import { ConnectButton } from '@/components/ConnectButton';
 import { OpenPositionsTable } from '@/components/OpenPositionsTable';
 import { LimitOrderChart } from '@/components/LimitOrderChart';
 import { LimitOrderForm } from '@/components/LimitOrderForm';
+import { StackingUseCases } from '@/components/StackingUseCases';
+import { HowItWorks } from '@/components/HowItWorks';
 
 // FAQ Accordion Item Component
 function FAQItem({ question, answer, isOpen, onToggle }: { question: string; answer: string; isOpen: boolean; onToggle: () => void }) {
@@ -137,6 +139,7 @@ export default function Home() {
     return true;
   });
   const [individualLimitPrices, setIndividualLimitPrices] = useState<(number | undefined)[]>([]);
+  const [displayedTokenIndex, setDisplayedTokenIndex] = useState(0);
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
 
   // Test functions for toast notifications
@@ -173,7 +176,7 @@ export default function Home() {
     <>
       <DisclaimerDialog open={showDisclaimer} onAccept={() => setShowDisclaimer(false)} />
       <LogoPreloader />
-      <main className="flex min-h-screen flex-col items-center relative overflow-x-hidden">
+      <main className="flex min-h-screen flex-col items-center relative">
         {/* Animated background effect - fades in after UI loads */}
         <motion.div
           initial={{ opacity: 0 }}
@@ -200,6 +203,7 @@ export default function Home() {
 
             {/* Not Connected State - Landing Page */}
             {!isInitializing && !isConnecting && !isConnected && (
+              <>
               <div className="pt-12 md:pt-20 pb-16 px-4 md:px-6">
                 {/* Hero Section */}
                 <div className="text-center mb-8 md:mb-12">
@@ -339,6 +343,57 @@ export default function Home() {
                 {/* Section Divider */}
                 <div className="w-full h-px bg-gradient-to-r from-black via-gray-400 to-black my-16 md:my-24" />
 
+                {/* How It Works Section */}
+                <motion.section
+                  initial={{ opacity: 0, y: 30 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6, delay: 0.55 }}
+                  className="mb-16 md:mb-24"
+                >
+                  <h2 className="text-2xl md:text-4xl font-bold text-white mb-4 text-center">How It Works</h2>
+                  <p className="text-gray-400 text-center max-w-2xl mx-auto mb-10">
+                    Create limit orders with tokens you want to sell, and specify which tokens you'll accept as payment - all at your exact prices.
+                  </p>
+                  <HowItWorks />
+                  <div className="flex flex-col md:flex-row justify-center gap-8 mt-10 text-center">
+                    <div className="flex-1 max-w-[250px] mx-auto">
+                      <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center mx-auto mb-3">
+                        <span className="text-red-400 font-bold">1</span>
+                      </div>
+                      <h3 className="text-white font-semibold mb-1">Deposit Tokens</h3>
+                      <p className="text-gray-500 text-sm">Deposit the tokens you want to sell into the contract</p>
+                    </div>
+                    <div className="flex-1 max-w-[250px] mx-auto">
+                      <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center mx-auto mb-3">
+                        <span className="text-purple-400 font-bold">2</span>
+                      </div>
+                      <h3 className="text-white font-semibold mb-1">Set Your Price</h3>
+                      <p className="text-gray-500 text-sm">Choose which tokens to accept and at what rates</p>
+                    </div>
+                    <div className="flex-1 max-w-[250px] mx-auto">
+                      <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center mx-auto mb-3">
+                        <span className="text-green-400 font-bold">3</span>
+                      </div>
+                      <h3 className="text-white font-semibold mb-1">Get Filled</h3>
+                      <p className="text-gray-500 text-sm">Buyers fill your order at your exact price - zero slippage</p>
+                    </div>
+                  </div>
+                </motion.section>
+
+              </div>
+              {/* End of padded container - Use Cases needs full width */}
+              </>
+            )}
+
+            {/* Use Cases Section - After How It Works, before Unique Features */}
+            {!isInitializing && !isConnecting && !isConnected && (
+              <StackingUseCases />
+            )}
+
+            {/* Not Connected State Continued - After Use Cases */}
+            {!isInitializing && !isConnecting && !isConnected && (
+              <>
+              <div className="pt-12 md:pt-20 pb-16 px-4 md:px-6">
                 {/* Why AgoráX Wins Section */}
                 <motion.section
                   initial={{ opacity: 0, y: 30 }}
@@ -454,6 +509,206 @@ export default function Home() {
                   </div>
                 </motion.section>
 
+{/* Use Cases Section moved outside of padded container for sticky to work */}
+
+                {/* Death by 1000 Cuts Section */}
+                <motion.section
+                  initial={{ opacity: 0, y: 30 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6, delay: 0.65 }}
+                  className="mb-16 md:mb-24"
+                >
+                  <h2 className="text-2xl md:text-4xl font-bold text-white mb-4 text-center">Microconsiderations to Protect You</h2>
+                  <p className="text-gray-400 text-center max-w-2xl mx-auto mb-10">
+                    Micro-optimized product design to protect you and deliver the best trading experience.
+                  </p>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl mx-auto">
+                    {/* Claim When You Want */}
+                    <LiquidGlassCard
+                      shadowIntensity="sm"
+                      glowIntensity="sm"
+                      blurIntensity="xl"
+                      className="p-6"
+                    >
+                      <div className="flex gap-4">
+                        <div className="w-10 h-10 rounded-lg bg-green-500/20 flex items-center justify-center flex-shrink-0">
+                          <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </div>
+                        <div>
+                          <h3 className="text-white font-semibold mb-1">Claim Proceeds When You Want</h3>
+                          <p className="text-gray-400 text-sm">Choose when to collect your proceeds - useful for tax planning or security reasons. Unlike LP positions where rewards auto-compound.</p>
+                        </div>
+                      </div>
+                    </LiquidGlassCard>
+
+                    {/* Anti-Spam Protection */}
+                    <LiquidGlassCard
+                      shadowIntensity="sm"
+                      glowIntensity="sm"
+                      blurIntensity="xl"
+                      className="p-6"
+                    >
+                      <div className="flex gap-4">
+                        <div className="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center flex-shrink-0">
+                          <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                          </svg>
+                        </div>
+                        <div>
+                          <h3 className="text-white font-semibold mb-1">Anti-Spam Protection</h3>
+                          <p className="text-gray-400 text-sm">100 PLS listing fee prevents order book spam and keeps the marketplace clean for real traders.</p>
+                        </div>
+                      </div>
+                    </LiquidGlassCard>
+
+                    {/* No Spending Permissions */}
+                    <LiquidGlassCard
+                      shadowIntensity="sm"
+                      glowIntensity="sm"
+                      blurIntensity="xl"
+                      className="p-6"
+                    >
+                      <div className="flex gap-4">
+                        <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+                          <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+                          </svg>
+                        </div>
+                        <div>
+                          <h3 className="text-white font-semibold mb-1">No Spending Permissions</h3>
+                          <p className="text-gray-400 text-sm">We escrow funds in the contract like Uniswap - no unlimited approvals that could drain your wallet if hacked. You always know exactly what's at risk.</p>
+                        </div>
+                      </div>
+                    </LiquidGlassCard>
+
+                    {/* Non-Tradeable Receipt Tokens */}
+                    <LiquidGlassCard
+                      shadowIntensity="sm"
+                      glowIntensity="sm"
+                      blurIntensity="xl"
+                      className="p-6"
+                    >
+                      <div className="flex gap-4">
+                        <div className="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center flex-shrink-0">
+                          <svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                          </svg>
+                        </div>
+                        <div>
+                          <h3 className="text-white font-semibold mb-1">Non-Tradeable Receipt Tokens</h3>
+                          <p className="text-gray-400 text-sm">AgoraX receipt tokens can't be transferred - a security feature noted in the audit. No risk of accidentally losing access to your limit order funds.</p>
+                        </div>
+                      </div>
+                    </LiquidGlassCard>
+
+                    {/* MEV & Flash Loan Protection */}
+                    <LiquidGlassCard
+                      shadowIntensity="sm"
+                      glowIntensity="sm"
+                      blurIntensity="xl"
+                      className="p-6"
+                    >
+                      <div className="flex gap-4">
+                        <div className="w-10 h-10 rounded-lg bg-red-500/20 flex items-center justify-center flex-shrink-0">
+                          <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m0-10.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.75c0 5.592 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.57-.598-3.75h-.152c-3.196 0-6.1-1.249-8.25-3.286zm0 13.036h.008v.008H12v-.008z" />
+                          </svg>
+                        </div>
+                        <div>
+                          <h3 className="text-white font-semibold mb-1">MEV & Flash Loan Protection</h3>
+                          <p className="text-gray-400 text-sm">Built-in cooldown period on new orders prevents flash loan attacks and MEV exploitation. Your orders can't be sandwiched.</p>
+                        </div>
+                      </div>
+                    </LiquidGlassCard>
+
+                    {/* Grandfathered Fees */}
+                    <LiquidGlassCard
+                      shadowIntensity="sm"
+                      glowIntensity="sm"
+                      blurIntensity="xl"
+                      className="p-6"
+                    >
+                      <div className="flex gap-4">
+                        <div className="w-10 h-10 rounded-lg bg-cyan-500/20 flex items-center justify-center flex-shrink-0">
+                          <svg className="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 01-1.043 3.296 3.745 3.745 0 01-3.296 1.043A3.745 3.745 0 0112 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 01-3.296-1.043 3.745 3.745 0 01-1.043-3.296A3.745 3.745 0 013 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 011.043-3.296 3.746 3.746 0 013.296-1.043A3.746 3.746 0 0112 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 013.296 1.043 3.746 3.746 0 011.043 3.296A3.745 3.745 0 0121 12z" />
+                          </svg>
+                        </div>
+                        <div>
+                          <h3 className="text-white font-semibold mb-1">Grandfathered Fees</h3>
+                          <p className="text-gray-400 text-sm">Your order locks in the fee rate at creation. If fees increase later, you still pay the lower rate. You're protected for the order's lifetime.</p>
+                        </div>
+                      </div>
+                    </LiquidGlassCard>
+
+                    {/* Immutable Fee Caps */}
+                    <LiquidGlassCard
+                      shadowIntensity="sm"
+                      glowIntensity="sm"
+                      blurIntensity="xl"
+                      className="p-6"
+                    >
+                      <div className="flex gap-4">
+                        <div className="w-10 h-10 rounded-lg bg-pink-500/20 flex items-center justify-center flex-shrink-0">
+                          <svg className="w-5 h-5 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                          </svg>
+                        </div>
+                        <div>
+                          <h3 className="text-white font-semibold mb-1">Immutable Fee Caps</h3>
+                          <p className="text-gray-400 text-sm">Hard-coded maximum fee limits in the contract. The owner can never raise fees beyond the immutable cap set at deployment.</p>
+                        </div>
+                      </div>
+                    </LiquidGlassCard>
+
+                    {/* No Accidental PLS Loss */}
+                    <LiquidGlassCard
+                      shadowIntensity="sm"
+                      glowIntensity="sm"
+                      blurIntensity="xl"
+                      className="p-6"
+                    >
+                      <div className="flex gap-4">
+                        <div className="w-10 h-10 rounded-lg bg-orange-500/20 flex items-center justify-center flex-shrink-0">
+                          <svg className="w-5 h-5 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                          </svg>
+                        </div>
+                        <div>
+                          <h3 className="text-white font-semibold mb-1">No Accidental PLS Loss</h3>
+                          <p className="text-gray-400 text-sm">Direct PLS transfers to the contract are rejected. You can't accidentally send funds to the wrong function and lose them forever.</p>
+                        </div>
+                      </div>
+                    </LiquidGlassCard>
+
+                    {/* Reentrancy Protection */}
+                    <LiquidGlassCard
+                      shadowIntensity="sm"
+                      glowIntensity="sm"
+                      blurIntensity="xl"
+                      className="p-6"
+                    >
+                      <div className="flex gap-4">
+                        <div className="w-10 h-10 rounded-lg bg-indigo-500/20 flex items-center justify-center flex-shrink-0">
+                          <svg className="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+                          </svg>
+                        </div>
+                        <div>
+                          <h3 className="text-white font-semibold mb-1">Reentrancy Protection</h3>
+                          <p className="text-gray-400 text-sm">All state-changing functions use OpenZeppelin's ReentrancyGuard. Protection against the class of exploits that drained millions from other protocols.</p>
+                        </div>
+                      </div>
+                    </LiquidGlassCard>
+                  </div>
+                </motion.section>
+
+                {/* Section Divider */}
+                <div className="w-full h-px bg-gradient-to-r from-black via-gray-400 to-black my-16 md:my-24" />
+
                 {/* FAQ Section */}
                 <motion.section
                   initial={{ opacity: 0, y: 30 }}
@@ -535,6 +790,8 @@ export default function Home() {
                 </motion.section>
 
               </div>
+
+              </>
             )}
 
             {/* Connected State */}
@@ -568,6 +825,7 @@ export default function Home() {
                           invertPriceDisplay={invertPriceDisplay}
                           pricesBound={pricesBound}
                           individualLimitPrices={individualLimitPrices}
+                          displayedTokenIndex={displayedTokenIndex}
                           onLimitPriceChange={(newPrice) => {
                             setLimitOrderPrice(newPrice);
                             setIndividualLimitPrices(prev => {
@@ -592,6 +850,9 @@ export default function Home() {
                           onDragStateChange={(dragging) => {
                             setIsDragging(dragging);
                           }}
+                          onDisplayedTokenIndexChange={(index) => {
+                            setDisplayedTokenIndex(index);
+                          }}
                         />
                       </div>
 
@@ -602,6 +863,7 @@ export default function Home() {
                           externalMarketPrice={currentMarketPrice}
                           externalIndividualLimitPrices={individualLimitPrices}
                           isDragging={isDragging}
+                          displayedTokenIndex={displayedTokenIndex}
                           onTokenChange={(sell, buyTokens) => {
                             setSellTokenAddress(sell);
                             setBuyTokenAddresses(buyTokens);
@@ -622,6 +884,9 @@ export default function Home() {
                           }}
                           onIndividualLimitPricesChange={(prices) => {
                             setIndividualLimitPrices(prices);
+                          }}
+                          onDisplayedTokenIndexChange={(index) => {
+                            setDisplayedTokenIndex(index);
                           }}
                           onCreateOrderClick={(sellToken, buyTokens, sellAmount, buyAmounts, expirationDays) => {
                           }}
@@ -656,6 +921,7 @@ export default function Home() {
                             invertPriceDisplay={invertPriceDisplay}
                             pricesBound={pricesBound}
                             individualLimitPrices={individualLimitPrices}
+                            displayedTokenIndex={displayedTokenIndex}
                             onLimitPriceChange={(newPrice) => {
                               setLimitOrderPrice(newPrice);
                               setIndividualLimitPrices(prev => {
@@ -680,6 +946,9 @@ export default function Home() {
                             onDragStateChange={(dragging) => {
                               setIsDragging(dragging);
                             }}
+                            onDisplayedTokenIndexChange={(index) => {
+                              setDisplayedTokenIndex(index);
+                            }}
                           />
                         </div>
 
@@ -694,6 +963,7 @@ export default function Home() {
                           externalMarketPrice={currentMarketPrice}
                           externalIndividualLimitPrices={individualLimitPrices}
                           isDragging={isDragging}
+                          displayedTokenIndex={displayedTokenIndex}
                           onTokenChange={(sell, buyTokens) => {
                             setSellTokenAddress(sell);
                             setBuyTokenAddresses(buyTokens);
@@ -714,6 +984,9 @@ export default function Home() {
                           }}
                           onIndividualLimitPricesChange={(prices) => {
                             setIndividualLimitPrices(prices);
+                          }}
+                          onDisplayedTokenIndexChange={(index) => {
+                            setDisplayedTokenIndex(index);
                           }}
                           onCreateOrderClick={(sellToken, buyTokens, sellAmount, buyAmounts, expirationDays) => {
                           }}

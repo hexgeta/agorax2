@@ -9,11 +9,43 @@ export interface TokenConfig {
   name: string
   origin?: [number, string]
   supply?: number
-  type?: "lp" | "token"
+  type?: "lp" | "stable"
   platform?: string
   hardcodedPrice?: number
   isWhitelisted?: boolean
+  baskets?: string[] // Array of basket names this token belongs to
 }
+
+// Token Basket definitions
+export interface TokenBasket {
+  id: string
+  name: string
+  description: string
+  icon?: string // Optional icon identifier
+}
+
+export const TOKEN_BASKETS: TokenBasket[] = [
+  {
+    id: "stable",
+    name: "Stable Basket",
+    description: "eUSDC, eDAI, eUSDT etc."
+  },
+  {
+    id: "hex",
+    name: "HEX Basket",
+    description: "pHEX & eHEX"
+  },
+  {
+    id: "core",
+    name: "Core Basket",
+    description: "PLS, HEX, PLSX, INC"
+  },
+  {
+    id: "pls-peg",
+    name: "PLS Peg Basket",
+    description: "PLS, WPLS, pWETH"
+  }
+]
 
 // ===================================
 // WHITELISTED TOKENS
@@ -37,7 +69,8 @@ export const TOKEN_CONSTANTS = [{
   ticker: "PLS",
   decimals: 18,
   name: "Pulse",
-  isWhitelisted: true // Must be whitelisted in AgoraX contract
+  isWhitelisted: true, // Must be whitelisted in AgoraX contract
+  baskets: ["core", "pls-peg"]
 }, {
   chain: 369,
   a: "0x95b303987a60c71504d99aa1b13b4da07b0790ab",
@@ -45,7 +78,8 @@ export const TOKEN_CONSTANTS = [{
   ticker: "PLSX",
   decimals: 18,
   name: "PulseX",
-  isWhitelisted: true
+  isWhitelisted: true,
+  baskets: ["core"]
 }, {
   chain: 369,
   a: "0x2b591e99afe9f32eaa6214f7b7629768c40eeb39",
@@ -53,7 +87,8 @@ export const TOKEN_CONSTANTS = [{
   ticker: "HEX",
     decimals: 8,
   name: "HEX on PulseChain",
-  isWhitelisted: true
+  isWhitelisted: true,
+  baskets: ["hex", "core"]
 }, {
   chain: 369,
   a: "0x2fa878ab3f87cc1c9737fc071108f904c0b0c95d",
@@ -61,7 +96,8 @@ export const TOKEN_CONSTANTS = [{
   ticker: "INC",
   decimals: 18,
   name: "Incentive",
-  isWhitelisted: true
+  isWhitelisted: true,
+  baskets: ["core"]
 }, {
   chain: 369,
   a: "0xc10A4Ed9b4042222d69ff0B374eddd47ed90fC1F",
@@ -111,7 +147,8 @@ export const TOKEN_CONSTANTS = [{
   dexs: "0x922723FC4de3122F7DC837E2CD2b82Dce9dA81d2",
   ticker: "weHEX",
     decimals: 8,
-  name: "Wrapped HEX from Eth"
+  name: "Wrapped HEX from Eth",
+  baskets: ["hex"]
 }, {
   chain: 369,
   a: "0xa1077a294dde1b09bb078844df40758a5d0f9a27",
@@ -119,7 +156,8 @@ export const TOKEN_CONSTANTS = [{
   ticker: "WPLS",
   decimals: 18,
   name: "Wrapped PLS",
-  origin: [369, "0x0"]
+  origin: [369, "0x0"],
+  baskets: ["pls-peg"]
 }, {
   chain: 369,
   a: "0x02dcdd04e3f455d838cd1249292c58f3b79e3c3c",
@@ -128,7 +166,8 @@ export const TOKEN_CONSTANTS = [{
   decimals: 18,
   name: "Wrapped WETH from Eth",
   origin: [1, "0x0"],
-  isWhitelisted: true
+  isWhitelisted: true,
+  baskets: ["pls-peg"]
 },  {
   chain: 369,
   a: "0xefD766cCb38EaF1dfd701853BFCe31359239F305",
@@ -137,7 +176,9 @@ export const TOKEN_CONSTANTS = [{
   decimals: 18,
   name: "Wrapped DAI from Eth",
   origin: [1, "0x6b175474e89094c44da98b954eedeac495271d0f"],
-  isWhitelisted: true
+  isWhitelisted: true,
+  type: "stable",
+  baskets: ["stable"]
 }, {
   chain: 369,
   a: "0x15d38573d2feeb82e7ad5187ab8c1d52810b1f07",
@@ -146,7 +187,9 @@ export const TOKEN_CONSTANTS = [{
   decimals: 6,
   name: "Wrapped USDC from Eth",
   origin: [1, "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"],
-  isWhitelisted: false
+  isWhitelisted: false,
+  type: "stable",
+  baskets: ["stable"]
 }, {
   chain: 369,
   a: "0x0cb6f5a34ad42ec934882a05265a7d5f59b51a2f",
@@ -155,7 +198,9 @@ export const TOKEN_CONSTANTS = [{
   decimals: 6,
   name: "Wrapped USDT from Eth",
   origin: [1, "0xdac17f958d2ee523a2206206994597c13d831ec7"],
-  isWhitelisted: false
+  isWhitelisted: false,
+  type: "stable",
+  baskets: ["stable"]
 }, {
   chain: 369,
   a: "0x3819f64f282bf135d62168c1e513280daf905e06",
@@ -284,6 +329,8 @@ export const TOKEN_CONSTANTS = [{
   dexs: "0x284a7654b90d3c2e217b6da9fac010e6c4b54610",
   ticker: "CST",
   decimals: 6,
+  type: "stable",
+  baskets: ["stable"],
   name: "Coast"
 }, {
   chain: 369,
@@ -292,8 +339,9 @@ export const TOKEN_CONSTANTS = [{
   ticker: "hUSDC",
   decimals: 6,
   name: "Hyperlane USDC",
-  type: "token"
-  }, 
+  type: "stable",
+  baskets: ["stable"]
+  },
 {
   chain: 369,
   a: "0x0deed1486bc52aa0d3e6f8849cec5add6598a162",
@@ -301,14 +349,18 @@ export const TOKEN_CONSTANTS = [{
   ticker: "USDL",
   decimals: 18,
   name: "USDL",
-  isWhitelisted: true
+  isWhitelisted: true,
+  type: "stable",
+  baskets: ["stable"]
 }, {
   chain: 369,
   a: "0xeb6b7932da20c6d7b3a899d5887d86dfb09a6408",
   dexs: "0xabb36512813194b12a82a319783dbb455652440a",
   ticker: "PXDC",
   decimals: 18,
-  name: "PXDC Stablecoin (Powercity)"
+  name: "PXDC Stablecoin (Powercity)",
+  type: "stable",
+  baskets: ["stable"]
 }, {
   chain: 369,
   a: "0x144Cd22AaA2a80FEd0Bb8B1DeADDc51A53Df1d50",
@@ -594,27 +646,6 @@ export const TOKEN_CONSTANTS = [{
   name: "uPX"
 }, {
   chain: 369,
-  a: "0x94534eeee131840b1c0f61847c572228bdfdde93",
-  dexs: "0xf5a89a6487d62df5308cdda89c566c5b5ef94c11",
-  ticker: "PTGC",
-  decimals: 18,
-  name: "Grays Currency"
-}, {
-  chain: 369,
-  a: "0x456548a9b56efbbd89ca0309edd17a9e20b04018",
-  dexs: "0x5b002c8ad3c23b4021f75003fEcf01a10b11F6Ca",
-  ticker: "UFO",
-  decimals: 18,
-  name: "UFO"
-}, {
-  chain: 369,
-  a: "0x1b7b541bea3af39292fce08649e4c4e1bee408a1",
-  dexs: "0x57b329880e4fbfe5b58d078bd13d0da30ce1ef2b",
-  ticker: "ALIEN",
-  decimals: 18,
-  name: "Alien"
-}, {
-  chain: 369,
   a: "0xaebcd0f8f69ecf9587e292bdfc4d731c1abedb68",
   dexs: "0x3584ae4d7046c160ba9c64bb53951285c4b2abfd",
   ticker: "DWB",
@@ -668,21 +699,21 @@ export const TOKEN_CONSTANTS = [{
   dexs: "0x6444456960C3f95b5b408f4d9E00220643f06F94",
   ticker: "pUSDC",
   decimals: 6,
-  name: "USDC on PulseChain"
+  name: "USDC on PulseChain",
 }, {
   chain: 369,
   a: "0xdac17f958d2ee523a2206206994597c13d831ec7",
   dexs: "0xfadc475639131c1eac3655c37eda430851d53716",
   ticker: "pUSDT",
   decimals: 6,
-  name: "USDT on PulseChain"
+  name: "USDT on PulseChain",
 }, {
   chain: 369,
   a: "0x6b175474e89094c44da98b954eedeac495271d0f",
   dexs: "0xfc64556faa683e6087f425819c7ca3c558e13ac1",
   ticker: "pDAI",
   decimals: 18,
-  name: "DAI on PulseChain"
+  name: "DAI on PulseChain",
 }, {
   chain: 369,
   a: "0x8a7fdca264e87b6da72d000f22186b4403081a2a",
@@ -696,7 +727,8 @@ export const TOKEN_CONSTANTS = [{
   dexs: "0x7994d526a127979bcb9ec7c98509bb5c7ebd78fd",
   ticker: "pWETH",
   decimals: 18,
-  name: "pWETH on PulseChain"
+  name: "pWETH on PulseChain",
+  baskets: ["pls-peg"]
 }, {
   chain: 369,
   a: "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
@@ -787,7 +819,9 @@ export const TOKEN_CONSTANTS = [{
   dexs: "0x0c330f304ba67cd4a41538bdebb7f20d057d965c",
   ticker: "pTUSD",
   decimals: 18,
-  name: "TrueUSD on PulseChain"
+  name: "TrueUSD on PulseChain",
+  type: "stable",
+  baskets: ["stable"]
 }, {
   chain: 369,
   a: "0x6de037ef9ad2725eb40118bb1702ebb27e4aeb24",
@@ -930,7 +964,9 @@ export const TOKEN_CONSTANTS = [{
   dexs: "0x9756f095dfa27d4c2eae0937a7b8a6603d99affb",
   ticker: "HEXDC",
   decimals: 8,
-  name: "HEXDC Stablecoin"
+  name: "HEXDC Stablecoin",
+  type: "stable",
+  baskets: ["stable"]
 },
 {
   chain: 369,
@@ -947,14 +983,6 @@ export const TOKEN_CONSTANTS = [{
   dexs: "0x05c4CB83895D284525DcAB245631cE504740931B",
   ticker: "B9",
   decimals: 8,
-},
-{
-  chain: 369,
-  a: "0xbd63fa573a120013804e51b46c56f9b3e490f53c",
-  dexs: "0x4581e25b434c1ced7a93449b229469f03ca4451e",
-  ticker: "SOIL (New)",
-  decimals: 18,
-  name: "SUN Minimeal (New)"
 },
 {
   chain: 369,
@@ -1086,23 +1114,6 @@ export const TOKEN_CONSTANTS = [{
 },
 {
   chain: 369,
-  a: "0x3D7eaf3a2406DFaD68be0dA504eCD690B80AAE48",
-  dexs: null,
-  ticker: "PLSCX",
-  decimals: 18,
-  name: "PLSCX"
-},
-{
-  chain: 369,
-  a: "0xF8bba8B1B1A05992B18051E4e79415364Cbf4539", 
-  dexs: null,
-  ticker: "PHLP",
-  decimals: 18,
-  type: "lp",
-  name: "Phame LP"
-},
-{
-  chain: 369,
   a: "0x891B9eE2F026f8099bd2D15C201fd3E44d708A08",
   dexs: "0x7cE41b0F4241d6b9eCE969a851033c09f32b65B6",
   ticker: "AHOY", 
@@ -1185,7 +1196,7 @@ export const TOKEN_CONSTANTS = [{
     chain: 369,
     a: "0x1c3C50bd18E3f0C7c23666b8e8a843238A359386",
     dexs: "",
-    ticker: "SOL",
+    ticker: "weSOL",
     decimals: 9,
     name: "Solana from Ethereum"
   },
@@ -1359,15 +1370,6 @@ export const TOKEN_CONSTANTS = [{
   },
 {
     chain: 369,
-    a: "0x7eE9946b082E197652Bf5d4Bdc2A034DBfF4121b",
-    dexs: "",
-    ticker: "PHLPv2",
-  decimals: 18,
-    name: "Phame LP",
-    type: "lp"
-  },
-{
-    chain: 369,
     a: "0xB272AE05C5F5eCE5a3a599928c06469ebc73FC31",
     dexs: "",
     ticker: "OBStable",
@@ -1381,14 +1383,6 @@ export const TOKEN_CONSTANTS = [{
     ticker: "OPHIR",
   decimals: 18,
     name: "OPHIR Token"
-  },
-{
-    chain: 369,
-    a: "0x4243568Fa2bbad327ee36e06c16824cAd8B37819",
-    dexs: "0x0a022e7591749B0ed0D9e3b7B978f26978440DC7",
-    ticker: "TSFi",
-  decimals: 18,
-    name: "TSFi"
   },
 {
     chain: 369,
@@ -1437,14 +1431,6 @@ export const TOKEN_CONSTANTS = [{
     ticker: "GRANN",
   decimals: 18,
     name: "Granny Token"
-  },
-{
-    chain: 369,
-    a: "0xf8AB3393b1f5CD6184Fb6800A1fC802043C4063e",
-    dexs: "0x71423f29f8376eF8EFdB9207343a5ff32604C2E3",
-    ticker: "Ǝ𒑰",
-  decimals: 18,
-    name: "monat money Ǝ𒑰"
   },
 {
     chain: 369,
@@ -1508,15 +1494,9 @@ export const TOKEN_CONSTANTS = [{
     dexs: "",
     ticker: "pLUSD",
   decimals: 18,
-    name: "LUSD Stablecoin"
-  },
-{
-    chain: 369,
-    a: "0x3693693695E7a8Ac0ee0ff2f2C4E7B85eAB6c555",
-    dexs: "",
-    ticker: "PHL",
-  decimals: 8,
-    name: "PulseHotList"
+    name: "LUSD Stablecoin",
+    type: "stable",
+    baskets: ["stable"]
   },
 {
     chain: 369,
@@ -1736,14 +1716,6 @@ export const TOKEN_CONSTANTS = [{
   },
 {
     chain: 369,
-    a: "0xC52F739f544d20725BA7aD47Bb42299034F06f4F",
-    dexs: "0x5da3F2B568073Cc04B136E866a44F920603556B4",
-    ticker: "PLSP",
-  decimals: 18,
-    name: "PulsePot"
-  },
-{
-    chain: 369,
     a: "0x7c7ba94b60270BC2c7d98d3498B5ce85B870a749",
     dexs: "",
     ticker: "HTP",
@@ -1952,14 +1924,6 @@ export const TOKEN_CONSTANTS = [{
   },
 {
     chain: 369,
-    a: "0x6e86e2b8be6228d1c12aA9d82f5Ec3F27A88Ecce",
-    dexs: "0xFA78fA581a52c22A0E68e370d5e0C2CAb419B940",
-    ticker: "GIFF",
-  decimals: 18,
-    name: "GIFFORDwear"
-  },
-{
-    chain: 369,
     a: "0xa8DCD0EB29f6F918289b5C14634C1B5F443Af826",
     dexs: "0x6547F88d725201D3119c5BBb6045A4059F5D2181",
     ticker: "MIKE",
@@ -2029,14 +1993,6 @@ export const TOKEN_CONSTANTS = [{
     ticker: "LUNCH",
   decimals: 18,
     name: "Lunch Money"
-  },
-{
-    chain: 369,
-    a: "0x8fC70fd5F10Cd5494EB369b0737CefD22eB33F17",
-    dexs: "",
-    ticker: "pGIFF",
-  decimals: 18,
-    name: "PermaGIFF"
   },
 {
     chain: 369,
@@ -2256,14 +2212,6 @@ export const TOKEN_CONSTANTS = [{
   },
 {
     chain: 369,
-    a: "0xeB2CEed77147893Ba8B250c796c2d4EF02a72B68",
-    dexs: "0x25D240831a9c0CB981506538E810d32487D291Af",
-    ticker: "PDRIP",
-  decimals: 18,
-    name: "Pulse Drip"
-  },
-{
-    chain: 369,
     a: "0xDd199016942596Ad07B0aC5Cb167121F4D709d56",
     dexs: "0x666f4F34855dE8742dc5F59ADf11596C120D9097",
     ticker: "GME",
@@ -2277,14 +2225,6 @@ export const TOKEN_CONSTANTS = [{
     ticker: "OMG",
   decimals: 18,
     name: "Orange Man Good"
-  },
-{
-    chain: 369,
-    a: "0x32151909F971534de577d86E5346e45d1D9873d9",
-    dexs: "",
-    ticker: "bGIFF",
-  decimals: 18,
-    name: "BABY GIFF"
   },
 {
     chain: 369,
@@ -2380,7 +2320,9 @@ export const TOKEN_CONSTANTS = [{
     dexs: "",
     ticker: "pBUSD",
   decimals: 18,
-    name: "Binance USD on PulseChain"
+    name: "Binance USD on PulseChain",
+    type: "stable",
+    baskets: ["stable"]
   },
 {
     chain: 369,
@@ -3804,14 +3746,18 @@ export const TOKEN_CONSTANTS = [{
   dexs: "0x0000000000000000000000000000000000000000",
   ticker: "BUSD (TE)",
   decimals: 18,
-  name: "BUSD Token from BSC (TokensExpress)"
+  name: "BUSD Token from BSC (TokensExpress)",
+  type: "stable",
+  baskets: ["stable"]
 }, {
   chain: 369,
   a: "0xec345429357e75e81d162372a48b6c4307e1922d",
   dexs: "0x0000000000000000000000000000000000000000",
   ticker: "USDT (TE)",
   decimals: 18,
-  name: "Tether USD from BSC (TokensExpress)"
+  name: "Tether USD from BSC (TokensExpress)",
+  type: "stable",
+  baskets: ["stable"]
 }, {
   chain: 369,
   a: "0x21dcb2c16c3773a565acb45f6c34348ec78a8385",
