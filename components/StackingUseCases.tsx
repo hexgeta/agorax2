@@ -1,21 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-
-// Solid background colors for cards
-const cardColors = [
-  'bg-purple-950',
-  'bg-blue-950',
-  'bg-green-950',
-  'bg-amber-950',
-  'bg-pink-950',
-  'bg-cyan-950',
-  'bg-red-950',
-  'bg-indigo-950',
-  'bg-orange-950',
-  'bg-teal-950',
-  'bg-rose-950',
-];
+import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 
 const useCases = [
   {
@@ -33,7 +19,7 @@ const useCases = [
   {
     title: 'Whale-Sized Trades',
     description:
-      'Even with the most liquid tokens, moving large positions gets eaten by slippage on AMMs. AgoraX lets whales trade freely at exact prices.',
+      'Even with the most liquid tokens, getting in and out of large positions can be difficult, getting eaten up by fees and slippage. AgoráX lets whales trade freely at exact prices.',
     textOnLeft: false,
     icon: (
       <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
@@ -144,12 +130,14 @@ const useCases = [
 
 export function StackingUseCases() {
   const sectionRef = useRef<HTMLElement>(null);
-  const [activeIndex, setActiveIndex] = useState(-1); // -1 = header, 0-5 = cards
+  const [scrollProgress, setScrollProgress] = useState(0); // 0 to useCases.length
   const [isInView, setIsInView] = useState(false);
 
+  // Pixels of scroll per card - lower = faster card transitions
+  const scrollPerCard = 300;
+  const totalScrollHeight = useCases.length * scrollPerCard;
+
   useEffect(() => {
-    // Pixels of scroll per card change - roughly 1 scroll wheel notch (~100px)
-    const scrollPerCard = 100;
     const handleScroll = () => {
       if (!sectionRef.current) return;
 
@@ -158,41 +146,25 @@ export function StackingUseCases() {
       const sectionBottom = rect.bottom;
       const viewportHeight = window.innerHeight;
 
-      // Check if section is in view - only show fixed content when:
-      // 1. Section top is at or past the viewport top (sectionTop <= 0)
-      // 2. Section bottom is still below the viewport bottom (we haven't scrolled past it)
-      const shouldShowFixed = sectionTop <= 0 && sectionBottom > viewportHeight;
+      // Check if section is in view - show fixed content when section top is past halfway
+      const shouldShowFixed = sectionTop < viewportHeight * 0.5 && sectionBottom > viewportHeight;
       setIsInView(shouldShowFixed);
 
       if (!shouldShowFixed) {
-        setActiveIndex(-1);
         return;
       }
 
-      // Calculate how far we've scrolled into the section
-      // When sectionTop = 0, we're at the start (header)
-      // Every scrollPerCard pixels reveals the next card
+      // Calculate continuous scroll progress
       const scrolledIntoSection = -sectionTop;
-
-      if (scrolledIntoSection < 0) {
-        setActiveIndex(-1); // Header
-      } else {
-        // Each scrollPerCard pixels reveals one card
-        const cardIndex = Math.floor(scrolledIntoSection / scrollPerCard);
-        setActiveIndex(Math.min(cardIndex, useCases.length - 1));
-      }
+      const progress = Math.max(0, scrolledIntoSection / scrollPerCard);
+      setScrollProgress(Math.min(progress, useCases.length - 1));
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
-    handleScroll(); // Initial check
+    handleScroll();
 
     return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  // Pixels of scroll per card change - roughly 1 scroll wheel notch (~100px)
-  // Adding viewport height to ensure the section stays visible while scrolling through all cards
-  const scrollPerCard = 100; // pixels per card change
-  const totalScrollHeight = (useCases.length + 1) * scrollPerCard; // +1 for header
+  }, [scrollPerCard]);
 
   return (
     <section
@@ -205,104 +177,124 @@ export function StackingUseCases() {
         className={`fixed left-6 md:left-10 top-1/2 -translate-y-1/2 z-20 transition-opacity duration-300 ${isInView ? 'opacity-100' : 'opacity-0'}`}
       >
         <div className="flex flex-col items-center gap-2">
-          {/* Header dot */}
-          <div
-            className={`w-2 h-2 rounded-full transition-all duration-300 ${
-              activeIndex === -1
-                ? 'bg-white scale-125'
-                : 'bg-white/30 hover:bg-white/50'
-            }`}
-          />
-          {/* Divider line */}
-          <div className="w-px h-4 bg-white/20" />
           {/* Card dots */}
           {useCases.map((_, i) => (
             <div
               key={i}
               className={`w-2 h-2 rounded-full transition-all duration-300 ${
-                activeIndex === i
-                  ? 'bg-white scale-125'
-                  : activeIndex > i
-                    ? 'bg-white/50'
-                    : 'bg-white/30 hover:bg-white/50'
+                Math.round(scrollProgress) === i
+                  ? 'bg-white/50 scale-125'
+                  : scrollProgress > i
+                    ? 'bg-white/20'
+                    : 'bg-white/10 hover:bg-white/20'
               }`}
             />
           ))}
         </div>
-        {/* Scroll indicator arrows */}
-        <div className="mt-4 flex flex-col items-center gap-1 text-white/40">
-          <svg
-            className={`w-4 h-4 transition-opacity duration-300 ${activeIndex <= -1 ? 'opacity-0' : 'opacity-100'}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-          </svg>
-          <svg
-            className={`w-4 h-4 transition-opacity duration-300 ${activeIndex >= useCases.length - 1 ? 'opacity-0' : 'opacity-100'}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
-        </div>
       </div>
 
-      {/* Fixed container for the visible card - only visible when section is in view */}
-      <div className={`fixed inset-0 pointer-events-none flex items-center justify-center z-10 transition-opacity duration-300 ${isInView ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-        {/* Header - shows when activeIndex is -1 */}
-        <div
-          className={`absolute inset-0 flex items-center justify-center transition-opacity duration-500 ${
-            activeIndex === -1 ? 'opacity-100' : 'opacity-0'
-          }`}
-        >
+      {/* Fixed container - only visible when section is in view, no transition to avoid flash */}
+      <div className={`fixed inset-0 pointer-events-none z-10 ${isInView ? 'block' : 'hidden'}`}>
+        {/* Header - always visible at the top, below navbar */}
+        <div className="absolute top-20 md:top-28 left-0 right-0 flex justify-center z-20">
           <div className="text-center max-w-2xl px-8">
-            <h1 className="text-4xl md:text-6xl font-bold text-white tracking-tight leading-tight mb-6">
+            <h1 className="text-3xl md:text-5xl font-bold text-white tracking-tight leading-tight mb-4">
               Powerful Use Cases
             </h1>
-            <p className="text-gray-400 text-lg md:text-xl">
-              From instant arbitrage to sophisticated market-making strategies, AgoraX enables trading patterns impossible on traditional DEXs.
+            <p className="text-gray-400 text-base md:text-lg mb-4">
+              From instant arbitrage to sophisticated market-making strategies, AgoráX enables trading patterns impossible on traditional DEXs.
             </p>
           </div>
         </div>
 
-        {/* Cards - stacked on top of each other, new cards slide up and cover previous ones */}
-        {useCases.map((useCase, i) => {
-          // Card is "revealed" when we've scrolled past its index
-          const isRevealed = activeIndex >= i;
-          // Each card has a fixed rotation: 0, 2, -2, 2, -2... (alternating after first)
-          const fixedRotation = i === 0 ? 0 : (i % 2 === 1 ? 2 : -2);
+        {/* Cards container - positioned below the header */}
+        <div className="absolute inset-0 flex items-center justify-center" style={{ paddingTop: '180px' }}>
+          {/* Cards - stacked on top of each other, smoothly follow scroll */}
+          {useCases.map((useCase, i) => {
+            // Calculate how far this card should have traveled (0 = not started, 1 = fully in place)
+            const cardProgress = Math.max(0, Math.min(1, scrollProgress - i + 1));
+            // Each card has a fixed rotation: 0, 2, -2, 2, -2... (alternating after first)
+            const fixedRotation = i === 0 ? 0 : (i % 2 === 1 ? 2 : -2);
+            // Smooth Y position: starts at 100vh below, ends at 0
+            const yPosition = (1 - cardProgress) * 100;
+            // Rotation eases in as card arrives
+            const currentRotation = fixedRotation + (1 - cardProgress) * 4;
 
-          return (
-            <div
-              key={i}
-              className="absolute transition-transform duration-500 ease-out"
-              style={{
-                zIndex: i + 1, // Higher index = higher z-index (stacks on top)
-                // Each card keeps its fixed rotation, unrevealed cards wait below
-                transform: isRevealed
-                  ? `translateY(0) rotate(${fixedRotation}deg)`
-                  : `translateY(100vh) rotate(${fixedRotation + 4}deg)`,
-              }}
-            >
-              <article className={`h-[450px] w-[90vw] max-w-[900px] rounded-2xl p-8 md:p-12 border border-white/30 ${cardColors[i % cardColors.length]}`}>
-                <div className={`flex flex-col md:flex-row h-full gap-8 items-center ${!useCase.textOnLeft ? 'md:flex-row-reverse' : ''}`}>
-                  <div className="w-full md:w-[45%] relative flex flex-col justify-center">
-                    <h2 className="text-2xl md:text-3xl font-bold text-white mb-4">{useCase.title}</h2>
-                    <p className="text-gray-400 text-base md:text-lg leading-relaxed">{useCase.description}</p>
-                  </div>
-                  <div className="relative w-full md:w-[50%] h-[200px] md:h-full rounded-2xl overflow-hidden bg-black/20 border border-white/5 flex items-center justify-center">
-                    <div className="transform scale-[3] opacity-10">
-                      {useCase.icon}
+            return (
+              <div
+                key={i}
+                className="absolute"
+                style={{
+                  zIndex: i + 1,
+                  transform: `translateY(${yPosition}vh) rotate(${currentRotation}deg)`,
+                }}
+              >
+                <LiquidGlassCard
+                  shadowIntensity="lg"
+                  glowIntensity="sm"
+                  blurIntensity="xl"
+                  className="h-[400px] w-[90vw] max-w-[900px] rounded-2xl p-8 md:p-12 bg-black/80 border-2 border-white/20"
+                >
+                  <div className="flex h-full items-start">
+                    <span className="text-white/10 text-[200px] md:text-[280px] font-bold select-none leading-none -mt-12">{i + 1}</span>
+                    <div className="flex flex-col justify-center pt-4">
+                      <h2 className="text-3xl md:text-5xl font-bold text-white mb-6">{useCase.title}</h2>
+                      <p className="text-gray-400 text-xl md:text-2xl leading-relaxed">{useCase.description}</p>
                     </div>
                   </div>
-                </div>
-              </article>
-            </div>
-          );
-        })}
+                </LiquidGlassCard>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Static content at the bottom - only visible when fixed content is hidden */}
+      <div
+        className={`absolute bottom-0 left-0 right-0 flex flex-col items-center ${isInView ? 'hidden' : 'block'}`}
+        style={{ paddingBottom: '40px' }}
+      >
+        {/* Static header */}
+        <div className="text-center max-w-2xl px-8 mb-8">
+          <h1 className="text-3xl md:text-5xl font-bold text-white tracking-tight leading-tight mb-4">
+            Powerful Use Cases
+          </h1>
+          <p className="text-gray-400 text-base md:text-lg mb-4">
+            From instant arbitrage to sophisticated market-making strategies, AgoráX enables trading patterns impossible on traditional DEXs.
+          </p>
+        </div>
+
+        {/* Static stacked cards */}
+        <div className="relative flex items-center justify-center" style={{ height: '450px' }}>
+          {useCases.map((useCase, i) => {
+            const fixedRotation = i === 0 ? 0 : (i % 2 === 1 ? 2 : -2);
+            return (
+              <div
+                key={i}
+                className="absolute"
+                style={{
+                  zIndex: i + 1,
+                  transform: `rotate(${fixedRotation}deg)`,
+                }}
+              >
+                <LiquidGlassCard
+                  shadowIntensity="lg"
+                  glowIntensity="sm"
+                  blurIntensity="xl"
+                  className="h-[400px] w-[90vw] max-w-[900px] rounded-2xl p-8 md:p-12 bg-black/80 border-2 border-white/20"
+                >
+                  <div className="flex h-full items-start">
+                    <span className="text-white/10 text-[200px] md:text-[280px] font-bold select-none leading-none -mt-12">{i + 1}</span>
+                    <div className="flex flex-col justify-center pt-4">
+                      <h2 className="text-3xl md:text-5xl font-bold text-white mb-6">{useCase.title}</h2>
+                      <p className="text-gray-400 text-xl md:text-2xl leading-relaxed">{useCase.description}</p>
+                    </div>
+                  </div>
+                </LiquidGlassCard>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </section>
   );

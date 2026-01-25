@@ -662,8 +662,12 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                 className="absolute top-1/2 -translate-y-1/2 left-[58px] right-0 h-[2px] bg-[#00D9FF] rounded-full transition-all duration-500 pointer-events-none"
               />
               <LiquidGlassCard
-                className={`group absolute right-0 flex items-center justify-between bg-cyan-500/10 px-3 py-1 border-cyan-500/30 w-fit min-w-[250px] ${displayQuoteTokenInfos.length > 1 ? 'cursor-pointer pointer-events-auto' : 'pointer-events-none'} ${limitPricePosition && limitPricePosition < currentPricePosition ? 'top-0 -translate-y-[calc(45%-0px)]' : 'bottom-0 translate-y-[calc(45%-0px)]'
-                  }`}
+                className={`group absolute right-0 flex items-center justify-between bg-cyan-500/10 px-3 py-1 border-cyan-500/30 w-fit min-w-[250px] ${displayQuoteTokenInfos.length > 1 ? 'cursor-pointer pointer-events-auto' : 'pointer-events-none'} ${limitPricePosition && limitPricePosition < currentPricePosition ? 'top-0' : 'bottom-0'}`}
+                style={{
+                  transform: limitPricePosition && limitPricePosition < currentPricePosition
+                    ? 'translateY(-45%)'
+                    : 'translateY(45%)'
+                }}
                 borderRadius="8px"
                 shadowIntensity="none"
                 glowIntensity="none"
@@ -739,7 +743,12 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                     }}
                   />
                   <LiquidGlassCard
-                    className={`group absolute right-0 flex items-center justify-between bg-pink-500/10 px-3 py-1 border-pink-500/30 w-fit min-w-[250px] ${displayQuoteTokenInfos.length > 1 ? 'cursor-pointer pointer-events-auto' : 'pointer-events-none'} ${limitPricePosition < currentPricePosition ? 'bottom-0 translate-y-[calc(45%-0px)]' : 'top-0 -translate-y-[calc(45%-0px)]'}`}
+                    className={`group absolute right-0 flex items-center justify-between bg-pink-500/10 px-3 py-1 border-pink-500/30 w-fit min-w-[250px] ${displayQuoteTokenInfos.length > 1 ? 'cursor-pointer pointer-events-auto' : 'pointer-events-none'} ${limitPricePosition < currentPricePosition ? 'bottom-0' : 'top-0'}`}
+                    style={{
+                      transform: limitPricePosition < currentPricePosition
+                        ? 'translateY(45%)'
+                        : 'translateY(-45%)'
+                    }}
                     borderRadius="8px"
                     shadowIntensity="none"
                     glowIntensity="none"

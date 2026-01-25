@@ -64,7 +64,7 @@ export function HowItWorks() {
             <CoinLogo symbol="PLS" size="lg" />
           </Circle>
           <Circle ref={buyToken2Ref} className="h-10 w-10 md:h-14 md:w-14 p-1">
-            <CoinLogo symbol="WPLS" size="lg" />
+            <CoinLogo symbol="COM" size="lg" />
           </Circle>
           <Circle ref={buyToken3Ref} className="h-10 w-10 md:h-14 md:w-14 p-1">
             <CoinLogo symbol="USDT" size="lg" />
