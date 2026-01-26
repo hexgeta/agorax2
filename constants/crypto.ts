@@ -329,8 +329,6 @@ export const TOKEN_CONSTANTS = [{
   dexs: "0x284a7654b90d3c2e217b6da9fac010e6c4b54610",
   ticker: "CST",
   decimals: 6,
-  type: "stable",
-  baskets: ["stable"],
   name: "Coast"
 }, {
   chain: 369,
@@ -820,8 +818,6 @@ export const TOKEN_CONSTANTS = [{
   ticker: "pTUSD",
   decimals: 18,
   name: "TrueUSD on PulseChain",
-  type: "stable",
-  baskets: ["stable"]
 }, {
   chain: 369,
   a: "0x6de037ef9ad2725eb40118bb1702ebb27e4aeb24",
@@ -1495,8 +1491,6 @@ export const TOKEN_CONSTANTS = [{
     ticker: "pLUSD",
   decimals: 18,
     name: "LUSD Stablecoin",
-    type: "stable",
-    baskets: ["stable"]
   },
 {
     chain: 369,

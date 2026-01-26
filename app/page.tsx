@@ -535,7 +535,7 @@ export default function Home() {
                           </svg>
                         </div>
                         <div>
-                          <h3 className="text-white font-semibold mb-1">Claim Proceeds When You Want</h3>
+                          <h3 className="text-white font-semibold mb-1">Claims Proceed Only When You Want</h3>
                           <p className="text-gray-400 text-sm">Choose when to collect your proceeds - useful for tax planning or security reasons. Unlike LP positions where rewards auto-compound.</p>
                         </div>
                       </div>
@@ -675,8 +675,8 @@ export default function Home() {
                           </svg>
                         </div>
                         <div>
-                          <h3 className="text-white font-semibold mb-1">No Accidental PLS Loss</h3>
-                          <p className="text-gray-400 text-sm">Direct PLS transfers to the contract are rejected. You can't accidentally send funds to the wrong function and lose them forever.</p>
+                          <h3 className="text-white font-semibold mb-1">Send to Contract Protection</h3>
+                          <p className="text-gray-400 text-sm">Direct transfers to the contract are rejected. You can't accidentally send to the Contract address and lose them forever.</p>
                         </div>
                       </div>
                     </LiquidGlassCard>

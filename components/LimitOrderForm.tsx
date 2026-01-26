@@ -3923,30 +3923,33 @@ export function LimitOrderForm({
                               Token Baskets
                             </div>
                             {getAvailableBaskets(0).filter(b => b.id !== selectedBasket).map((basket) => {
-                              const basketTokenCount = getBasketTokens(basket.id).filter(t =>
+                              const basketTokens = getBasketTokens(basket.id).filter(t =>
                                 !sellToken || t.a.toLowerCase() !== sellToken.a.toLowerCase()
-                              ).length;
+                              );
                               return (
                                 <button
                                   key={basket.id}
                                   onClick={() => handleBasketSelect(basket, 0)}
                                   className="w-full p-3 flex items-center space-x-3 hover:bg-white/5 transition-all text-left border-b border-white/5"
                                 >
-                                  <div className="w-6 h-6 rounded-full bg-gradient-to-br from-[#FF0080]/30 to-[#00BFFF]/30 flex items-center justify-center">
-                                    <svg className="w-3.5 h-3.5 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                                    </svg>
+                                  <div className="flex items-center -space-x-1.5">
+                                    {basketTokens.slice(0, 5).map((token, idx) => (
+                                      <TokenLogo
+                                        key={token.a}
+                                        ticker={token.ticker}
+                                        className="w-6 h-6 rounded-full ring-2 ring-black/80"
+                                        style={{ zIndex: 5 - idx }}
+                                      />
+                                    ))}
+                                    {basketTokens.length > 5 && (
+                                      <div className="w-6 h-6 rounded-full bg-white/10 ring-2 ring-black/80 flex items-center justify-center text-[10px] text-white/60">
+                                        +{basketTokens.length - 5}
+                                      </div>
+                                    )}
                                   </div>
                                   <div className="flex-1 min-w-0">
-                                    <div className="flex items-center justify-between">
-                                      <div className="min-w-0 flex-1">
-                                        <div className="text-white font-medium">{basket.name}</div>
-                                        <div className="text-white/50 text-xs truncate">{basket.description}</div>
-                                      </div>
-                                      <div className="text-right ml-2 flex-shrink-0">
-                                        <div className="text-white/60 text-xs">{basketTokenCount} tokens</div>
-                                      </div>
-                                    </div>
+                                    <div className="text-white font-medium">{basket.name}</div>
+                                    <div className="text-white/50 text-xs truncate">{basket.description}</div>
                                   </div>
                                 </button>
                               );
@@ -4463,30 +4466,33 @@ export function LimitOrderForm({
                               Token Baskets
                             </div>
                             {getAvailableBaskets(index).map((basket) => {
-                              const basketTokenCount = getBasketTokens(basket.id).filter(t =>
+                              const basketTokens = getBasketTokens(basket.id).filter(t =>
                                 !sellToken || t.a.toLowerCase() !== sellToken.a.toLowerCase()
-                              ).length;
+                              );
                               return (
                                 <button
                                   key={basket.id}
                                   onClick={() => handleBasketSelect(basket, index)}
                                   className="w-full p-3 flex items-center space-x-3 hover:bg-white/5 transition-all text-left border-b border-white/5"
                                 >
-                                  <div className="w-6 h-6 rounded-full bg-gradient-to-br from-[#FF0080]/30 to-[#00BFFF]/30 flex items-center justify-center">
-                                    <svg className="w-3.5 h-3.5 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                                    </svg>
+                                  <div className="flex items-center -space-x-1.5">
+                                    {basketTokens.slice(0, 5).map((token, idx) => (
+                                      <TokenLogo
+                                        key={token.a}
+                                        ticker={token.ticker}
+                                        className="w-6 h-6 rounded-full ring-2 ring-black/80"
+                                        style={{ zIndex: 5 - idx }}
+                                      />
+                                    ))}
+                                    {basketTokens.length > 5 && (
+                                      <div className="w-6 h-6 rounded-full bg-white/10 ring-2 ring-black/80 flex items-center justify-center text-[10px] text-white/60">
+                                        +{basketTokens.length - 5}
+                                      </div>
+                                    )}
                                   </div>
                                   <div className="flex-1 min-w-0">
-                                    <div className="flex items-center justify-between">
-                                      <div className="min-w-0 flex-1">
-                                        <div className="text-white font-medium">{basket.name}</div>
-                                        <div className="text-white/50 text-xs truncate">{basket.description}</div>
-                                      </div>
-                                      <div className="text-right ml-2 flex-shrink-0">
-                                        <div className="text-white/60 text-xs">{basketTokenCount} tokens</div>
-                                      </div>
-                                    </div>
+                                    <div className="text-white font-medium">{basket.name}</div>
+                                    <div className="text-white/50 text-xs truncate">{basket.description}</div>
                                   </div>
                                 </button>
                               );
