@@ -76,7 +76,7 @@ export function StackingUseCases() {
       {/* Cards - stacked with slight overlap and rotation */}
       {/* Mobile: 200px spacing, Desktop: 170px spacing */}
       <div
-        className="max-w-4xl mx-auto relative [--card-spacing:185px] md:[--card-spacing:170px]"
+        className="max-w-4xl mx-auto relative [--card-spacing:190px] md:[--card-spacing:170px]"
         style={{
           paddingBottom: `calc(${useCases.length} * var(--card-spacing) + 80px)`,
         }}

@@ -3934,15 +3934,19 @@ export function LimitOrderForm({
                                 >
                                   <div className="flex items-center -space-x-1.5">
                                     {basketTokens.slice(0, 5).map((token, idx) => (
-                                      <TokenLogo
+                                      <div
                                         key={token.a}
-                                        ticker={token.ticker}
-                                        className="w-6 h-6 rounded-full ring-2 ring-black/80"
+                                        className="w-6 h-6 rounded-full bg-black ring-2 ring-black flex items-center justify-center"
                                         style={{ zIndex: 5 - idx }}
-                                      />
+                                      >
+                                        <TokenLogo
+                                          ticker={token.ticker}
+                                          className="w-5 h-5 rounded-full"
+                                        />
+                                      </div>
                                     ))}
                                     {basketTokens.length > 5 && (
-                                      <div className="w-6 h-6 rounded-full bg-white/10 ring-2 ring-black/80 flex items-center justify-center text-[10px] text-white/60">
+                                      <div className="w-6 h-6 rounded-full bg-black ring-2 ring-black flex items-center justify-center text-[10px] text-white/60">
                                         +{basketTokens.length - 5}
                                       </div>
                                     )}
@@ -4477,15 +4481,19 @@ export function LimitOrderForm({
                                 >
                                   <div className="flex items-center -space-x-1.5">
                                     {basketTokens.slice(0, 5).map((token, idx) => (
-                                      <TokenLogo
+                                      <div
                                         key={token.a}
-                                        ticker={token.ticker}
-                                        className="w-6 h-6 rounded-full ring-2 ring-black/80"
+                                        className="w-6 h-6 rounded-full bg-black ring-2 ring-black flex items-center justify-center"
                                         style={{ zIndex: 5 - idx }}
-                                      />
+                                      >
+                                        <TokenLogo
+                                          ticker={token.ticker}
+                                          className="w-5 h-5 rounded-full"
+                                        />
+                                      </div>
                                     ))}
                                     {basketTokens.length > 5 && (
-                                      <div className="w-6 h-6 rounded-full bg-white/10 ring-2 ring-black/80 flex items-center justify-center text-[10px] text-white/60">
+                                      <div className="w-6 h-6 rounded-full bg-black ring-2 ring-black flex items-center justify-center text-[10px] text-white/60">
                                         +{basketTokens.length - 5}
                                       </div>
                                     )}
