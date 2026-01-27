@@ -2,6 +2,7 @@
 
 import { cn } from '@/lib/utils'
 import logoManifest from '@/constants/logo-manifest.json'
+import { INLINE_LOGOS } from '@/constants/inline-logos'
 
 const LOGO_SIZES = {
   sm: 'w-4 h-4',   // 16px
@@ -35,18 +36,23 @@ export function CoinLogo({
   
   // Get logo path - use manifest to get exact file format (no 404s!)
   const getLogoPath = () => {
+    // Use inline logos for priority tokens (instant load, no network request)
+    if (INLINE_LOGOS[logoSymbol]) {
+      return INLINE_LOGOS[logoSymbol]
+    }
+
     // Special case for ETH with no background
     if (logoSymbol === 'ETH' && variant === 'no-bg') {
       const format = (logoManifest as Record<string, string>)['eth-black-no-bg'] || 'svg'
       return `/coin-logos/eth-black-no-bg.${format}`
     }
-    
+
     // Look up the actual format from manifest
     const format = (logoManifest as Record<string, string>)[logoSymbol]
     if (format) {
       return `/coin-logos/${logoSymbol}.${format}`
     }
-    
+
     // Fallback to default if not in manifest
     return '/coin-logos/default.svg'
   }

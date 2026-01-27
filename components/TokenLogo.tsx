@@ -1,6 +1,7 @@
 'use client';
 
 import logoManifest from '@/constants/logo-manifest.json';
+import { INLINE_LOGOS } from '@/constants/inline-logos';
 
 interface TokenLogoProps {
   ticker: string;
@@ -14,6 +15,11 @@ export function TokenLogo({ ticker, className = '', style }: TokenLogoProps) {
 
   // Look up exact format from manifest (no 404s!)
   const getLogoSrc = () => {
+    // Use inline logos for priority tokens (instant load, no network request)
+    if (INLINE_LOGOS[baseTicker]) {
+      return INLINE_LOGOS[baseTicker];
+    }
+
     // Try the base ticker first (handles pHEX, eHEX, etc.)
     const format = (logoManifest as Record<string, string>)[baseTicker];
     if (format) {

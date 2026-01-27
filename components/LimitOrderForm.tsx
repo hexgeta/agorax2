@@ -25,6 +25,7 @@ import { useContractWhitelist } from '@/hooks/contracts/useContractWhitelist';
 import { useContractWhitelistRead } from '@/hooks/contracts/useContractWhitelistRead';
 import { waitForTransactionWithTimeout, TRANSACTION_TIMEOUTS } from '@/utils/transactionTimeout';
 import useToast from '@/hooks/use-toast';
+import { useLimitOrderPricing } from '@/hooks/useLimitOrderPricing';
 
 interface LimitOrderFormProps {
   onTokenChange?: (sellToken: string | undefined, buyTokens: (string | undefined)[]) => void;
@@ -324,6 +325,7 @@ export function LimitOrderForm({
   const buyTokenMenuRefs = useRef<(HTMLDivElement | null)[]>([]);
   const buyInputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const sellInputRef = useRef<HTMLInputElement>(null);
+  const limitPriceInputRef = useRef<HTMLInputElement>(null);
   const datePickerRef = useRef<HTMLDivElement>(null);
   const isInitialLoadRef = useRef<boolean>(true);
   const limitPriceSetByUserRef = useRef<boolean>(false);
@@ -331,13 +333,15 @@ export function LimitOrderForm({
   const [hasCalculatedInitialBuyAmount, setHasCalculatedInitialBuyAmount] = useState(false);
   const lastEditedInputRef = useRef<'sell' | number | null>(null); // 'sell' or buy index
   const isUpdatingFromOtherInputRef = useRef<boolean>(false);
-  const previousSellTokenRef = useRef<TokenOption | null>(null);
-  const previousBuyTokenRef = useRef<TokenOption | null>(null);
-  const isTokenChangingRef = useRef<boolean>(false);
   // Track which input is actively being typed in - prevents feedback loops
   const activeInputRef = useRef<'sell' | 'buy' | null>(null);
   // Track when percentage/backing click is in progress - prevents useEffect from overwriting amounts
   const isPercentageClickInProgressRef = useRef<boolean>(false);
+
+  // Track previous token addresses to detect changes for deferred price recalculation
+  // This fixes the race condition where prices aren't ready when token selection happens
+  const prevSellTokenAddressRef = useRef<string | undefined>(sellToken?.a);
+  const prevBuyTokenAddressRef = useRef<string | undefined>(buyTokens[0]?.a);
 
   // Hooks for contract interaction
   const publicClient = usePublicClient();
@@ -733,6 +737,90 @@ export function LimitOrderForm({
     const entry = Object.entries(prices).find(([addr]) => addr.toLowerCase() === lowerAddr);
     return entry && entry[1].price > 0 ? entry[1].price : 0;
   }, [prices]);
+
+  // ============================================================================
+  // CENTRALIZED PRICING LOGIC - See /docs/limit-order-data-flow.md
+  // ============================================================================
+  const pricing = useLimitOrderPricing(
+    { sellAmount, buyAmounts, limitPrice, pricePercentage },
+    {
+      setSellAmount,
+      setBuyAmounts,
+      setLimitPrice,
+      setPricePercentage,
+      onLimitPriceChange: onLimitPriceChange ? (price) => onLimitPriceChange(price) : undefined
+    },
+    { getPrice }
+  );
+
+  // ============================================================================
+  // DEFERRED TOKEN CHANGE HANDLER
+  // ============================================================================
+  // This effect handles the price recalculation when tokens change.
+  // It fixes the race condition where the synchronous handler was called before
+  // prices were available for the new token, causing the limit price to "go crazy"
+  // before snapping back when prices eventually loaded.
+  //
+  // How it works:
+  // 1. Detect when sell or buy token address changes (via refs tracking previous values)
+  // 2. Only recalculate if BOTH tokens have valid prices (> 0)
+  // 3. Update the refs after processing to avoid re-triggering
+  useEffect(() => {
+    const currentSellAddress = sellToken?.a;
+    const currentBuyAddress = buyTokens[0]?.a;
+
+    // Check if either token changed
+    const sellTokenChanged = currentSellAddress !== prevSellTokenAddressRef.current;
+    const buyTokenChanged = currentBuyAddress !== prevBuyTokenAddressRef.current;
+
+    // Only process if a token actually changed
+    if (!sellTokenChanged && !buyTokenChanged) return;
+
+    // Ensure we have both tokens
+    if (!currentSellAddress || !currentBuyAddress) {
+      // Update refs even if we can't process (token was cleared)
+      prevSellTokenAddressRef.current = currentSellAddress;
+      prevBuyTokenAddressRef.current = currentBuyAddress;
+      return;
+    }
+
+    // Check if we have valid prices for BOTH tokens
+    const sellPrice = getPrice(currentSellAddress);
+    const buyPrice = getPrice(currentBuyAddress);
+
+    if (sellPrice <= 0 || buyPrice <= 0) {
+      // Prices not ready yet - don't update refs, so we'll retry on next price update
+      return;
+    }
+
+    // Prices are ready - update refs to prevent re-triggering
+    prevSellTokenAddressRef.current = currentSellAddress;
+    prevBuyTokenAddressRef.current = currentBuyAddress;
+
+    // Get sell amount
+    const sellAmt = sellAmount ? parseFloat(removeCommas(sellAmount)) : 0;
+    if (sellAmt <= 0) return;
+
+    // Calculate new market price and derived values
+    const newMarketPrice = sellPrice / buyPrice;
+    if (newMarketPrice <= 0) return;
+
+    // Apply existing percentage to get new limit price
+    const pct = pricePercentage ?? 0;
+    const newLimitPrice = newMarketPrice * (1 + pct / 100);
+
+    // Update limit price
+    setLimitPrice(newLimitPrice.toFixed(8));
+    onLimitPriceChange?.(newLimitPrice);
+
+    // Calculate new buy amount
+    const newBuyAmount = sellAmt * newLimitPrice;
+    setBuyAmounts(prev => {
+      const newAmounts = [...prev];
+      newAmounts[0] = pricing.formatCalculatedValue(newBuyAmount);
+      return newAmounts;
+    });
+  }, [sellToken?.a, buyTokens, getPrice, sellAmount, pricePercentage, onLimitPriceChange, pricing]);
 
   // Sorted filtered sell tokens (sorted by USD value)
   const filteredSellTokens = useMemo(() => {
@@ -1373,84 +1461,6 @@ export function LimitOrderForm({
     }
   }, [pricesBound, onPricesBoundChange]);
 
-  // Track previous token addresses to detect token changes
-  const prevSellTokenRef = useRef<string | null>(null);
-  const prevFirstBuyTokenRef = useRef<string | null>(null);
-
-  // Recalculate limit price and buy amounts when sell or first buy token changes
-  // This preserves the price percentage while updating for the new token pair
-  useEffect(() => {
-    const currentSellAddr = sellToken?.a?.toLowerCase() || null;
-    const currentBuyAddr = buyTokens[0]?.a?.toLowerCase() || null;
-    const prevSellAddr = prevSellTokenRef.current;
-    const prevBuyAddr = prevFirstBuyTokenRef.current;
-
-    // Check if either token actually changed (not just initial mount)
-    const sellChanged = prevSellAddr !== null && currentSellAddr !== prevSellAddr;
-    const buyChanged = prevBuyAddr !== null && currentBuyAddr !== prevBuyAddr;
-
-    // Update refs for next comparison
-    prevSellTokenRef.current = currentSellAddr;
-    prevFirstBuyTokenRef.current = currentBuyAddr;
-
-    // Only proceed if a token changed and we have valid token addresses
-    if ((sellChanged || buyChanged) && currentSellAddr && currentBuyAddr) {
-      const sellTokenUsdPrice = getPrice(currentSellAddr);
-      const buyTokenUsdPrice = getPrice(currentBuyAddr);
-
-      // Only recalculate if we have valid prices
-      if (sellTokenUsdPrice > 0 && buyTokenUsdPrice > 0) {
-        // Calculate new market price (buy tokens per sell token)
-        const newMarketPrice = sellTokenUsdPrice / buyTokenUsdPrice;
-
-        // Use stored pricePercentage to calculate new limit price
-        const percentToApply = pricePercentage !== null ? pricePercentage : 0;
-        const newLimitPrice = newMarketPrice * (1 + percentToApply / 100);
-
-        // Update limit price
-        setLimitPrice(newLimitPrice.toFixed(8));
-        setIndividualLimitPrices(prev => {
-          const newPrices = [...prev];
-          newPrices[0] = newLimitPrice;
-          return newPrices;
-        });
-
-        if (onLimitPriceChange) {
-          onLimitPriceChange(newLimitPrice);
-        }
-
-        // Recalculate buy amount based on new limit price
-        const sellAmt = sellAmount ? parseFloat(removeCommas(sellAmount)) : 0;
-        if (sellAmt > 0) {
-          const newBuyAmount = sellAmt * newLimitPrice;
-          const newAmounts = [...buyAmounts];
-          newAmounts[0] = formatCalculatedValue(newBuyAmount);
-          setBuyAmounts(newAmounts);
-        }
-
-        // For baskets/multiple buy tokens, recalculate all other token amounts too
-        if (buyTokens.length > 1) {
-          const premiumMultiplier = 1 + percentToApply / 100;
-          const newAmounts = buyTokens.map((token, index) => {
-            if (index === 0 || !token) return buyAmounts[index] || '';
-            const tokenUsdPrice = getPrice(token.a);
-            if (tokenUsdPrice > 0 && sellTokenUsdPrice > 0) {
-              const sellAmt = sellAmount ? parseFloat(removeCommas(sellAmount)) : 0;
-              if (sellAmt > 0) {
-                const sellUsdValue = sellAmt * sellTokenUsdPrice;
-                const marketAmount = sellUsdValue / tokenUsdPrice;
-                const adjustedAmount = marketAmount * premiumMultiplier;
-                return formatCalculatedValue(adjustedAmount);
-              }
-            }
-            return buyAmounts[index] || '';
-          });
-          setBuyAmounts(newAmounts);
-        }
-      }
-    }
-  }, [sellToken?.a, buyTokens[0]?.a, prices]);
-
   // Track if we're receiving updates from chart drag to avoid circular updates
   const isReceivingExternalIndividualPriceRef = useRef(false);
 
@@ -1782,14 +1792,14 @@ export function LimitOrderForm({
       }
 
       if (marketPrice > 0) {
-        let percentageAboveMarket;
-        if (invertPriceDisplay) {
-          const invertedLimitPrice = 1 / externalLimitPrice;
-          const invertedMarketPrice = 1 / marketPrice;
-          percentageAboveMarket = ((invertedLimitPrice - invertedMarketPrice) / invertedMarketPrice) * 100;
-        } else {
-          percentageAboveMarket = ((externalLimitPrice - marketPrice) / marketPrice) * 100;
-        }
+        // marketPrice is in sell/buy format (sell tokens per buy token)
+        // externalLimitPrice is in buy/sell format (buy tokens per sell token)
+        // Convert marketPrice to buy/sell format for comparison
+        const marketPriceBuyPerSell = 1 / marketPrice;
+        // Percentage is always calculated in buy/sell format:
+        // positive % means user wants MORE buy tokens than market (asking above market)
+        // negative % means user wants FEWER buy tokens than market (asking below market)
+        const percentageAboveMarket = ((externalLimitPrice - marketPriceBuyPerSell) / marketPriceBuyPerSell) * 100;
         setPricePercentage(percentageAboveMarket);
       }
     }
@@ -1908,23 +1918,31 @@ export function LimitOrderForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sellAmountNum, limitPrice]);
 
-  // When first buy amount changes, update sell amount based on limit price
+  // When first buy amount changes, update limit price and percentage
+  // RULE: Sell amount stays the same, limit price and percentage recalculate
   // Only runs when user is typing in BUY - never when typing in sell
   useEffect(() => {
-    if (limitPriceSetByUserRef.current &&
-      activeInputRef.current === 'buy' &&
+    if (activeInputRef.current === 'buy' &&
       !isInitialLoadRef.current &&
-      buyAmountNum > 0) {
+      buyAmountNum > 0 &&
+      sellAmountNum > 0) {
 
-      const limitPriceNum = parseFloat(limitPrice);
-      if (limitPriceNum > 0) {
-        // limitPrice is always stored as buyToken per sellToken (canonical format)
-        // sellAmount = buyAmount / limitPrice
-        const newSellAmount = buyAmountNum / limitPriceNum;
-        setSellAmount(formatCalculatedValue(newSellAmount));
+      // Recalculate limit price: limitPrice = buyAmount / sellAmount
+      const newLimitPrice = buyAmountNum / sellAmountNum;
+      setLimitPrice(newLimitPrice.toString());
+      onLimitPriceChange?.(newLimitPrice);
+
+      // Recalculate percentage from new limit price vs market
+      if (marketPrice > 0) {
+        // marketPrice is sell/buy format, newLimitPrice is buy/sell format
+        // Convert to same format for comparison
+        const marketPriceBuyPerSell = 1 / marketPrice;
+        const percentageAboveMarket = ((newLimitPrice - marketPriceBuyPerSell) / marketPriceBuyPerSell) * 100;
+        setPricePercentage(Math.abs(percentageAboveMarket) > 0.01 ? percentageAboveMarket : null);
       }
     }
-  }, [buyAmountNum, limitPrice]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [buyAmountNum]);
 
   // Recalculate additional buy token amounts when prices change or new tokens are added
   // Only applies when prices are BOUND - when unlinked, each token keeps its own price
@@ -2343,106 +2361,6 @@ export function LimitOrderForm({
       setExpirationInput(diffDays.toString());
     }
   };
-
-  // Handle token changes and maintain price relationship
-  useEffect(() => {
-    // Skip on initial load or if we're already in the middle of updating
-    if (isInitialLoadRef.current || isTokenChangingRef.current || !limitPriceSetByUserRef.current) {
-      // Update refs for next time
-      previousSellTokenRef.current = sellToken;
-      previousBuyTokenRef.current = buyTokens[0];
-      return;
-    }
-
-    const previousSellToken = previousSellTokenRef.current;
-    const previousBuyToken = previousBuyTokenRef.current;
-    const currentBuyToken = buyTokens[0];
-
-    // Check if either sell or buy token changed
-    const sellTokenChanged = previousSellToken?.a !== sellToken?.a;
-    const buyTokenChanged = previousBuyToken?.a !== currentBuyToken?.a;
-
-    if ((sellTokenChanged || buyTokenChanged) && sellToken && currentBuyToken) {
-      isTokenChangingRef.current = true;
-
-      // Get current and new market prices
-      const currentSellPrice = sellToken ? prices[sellToken.a]?.price || 0 : 0;
-      const currentBuyPrice = currentBuyToken ? prices[currentBuyToken.a]?.price || 0 : 0;
-
-      if (currentSellPrice > 0 && currentBuyPrice > 0) {
-        // Calculate new market price in buy/sell format (buy tokens per sell token)
-        const newMarketPriceBuyPerSell = currentSellPrice / currentBuyPrice;
-
-        // If we have a stored price percentage, use it to calculate new amounts
-        if (pricePercentage !== null && pricePercentage !== undefined) {
-          // Apply percentage to buy/sell format market price
-          const newLimitPrice = newMarketPriceBuyPerSell * (1 + pricePercentage / 100);
-
-          // limitPrice is always stored in buy/sell format
-          setLimitPrice(newLimitPrice.toFixed(8));
-
-          if (onLimitPriceChange) {
-            onLimitPriceChange(newLimitPrice);
-          }
-
-          // Recalculate buy amount based on buy/sell limit price
-          const sellAmt = sellAmount ? parseFloat(removeCommas(sellAmount)) : 0;
-          if (sellAmt > 0) {
-            const newBuyAmount = sellAmt * newLimitPrice;
-            const newAmounts = [...buyAmounts];
-            newAmounts[0] = formatCalculatedValue(newBuyAmount);
-            setBuyAmounts(newAmounts);
-
-            // Save to localStorage
-            if (newAmounts[0]) {
-              localStorage.setItem('limitOrderBuyAmount', newAmounts[0]);
-            }
-          }
-        } else if (marketPrice > 0) {
-          // If no percentage stored, calculate current percentage from existing limit price
-          // limitPrice is stored in buy/sell format
-          const storedLimitPrice = parseFloat(limitPrice);
-          if (storedLimitPrice > 0) {
-            // marketPrice from line 1595 is in sell/buy format, convert to buy/sell
-            const marketPriceBuyPerSell = 1 / marketPrice;
-            const calculatedPercentage = ((storedLimitPrice - marketPriceBuyPerSell) / marketPriceBuyPerSell) * 100;
-
-            // Apply same percentage to new market price (buy/sell format)
-            const newLimitPrice = newMarketPriceBuyPerSell * (1 + calculatedPercentage / 100);
-
-            // Store in buy/sell format
-            setLimitPrice(newLimitPrice.toFixed(8));
-            setPricePercentage(calculatedPercentage);
-
-            if (onLimitPriceChange) {
-              onLimitPriceChange(newLimitPrice);
-            }
-
-            // Recalculate buy amount
-            const sellAmt = sellAmount ? parseFloat(removeCommas(sellAmount)) : 0;
-            if (sellAmt > 0) {
-              const newBuyAmount = sellAmt * newLimitPrice;
-              const newAmounts = [...buyAmounts];
-              newAmounts[0] = formatCalculatedValue(newBuyAmount);
-              setBuyAmounts(newAmounts);
-
-              // Save to localStorage
-              if (newAmounts[0]) {
-                localStorage.setItem('limitOrderBuyAmount', newAmounts[0]);
-              }
-            }
-          }
-        }
-      }
-
-      isTokenChangingRef.current = false;
-    }
-
-    // Update refs for next comparison
-    previousSellTokenRef.current = sellToken;
-    previousBuyTokenRef.current = currentBuyToken;
-  }, [sellToken?.a, firstBuyTokenAddress, prices, invertPriceDisplay, marketPrice, sellAmount]);
-  // Note: onLimitPriceChange intentionally excluded to prevent infinite loops
 
   const handlePercentageClick = (percentage: number, direction: 'above' | 'below' = 'above') => {
     if (!marketPrice) return;
@@ -3091,6 +3009,8 @@ export function LimitOrderForm({
     }
   };
 
+  // Handle buy token selection - uses centralized pricing hook
+  // See /docs/limit-order-data-flow.md for data flow rules
   const handleBuyTokenSelect = (tokenFromList: any, index: number) => {
     const token: TokenOption = {
       a: tokenFromList.a,
@@ -3117,44 +3037,21 @@ export function LimitOrderForm({
     // Save first buy token to localStorage for chart
     if (index === 0) {
       localStorage.setItem('limitOrderBuyToken', token.a);
+      // Note: Price recalculation is handled by the deferred useEffect above
+      // (search for "DEFERRED TOKEN CHANGE HANDLER") to avoid race conditions
+      // where prices aren't ready when this handler runs
     }
 
-    // Auto-calculate buy amount for additional tokens based on USD prices
-    if (index > 0 && sellAmount && parseFloat(removeCommas(sellAmount)) > 0) {
-      const sellAmt = parseFloat(removeCommas(sellAmount));
-      const sellTokenUsdPrice = sellToken ? getPrice(sellToken.a) : 0;
-      const tokenUsdPrice = getPrice(token.a);
+    // Auto-calculate buy amount for additional tokens (index > 0)
+    if (index > 0) {
+      pricing.handleAdditionalBuyTokenChange(token, index, sellToken, newBuyTokens[0], pricesBound);
 
-      // Only calculate if we have valid prices (> 0, not -1 which means no price)
-      if (sellTokenUsdPrice > 0 && tokenUsdPrice > 0) {
-        const sellUsdValue = sellAmt * sellTokenUsdPrice;
-
-        let premiumMultiplier = 1; // Default to market price
-
-        // Only apply first token's premium if prices are BOUND
-        if (pricesBound) {
-          // Calculate the premium/discount from market for the first token
-          // Use newBuyTokens[0] since buyTokens hasn't updated yet (async state)
-          const firstBuyToken = newBuyTokens[0];
-          const firstBuyTokenUsdPrice = firstBuyToken ? getPrice(firstBuyToken.a) : 0;
-          const limitPriceNum = parseFloat(limitPrice) || 0;
-          // marketPrice = sell tokens per buy token (e.g., how many PLS for 1 HEX)
-          const marketPriceForFirst = firstBuyTokenUsdPrice > 0 ? firstBuyTokenUsdPrice / sellTokenUsdPrice : 0;
-          premiumMultiplier = marketPriceForFirst > 0 && limitPriceNum > 0 ? limitPriceNum / marketPriceForFirst : 1;
-        }
-
-        // Apply premium/discount to this token's market rate
-        const marketAmount = sellUsdValue / tokenUsdPrice;
-        const adjustedAmount = marketAmount * premiumMultiplier;
-
-        const newBuyAmounts = [...buyAmounts];
-        newBuyAmounts[index] = formatCalculatedValue(adjustedAmount);
-        setBuyAmounts(newBuyAmounts);
-
-        // When unbound, also set the individual limit price for the new token at market
-        if (!pricesBound) {
-          // marketPrice = sell tokens per buy token
-          const marketPrice = tokenUsdPrice / sellTokenUsdPrice;
+      // When unbound, also set the individual limit price for the new token at market
+      if (!pricesBound && sellToken) {
+        const tokenUsdPrice = getPrice(token.a);
+        const sellTokenUsdPrice = getPrice(sellToken.a);
+        if (tokenUsdPrice > 0 && sellTokenUsdPrice > 0) {
+          const marketPrice = sellTokenUsdPrice / tokenUsdPrice;
           setIndividualLimitPrices(prev => {
             const newPrices = [...prev];
             newPrices[index] = marketPrice;
@@ -3162,11 +3059,22 @@ export function LimitOrderForm({
           });
         }
       }
-      // If token has no price data, leave the amount empty for user to fill manually
     }
+  };
 
-    // Note: checkDuplicateTokens is no longer needed since we filter out
-    // selected tokens from dropdowns, preventing duplicates at the UI level
+  // Handle sell token selection
+  // See /docs/limit-order-data-flow.md for data flow rules
+  const handleSellTokenSelect = (token: { a: string; ticker: string; name: string; decimals: number }) => {
+    const tokenOption: TokenOption = { a: token.a, ticker: token.ticker, name: token.name, decimals: token.decimals };
+    setSellToken(tokenOption);
+    localStorage.setItem('limitOrderSellToken', token.a);
+    localStorage.removeItem('limitOrderCustomSellToken');
+    setShowSellDropdown(false);
+    setSellSearchQuery('');
+
+    // Note: Price recalculation is handled by the deferred useEffect above
+    // (search for "DEFERRED TOKEN CHANGE HANDLER") to avoid race conditions
+    // where prices aren't ready when this handler runs
   };
 
   // Handle basket selection - expands basket into multiple buy tokens
@@ -3568,12 +3476,9 @@ export function LimitOrderForm({
                           toast({ title: "Token already selected", description: "This token is already selected as a buy token", variant: "destructive" });
                           return;
                         }
-                        setSellToken(customToken);
-                        localStorage.setItem('limitOrderSellToken', customToken.a);
+                        handleSellTokenSelect(customToken);
                         // Save full custom token object for restoration after reload
                         localStorage.setItem('limitOrderCustomSellToken', JSON.stringify(customToken));
-                        setShowSellDropdown(false);
-                        setSellSearchQuery('');
                         setCustomToken(null);
                       }}
                       className="w-full p-3 flex items-center space-x-3 hover:bg-white/5 transition-all text-left border-b border-white/5 bg-cyan-900/20"
@@ -3606,12 +3511,7 @@ export function LimitOrderForm({
                           key={token.a}
                           onClick={() => {
                             if (token.a) {
-                              setSellToken({ a: token.a, ticker: token.ticker, name: token.name, decimals: token.decimals });
-                              localStorage.setItem('limitOrderSellToken', token.a);
-                              // Clear custom token storage when selecting a regular token
-                              localStorage.removeItem('limitOrderCustomSellToken');
-                              setShowSellDropdown(false);
-                              setSellSearchQuery('');
+                              handleSellTokenSelect({ a: token.a, ticker: token.ticker, name: token.name, decimals: token.decimals });
                             }
                           }}
                           className="w-full p-3 flex items-center space-x-3 hover:bg-white/5 transition-all text-left border-b border-white/5 last:border-b-0"
@@ -4054,23 +3954,21 @@ export function LimitOrderForm({
                           </button>
                         )}
                       </div>
-                      {pricePercentage !== null && Math.abs(pricePercentage) > 0.01 && (
-                        <span className="text-sm font-bold text-[#FF0080]">
-                          <NumberFlow
-                            value={pricePercentage}
-                            format={{
-                              signDisplay: 'always',
-                              minimumFractionDigits: 0,
-                              maximumFractionDigits: Math.abs(pricePercentage) >= 10 ? 1 : 2
-                            }}
-                            suffix="%"
-                            animated={!isDragging}
-                          />
-                        </span>
-                      )}
+                      {pricePercentage !== null && Math.abs(pricePercentage) > 0.01 && (() => {
+                        // When inverted, flip the percentage sign
+                        const displayPct = invertPriceDisplay ? -pricePercentage : pricePercentage;
+                        return (
+                          <span className="text-sm font-bold text-[#FF0080]">
+                            {displayPct >= 0 ? '+' : ''}{Math.abs(displayPct) >= 10
+                              ? displayPct.toFixed(1)
+                              : displayPct.toFixed(2)}%
+                          </span>
+                        );
+                      })()}
                     </div>
                     <div className="relative">
                       <input
+                        ref={limitPriceInputRef}
                         type="text"
                         inputMode="decimal"
                         className="w-full bg-black/40 border border-[#FF0080]/30 p-3 text-[#FF0080] text-lg min-h-[52px] rounded-lg focus:outline-none focus:border-[#FF0080]/60 transition-colors"
@@ -4102,11 +4000,37 @@ export function LimitOrderForm({
                           return formatNumberWithCommas(displayPrice.toFixed(8).replace(/\.?0+$/, ''));
                         })()}
                         onChange={(e) => {
+                          const input = e.target;
+                          const cursorPos = input.selectionStart || 0;
+                          const oldValue = input.value;
+
                           // Remove commas first, then filter to only numbers and decimal
                           const rawValue = removeCommas(e.target.value).replace(/[^0-9.]/g, '');
                           // Format with commas for display
                           const formattedValue = formatNumberWithCommas(rawValue);
                           setLimitPriceInputValue(formattedValue);
+
+                          // Calculate new cursor position
+                          const digitsBeforeCursor = removeCommas(oldValue.slice(0, cursorPos)).length;
+                          let newCursorPos = 0;
+                          let digitCount = 0;
+                          for (let i = 0; i < formattedValue.length; i++) {
+                            if (digitCount >= digitsBeforeCursor) {
+                              newCursorPos = i;
+                              break;
+                            }
+                            if (formattedValue[i] !== ',') {
+                              digitCount++;
+                            }
+                            newCursorPos = i + 1;
+                          }
+
+                          requestAnimationFrame(() => {
+                            if (limitPriceInputRef.current) {
+                              limitPriceInputRef.current.setSelectionRange(newCursorPos, newCursorPos);
+                            }
+                          });
+
                           if (rawValue === '' || rawValue === '.') {
                             setLimitPrice('');
                             setPricePercentage(null);
@@ -4130,8 +4054,21 @@ export function LimitOrderForm({
                               return newPrices;
                             });
                             if (marketPrice > 0) {
-                              const percentageAboveMarket = ((basePrice - marketPrice) / marketPrice) * 100;
+                              // marketPrice is sell/buy format, basePrice is buy/sell format
+                              // Convert to same format for comparison
+                              const marketPriceBuyPerSell = 1 / marketPrice;
+                              const percentageAboveMarket = ((basePrice - marketPriceBuyPerSell) / marketPriceBuyPerSell) * 100;
                               setPricePercentage(Math.abs(percentageAboveMarket) > 0.01 ? percentageAboveMarket : null);
+                            }
+                            // Recalculate buy amount: buyAmount = sellAmount * limitPrice
+                            const sellAmt = sellAmount ? parseFloat(removeCommas(sellAmount)) : 0;
+                            if (sellAmt > 0) {
+                              const newBuyAmount = sellAmt * basePrice;
+                              setBuyAmounts(prev => {
+                                const newAmounts = [...prev];
+                                newAmounts[0] = formatCalculatedValue(newBuyAmount);
+                                return newAmounts;
+                              });
                             }
                             if (onLimitPriceChange) {
                               onLimitPriceChange(basePrice);
@@ -4165,9 +4102,9 @@ export function LimitOrderForm({
                           title={buyTokens.length > 1 ? 'Click to cycle through tokens' : undefined}
                         >
                           {invertPriceDisplay
-                            ? formatTokenTicker(sellToken.ticker, chainId)
-                            : formatTokenTicker(buyTokens[displayedPriceTokenIndex % buyTokens.length]?.ticker || buyTokens[0].ticker, chainId)}
-                          {buyTokens.length > 1 && !invertPriceDisplay && (
+                            ? formatTokenTicker(buyTokens[displayedPriceTokenIndex % buyTokens.length]?.ticker || buyTokens[0].ticker, chainId)
+                            : formatTokenTicker(sellToken.ticker, chainId)}
+                          {buyTokens.length > 1 && invertPriceDisplay && (
                             <span className="text-xs text-[#FF0080]/50">({(displayedPriceTokenIndex % buyTokens.length) + 1}/{buyTokens.length})</span>
                           )}
                         </button>
@@ -4559,7 +4496,7 @@ export function LimitOrderForm({
                       <div className="flex justify-between items-center mb-2">
                         <div className="flex items-center gap-2">
                           <label className="text-[#FF0080]/90 text-sm font-semibold">
-                            Limit Price: ({formatTokenTicker(buyToken.ticker, chainId)})
+                            Limit Price: ({invertPriceDisplay ? formatTokenTicker(sellToken?.ticker || '', chainId) : formatTokenTicker(buyToken.ticker, chainId)})
                           </label>
                           {sellToken && (
                             <button
@@ -4578,23 +4515,21 @@ export function LimitOrderForm({
                             </button>
                           )}
                         </div>
-                        {pricePercentage !== null && Math.abs(pricePercentage) > 0.01 && (
-                          <span className="text-sm font-bold text-[#FF0080]">
-                            <NumberFlow
-                              value={pricePercentage}
-                              format={{
-                                signDisplay: 'always',
-                                minimumFractionDigits: 0,
-                                maximumFractionDigits: Math.abs(pricePercentage) >= 10 ? 1 : 2
-                              }}
-                              suffix="%"
-                              animated={!isDragging}
-                            />
-                          </span>
-                        )}
+                        {pricePercentage !== null && Math.abs(pricePercentage) > 0.01 && (() => {
+                          // When inverted, flip the percentage sign
+                          const displayPct = invertPriceDisplay ? -pricePercentage : pricePercentage;
+                          return (
+                            <span className="text-sm font-bold text-[#FF0080]">
+                              {displayPct >= 0 ? '+' : ''}{Math.abs(displayPct) >= 10
+                                ? displayPct.toFixed(1)
+                                : displayPct.toFixed(2)}%
+                            </span>
+                          );
+                        })()}
                       </div>
                       <div className="relative">
                         <input
+                          ref={limitPriceInputRef}
                           type="text"
                           inputMode="decimal"
                           className="w-full bg-black/40 border border-[#FF0080]/30 p-3 text-[#FF0080] text-lg min-h-[52px] rounded-lg focus:outline-none focus:border-[#FF0080]/60 transition-colors"
@@ -4603,14 +4538,43 @@ export function LimitOrderForm({
                             if (!limitPrice || parseFloat(limitPrice) <= 0) return '';
                             const price = parseFloat(limitPrice);
                             if (invertPriceDisplay && price > 0) {
-                              return (1 / price).toFixed(8).replace(/\.?0+$/, '');
+                              return formatNumberWithCommas((1 / price).toFixed(8).replace(/\.?0+$/, ''));
                             }
-                            return price.toFixed(8).replace(/\.?0+$/, '');
+                            return formatNumberWithCommas(price.toFixed(8).replace(/\.?0+$/, ''));
                           })()}
                           onChange={(e) => {
-                            const inputValue = e.target.value.replace(/[^0-9.]/g, '');
-                            setLimitPriceInputValue(inputValue);
-                            if (inputValue === '' || inputValue === '.') {
+                            const input = e.target;
+                            const cursorPos = input.selectionStart || 0;
+                            const oldValue = input.value;
+
+                            // Remove commas first, then filter to only numbers and decimal
+                            const rawValue = removeCommas(e.target.value).replace(/[^0-9.]/g, '');
+                            // Format with commas for display
+                            const formattedValue = formatNumberWithCommas(rawValue);
+                            setLimitPriceInputValue(formattedValue);
+
+                            // Calculate new cursor position
+                            const digitsBeforeCursor = removeCommas(oldValue.slice(0, cursorPos)).length;
+                            let newCursorPos = 0;
+                            let digitCount = 0;
+                            for (let i = 0; i < formattedValue.length; i++) {
+                              if (digitCount >= digitsBeforeCursor) {
+                                newCursorPos = i;
+                                break;
+                              }
+                              if (formattedValue[i] !== ',') {
+                                digitCount++;
+                              }
+                              newCursorPos = i + 1;
+                            }
+
+                            requestAnimationFrame(() => {
+                              if (limitPriceInputRef.current) {
+                                limitPriceInputRef.current.setSelectionRange(newCursorPos, newCursorPos);
+                              }
+                            });
+
+                            if (rawValue === '' || rawValue === '.') {
                               setLimitPrice('');
                               setPricePercentage(null);
                               setIndividualLimitPrices(prev => {
@@ -4623,7 +4587,7 @@ export function LimitOrderForm({
                               }
                               return;
                             }
-                            const displayPrice = parseFloat(inputValue);
+                            const displayPrice = parseFloat(rawValue);
                             if (!isNaN(displayPrice) && displayPrice > 0) {
                               const basePrice = invertPriceDisplay ? 1 / displayPrice : displayPrice;
                               setLimitPrice(basePrice.toString());
@@ -4633,8 +4597,21 @@ export function LimitOrderForm({
                                 return newPrices;
                               });
                               if (marketPrice > 0) {
-                                const percentageAboveMarket = ((basePrice - marketPrice) / marketPrice) * 100;
+                                // marketPrice is sell/buy format, basePrice is buy/sell format
+                                // Convert to same format for comparison
+                                const marketPriceBuyPerSell = 1 / marketPrice;
+                                const percentageAboveMarket = ((basePrice - marketPriceBuyPerSell) / marketPriceBuyPerSell) * 100;
                                 setPricePercentage(Math.abs(percentageAboveMarket) > 0.01 ? percentageAboveMarket : null);
+                              }
+                              // Recalculate buy amount: buyAmount = sellAmount * limitPrice
+                              const sellAmt = sellAmount ? parseFloat(removeCommas(sellAmount)) : 0;
+                              if (sellAmt > 0) {
+                                const newBuyAmount = sellAmt * basePrice;
+                                setBuyAmounts(prev => {
+                                  const newAmounts = [...prev];
+                                  newAmounts[0] = formatCalculatedValue(newBuyAmount);
+                                  return newAmounts;
+                                });
                               }
                               if (onLimitPriceChange) {
                                 onLimitPriceChange(basePrice);
@@ -4648,7 +4625,7 @@ export function LimitOrderForm({
                               const displayValue = invertPriceDisplay && price > 0
                                 ? (1 / price).toFixed(8).replace(/\.?0+$/, '')
                                 : price.toFixed(8).replace(/\.?0+$/, '');
-                              setLimitPriceInputValue(displayValue);
+                              setLimitPriceInputValue(formatNumberWithCommas(displayValue));
                             } else {
                               setLimitPriceInputValue('');
                             }
@@ -4657,7 +4634,7 @@ export function LimitOrderForm({
                         />
                         {sellToken && (
                           <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[#FF0080]/70 text-sm font-medium pointer-events-none">
-                            {invertPriceDisplay ? formatTokenTicker(sellToken.ticker, chainId) : formatTokenTicker(buyToken.ticker, chainId)}
+                            {invertPriceDisplay ? formatTokenTicker(buyToken.ticker, chainId) : formatTokenTicker(sellToken.ticker, chainId)}
                           </div>
                         )}
                       </div>
@@ -4792,7 +4769,7 @@ export function LimitOrderForm({
                         <div className="mt-4">
                           <div className="flex justify-between items-center mb-2">
                             <label className="text-sm font-semibold" style={{ color: accentColor }}>
-                              Limit Price: ({formatTokenTicker(buyToken.ticker, chainId)})
+                              Limit Price: ({invertPriceDisplay ? formatTokenTicker(sellToken?.ticker || '', chainId) : formatTokenTicker(buyToken.ticker, chainId)})
                             </label>
                             {tokenPricePercentage !== null && Math.abs(tokenPricePercentage) > 0.01 && (
                               <span className="text-sm font-bold" style={{ color: accentColor }}>
@@ -4903,7 +4880,7 @@ export function LimitOrderForm({
                                 className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-medium pointer-events-none"
                                 style={{ color: `${accentColor}B3` }}
                               >
-                                {invertPriceDisplay ? formatTokenTicker(sellToken.ticker, chainId) : formatTokenTicker(buyToken.ticker, chainId)}
+                                {invertPriceDisplay ? formatTokenTicker(buyToken.ticker, chainId) : formatTokenTicker(sellToken.ticker, chainId)}
                               </div>
                             )}
                           </div>

@@ -741,28 +741,34 @@ export default function Home() {
                       onToggle={() => setOpenFaqIndex(openFaqIndex === 3 ? null : 3)}
                     />
                     <FAQItem
-                      question="Is it safe?"
-                      answer="AgoráX is a decentralized, immutable smart contract. Your tokens never leave the smart contract until a trade executes. There's no centralized person, or entity that can take or freeze your funds. All code is on-tchain and verifiable."
+                      question="How is AgoráX different from Uniswap V3?"
+                      answer="<strong class='text-white'>Fundamentally different architectures:</strong><br/><br/><strong class='text-green-400'>AgoráX (Limit Order Book):</strong><br/>• <strong>Zero slippage</strong> - You set exact prices, trade executes at that price or not at all<br/>• <strong>One order, 50 tokens</strong> - Accept payment in up to 50 different tokens simultaneously<br/>• <strong>No impermanent loss</strong> - You're a trader, not a liquidity provider<br/>• <strong>Non-transferable receipts</strong> - AGX tokens can't be transferred, sold, or stolen via phishing<br/>• <strong>No pooled funds</strong> - Your tokens are in YOUR order, not a shared pool that can be drained<br/>• <strong>MEV protection</strong> - Built-in cooldown period prevents sandwich attacks and flash loan exploits<br/><br/><strong class='text-red-400'>Uniswap V3 (AMM):</strong><br/>• Slippage on every trade - price worsens as trade size increases<br/>• Single token pairs only - one LP position = one pair<br/>• Impermanent loss risk - you lose value when prices move<br/>• LP positions are NFTs - transferable, sellable, and vulnerable to theft<br/>• Shared liquidity pools - one exploit can drain everyone's funds<br/>• MEV vulnerable - sandwich attacks are common"
                       isOpen={openFaqIndex === 4}
                       onToggle={() => setOpenFaqIndex(openFaqIndex === 4 ? null : 4)}
                     />
                     <FAQItem
-                      question="Are there admin keys?"
-                      answer="Yes. There are a few basic owner functions, but they are primarily for whitelist and fee management, but even for those users are protected. Their original fee and tokens listed are protected for the remainder of their order's life. The Owner CANNOT access a users funds, but there is an emergency pause that prevents placing and filling orders. Cancelling orders and collecting proceeds are both still possible in the event of a pause."
+                      question="Is it safe?"
+                      answer="AgoráX is a decentralized, immutable smart contract. Your tokens never leave the smart contract until a trade executes. There's no centralized person, or entity that can take or freeze your funds. All code is on-tchain and verifiable."
                       isOpen={openFaqIndex === 5}
                       onToggle={() => setOpenFaqIndex(openFaqIndex === 5 ? null : 5)}
                     />
                     <FAQItem
-                      question="Is the code immutable?"
-                      answer="Yes. 100% immutable. No upgrades, no proxy contracts."
+                      question="Are there admin keys?"
+                      answer="Yes. There are a few basic owner functions, but they are primarily for whitelist and fee management, but even for those users are protected. Their original fee and tokens listed are protected for the remainder of their order's life. The Owner CANNOT access a users funds, but there is an emergency pause that prevents placing and filling orders. Cancelling orders and collecting proceeds are both still possible in the event of a pause."
                       isOpen={openFaqIndex === 6}
                       onToggle={() => setOpenFaqIndex(openFaqIndex === 6 ? null : 6)}
                     />
                     <FAQItem
-                      question="Which tokens can I trade?"
-                      answer="You can sell any PRC-20 token on PulseChain and buy from a whitelist of 100+ tokens. For whitelist additions DM us at https://x.com/Time_Haven"
+                      question="Is the code immutable?"
+                      answer="Yes. 100% immutable. No upgrades, no proxy contracts."
                       isOpen={openFaqIndex === 7}
                       onToggle={() => setOpenFaqIndex(openFaqIndex === 7 ? null : 7)}
+                    />
+                    <FAQItem
+                      question="Which tokens can I trade?"
+                      answer="You can sell any PRC-20 token on PulseChain and buy from a whitelist of 100+ tokens. For whitelist additions DM us at https://x.com/Time_Haven"
+                      isOpen={openFaqIndex === 8}
+                      onToggle={() => setOpenFaqIndex(openFaqIndex === 8 ? null : 8)}
                     />
                   </div>
                 </motion.section>
