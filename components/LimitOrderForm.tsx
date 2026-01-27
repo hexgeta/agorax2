@@ -342,6 +342,8 @@ export function LimitOrderForm({
   // This fixes the race condition where prices aren't ready when token selection happens
   const prevSellTokenAddressRef = useRef<string | undefined>(sellToken?.a);
   const prevBuyTokenAddressRef = useRef<string | undefined>(buyTokens[0]?.a);
+  // Track when a token change is pending - blocks other effects from calling onLimitPriceChange
+  const tokenChangePendingRef = useRef<boolean>(false);
 
   // Hooks for contract interaction
   const publicClient = usePublicClient();
@@ -774,13 +776,21 @@ export function LimitOrderForm({
     const buyTokenChanged = currentBuyAddress !== prevBuyTokenAddressRef.current;
 
     // Only process if a token actually changed
-    if (!sellTokenChanged && !buyTokenChanged) return;
+    if (!sellTokenChanged && !buyTokenChanged) {
+      tokenChangePendingRef.current = false;
+      return;
+    }
+
+    // Mark that a token change is pending - this blocks other effects from
+    // calling onLimitPriceChange with stale values
+    tokenChangePendingRef.current = true;
 
     // Ensure we have both tokens
     if (!currentSellAddress || !currentBuyAddress) {
       // Update refs even if we can't process (token was cleared)
       prevSellTokenAddressRef.current = currentSellAddress;
       prevBuyTokenAddressRef.current = currentBuyAddress;
+      tokenChangePendingRef.current = false;
       return;
     }
 
@@ -790,6 +800,7 @@ export function LimitOrderForm({
 
     if (sellPrice <= 0 || buyPrice <= 0) {
       // Prices not ready yet - don't update refs, so we'll retry on next price update
+      // Keep tokenChangePendingRef true to block other effects
       return;
     }
 
@@ -799,11 +810,17 @@ export function LimitOrderForm({
 
     // Get sell amount
     const sellAmt = sellAmount ? parseFloat(removeCommas(sellAmount)) : 0;
-    if (sellAmt <= 0) return;
+    if (sellAmt <= 0) {
+      tokenChangePendingRef.current = false;
+      return;
+    }
 
     // Calculate new market price and derived values
     const newMarketPrice = sellPrice / buyPrice;
-    if (newMarketPrice <= 0) return;
+    if (newMarketPrice <= 0) {
+      tokenChangePendingRef.current = false;
+      return;
+    }
 
     // Apply existing percentage to get new limit price
     const pct = pricePercentage ?? 0;
@@ -820,6 +837,9 @@ export function LimitOrderForm({
       newAmounts[0] = pricing.formatCalculatedValue(newBuyAmount);
       return newAmounts;
     });
+
+    // Clear the pending flag after successful update
+    tokenChangePendingRef.current = false;
   }, [sellToken?.a, buyTokens, getPrice, sellAmount, pricePercentage, onLimitPriceChange, pricing]);
 
   // Sorted filtered sell tokens (sorted by USD value)
@@ -1718,7 +1738,8 @@ export function LimitOrderForm({
       isInitialLoadRef.current = false;
 
       // onLimitPriceChange expects non-inverted price (buy/sell)
-      if (onLimitPriceChange) {
+      // Skip if a token change is pending to avoid sending stale values to chart
+      if (onLimitPriceChange && !tokenChangePendingRef.current) {
         onLimitPriceChange(1 / marketPrice);
       }
     }
@@ -1731,6 +1752,8 @@ export function LimitOrderForm({
     if (activeInputRef.current !== null) return;
     // Skip if a percentage/backing click is in progress - it handles its own updates
     if (isPercentageClickInProgressRef.current) return;
+    // Skip if a token change is pending - deferred handler will set correct price
+    if (tokenChangePendingRef.current) return;
 
     if (externalLimitPrice !== undefined && !isLimitPriceInputFocused) {
       limitPriceSetByUserRef.current = true;
@@ -3019,6 +3042,12 @@ export function LimitOrderForm({
       decimals: tokenFromList.decimals
     };
 
+    // Mark token change as pending IMMEDIATELY to prevent other effects from
+    // triggering with stale values before the deferred handler runs
+    if (index === 0) {
+      tokenChangePendingRef.current = true;
+    }
+
     const newBuyTokens = [...buyTokens];
     newBuyTokens[index] = token;
     setBuyTokens(newBuyTokens);
@@ -3065,6 +3094,10 @@ export function LimitOrderForm({
   // Handle sell token selection
   // See /docs/limit-order-data-flow.md for data flow rules
   const handleSellTokenSelect = (token: { a: string; ticker: string; name: string; decimals: number }) => {
+    // Mark token change as pending IMMEDIATELY to prevent other effects from
+    // triggering with stale values before the deferred handler runs
+    tokenChangePendingRef.current = true;
+
     const tokenOption: TokenOption = { a: token.a, ticker: token.ticker, name: token.name, decimals: token.decimals };
     setSellToken(tokenOption);
     localStorage.setItem('limitOrderSellToken', token.a);
@@ -3347,14 +3380,7 @@ export function LimitOrderForm({
                   }}
                   className="w-full h-full bg-black/40 border border-white/10 p-3 text-white text-base flex items-center cursor-text rounded-lg overflow-hidden"
                 >
-                  <NumberFlow
-                    value={formatDisplayValue(sellAmountNum)}
-                    format={{
-                      minimumFractionDigits: 0,
-                      maximumFractionDigits: 4
-                    }}
-                    animated={!isDragging}
-                  />
+                  {formatNumberWithCommas(formatDisplayValue(sellAmountNum).toString())}
                 </div>
               ) : (
                 <input
@@ -3552,16 +3578,7 @@ export function LimitOrderForm({
                   <span>Loading price...</span>
                 </div>
               ) : sellUsdValue > 0 ? (
-                <NumberFlow
-                  value={sellUsdValue}
-                  format={{
-                    style: 'currency',
-                    currency: 'USD',
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2
-                  }}
-                  animated={!isDragging}
-                />
+                `$${sellUsdValue.toFixed(2)}`
               ) : '$0.00'}
             </div>
             {sellToken && isConnected && (
@@ -3764,14 +3781,7 @@ export function LimitOrderForm({
                           }}
                           className="w-full h-full bg-black/40 border border-white/10 p-3 text-white text-base flex items-center cursor-text rounded-lg overflow-hidden"
                         >
-                          <NumberFlow
-                            value={formatDisplayValue(parseFloat(removeCommas(buyAmounts[0])))}
-                            format={{
-                              minimumFractionDigits: 0,
-                              maximumFractionDigits: 4
-                            }}
-                            animated={!isDragging}
-                          />
+                          {formatNumberWithCommas(formatDisplayValue(parseFloat(removeCommas(buyAmounts[0]))).toString())}
                         </div>
                       ) : (
                         <input
@@ -4218,14 +4228,7 @@ export function LimitOrderForm({
                           }}
                           className="w-full h-full bg-black/40 border border-white/10 p-3 text-white text-base flex items-center cursor-text rounded-lg overflow-hidden"
                         >
-                          <NumberFlow
-                            value={formatDisplayValue(parseFloat(removeCommas(buyAmounts[index])))}
-                            format={{
-                              minimumFractionDigits: 0,
-                              maximumFractionDigits: 4
-                            }}
-                            animated={!isDragging}
-                          />
+                          {formatNumberWithCommas(formatDisplayValue(parseFloat(removeCommas(buyAmounts[index]))).toString())}
                         </div>
                       ) : (
                         <input

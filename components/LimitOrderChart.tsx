@@ -785,13 +785,7 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                           </span>
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-bold text-white">
-                              <NumberFlow
-                                value={priceForThisToken || 0}
-                                format={{
-                                  minimumSignificantDigits: 1,
-                                  maximumSignificantDigits: 4
-                                }}
-                              />
+                              {(priceForThisToken || 0).toPrecision(4).replace(/\.?0+$/, '')}
                             </span>
                             <span className="text-xs text-[#FF0080]">
                               {formatTokenTicker(unitTokenInfo?.ticker || '')}
@@ -895,13 +889,7 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                       </span>
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-bold text-white">
-                          <NumberFlow
-                            value={displayIndividualPrice || 0}
-                            format={{
-                              minimumSignificantDigits: 1,
-                              maximumSignificantDigits: 4
-                            }}
-                          />
+                          {(displayIndividualPrice || 0).toPrecision(4).replace(/\.?0+$/, '')}
                         </span>
                         <span className="text-xs" style={{ color: lineColor }}>
                           {formatTokenTicker(invertPriceDisplay ? (sellTokenInfo?.ticker || '') : tokenInfo.ticker)}
