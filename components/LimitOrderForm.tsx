@@ -589,8 +589,9 @@ export function LimitOrderForm({
       // Tokens are already filtered to be in whitelist via availableTokens
 
       // Exclude the currently selected buy token at this index from the dropdown
+      // BUT: when a basket is selected, allow it so user can click to switch to single token
       if (currentBuyToken && currentBuyToken.a && token.a.toLowerCase() === currentBuyToken.a.toLowerCase()) {
-        return false;
+        if (!selectedBasket) return false;
       }
 
       // Exclude if it's the sell token
@@ -599,10 +600,11 @@ export function LimitOrderForm({
       }
 
       // Exclude if it's already selected in another buy token slot
+      // BUT: when a basket is selected, allow basket tokens to appear so user can switch to single token
       const isSelectedInOtherBuySlot = buyTokens.some((buyToken, idx) =>
         idx !== index && buyToken && buyToken.a && token.a && buyToken.a.toLowerCase() === token.a.toLowerCase()
       );
-      if (isSelectedInOtherBuySlot) return false;
+      if (isSelectedInOtherBuySlot && !selectedBasket) return false;
 
       // Apply search filter (including address search)
       const searchLower = searchQuery.toLowerCase();
@@ -1282,6 +1284,21 @@ export function LimitOrderForm({
       localStorage.setItem('limitOrderBuyToken', resolvedBuyTokens[0].a);
     }
 
+    // Restore selected basket if it was saved
+    const savedBasket = localStorage.getItem('limitOrderSelectedBasket');
+    if (savedBasket) {
+      // Verify the basket still exists
+      const basket = TOKEN_BASKETS.find(b => b.id === savedBasket);
+      if (basket && resolvedBuyTokens.length > 1) {
+        // If we have multiple buy tokens and a saved basket, restore it
+        // The tokens were already restored from localStorage, so they should match
+        setSelectedBasket(savedBasket);
+      } else {
+        // Basket no longer exists or only one token, clear it
+        localStorage.removeItem('limitOrderSelectedBasket');
+      }
+    }
+
     const savedLimitPrice = localStorage.getItem('limitOrderPrice');
     if (savedLimitPrice && parseFloat(savedLimitPrice) > 0) {
       limitPriceSetByUserRef.current = true;
@@ -1347,6 +1364,15 @@ export function LimitOrderForm({
       localStorage.setItem('limitOrderBuyToken', tokenAddresses[0]);
     }
   }, [buyTokens]);
+
+  // Save selected basket to localStorage
+  useEffect(() => {
+    if (selectedBasket) {
+      localStorage.setItem('limitOrderSelectedBasket', selectedBasket);
+    } else {
+      localStorage.removeItem('limitOrderSelectedBasket');
+    }
+  }, [selectedBasket]);
 
   // Safeguard: Ensure sell token and buy tokens are never the same
   useEffect(() => {
@@ -2986,13 +3012,20 @@ export function LimitOrderForm({
 
     // Mark token change as pending IMMEDIATELY to prevent other effects from
     // triggering with stale values before the deferred handler runs
-    if (index === 0) {
+    if (index === 0 || selectedBasket) {
       tokenChangePendingRef.current = true;
     }
 
-    const newBuyTokens = [...buyTokens];
-    newBuyTokens[index] = token;
-    setBuyTokens(newBuyTokens);
+    // If a basket is selected, replace all tokens with just the selected one
+    // This allows user to switch from basket to single token
+    if (selectedBasket) {
+      setBuyTokens([token]);
+      setBuyAmounts(['']);
+    } else {
+      const newBuyTokens = [...buyTokens];
+      newBuyTokens[index] = token;
+      setBuyTokens(newBuyTokens);
+    }
 
     const newDropdowns = [...showBuyDropdowns];
     newDropdowns[index] = false;
@@ -3840,12 +3873,13 @@ export function LimitOrderForm({
                   )}
                 </div>
 
-                {/* Buy Token USD Value for Basket */}
+                {/* Buy Token USD Value for Basket - show minimum (conservative) since it's "one of" */}
                 <div className="flex items-center gap-2 mt-2">
                   <div className="w-[140px] shrink-0 text-white/50 text-sm font-semibold">
                     {(() => {
-                      // Calculate total USD value across all basket tokens
-                      let totalUsdValue = 0;
+                      // Find the minimum USD value across all basket tokens (conservative estimate)
+                      // Since the order accepts "one of" these tokens, we show the lowest value
+                      const usdValues: number[] = [];
                       let hasAnyPrice = false;
                       let hasAnyAmount = false;
 
@@ -3854,8 +3888,10 @@ export function LimitOrderForm({
                           const buyAmtNum = buyAmounts[idx] ? parseFloat(removeCommas(buyAmounts[idx])) : 0;
                           if (buyAmtNum > 0) hasAnyAmount = true;
                           const tokenPrice = getPrice(token.a);
-                          if (tokenPrice > 0) hasAnyPrice = true;
-                          totalUsdValue += buyAmtNum * Math.max(0, tokenPrice);
+                          if (tokenPrice > 0) {
+                            hasAnyPrice = true;
+                            usdValues.push(buyAmtNum * tokenPrice);
+                          }
                         }
                       });
 
@@ -3867,7 +3903,8 @@ export function LimitOrderForm({
                           </div>
                         );
                       }
-                      return totalUsdValue > 0 ? `$${formatNumberWithCommas(totalUsdValue.toFixed(2))}` : '$0.00';
+                      const minUsdValue = usdValues.length > 0 ? Math.min(...usdValues) : 0;
+                      return minUsdValue > 0 ? `$${formatNumberWithCommas(minUsdValue.toFixed(2))}` : '$0.00';
                     })()}
                   </div>
                 </div>
@@ -5599,7 +5636,7 @@ export function LimitOrderForm({
           )}
 
         {/* Below Market Price Warning */}
-        {pricePercentage !== null && pricePercentage < -5 && sellToken && buyTokens[0] && (
+        {pricePercentage !== null && pricePercentage < -1 && sellToken && buyTokens[0] && (
           <div className="mb-4 p-3 bg-yellow-900/20 border border-yellow-500/30 rounded-lg">
             <div className="flex items-start gap-2">
               <svg className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
