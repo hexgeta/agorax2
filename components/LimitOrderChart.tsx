@@ -349,7 +349,11 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
   const sellChanged = sellTokenAddress !== prevSellTokenRef.current;
   const buyChanged = buyTokenAddresses[0] !== prevBuyTokenRef.current;
 
-  // If token just changed, mark as pending and capture the old limit price
+  // Determine if we're ALREADY in a transition from previous render
+  // (tokenTransitionPending is set, and price hasn't changed yet)
+  const wasInTransition = tokenTransitionPending && limitOrderPrice === limitPriceAtTokenChangeRef.current;
+
+  // If token just changed THIS render, mark as pending and capture the old limit price
   if (sellChanged || buyChanged) {
     if (!tokenTransitionPending) {
       // First render with new token - capture current limitOrderPrice to compare against
@@ -359,9 +363,8 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
     prevBuyTokenRef.current = buyTokenAddresses[0];
   }
 
-  // Determine if we're in transition: tokens changed AND limitOrderPrice hasn't updated yet
-  const isInTransition = (sellChanged || buyChanged) ||
-    (tokenTransitionPending && limitOrderPrice === limitPriceAtTokenChangeRef.current);
+  // We're in transition if: token just changed OR we were already in transition
+  const isInTransition = (sellChanged || buyChanged) || wasInTransition;
 
   // Update transition state (for re-render trigger when it clears)
   useEffect(() => {
@@ -392,13 +395,15 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
     ? percentageToPosition(limitPricePercentDeviation)
     : null;
 
-  // During transitions, keep using the stable position to prevent jumping
-  // Only update stable position when NOT in transition
+  // During transitions, keep the line at the same visual position on the chart
+  // IMPORTANT: Only update stableLimitPricePositionRef when NOT in transition
+  // This prevents the ref from being updated with bad position data during transition
   if (!isInTransition && calculatedLimitPricePosition !== null) {
     stableLimitPricePositionRef.current = calculatedLimitPricePosition;
   }
 
   // Use stable position during transitions, calculated position otherwise
+  // The stable position keeps the line visually in place until new price arrives
   const limitPricePosition = isInTransition
     ? stableLimitPricePositionRef.current
     : calculatedLimitPricePosition;

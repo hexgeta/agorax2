@@ -3508,7 +3508,7 @@ export function LimitOrderForm({
                   <span>Loading price...</span>
                 </div>
               ) : sellUsdValue > 0 ? (
-                `$${sellUsdValue.toFixed(2)}`
+                `$${formatNumberWithCommas(sellUsdValue.toFixed(2))}`
               ) : '$0.00'}
             </div>
             {sellToken && isConnected && (
@@ -3840,17 +3840,69 @@ export function LimitOrderForm({
                   )}
                 </div>
 
+                {/* Buy Token USD Value for Basket */}
+                <div className="flex items-center gap-2 mt-2">
+                  <div className="w-[140px] shrink-0 text-white/50 text-sm font-semibold">
+                    {(() => {
+                      // Calculate total USD value across all basket tokens
+                      let totalUsdValue = 0;
+                      let hasAnyPrice = false;
+                      let hasAnyAmount = false;
+
+                      buyTokens.forEach((token, idx) => {
+                        if (token) {
+                          const buyAmtNum = buyAmounts[idx] ? parseFloat(removeCommas(buyAmounts[idx])) : 0;
+                          if (buyAmtNum > 0) hasAnyAmount = true;
+                          const tokenPrice = getPrice(token.a);
+                          if (tokenPrice > 0) hasAnyPrice = true;
+                          totalUsdValue += buyAmtNum * Math.max(0, tokenPrice);
+                        }
+                      });
+
+                      if (pricesLoading && !hasAnyPrice && hasAnyAmount) {
+                        return (
+                          <div className="flex items-center gap-1.5 animate-pulse">
+                            <span className="w-1.5 h-1.5 rounded-full bg-white/30" />
+                            <span>Loading price...</span>
+                          </div>
+                        );
+                      }
+                      return totalUsdValue > 0 ? `$${formatNumberWithCommas(totalUsdValue.toFixed(2))}` : '$0.00';
+                    })()}
+                  </div>
+                </div>
+
                 {/* Basket Tokens Preview - show which tokens are in the basket */}
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {buyTokens.map((token, index) => token && (
-                    <div key={token.a} className="flex items-center gap-1 px-2 py-1 bg-white/5 rounded-full border border-white/10 whitespace-nowrap">
+                    <div
+                      key={token.a}
+                      className="group relative flex items-center gap-1 px-2 py-1 bg-white/5 hover:bg-white/10 rounded-full border border-white/10 hover:border-white/20 whitespace-nowrap transition-colors cursor-pointer"
+                      onClick={() => {
+                        if (buyTokens.length > 1) {
+                          // Remove this token from the basket
+                          const newBuyTokens = buyTokens.filter((_, i) => i !== index);
+                          const newBuyAmounts = buyAmounts.filter((_, i) => i !== index);
+                          setBuyTokens(newBuyTokens);
+                          setBuyAmounts(newBuyAmounts);
+                        }
+                      }}
+                      title={buyTokens.length > 1 ? `Click to remove ${formatTokenTicker(token.ticker, chainId)}` : 'Cannot remove last token'}
+                    >
                       <TokenLogo ticker={token.ticker} className="w-4 h-4 flex-shrink-0" />
-                      <span className="text-white/70 text-xs">
+                      <span className="text-white/70 text-xs group-hover:text-white/90 transition-colors">
                         {buyAmounts[index] && parseFloat(removeCommas(buyAmounts[index])) > 0
                           ? `${formatNumberWithCommas(parseFloat(parseFloat(removeCommas(buyAmounts[index])).toPrecision(4)).toString())} `
                           : ''}
                         {formatTokenTicker(token.ticker, chainId)}
                       </span>
+                      {buyTokens.length > 1 && (
+                        <span className="ml-0.5 opacity-0 group-hover:opacity-100 transition-opacity text-white/50 hover:text-white">
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </span>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -3860,9 +3912,26 @@ export function LimitOrderForm({
                   <div className="mt-4">
                     <div className="flex justify-between items-center mb-2">
                       <div className="flex items-center gap-2">
-                        <label className="text-[#FF0080]/90 text-sm font-semibold">
-                          Limit Price: ({TOKEN_BASKETS.find(b => b.id === selectedBasket)?.name || 'Basket'})
-                        </label>
+                        {invertPriceDisplay && buyTokens.length > 1 ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const nextIndex = (displayedPriceTokenIndex + 1) % buyTokens.length;
+                              setDisplayedPriceTokenIndex(nextIndex);
+                            }}
+                            className="text-[#FF0080]/90 text-sm font-semibold hover:text-[#FF0080] transition-colors flex items-center gap-1"
+                            title="Click to cycle through tokens"
+                          >
+                            Limit Price: ({formatTokenTicker(buyTokens[displayedPriceTokenIndex % buyTokens.length]?.ticker || buyTokens[0].ticker, chainId)})
+                            <span className="text-xs text-[#FF0080]/50">({(displayedPriceTokenIndex % buyTokens.length) + 1}/{buyTokens.length})</span>
+                          </button>
+                        ) : (
+                          <label className="text-[#FF0080]/90 text-sm font-semibold">
+                            Limit Price: ({invertPriceDisplay
+                              ? formatTokenTicker(buyTokens[displayedPriceTokenIndex % buyTokens.length]?.ticker || buyTokens[0].ticker, chainId)
+                              : formatTokenTicker(sellToken?.ticker || '', chainId)})
+                          </label>
+                        )}
                         {sellToken && (
                           <button
                             type="button"
@@ -3872,7 +3941,7 @@ export function LimitOrderForm({
                               onInvertPriceDisplayChange?.(newInverted);
                             }}
                             className="p-1 text-[#FF0080] hover:text-white transition-colors"
-                            title={`Show price in ${invertPriceDisplay ? formatTokenTicker(buyTokens[0].ticker, chainId) : formatTokenTicker(sellToken.ticker, chainId)}`}
+                            title={`Show price in ${invertPriceDisplay ? formatTokenTicker(sellToken.ticker, chainId) : formatTokenTicker(buyTokens[0].ticker, chainId)}`}
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
@@ -4028,9 +4097,9 @@ export function LimitOrderForm({
                           title={buyTokens.length > 1 ? 'Click to cycle through tokens' : undefined}
                         >
                           {invertPriceDisplay
-                            ? formatTokenTicker(buyTokens[displayedPriceTokenIndex % buyTokens.length]?.ticker || buyTokens[0].ticker, chainId)
-                            : formatTokenTicker(sellToken.ticker, chainId)}
-                          {buyTokens.length > 1 && invertPriceDisplay && (
+                            ? formatTokenTicker(sellToken.ticker, chainId)
+                            : formatTokenTicker(buyTokens[displayedPriceTokenIndex % buyTokens.length]?.ticker || buyTokens[0].ticker, chainId)}
+                          {buyTokens.length > 1 && !invertPriceDisplay && (
                             <span className="text-xs text-[#FF0080]/50">({(displayedPriceTokenIndex % buyTokens.length) + 1}/{buyTokens.length})</span>
                           )}
                         </button>
@@ -4393,6 +4462,28 @@ export function LimitOrderForm({
                   )}
                 </div>
 
+                {/* Buy Token USD Value */}
+                {buyToken && (
+                  <div className="flex items-center gap-2 mt-2">
+                    <div className="w-[140px] shrink-0 text-white/50 text-sm font-semibold">
+                      {(() => {
+                        const buyAmtNum = buyAmounts[index] ? parseFloat(removeCommas(buyAmounts[index])) : 0;
+                        const tokenPrice = getPrice(buyToken.a);
+                        const usdValue = buyAmtNum * Math.max(0, tokenPrice);
+                        if (pricesLoading && tokenPrice === 0 && buyAmtNum > 0) {
+                          return (
+                            <div className="flex items-center gap-1.5 animate-pulse">
+                              <span className="w-1.5 h-1.5 rounded-full bg-white/30" />
+                              <span>Loading price...</span>
+                            </div>
+                          );
+                        }
+                        return usdValue > 0 ? `$${formatNumberWithCommas(usdValue.toFixed(2))}` : '$0.00';
+                      })()}
+                    </div>
+                  </div>
+                )}
+
                 {/* Limit Price Section - inline for each buy token */}
                 {buyToken && (
                   index === 0 ? (
@@ -4401,7 +4492,7 @@ export function LimitOrderForm({
                       <div className="flex justify-between items-center mb-2">
                         <div className="flex items-center gap-2">
                           <label className="text-[#FF0080]/90 text-sm font-semibold">
-                            Limit Price: ({invertPriceDisplay ? formatTokenTicker(sellToken?.ticker || '', chainId) : formatTokenTicker(buyToken.ticker, chainId)})
+                            Limit Price: ({invertPriceDisplay ? formatTokenTicker(buyToken.ticker, chainId) : formatTokenTicker(sellToken?.ticker || '', chainId)})
                           </label>
                           {sellToken && (
                             <button
@@ -4412,7 +4503,7 @@ export function LimitOrderForm({
                                 onInvertPriceDisplayChange?.(newInverted);
                               }}
                               className="p-1 text-[#FF0080] hover:text-white transition-colors"
-                              title={`Show price in ${invertPriceDisplay ? formatTokenTicker(buyToken.ticker, chainId) : formatTokenTicker(sellToken.ticker, chainId)}`}
+                              title={`Show price in ${invertPriceDisplay ? formatTokenTicker(sellToken.ticker, chainId) : formatTokenTicker(buyToken.ticker, chainId)}`}
                             >
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
@@ -4539,7 +4630,7 @@ export function LimitOrderForm({
                         />
                         {sellToken && (
                           <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[#FF0080]/70 text-sm font-medium pointer-events-none">
-                            {invertPriceDisplay ? formatTokenTicker(buyToken.ticker, chainId) : formatTokenTicker(sellToken.ticker, chainId)}
+                            {invertPriceDisplay ? formatTokenTicker(sellToken.ticker, chainId) : formatTokenTicker(buyToken.ticker, chainId)}
                           </div>
                         )}
                       </div>
@@ -5506,6 +5597,23 @@ export function LimitOrderForm({
             proStatsContainerRef.current
           ) : null
           )}
+
+        {/* Below Market Price Warning */}
+        {pricePercentage !== null && pricePercentage < -5 && sellToken && buyTokens[0] && (
+          <div className="mb-4 p-3 bg-yellow-900/20 border border-yellow-500/30 rounded-lg">
+            <div className="flex items-start gap-2">
+              <svg className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <div className="text-sm">
+                <p className="text-yellow-500 font-medium">Selling Below Market Price</p>
+                <p className="text-yellow-400/80 mt-1">
+                  Your limit price is {Math.abs(pricePercentage).toFixed(1)}% below market. You&apos;re offering {formatTokenTicker(sellToken.ticker, chainId)} at a discount.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Connect/Submit Button */}
         {!isConnected ? (
