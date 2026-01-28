@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useState } from 'react'
 import { TransactionProvider } from '@/context/TransactionContext'
 import { TokenAccessProvider } from '@/context/TokenAccessContext'
+import { TokenBalancesProvider } from '@/context/TokenBalancesContext'
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient())
@@ -15,7 +16,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <SWRConfig value={swrConfig}>
         <TransactionProvider>
           <TokenAccessProvider>
-            {children}
+            <TokenBalancesProvider>
+              {children}
+            </TokenBalancesProvider>
           </TokenAccessProvider>
         </TransactionProvider>
       </SWRConfig>

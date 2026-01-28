@@ -12,6 +12,8 @@ import { formatTokenTicker, parseTokenAmount, getTokenInfoByIndex, getContractWh
 import { getBlockExplorerTxUrl } from '@/utils/blockExplorer';
 import { useTokenStats } from '@/hooks/crypto/useTokenStats';
 import { useTokenAccess } from '@/context/TokenAccessContext';
+import { useTokenBalances } from '@/context/TokenBalancesContext';
+import { useTransaction } from '@/context/TransactionContext';
 import { PAYWALL_ENABLED, REQUIRED_PARTY_TOKENS, REQUIRED_TEAM_TOKENS, PAYWALL_TITLE, PAYWALL_DESCRIPTION } from '@/config/paywall';
 import PaywallModal from './PaywallModal';
 import { TokenLogo } from '@/components/TokenLogo';
@@ -72,6 +74,24 @@ const formatBalanceDisplay = (balance: string): string => {
   if (num < 1) return num.toFixed(6);
   if (num < 1000) return num.toFixed(4);
   return formatNumberWithCommas(num.toFixed(2));
+};
+
+// Helper to format limit price for display (handles very small numbers)
+const formatLimitPriceDisplay = (price: number): string => {
+  if (price === 0) return '';
+  // For very small numbers (< 0.0000001), use scientific notation
+  if (price < 0.0000001) {
+    return price.toPrecision(4);
+  }
+  // For small numbers, show enough decimal places to see significant figures
+  if (price < 0.001) {
+    // Find how many decimal places we need to show 4 significant figures
+    const magnitude = Math.floor(Math.log10(price));
+    const decimals = Math.min(Math.abs(magnitude) + 3, 12); // At least 4 sig figs, max 12 decimals
+    return price.toFixed(decimals).replace(/\.?0+$/, '');
+  }
+  // For normal numbers, use 8 decimal places and strip trailing zeros
+  return price.toFixed(8).replace(/\.?0+$/, '');
 };
 
 // Helper to format display value with max 4 significant figures
@@ -311,8 +331,8 @@ export function LimitOrderForm({
   const [isLoadingCustomToken, setIsLoadingCustomToken] = useState(false);
   const [customTokenError, setCustomTokenError] = useState<string | null>(null);
 
-  // Token balances for dropdown sorting (address -> balance in token units)
-  const [dropdownTokenBalances, setDropdownTokenBalances] = useState<Record<string, string>>({});
+  // Token balances from shared context (fetched in background on app load)
+  const { balances: dropdownTokenBalances } = useTokenBalances();
 
   // Individual limit prices for each buy token (used when pricesBound is false)
   const [individualLimitPrices, setIndividualLimitPrices] = useState<(number | undefined)[]>([]);
@@ -349,6 +369,7 @@ export function LimitOrderForm({
   const publicClient = usePublicClient();
   const { toast } = useToast();
   const { placeOrder, contractAddress } = useContractWhitelist();
+  const { setTransactionPending } = useTransaction();
 
   // Get whitelisted tokens from the contract
   const { activeTokens, isLoading: isLoadingWhitelist } = useContractWhitelistRead();
@@ -454,87 +475,6 @@ export function LimitOrderForm({
       return true;
     });
   }, [getBasketTokens, sellToken]);
-
-  // Fetch all token balances for dropdown sorting
-  // Runs on wallet connect, page load, and every 5 minutes
-  const tokensToFetchBalances = useMemo(() => {
-    return showMoreTokens ? TOKEN_CONSTANTS.filter(t => t.a) : availableTokens;
-  }, [showMoreTokens, availableTokens]);
-
-  // Use ref to track if currently fetching to prevent concurrent fetches
-  const isFetchingBalances = useRef(false);
-
-  const fetchAllBalances = useCallback(async () => {
-    if (!address || !publicClient || tokensToFetchBalances.length === 0 || isFetchingBalances.current) return;
-
-    isFetchingBalances.current = true;
-
-    const ERC20_BALANCE_ABI = [
-      {
-        inputs: [{ name: 'account', type: 'address' }],
-        name: 'balanceOf',
-        outputs: [{ name: '', type: 'uint256' }],
-        stateMutability: 'view',
-        type: 'function',
-      },
-    ] as const;
-
-    const balances: Record<string, string> = {};
-
-    try {
-      const erc20Tokens = tokensToFetchBalances.filter(t => t.a && !isNativeToken(t.a));
-
-      // Fetch all ERC20 balances in parallel using individual readContract calls
-      const balancePromises = erc20Tokens.map(async (token) => {
-        try {
-          const balance = await publicClient.readContract({
-            address: token.a as `0x${string}`,
-            abi: ERC20_BALANCE_ABI,
-            functionName: 'balanceOf',
-            args: [address],
-          });
-          return { token, balance: balance as bigint, success: true };
-        } catch {
-          return { token, balance: 0n, success: false };
-        }
-      });
-
-      const results = await Promise.all(balancePromises);
-
-      results.forEach(({ token, balance, success }) => {
-        if (token?.a && success) {
-          const formatted = formatUnits(balance, token.decimals || 18);
-          balances[token.a.toLowerCase()] = formatted;
-        }
-      });
-
-      // Fetch native token (PLS) balance separately
-      const nativeToken = tokensToFetchBalances.find(t => t.a && isNativeToken(t.a));
-      if (nativeToken?.a) {
-        const nativeBalance = await publicClient.getBalance({ address });
-        balances[nativeToken.a.toLowerCase()] = formatEther(nativeBalance);
-      }
-
-      setDropdownTokenBalances(balances);
-    } catch (error) {
-      console.error('Failed to fetch token balances for dropdown:', error);
-    } finally {
-      isFetchingBalances.current = false;
-    }
-  }, [address, publicClient, tokensToFetchBalances]);
-
-  // Fetch balances on wallet connect/change and set up 5-minute interval
-  useEffect(() => {
-    if (!address) return;
-
-    // Fetch immediately on wallet connect or page load
-    fetchAllBalances();
-
-    // Set up 5-minute interval for background refresh
-    const intervalId = setInterval(fetchAllBalances, 5 * 60 * 1000);
-
-    return () => clearInterval(intervalId);
-  }, [address, fetchAllBalances]);
 
   // Detect if sell search query is a contract address and fetch token info from DexScreener
   useEffect(() => {
@@ -2059,6 +1999,7 @@ export function LimitOrderForm({
 
     try {
       setIsCreatingOrder(true);
+      setTransactionPending(true);
 
       // Handle token approval if needed
       if (needsApproval && allowance !== undefined && allowance < sellAmountWei) {
@@ -2294,6 +2235,7 @@ export function LimitOrderForm({
     } finally {
       setIsCreatingOrder(false);
       setIsApproving(false);
+      setTransactionPending(false);
     }
   };
 
@@ -3372,32 +3314,20 @@ export function LimitOrderForm({
 
             {/* Amount Input - inline */}
             <div className="flex-1 min-w-0">
-              {!isSellInputFocused && sellAmountNum > 0 ? (
-                <div
-                  onClick={() => {
-                    setIsSellInputFocused(true);
-                    setTimeout(() => sellInputRef.current?.focus(), 0);
-                  }}
-                  className="w-full h-full bg-black/40 border border-white/10 p-3 text-white text-base flex items-center cursor-text rounded-lg overflow-hidden"
-                >
-                  {formatNumberWithCommas(formatDisplayValue(sellAmountNum).toString())}
-                </div>
-              ) : (
-                <input
-                  ref={sellInputRef}
-                  type="text"
-                  value={sellAmount}
-                  onChange={handleSellAmountChange}
-                  onKeyDown={handleSellKeyDown}
-                  onFocus={() => setIsSellInputFocused(true)}
-                  onBlur={() => {
-                    setIsSellInputFocused(false);
-                    activeInputRef.current = null;
-                  }}
-                  placeholder="0.00"
-                  className="w-full h-full bg-black/40 border border-white/10 p-3 text-white text-base placeholder-white/30 focus:outline-none rounded-lg"
-                />
-              )}
+              <input
+                ref={sellInputRef}
+                type="text"
+                value={sellAmount}
+                onChange={handleSellAmountChange}
+                onKeyDown={handleSellKeyDown}
+                onFocus={() => setIsSellInputFocused(true)}
+                onBlur={() => {
+                  setIsSellInputFocused(false);
+                  activeInputRef.current = null;
+                }}
+                placeholder="0.00"
+                className="w-full h-full bg-black/40 border border-white/10 p-3 text-white text-base placeholder-white/30 focus:outline-none rounded-lg"
+              />
             </div>
 
             {/* 3-dot menu for sell token - hide for native PLS */}
@@ -3771,40 +3701,26 @@ export function LimitOrderForm({
 
                     {/* Amount Input - uses first buy amount */}
                     <div className="flex-1 min-w-0">
-                      {!isBuyInputFocused[0] && buyAmounts[0] && parseFloat(removeCommas(buyAmounts[0])) > 0 ? (
-                        <div
-                          onClick={() => {
-                            const newFocused = [...isBuyInputFocused];
-                            newFocused[0] = true;
-                            setIsBuyInputFocused(newFocused);
-                            setTimeout(() => buyInputRefs.current[0]?.focus(), 0);
-                          }}
-                          className="w-full h-full bg-black/40 border border-white/10 p-3 text-white text-base flex items-center cursor-text rounded-lg overflow-hidden"
-                        >
-                          {formatNumberWithCommas(formatDisplayValue(parseFloat(removeCommas(buyAmounts[0]))).toString())}
-                        </div>
-                      ) : (
-                        <input
-                          ref={el => { buyInputRefs.current[0] = el; }}
-                          type="text"
-                          value={buyAmounts[0] || ''}
-                          onChange={(e) => handleBuyAmountChange(e, 0)}
-                          onKeyDown={(e) => handleBuyKeyDown(e, 0)}
-                          onFocus={() => {
-                            const newFocused = [...isBuyInputFocused];
-                            newFocused[0] = true;
-                            setIsBuyInputFocused(newFocused);
-                          }}
-                          onBlur={() => {
-                            const newFocused = [...isBuyInputFocused];
-                            newFocused[0] = false;
-                            setIsBuyInputFocused(newFocused);
-                            activeInputRef.current = null;
-                          }}
-                          placeholder="0.00"
-                          className="w-full h-full bg-black/40 border border-white/10 p-3 text-white text-base placeholder-white/30 focus:outline-none rounded-lg"
-                        />
-                      )}
+                      <input
+                        ref={el => { buyInputRefs.current[0] = el; }}
+                        type="text"
+                        value={buyAmounts[0] || ''}
+                        onChange={(e) => handleBuyAmountChange(e, 0)}
+                        onKeyDown={(e) => handleBuyKeyDown(e, 0)}
+                        onFocus={() => {
+                          const newFocused = [...isBuyInputFocused];
+                          newFocused[0] = true;
+                          setIsBuyInputFocused(newFocused);
+                        }}
+                        onBlur={() => {
+                          const newFocused = [...isBuyInputFocused];
+                          newFocused[0] = false;
+                          setIsBuyInputFocused(newFocused);
+                          activeInputRef.current = null;
+                        }}
+                        placeholder="0.00"
+                        className="w-full h-full bg-black/40 border border-white/10 p-3 text-white text-base placeholder-white/30 focus:outline-none rounded-lg"
+                      />
                     </div>
                   </div>
 
@@ -4005,9 +3921,9 @@ export function LimitOrderForm({
                           }
 
                           if (invertPriceDisplay && displayPrice > 0) {
-                            return formatNumberWithCommas((1 / displayPrice).toFixed(8).replace(/\.?0+$/, ''));
+                            return formatNumberWithCommas(formatLimitPriceDisplay(1 / displayPrice));
                           }
-                          return formatNumberWithCommas(displayPrice.toFixed(8).replace(/\.?0+$/, ''));
+                          return formatNumberWithCommas(formatLimitPriceDisplay(displayPrice));
                         })()}
                         onChange={(e) => {
                           const input = e.target;
@@ -4218,40 +4134,26 @@ export function LimitOrderForm({
 
                     {/* Amount Input - inline */}
                     <div className="flex-1 min-w-0">
-                      {!isBuyInputFocused[index] && buyAmounts[index] && parseFloat(removeCommas(buyAmounts[index])) > 0 ? (
-                        <div
-                          onClick={() => {
-                            const newFocused = [...isBuyInputFocused];
-                            newFocused[index] = true;
-                            setIsBuyInputFocused(newFocused);
-                            setTimeout(() => buyInputRefs.current[index]?.focus(), 0);
-                          }}
-                          className="w-full h-full bg-black/40 border border-white/10 p-3 text-white text-base flex items-center cursor-text rounded-lg overflow-hidden"
-                        >
-                          {formatNumberWithCommas(formatDisplayValue(parseFloat(removeCommas(buyAmounts[index]))).toString())}
-                        </div>
-                      ) : (
-                        <input
-                          ref={el => { buyInputRefs.current[index] = el; }}
-                          type="text"
-                          value={buyAmounts[index] || ''}
-                          onChange={(e) => handleBuyAmountChange(e, index)}
-                          onKeyDown={(e) => handleBuyKeyDown(e, index)}
-                          onFocus={() => {
-                            const newFocused = [...isBuyInputFocused];
-                            newFocused[index] = true;
-                            setIsBuyInputFocused(newFocused);
-                          }}
-                          onBlur={() => {
-                            const newFocused = [...isBuyInputFocused];
-                            newFocused[index] = false;
-                            setIsBuyInputFocused(newFocused);
-                            activeInputRef.current = null;
-                          }}
-                          placeholder="0.00"
-                          className="w-full h-full bg-black/40 border border-white/10 p-3 text-white text-base placeholder-white/30 focus:outline-none rounded-lg"
-                        />
-                      )}
+                      <input
+                        ref={el => { buyInputRefs.current[index] = el; }}
+                        type="text"
+                        value={buyAmounts[index] || ''}
+                        onChange={(e) => handleBuyAmountChange(e, index)}
+                        onKeyDown={(e) => handleBuyKeyDown(e, index)}
+                        onFocus={() => {
+                          const newFocused = [...isBuyInputFocused];
+                          newFocused[index] = true;
+                          setIsBuyInputFocused(newFocused);
+                        }}
+                        onBlur={() => {
+                          const newFocused = [...isBuyInputFocused];
+                          newFocused[index] = false;
+                          setIsBuyInputFocused(newFocused);
+                          activeInputRef.current = null;
+                        }}
+                        placeholder="0.00"
+                        className="w-full h-full bg-black/40 border border-white/10 p-3 text-white text-base placeholder-white/30 focus:outline-none rounded-lg"
+                      />
                     </div>
 
                     {/* 3-dot menu for buy token - hide for native PLS */}
@@ -4541,9 +4443,9 @@ export function LimitOrderForm({
                             if (!limitPrice || parseFloat(limitPrice) <= 0) return '';
                             const price = parseFloat(limitPrice);
                             if (invertPriceDisplay && price > 0) {
-                              return formatNumberWithCommas((1 / price).toFixed(8).replace(/\.?0+$/, ''));
+                              return formatNumberWithCommas(formatLimitPriceDisplay(1 / price));
                             }
-                            return formatNumberWithCommas(price.toFixed(8).replace(/\.?0+$/, ''));
+                            return formatNumberWithCommas(formatLimitPriceDisplay(price));
                           })()}
                           onChange={(e) => {
                             const input = e.target;

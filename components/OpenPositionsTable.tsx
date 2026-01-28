@@ -1400,16 +1400,13 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
           value
         );
 
-        successCount++;
-
-        // Show success toast for this transaction
+        // Show submitted toast
         const txLabel = totalTransactions > 1 ? ` (${formatTokenTicker(buyTokenInfo.ticker)})` : '';
         toast({
-          title: `✅ Order Fill Submitted${txLabel}`,
+          title: `Transaction Submitted${txLabel}`,
           description: totalTransactions > 1
-            ? `Transaction ${txNum + 1} of ${totalTransactions} submitted successfully.`
-            : `Transaction for ${formatTokenTicker(buyTokenInfo.ticker)} submitted successfully.`,
-          variant: "success",
+            ? `Transaction ${txNum + 1} of ${totalTransactions} submitted. Waiting for confirmation...`
+            : `Waiting for confirmation...`,
           action: txHash ? (
             <a
               href={getBlockExplorerTxUrl(chainId, txHash)}
@@ -1422,10 +1419,33 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
           ) : undefined,
         });
 
-        // Wait a bit between transactions to allow state to update
-        if (txNum < tokensToExecute.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 2000));
-        }
+        // Wait for transaction confirmation
+        await waitForTransactionWithTimeout(
+          publicClient,
+          txHash as `0x${string}`,
+          TRANSACTION_TIMEOUTS.TRANSACTION
+        );
+
+        successCount++;
+
+        // Show success toast only after confirmation
+        toast({
+          title: `✅ Order Filled${txLabel}`,
+          description: totalTransactions > 1
+            ? `Transaction ${txNum + 1} of ${totalTransactions} confirmed successfully.`
+            : `Transaction for ${formatTokenTicker(buyTokenInfo.ticker)} confirmed successfully.`,
+          variant: "success",
+          action: txHash ? (
+            <a
+              href={getBlockExplorerTxUrl(chainId, txHash)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-white hover:underline font-medium"
+            >
+              View Tx
+            </a>
+          ) : undefined,
+        });
       }
 
       // Clear the inputs for this order

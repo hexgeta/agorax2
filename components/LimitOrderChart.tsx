@@ -47,6 +47,16 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
   const lastUpdateRef = useRef<number>(0);
   const cooldownTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Track previous token addresses to detect token changes and prevent line jumping
+  const prevSellTokenRef = useRef<string | undefined>(sellTokenAddress);
+  const prevBuyTokenRef = useRef<string | undefined>(buyTokenAddresses[0]);
+  // Store the stable limit price position during token transitions
+  const stableLimitPricePositionRef = useRef<number | null>(null);
+  // Track the limitOrderPrice we had when token change started - wait for it to change
+  const limitPriceAtTokenChangeRef = useRef<number | undefined>(undefined);
+  // Use state for transition pending so it triggers re-renders when cleared
+  const [tokenTransitionPending, setTokenTransitionPending] = useState(false);
+
   // Format number to 4 significant figures
   const formatSignificantFigures = (num: number, sigFigs: number = 4): string => {
     if (num === 0) return '0';
@@ -334,6 +344,36 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
   // Current price is always at 0% deviation = center of chart
   const currentPricePosition = percentageToPosition(0); // Always 50%
 
+  // Detect token changes SYNCHRONOUSLY during render (before position calculation)
+  // This ensures we freeze before any wrong position is calculated
+  const sellChanged = sellTokenAddress !== prevSellTokenRef.current;
+  const buyChanged = buyTokenAddresses[0] !== prevBuyTokenRef.current;
+
+  // If token just changed, mark as pending and capture the old limit price
+  if (sellChanged || buyChanged) {
+    if (!tokenTransitionPending) {
+      // First render with new token - capture current limitOrderPrice to compare against
+      limitPriceAtTokenChangeRef.current = limitOrderPrice;
+    }
+    prevSellTokenRef.current = sellTokenAddress;
+    prevBuyTokenRef.current = buyTokenAddresses[0];
+  }
+
+  // Determine if we're in transition: tokens changed AND limitOrderPrice hasn't updated yet
+  const isInTransition = (sellChanged || buyChanged) ||
+    (tokenTransitionPending && limitOrderPrice === limitPriceAtTokenChangeRef.current);
+
+  // Update transition state (for re-render trigger when it clears)
+  useEffect(() => {
+    if (sellChanged || buyChanged) {
+      setTokenTransitionPending(true);
+    } else if (tokenTransitionPending && limitOrderPrice !== limitPriceAtTokenChangeRef.current) {
+      // New price arrived - clear transition
+      setTokenTransitionPending(false);
+      limitPriceAtTokenChangeRef.current = undefined;
+    }
+  }, [sellChanged, buyChanged, tokenTransitionPending, limitOrderPrice]);
+
   // Use draggedPrice during drag and briefly after for smooth rendering
   const basePriceToDisplay = (isDragging || justReleasedRef.current) && draggedPrice
     ? draggedPrice
@@ -348,9 +388,20 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
   const limitPricePercentDeviation = displayCurrentPrice && priceToDisplay
     ? ((priceToDisplay - displayCurrentPrice) / displayCurrentPrice) * 100
     : 0;
-  const limitPricePosition = priceToDisplay
+  const calculatedLimitPricePosition = priceToDisplay
     ? percentageToPosition(limitPricePercentDeviation)
     : null;
+
+  // During transitions, keep using the stable position to prevent jumping
+  // Only update stable position when NOT in transition
+  if (!isInTransition && calculatedLimitPricePosition !== null) {
+    stableLimitPricePositionRef.current = calculatedLimitPricePosition;
+  }
+
+  // Use stable position during transitions, calculated position otherwise
+  const limitPricePosition = isInTransition
+    ? stableLimitPricePositionRef.current
+    : calculatedLimitPricePosition;
 
   // Drag handlers for limit price line (bound mode)
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
