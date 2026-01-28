@@ -175,15 +175,15 @@ export function SwipeCard({ order, onSwipeComplete, isTop, stackIndex, cardRef, 
       transition={{ type: 'spring', stiffness: 300, damping: 25 }}
     >
       <motion.div
-        style={{ x, y: arcY, rotate }}
+        style={{ x, y: arcY, rotate, touchAction: isTop ? 'none' : 'auto' }}
         drag={isTop ? 'x' : false}
-        dragElastic={0.9}
+        dragElastic={1}
+        dragMomentum={false}
         onDragEnd={isTop ? handleDragEnd : undefined}
         whileDrag={{ scale: 1.02 }}
-        dragConstraints={{ left: 0, right: 0 }}
         className={cn(
-          'w-full h-full select-none relative',
-          isTop ? 'cursor-grab active:cursor-grabbing touch-none' : 'pointer-events-none'
+          'w-full h-full select-none',
+          isTop ? 'cursor-grab active:cursor-grabbing' : 'pointer-events-none'
         )}
       >
       <LiquidGlassCard
@@ -278,14 +278,9 @@ export function SwipeCard({ order, onSwipeComplete, isTop, stackIndex, cardRef, 
           </div>
           <div
             onClick={handleBuyTokenClick}
-            onPointerDown={(e) => {
-              if (buyTokensIndex.length > 1) {
-                e.stopPropagation();
-              }
-            }}
             className={cn(
               "flex items-center gap-3 mt-1 p-2 -mx-2 rounded-lg transition-colors",
-              buyTokensIndex.length > 1 && "cursor-pointer hover:bg-white/5 active:bg-white/10 touch-auto"
+              buyTokensIndex.length > 1 && "cursor-pointer hover:bg-white/5 active:bg-white/10"
             )}
           >
             <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center overflow-hidden">
