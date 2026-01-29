@@ -799,7 +799,7 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                     }}
                   />
                   <LiquidGlassCard
-                    className={`group absolute right-0 flex items-center justify-between bg-pink-500/10 px-3 py-1 border-pink-500/30 w-fit min-w-[250px] ${displayQuoteTokenInfos.length > 1 ? 'cursor-pointer pointer-events-auto' : 'pointer-events-none'} ${limitPricePosition < currentPricePosition ? 'bottom-0' : 'top-0'}`}
+                    className={`group absolute right-0 flex items-center gap-2 bg-pink-500/10 px-3 py-1 border-pink-500/30 w-fit ${displayQuoteTokenInfos.length >= 5 ? '' : 'min-w-[250px] justify-between'} ${displayQuoteTokenInfos.length > 1 ? 'cursor-pointer pointer-events-auto' : 'pointer-events-none'} ${limitPricePosition < currentPricePosition ? 'bottom-0' : 'top-0'}`}
                     style={{
                       transform: limitPricePosition < currentPricePosition
                         ? 'translateY(45%)'
@@ -828,6 +828,30 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                       // When inverted, price is "X sell_tokens per 1 buy_token", so show sell token as unit
                       // When not inverted, price is "X buy_tokens per 1 sell_token", so show buy token as unit
                       const unitTokenInfo = invertPriceDisplay ? sellTokenInfo : tokenInfo;
+
+                      // Use compact layout for 5+ tokens
+                      const useCompactLayout = displayQuoteTokenInfos.length >= 5;
+
+                      if (useCompactLayout) {
+                        // Compact layout: Logo | Ticker | Price - all in a row
+                        return (
+                          <>
+                            <TokenLogo
+                              ticker={tokenInfo?.ticker || ''}
+                              className="w-[16px] h-[16px] object-contain flex-shrink-0"
+                            />
+                            <span className="text-xs whitespace-nowrap text-[#FF0080]">
+                              {formatTokenTicker(tokenInfo?.ticker || '')}
+                            </span>
+                            <span className="text-sm font-bold text-white whitespace-nowrap">
+                              {(priceForThisToken || 0).toPrecision(4).replace(/\.?0+$/, '')}
+                            </span>
+                            <span className="text-[10px] text-white/40">
+                              ({displayedTokenIndex + 1}/{displayQuoteTokenInfos.length})
+                            </span>
+                          </>
+                        );
+                      }
 
                       return (
                         <>
@@ -858,20 +882,37 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                 </div>
               )
             ) : (
-              /* Multiple draggable lines when prices are unbound - one for each token */
-              displayQuoteTokenInfos.map((tokenInfo, index) => {
-                if (!tokenInfo) return null;
+              /* Unbound prices: Single line for currently displayed token, dragging affects only that token */
+              (() => {
+                const activeIndex = displayedTokenIndex;
+                const activeTokenInfo = displayQuoteTokenInfos[activeIndex];
+                if (!activeTokenInfo) return null;
 
-                // Get the individual limit price for this token
-                // Use dragged price if this line is being dragged
-                // Fall back to calculating from the main limit price if individual price not set
-                let baseIndividualPrice = (isDragging && draggingLineIndex === index && draggedPrice)
+                // Token colors matching LimitOrderForm - first token is pink, others use this array
+                const tokenColors = [
+                  { accent: '#FF0080', bg: 'bg-pink-500/10', border: 'border-pink-500/30' },      // First token (index 0)
+                  { accent: '#8B5CF6', bg: 'bg-purple-500/10', border: 'border-purple-500/30' },  // Purple
+                  { accent: '#F59E0B', bg: 'bg-amber-500/10', border: 'border-amber-500/30' },    // Amber
+                  { accent: '#10B981', bg: 'bg-emerald-500/10', border: 'border-emerald-500/30' }, // Emerald
+                  { accent: '#EF4444', bg: 'bg-red-500/10', border: 'border-red-500/30' },        // Red
+                  { accent: '#3B82F6', bg: 'bg-blue-500/10', border: 'border-blue-500/30' },      // Blue
+                  { accent: '#EC4899', bg: 'bg-fuchsia-500/10', border: 'border-fuchsia-500/30' }, // Fuchsia
+                  { accent: '#14B8A6', bg: 'bg-teal-500/10', border: 'border-teal-500/30' },      // Teal
+                  { accent: '#F97316', bg: 'bg-orange-500/10', border: 'border-orange-500/30' },  // Orange
+                  { accent: '#6366F1', bg: 'bg-indigo-500/10', border: 'border-indigo-500/30' },  // Indigo
+                ];
+                const colors = tokenColors[activeIndex % tokenColors.length];
+                const lineColor = colors.accent;
+
+                // Get the individual limit price for the active token
+                // Use draggedPrice during dragging OR during cooldown period (justReleasedRef)
+                let baseIndividualPrice = ((isDragging && draggingLineIndex === activeIndex) || justReleasedRef.current) && draggedPrice
                   ? draggedPrice
-                  : individualLimitPrices[index];
+                  : individualLimitPrices[activeIndex];
 
                 // If no individual price, try to calculate from the main limit price
                 if (!baseIndividualPrice && limitOrderPrice) {
-                  const tokenAddress = tokenInfo?.a;
+                  const tokenAddress = activeTokenInfo?.a;
                   const calculatedPrice = calculateLimitPriceForToken(tokenAddress);
                   baseIndividualPrice = calculatedPrice || undefined;
                 }
@@ -884,11 +925,11 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                   : baseIndividualPrice;
 
                 // Calculate THIS token's market price to determine % deviation
-                const tokenAddress = tokenInfo?.a?.toLowerCase();
+                const tokenAddress = activeTokenInfo?.a?.toLowerCase();
                 const tokenMarketPrice = tokenAddress && sellTokenUsdPrice && buyTokenUsdPrices[tokenAddress]
                   ? (invertPriceDisplay
-                      ? buyTokenUsdPrices[tokenAddress] / sellTokenUsdPrice  // inverted: buy/sell
-                      : sellTokenUsdPrice / buyTokenUsdPrices[tokenAddress]) // normal: sell/buy
+                      ? buyTokenUsdPrices[tokenAddress] / sellTokenUsdPrice
+                      : sellTokenUsdPrice / buyTokenUsdPrices[tokenAddress])
                   : null;
 
                 // Don't show line if no market price data available
@@ -904,61 +945,69 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
 
                 if (individualPricePosition === null) return null;
 
-                // Generate a unique color for each token line - must match LimitOrderForm tokenColors
-                // First token (index 0) is always pink to match the primary LIMIT PRICE section
-                // Additional tokens use the tokenColors array from LimitOrderForm
-                const additionalTokenColors = ['#8B5CF6', '#F59E0B', '#10B981', '#EF4444', '#3B82F6', '#EC4899', '#14B8A6', '#F97316', '#6366F1'];
-                const lineColor = index === 0 ? '#FF0080' : additionalTokenColors[(index - 1) % additionalTokenColors.length];
+                const isThisLineDragging = isDragging && draggingLineIndex === activeIndex;
 
-                const isThisLineDragging = isDragging && draggingLineIndex === index;
+                // When inverted, show sell token as unit; otherwise show buy token
+                const unitTokenInfo = invertPriceDisplay ? sellTokenInfo : activeTokenInfo;
 
                 return (
                   <div
-                    key={`limit-line-${index}`}
                     className={`absolute w-full ${onIndividualLimitPriceChange ? (isThisLineDragging ? 'cursor-grabbing' : 'cursor-grab') : ''}`}
                     style={{
                       bottom: `${individualPricePosition}%`,
                       height: '40px',
-                      zIndex: individualPricePosition < currentPricePosition ? 20 + index : 10 + index,
+                      zIndex: individualPricePosition < currentPricePosition ? 20 : 10,
                       transform: 'translateY(50%)',
                       transition: isThisLineDragging ? 'none' : 'bottom 200ms'
                     }}
-                    onMouseDown={(e) => handleIndividualMouseDown(e, index, baseIndividualPrice)}
+                    onMouseDown={(e) => handleIndividualMouseDown(e, activeIndex, baseIndividualPrice!)}
                   >
-                    {/* Visible line */}
+                    {/* Visible line - color matches token's form box */}
                     <div
-                      className={`absolute top-1/2 -translate-y-1/2 left-[58px] right-0 h-[2px] rounded-full pointer-events-none ${isThisLineDragging ? 'opacity-70' : 'opacity-100'}`}
+                      className={`absolute top-1/2 -translate-y-1/2 left-[58px] right-0 rounded-full ${isThisLineDragging ? 'h-[2px] opacity-70' : 'h-[2px] opacity-100'} pointer-events-none`}
                       style={{ backgroundColor: lineColor, transition: isThisLineDragging ? 'none' : 'all 200ms' }}
                     />
                     <LiquidGlassCard
-                      className={`absolute right-0 flex items-center justify-between px-3 py-1 pointer-events-none w-fit min-w-[250px] ${individualPricePosition < currentPricePosition ? 'bottom-0 translate-y-[calc(45%-0px)]' : 'top-0 -translate-y-[calc(45%-0px)]'}`}
+                      className={`group absolute right-0 flex items-center gap-2 px-3 py-1 w-fit min-w-[250px] justify-between ${displayQuoteTokenInfos.length > 1 ? 'cursor-pointer pointer-events-auto' : 'pointer-events-none'} ${individualPricePosition < currentPricePosition ? 'bottom-0' : 'top-0'} ${colors.bg} ${colors.border}`}
                       style={{
-                        backgroundColor: `${lineColor}10`,
-                        borderColor: `${lineColor}30`
+                        transform: individualPricePosition < currentPricePosition
+                          ? 'translateY(45%)'
+                          : 'translateY(-45%)'
                       }}
                       borderRadius="8px"
                       shadowIntensity="none"
                       glowIntensity="none"
+                      onClick={cycleDisplayedToken}
                     >
-                      <span className="text-xs text-white/70 whitespace-nowrap">
-                        Limit Price: ({formatTokenTicker(tokenInfo.ticker)})
+                      <span className="text-xs text-white/70 whitespace-nowrap flex items-center gap-1">
+                        Limit Price:
+                        {displayQuoteTokenInfos.length > 1 && (
+                          <span className="text-[10px] text-white/40 group-hover:text-white transition-colors">
+                            ({formatTokenTicker(activeTokenInfo?.ticker || '')})
+                          </span>
+                        )}
                       </span>
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-bold text-white">
                           {(displayIndividualPrice || 0).toPrecision(4).replace(/\.?0+$/, '')}
                         </span>
                         <span className="text-xs" style={{ color: lineColor }}>
-                          {formatTokenTicker(invertPriceDisplay ? (sellTokenInfo?.ticker || '') : tokenInfo.ticker)}
+                          {formatTokenTicker(unitTokenInfo?.ticker || '')}
                         </span>
                         <TokenLogo
-                          ticker={invertPriceDisplay ? (sellTokenInfo?.ticker || '') : tokenInfo.ticker}
+                          ticker={unitTokenInfo?.ticker || ''}
                           className="w-[16px] h-[16px] object-contain"
                         />
+                        {displayQuoteTokenInfos.length > 1 && (
+                          <span className="text-[10px] text-white/40 group-hover:text-white transition-colors ml-1">
+                            ({activeIndex + 1}/{displayQuoteTokenInfos.length})
+                          </span>
+                        )}
                       </div>
                     </LiquidGlassCard>
                   </div>
                 );
-              })
+              })()
             )}
           </div>
         </div>
