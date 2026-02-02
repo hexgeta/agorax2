@@ -69,7 +69,7 @@ export function CoinLogo({
       className={cn(
         LOGO_SIZES[size],
         'object-contain',
-        logoSymbol === 'HEX' ? '' : 'rounded-full',
+        ['HEX', 'PLS', 'PLSX', 'INC'].includes(logoSymbol) ? '' : 'rounded-full',
         inverted ? 'brightness-0 invert' : '',
         className
       )}

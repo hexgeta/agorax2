@@ -23,11 +23,11 @@ export const COM_LOGO = `data:image/svg+xml,${encodeURIComponent(`<svg width="91
 export const USDT_LOGO = `data:image/svg+xml,${encodeURIComponent(`<svg width="339" height="339" viewBox="0 0 339 339" xmlns="http://www.w3.org/2000/svg"><circle fill="#009393" cx="169.5" cy="169.5" r="169.5"/><path d="M267.87 79v35.63h-73.47v24.7c51.6 2.64 90.32 13.48 90.6 26.48v27.09c-.29 13-39 23.84-90.6 26.48V280h-48.79v-60.62c-51.6-2.64-90.32-13.48-90.6-26.48v-27.09c.29-13 39-23.84 90.6-26.48v-24.7H72.13V79h195.74zm-73.47 79.56v25.86a254.59 254.59 0 01-24.4.61c-8.37 0-16.53-.21-24.4-.61v-25.86c-43.87 2.24-78.42 10.41-87.97 20.8 11.26 12.24 57.29 21.41 112.36 21.41s101.1-9.17 112.37-21.41c-9.55-10.39-44.1-18.56-87.96-20.8z" fill="#FFF"/></svg>`)}`;
 
 // Map of symbol to inline data URL
+// Note: PLS removed because the inline version has rendering issues - uses file-based version instead
 export const INLINE_LOGOS: Record<string, string> = {
   HEX: HEX_LOGO,
   INC: INC_LOGO,
   PLSX: PLSX_LOGO,
-  PLS: PLS_LOGO,
   COM: COM_LOGO,
   USDT: USDT_LOGO,
 };

@@ -42,7 +42,7 @@ export function TokenLogo({ ticker, className = '', style }: TokenLogoProps) {
     <img
       src={getLogoSrc()}
       alt={`${ticker} logo`}
-      className={className}
+      className={`object-contain ${className}`}
       style={style}
       onError={handleError}
     />

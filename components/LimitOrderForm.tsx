@@ -1342,7 +1342,26 @@ export function LimitOrderForm({
 
     if (resolvedBuyTokens.length > 0) {
       setBuyTokens(resolvedBuyTokens);
-      setBuyAmounts(Array(resolvedBuyTokens.length).fill(''));
+
+      // In unlinked mode, restore saved buy amounts if they exist and match the token count
+      const pricesBoundSaved = localStorage.getItem('limitOrderPricesBound');
+      const isUnlinked = pricesBoundSaved === 'false';
+      let restoredAmounts: string[] | null = null;
+
+      if (isUnlinked) {
+        const savedAmounts = localStorage.getItem('limitOrderBuyAmounts');
+        if (savedAmounts) {
+          try {
+            const parsed = JSON.parse(savedAmounts) as string[];
+            // Only use saved amounts if the array length matches (same tokens)
+            if (parsed.length === resolvedBuyTokens.length) {
+              restoredAmounts = parsed;
+            }
+          } catch { /* ignore parse errors */ }
+        }
+      }
+
+      setBuyAmounts(restoredAmounts || Array(resolvedBuyTokens.length).fill(''));
       localStorage.setItem('limitOrderBuyToken', resolvedBuyTokens[0].a);
     }
 
@@ -1372,11 +1391,17 @@ export function LimitOrderForm({
   }, [availableTokens]);
 
   // Calculate buy amounts on page load based on saved sell amount and limit price
+  // Only applies when prices are bound (linked mode)
   useEffect(() => {
     // Only run once after tokens are initialized and we have the required data
     if (hasCalculatedInitialBuyAmount) return;
     if (!hasInitializedTokensRef.current) return;
     if (!sellAmount || !limitPrice) return;
+    // Don't recalculate in unlinked mode - user has set custom amounts
+    if (!pricesBound) {
+      setHasCalculatedInitialBuyAmount(true);
+      return;
+    }
 
     const sellAmt = parseFloat(removeCommas(sellAmount));
     const limitPriceNum = parseFloat(limitPrice);
@@ -1390,7 +1415,7 @@ export function LimitOrderForm({
       setBuyAmounts(newAmounts);
       setHasCalculatedInitialBuyAmount(true);
     }
-  }, [sellAmount, limitPrice, hasCalculatedInitialBuyAmount]);
+  }, [sellAmount, limitPrice, hasCalculatedInitialBuyAmount, pricesBound]);
 
   // Save form values to localStorage
   useEffect(() => {
@@ -1750,44 +1775,36 @@ export function LimitOrderForm({
     }
   }, [marketPrice, onLimitPriceChange]);
 
-  // Sync external limit price changes (from chart dragging)
-  // Skip when user is typing in any input to prevent feedback loops
+  // Sync external limit price changes (from chart)
   useEffect(() => {
     // Skip if user is actively typing in sell or buy input
     if (activeInputRef.current !== null) return;
-    // Skip if a percentage/backing click is in progress - it handles its own updates
+    // Skip if a percentage/backing click is in progress
     if (isPercentageClickInProgressRef.current) return;
-    // Skip if a token change is pending - deferred handler will set correct price
+    // Skip if a token change is pending
     if (tokenChangePendingRef.current) return;
+    // Skip if user is focused on limit price input
+    if (isLimitPriceInputFocused) return;
 
-    if (externalLimitPrice !== undefined && !isLimitPriceInputFocused) {
+    if (externalLimitPrice !== undefined) {
       limitPriceSetByUserRef.current = true;
       isInitialLoadRef.current = false;
 
-      // externalLimitPrice is in buy/sell format (non-inverted)
-      // limitPrice is always stored in buy/sell format
-      // So we store it directly
       setLimitPrice(externalLimitPrice.toString());
 
-      // Update buy amounts based on external price (non-inverted)
+      // Update buy amounts based on external price
       if (sellAmountNum > 0) {
-        // Update buy token amounts
         setBuyAmounts((prevAmounts) => {
           const newAmounts = [...prevAmounts];
-          // First buy token uses the non-inverted limit price directly
-          // buyAmount = sellAmount * (buy tokens per sell token)
           if (buyTokens[0]) {
             const newBuyAmount = sellAmountNum * externalLimitPrice;
             newAmounts[0] = formatCalculatedValue(newBuyAmount);
           }
 
           // Only update additional tokens if prices are BOUND
-          // When unlinked, each token has its own independent price
           if (pricesBound) {
             const sellTokenUsdPrice = sellToken ? getPrice(sellToken.a) : 0;
             if (sellTokenUsdPrice > 0) {
-              // Calculate the premium/discount from market for the first token
-              // marketPriceForFirst = buy tokens per sell token at market rate
               const firstBuyTokenUsdPrice = buyTokens[0] ? getPrice(buyTokens[0].a) : 0;
               const marketPriceForFirst = firstBuyTokenUsdPrice > 0 ? sellTokenUsdPrice / firstBuyTokenUsdPrice : 0;
               const premiumMultiplier = marketPriceForFirst > 0 ? externalLimitPrice / marketPriceForFirst : 1;
@@ -1796,7 +1813,6 @@ export function LimitOrderForm({
                 if (buyTokens[i]) {
                   const tokenUsdPrice = getPrice(buyTokens[i]!.a);
                   if (tokenUsdPrice > 0) {
-                    // Calculate this token's market price and apply the same premium
                     const marketPriceForThis = sellTokenUsdPrice / tokenUsdPrice;
                     const adjustedPrice = marketPriceForThis * premiumMultiplier;
                     const adjustedAmount = sellAmountNum * adjustedPrice;
@@ -1811,22 +1827,21 @@ export function LimitOrderForm({
       }
 
       // Update individual limit price for first token when unbound
+      // Set flag to prevent feedback loop back to parent
       if (!pricesBound) {
+        isReceivingExternalIndividualPriceRef.current = true;
         setIndividualLimitPrices(prev => {
           const newPrices = [...prev];
           newPrices[0] = externalLimitPrice;
           return newPrices;
         });
+        setTimeout(() => {
+          isReceivingExternalIndividualPriceRef.current = false;
+        }, 50);
       }
 
       if (marketPrice > 0) {
-        // marketPrice is in sell/buy format (sell tokens per buy token)
-        // externalLimitPrice is in buy/sell format (buy tokens per sell token)
-        // Convert marketPrice to buy/sell format for comparison
         const marketPriceBuyPerSell = 1 / marketPrice;
-        // Percentage is always calculated in buy/sell format:
-        // positive % means user wants MORE buy tokens than market (asking above market)
-        // negative % means user wants FEWER buy tokens than market (asking below market)
         const percentageAboveMarket = ((externalLimitPrice - marketPriceBuyPerSell) / marketPriceBuyPerSell) * 100;
         setPricePercentage(percentageAboveMarket);
       }
@@ -1835,7 +1850,6 @@ export function LimitOrderForm({
   }, [externalLimitPrice, sellAmountNum, marketPrice, invertPriceDisplay, pricesBound, buyTokens, prices]);
 
   // Sync external individual limit price changes (from chart dragging individual token lines)
-  // Uses centralized hook for clean one-way data flow
   useEffect(() => {
     if (!externalIndividualLimitPrices) return;
     // Skip when user is typing in any individual price input
@@ -1933,6 +1947,37 @@ export function LimitOrderForm({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [buyAmountNum]);
+
+  // When an alt buy amount changes in UNLINKED mode, update that token's individual limit price
+  // This ensures the limit price reflects the user's desired exchange rate
+  // Only runs for the specific token being edited (tracked by lastEditedInputRef)
+  useEffect(() => {
+    // Only for unlinked mode
+    if (pricesBound) return;
+    // Only when user is typing in a buy input (not primary - that's handled above)
+    if (activeInputRef.current !== 'buy') return;
+    // Only process alt tokens (index > 0) - primary is handled by the buyAmountNum effect
+    const editedIndex = lastEditedInputRef.current;
+    if (typeof editedIndex !== 'number' || editedIndex === 0) return;
+    if (sellAmountNum <= 0) return;
+
+    const amount = buyAmounts[editedIndex];
+    if (!amount) return;
+    const amountNum = parseFloat(removeCommas(amount));
+    if (amountNum <= 0) return;
+
+    // Calculate limit price: limitPrice = buyAmount / sellAmount
+    const newLimitPrice = amountNum / sellAmountNum;
+
+    // Update individual limit price for this token only
+    setIndividualLimitPrices(prev => {
+      if (prev[editedIndex] === newLimitPrice) return prev;
+      const newPrices = [...prev];
+      newPrices[editedIndex] = newLimitPrice;
+      return newPrices;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [buyAmounts, sellAmountNum, pricesBound]);
 
   // Recalculate additional buy token amounts when prices change or new tokens are added
   // Only applies when prices are BOUND - when unlinked, each token keeps its own price
@@ -4188,7 +4233,9 @@ export function LimitOrderForm({
                             (invertPriceDisplay ? pricePercentage < 0 : pricePercentage > 0);
                           const isWholeNumber = (n: number) => Math.abs(n - Math.round(n)) < 0.01;
                           const formatPct = (n: number) => isWholeNumber(n) ? String(Math.round(n)) : n.toFixed(1);
-                          const displayValue = isCustomActive ? `${pricePercentage > 0 ? '+' : ''}${formatPct(pricePercentage)}%` : '';
+                          // Cap display at ±999% to prevent UI overflow
+                          const cappedPct = pricePercentage !== null ? Math.max(-999, Math.min(999, pricePercentage)) : 0;
+                          const displayValue = isCustomActive ? `${cappedPct > 0 ? '+' : ''}${formatPct(cappedPct)}%` : '';
 
                           return (
                             <div className="flex-1 relative">
@@ -4197,6 +4244,7 @@ export function LimitOrderForm({
                                 type="text"
                                 inputMode="decimal"
                                 defaultValue={displayValue}
+                                maxLength={5}
                                 className={`peer w-full py-2 px-2 border text-xs font-medium rounded-full text-center focus:outline-none focus:border-[#FF0080] focus:bg-[#FF0080]/20 focus:text-white ${
                                   isCustomActive
                                     ? 'bg-[#FF0080]/20 border-[#FF0080]/40 text-white'
@@ -4207,20 +4255,40 @@ export function LimitOrderForm({
                                   e.target.dataset.originalValue = e.target.value;
                                   e.target.value = '';
                                 }}
+                                onInput={(e) => {
+                                  const input = e.target as HTMLInputElement;
+                                  const prevValue = input.dataset.prevValue || '';
+                                  // Only allow digits, minus sign at start, and one decimal point
+                                  let cleaned = input.value.replace(/[^0-9.-]/g, '');
+                                  // Ensure minus is only at start
+                                  if (cleaned.indexOf('-') > 0) cleaned = cleaned.replace(/-/g, '');
+                                  // Only one decimal point
+                                  const parts = cleaned.split('.');
+                                  if (parts.length > 2) cleaned = parts[0] + '.' + parts.slice(1).join('');
+                                  // Block if would exceed 999
+                                  const num = parseFloat(cleaned);
+                                  if (!isNaN(num) && Math.abs(num) > 999) {
+                                    cleaned = prevValue; // Revert to previous value
+                                  }
+                                  input.value = cleaned;
+                                  input.dataset.prevValue = cleaned;
+                                }}
                                 onKeyDown={(e) => {
                                   if (e.key === 'Enter') {
                                     const input = e.target as HTMLInputElement;
-                                    const value = parseFloat(input.value.replace(/[^0-9.-]/g, ''));
+                                    const value = parseFloat(input.value);
                                     if (!isNaN(value) && value !== 0) {
-                                      handlePercentageClick(Math.abs(value), value > 0 ? 'above' : 'below');
+                                      const capped = Math.max(-999, Math.min(999, value));
+                                      handlePercentageClick(Math.abs(capped), capped > 0 ? 'above' : 'below');
                                       input.blur();
                                     }
                                   }
                                 }}
                                 onBlur={(e) => {
-                                  const value = parseFloat(e.target.value.replace(/[^0-9.-]/g, ''));
+                                  const value = parseFloat(e.target.value);
                                   if (!isNaN(value) && value !== 0) {
-                                    handlePercentageClick(Math.abs(value), value > 0 ? 'above' : 'below');
+                                    const capped = Math.max(-999, Math.min(999, value));
+                                    handlePercentageClick(Math.abs(capped), capped > 0 ? 'above' : 'below');
                                   } else if (e.target.value === '' && e.target.dataset.originalValue) {
                                     // Restore original value if nothing was typed
                                     e.target.value = e.target.dataset.originalValue;
@@ -4807,7 +4875,9 @@ export function LimitOrderForm({
                               (invertPriceDisplay ? pricePercentage < 0 : pricePercentage > 0);
                             const isWholeNumber = (n: number) => Math.abs(n - Math.round(n)) < 0.01;
                             const formatPct = (n: number) => isWholeNumber(n) ? String(Math.round(n)) : n.toFixed(1);
-                            const displayValue = isCustomActive ? `${pricePercentage > 0 ? '+' : ''}${formatPct(pricePercentage)}%` : '';
+                            // Cap display at ±999% to prevent UI overflow
+                            const cappedPct = pricePercentage !== null ? Math.max(-999, Math.min(999, pricePercentage)) : 0;
+                            const displayValue = isCustomActive ? `${cappedPct > 0 ? '+' : ''}${formatPct(cappedPct)}%` : '';
 
                             return (
                               <div className="flex-1 relative">
@@ -4816,6 +4886,7 @@ export function LimitOrderForm({
                                   type="text"
                                   inputMode="decimal"
                                   defaultValue={displayValue}
+                                  maxLength={5}
                                   className={`peer w-full py-2 px-2 border text-xs font-medium rounded-full text-center focus:outline-none focus:border-[#FF0080] focus:bg-[#FF0080]/20 focus:text-white ${
                                     isCustomActive
                                       ? 'bg-[#FF0080]/20 border-[#FF0080]/40 text-white'
@@ -4826,20 +4897,40 @@ export function LimitOrderForm({
                                     e.target.dataset.originalValue = e.target.value;
                                     e.target.value = '';
                                   }}
+                                  onInput={(e) => {
+                                    const input = e.target as HTMLInputElement;
+                                    const prevValue = input.dataset.prevValue || '';
+                                    // Only allow digits, minus sign at start, and one decimal point
+                                    let cleaned = input.value.replace(/[^0-9.-]/g, '');
+                                    // Ensure minus is only at start
+                                    if (cleaned.indexOf('-') > 0) cleaned = cleaned.replace(/-/g, '');
+                                    // Only one decimal point
+                                    const parts = cleaned.split('.');
+                                    if (parts.length > 2) cleaned = parts[0] + '.' + parts.slice(1).join('');
+                                    // Block if would exceed 999
+                                    const num = parseFloat(cleaned);
+                                    if (!isNaN(num) && Math.abs(num) > 999) {
+                                      cleaned = prevValue; // Revert to previous value
+                                    }
+                                    input.value = cleaned;
+                                    input.dataset.prevValue = cleaned;
+                                  }}
                                   onKeyDown={(e) => {
                                     if (e.key === 'Enter') {
                                       const input = e.target as HTMLInputElement;
-                                      const value = parseFloat(input.value.replace(/[^0-9.-]/g, ''));
+                                      const value = parseFloat(input.value);
                                       if (!isNaN(value) && value !== 0) {
-                                        handlePercentageClick(Math.abs(value), value > 0 ? 'above' : 'below');
+                                        const capped = Math.max(-999, Math.min(999, value));
+                                        handlePercentageClick(Math.abs(capped), capped > 0 ? 'above' : 'below');
                                         input.blur();
                                       }
                                     }
                                   }}
                                   onBlur={(e) => {
-                                    const value = parseFloat(e.target.value.replace(/[^0-9.-]/g, ''));
+                                    const value = parseFloat(e.target.value);
                                     if (!isNaN(value) && value !== 0) {
-                                      handlePercentageClick(Math.abs(value), value > 0 ? 'above' : 'below');
+                                      const capped = Math.max(-999, Math.min(999, value));
+                                      handlePercentageClick(Math.abs(capped), capped > 0 ? 'above' : 'below');
                                     } else if (e.target.value === '' && e.target.dataset.originalValue) {
                                       // Restore original value if nothing was typed
                                       e.target.value = e.target.dataset.originalValue;
@@ -4894,7 +4985,7 @@ export function LimitOrderForm({
                         <div className="mt-4">
                           <div className="flex justify-between items-center mb-2">
                             <label className="text-sm font-semibold" style={{ color: accentColor }}>
-                              Limit Price: ({showUsdPrices ? '$' : (invertPriceDisplay ? formatTokenTicker(sellToken?.ticker || '', chainId) : formatTokenTicker(buyToken.ticker, chainId))})
+                              Limit Price: ({showUsdPrices ? '$' : (invertPriceDisplay ? formatTokenTicker(buyToken.ticker, chainId) : formatTokenTicker(sellToken?.ticker || '', chainId))})
                             </label>
                           </div>
                           <div className="relative">
@@ -5026,7 +5117,7 @@ export function LimitOrderForm({
                                 className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-medium pointer-events-none"
                                 style={{ color: `${accentColor}B3` }}
                               >
-                                {invertPriceDisplay ? formatTokenTicker(buyToken.ticker, chainId) : formatTokenTicker(sellToken.ticker, chainId)}
+                                {invertPriceDisplay ? formatTokenTicker(sellToken.ticker, chainId) : formatTokenTicker(buyToken.ticker, chainId)}
                               </div>
                             )}
                           </div>
@@ -5112,7 +5203,9 @@ export function LimitOrderForm({
                                     (invertPriceDisplay ? tokenPricePercentage < 0 : tokenPricePercentage > 0);
                                   const isWholeNumber = (n: number) => Math.abs(n - Math.round(n)) < 0.01;
                                   const formatPct = (n: number) => isWholeNumber(n) ? String(Math.round(n)) : n.toFixed(1);
-                                  const displayValue = isCustomActive ? `${tokenPricePercentage > 0 ? '+' : ''}${formatPct(tokenPricePercentage)}%` : '';
+                                  // Cap display at ±999% to prevent UI overflow
+                                  const cappedPct = tokenPricePercentage !== null ? Math.max(-999, Math.min(999, tokenPricePercentage)) : 0;
+                                  const displayValue = isCustomActive ? `${cappedPct > 0 ? '+' : ''}${formatPct(cappedPct)}%` : '';
 
                                   return (
                                     <div className="flex-1 relative">
@@ -5121,6 +5214,7 @@ export function LimitOrderForm({
                                         type="text"
                                         inputMode="decimal"
                                         defaultValue={displayValue}
+                                        maxLength={5}
                                         className="peer w-full py-2 px-2 text-xs font-medium rounded-full text-center focus:outline-none"
                                         style={{
                                           backgroundColor: isCustomActive ? `${accentColor}33` : 'rgba(0,0,0,0.4)',
@@ -5135,10 +5229,29 @@ export function LimitOrderForm({
                                           e.target.dataset.originalValue = e.target.value;
                                           e.target.value = '';
                                         }}
+                                        onInput={(e) => {
+                                          const input = e.target as HTMLInputElement;
+                                          const prevValue = input.dataset.prevValue || '';
+                                          // Only allow digits, minus sign at start, and one decimal point
+                                          let cleaned = input.value.replace(/[^0-9.-]/g, '');
+                                          // Ensure minus is only at start
+                                          if (cleaned.indexOf('-') > 0) cleaned = cleaned.replace(/-/g, '');
+                                          // Only one decimal point
+                                          const parts = cleaned.split('.');
+                                          if (parts.length > 2) cleaned = parts[0] + '.' + parts.slice(1).join('');
+                                          // Block if would exceed 999
+                                          const num = parseFloat(cleaned);
+                                          if (!isNaN(num) && Math.abs(num) > 999) {
+                                            cleaned = prevValue; // Revert to previous value
+                                          }
+                                          input.value = cleaned;
+                                          input.dataset.prevValue = cleaned;
+                                        }}
                                         onBlur={(e) => {
-                                          const value = parseFloat(e.target.value.replace(/[^0-9.-]/g, ''));
+                                          const value = parseFloat(e.target.value);
                                           if (!isNaN(value) && value !== 0) {
-                                            handleIndividualPercentageClick(index, Math.abs(value), value > 0 ? 'above' : 'below');
+                                            const capped = Math.max(-999, Math.min(999, value));
+                                            handleIndividualPercentageClick(index, Math.abs(capped), capped > 0 ? 'above' : 'below');
                                           } else if (e.target.value === '' && e.target.dataset.originalValue) {
                                             // Restore original value if nothing was typed
                                             e.target.value = e.target.dataset.originalValue;
@@ -5153,9 +5266,10 @@ export function LimitOrderForm({
                                         onKeyDown={(e) => {
                                           if (e.key === 'Enter') {
                                             const input = e.target as HTMLInputElement;
-                                            const value = parseFloat(input.value.replace(/[^0-9.-]/g, ''));
+                                            const value = parseFloat(input.value);
                                             if (!isNaN(value) && value !== 0) {
-                                              handleIndividualPercentageClick(index, Math.abs(value), value > 0 ? 'above' : 'below');
+                                              const capped = Math.max(-999, Math.min(999, value));
+                                              handleIndividualPercentageClick(index, Math.abs(capped), capped > 0 ? 'above' : 'below');
                                               input.blur();
                                             }
                                           }

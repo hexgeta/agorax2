@@ -351,9 +351,25 @@ const simplifyErrorMessage = (error: any): string => {
 interface OpenPositionsTableProps {
   isMarketplaceMode?: boolean;
   isLandingPageMode?: boolean; // Simplified view for landing page - shows top 10 active, no search/toggles
+  initialSearchQuery?: string; // Pre-populate search from URL query params
+  initialStatus?: 'active' | 'expired' | 'completed' | 'cancelled'; // Pre-set status filter
+  initialDateFilter?: '1h' | '12h' | '24h' | '7d' | '30d' | '90d' | '180d' | 'custom'; // Pre-set date filter
+  initialCustomDateStart?: number; // Unix timestamp for custom date range start
+  initialCustomDateEnd?: number; // Unix timestamp for custom date range end
+  initialAonFilter?: boolean; // Pre-set All or Nothing filter
+  initialDustFilter?: string; // Pre-set dust filter minimum value (e.g., "10" for $10 minimum)
+  onFiltersChange?: (filters: {
+    searchQuery: string;
+    status: 'active' | 'expired' | 'completed' | 'cancelled' | 'order-history';
+    dateFilter: '1h' | '12h' | '24h' | '7d' | '30d' | '90d' | '180d' | 'custom' | null;
+    customDateStart: number | null; // Unix timestamp
+    customDateEnd: number | null; // Unix timestamp
+    aonFilter: boolean;
+    dustFilter: string | null; // null = disabled, string = min USD value
+  }) => void; // Callback when filters change (for URL sync)
 }
 
-export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ isMarketplaceMode = false, isLandingPageMode = false }, ref) => {
+export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ isMarketplaceMode = false, isLandingPageMode = false, initialSearchQuery = '', initialStatus, initialDateFilter, initialCustomDateStart, initialCustomDateEnd, initialAonFilter, initialDustFilter, onFiltersChange }, ref) => {
   const { fillOrExecuteOrder, cancelOrder, collectProceeds, cancelAllExpiredOrders, updateOrderExpiration, isWalletConnected } = useContractWhitelist();
   const { address, chainId } = useAccount();
   const publicClient = usePublicClient();
@@ -408,16 +424,16 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
   // Level 2: Ownership filter - set based on mode
   const [ownershipFilter, setOwnershipFilter] = useState<'mine' | 'non-mine'>(isMarketplaceMode ? 'non-mine' : 'mine');
   // Level 3: Status filter
-  const [statusFilter, setStatusFilter] = useState<'active' | 'expired' | 'completed' | 'cancelled' | 'order-history'>('active');
+  const [statusFilter, setStatusFilter] = useState<'active' | 'expired' | 'completed' | 'cancelled' | 'order-history'>(initialStatus || 'active');
   // Search filter
-  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState<string>(initialSearchQuery);
   // All or Nothing filter
-  const [aonFilterEnabled, setAonFilterEnabled] = useState<boolean>(false);
+  const [aonFilterEnabled, setAonFilterEnabled] = useState<boolean>(initialAonFilter || false);
   // Hide my orders filter (marketplace mode only)
   const [hideMyOrders, setHideMyOrders] = useState<boolean>(false);
   // Dust filter - hide low value orders
-  const [dustFilterEnabled, setDustFilterEnabled] = useState<boolean>(false);
-  const [dustFilterMinValue, setDustFilterMinValue] = useState<string>('10');
+  const [dustFilterEnabled, setDustFilterEnabled] = useState<boolean>(!!initialDustFilter);
+  const [dustFilterMinValue, setDustFilterMinValue] = useState<string>(initialDustFilter || '10');
   // Advanced options shelf state (persisted to localStorage)
   const [showAdvancedOptions, setShowAdvancedOptions] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
@@ -428,9 +444,13 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
   });
   // Date filter state
   type DateFilterPreset = '1h' | '12h' | '24h' | '7d' | '30d' | '90d' | '180d' | 'custom' | null;
-  const [dateFilterPreset, setDateFilterPreset] = useState<DateFilterPreset>(null);
-  const [customDateStart, setCustomDateStart] = useState<Date | undefined>(undefined);
-  const [customDateEnd, setCustomDateEnd] = useState<Date | undefined>(undefined);
+  const [dateFilterPreset, setDateFilterPreset] = useState<DateFilterPreset>(initialDateFilter || null);
+  const [customDateStart, setCustomDateStart] = useState<Date | undefined>(
+    initialCustomDateStart ? new Date(initialCustomDateStart * 1000) : undefined
+  );
+  const [customDateEnd, setCustomDateEnd] = useState<Date | undefined>(
+    initialCustomDateEnd ? new Date(initialCustomDateEnd * 1000) : undefined
+  );
   const [showDatePicker, setShowDatePicker] = useState<boolean>(false);
   const datePickerRef = useRef<HTMLDivElement>(null);
   const [isClient, setIsClient] = useState(false);
@@ -587,6 +607,55 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
   useEffect(() => {
     localStorage.setItem('openPositionsAdvancedOptions', showAdvancedOptions.toString());
   }, [showAdvancedOptions]);
+
+  // Notify parent when filters change (for URL sync in marketplace mode)
+  useEffect(() => {
+    if (onFiltersChange && isMarketplaceMode) {
+      onFiltersChange({
+        searchQuery,
+        status: statusFilter,
+        dateFilter: dateFilterPreset,
+        customDateStart: customDateStart ? Math.floor(customDateStart.getTime() / 1000) : null,
+        customDateEnd: customDateEnd ? Math.floor(customDateEnd.getTime() / 1000) : null,
+        aonFilter: aonFilterEnabled,
+        dustFilter: dustFilterEnabled ? dustFilterMinValue : null,
+      });
+    }
+  }, [searchQuery, statusFilter, dateFilterPreset, customDateStart, customDateEnd, aonFilterEnabled, dustFilterEnabled, dustFilterMinValue, onFiltersChange, isMarketplaceMode]);
+
+  // Auto-switch to correct status tab when searching by exact order ID (pure number)
+  useEffect(() => {
+    if (!isMarketplaceMode || !allOrders || allOrders.length === 0) return;
+
+    const query = searchQuery.trim();
+    // Only auto-switch for pure number queries (order IDs)
+    if (!query || !/^\d+$/.test(query)) return;
+
+    // Find the order by ID
+    const order = allOrders.find(o => o.orderDetailsWithID.orderID.toString() === query);
+    if (!order) return;
+
+    // Determine the order's status
+    const status = order.orderDetailsWithID.status;
+    const expirationTime = Number(order.orderDetailsWithID.orderDetails.expirationTime);
+    const currentTime = Math.floor(Date.now() / 1000);
+
+    let targetStatus: 'active' | 'expired' | 'completed' | 'cancelled';
+    if (status === 2) {
+      targetStatus = 'completed';
+    } else if (status === 1) {
+      targetStatus = 'cancelled';
+    } else if (status === 0 && expirationTime < currentTime) {
+      targetStatus = 'expired';
+    } else {
+      targetStatus = 'active';
+    }
+
+    // Only switch if we're not already on the correct tab
+    if (statusFilter !== targetStatus) {
+      setStatusFilter(targetStatus);
+    }
+  }, [searchQuery, allOrders, isMarketplaceMode, statusFilter]);
 
   // Effect to handle initial load completion
   useEffect(() => {
@@ -2079,23 +2148,37 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
         filteredOrders = orders;
     }
 
-    // Level 4: Filter by search query (ticker names)
+    // Level 4: Filter by search query (ticker names, contract addresses, seller address, or order ID)
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
       filteredOrders = filteredOrders.filter(order => {
+        // Check order ID (exact match only)
+        const orderId = order.orderDetailsWithID.orderID.toString();
+        if (orderId === query) {
+          return true;
+        }
+
+        // Check seller address
+        const sellerAddress = order.userDetails.orderOwner.toLowerCase();
+        if (sellerAddress.includes(query)) {
+          return true;
+        }
+
         // Get sell token info
         const sellTokenInfo = getTokenInfo(order.orderDetailsWithID.orderDetails.sellToken);
         const sellTicker = sellTokenInfo.ticker.toLowerCase();
+        const sellAddress = sellTokenInfo.address.toLowerCase();
 
         // Get buy token info(s)
         const buyTokensMatch = order.orderDetailsWithID.orderDetails.buyTokensIndex.some(tokenIndex => {
           const buyTokenInfo = getTokenInfoByIndex(Number(tokenIndex));
           const buyTicker = buyTokenInfo.ticker.toLowerCase();
-          return buyTicker.includes(query);
+          const buyAddress = buyTokenInfo.address.toLowerCase();
+          return buyTicker.includes(query) || buyAddress.includes(query);
         });
 
-        // Return true if either sell or buy token matches
-        return sellTicker.includes(query) || buyTokensMatch;
+        // Return true if either sell or buy token matches (by ticker or address)
+        return sellTicker.includes(query) || sellAddress.includes(query) || buyTokensMatch;
       });
     }
 
@@ -2365,7 +2448,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     }
   };
 
-  // Get orders for tab counts - uses same logic as displayOrders for marketplace mode
+  // Get orders for tab counts - applies all filters except status to show matching count per tab
   const getOrdersForTabCount = (status: 'active' | 'expired' | 'completed' | 'cancelled') => {
     let orders = allOrders;
 
@@ -2388,24 +2471,96 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     }
 
     // Apply status filter
+    let filteredOrders: typeof orders = [];
     switch (status) {
       case 'active':
-        return orders.filter(order =>
+        filteredOrders = orders.filter(order =>
           order.orderDetailsWithID.status === 0 &&
           Number(order.orderDetailsWithID.orderDetails.expirationTime) >= Math.floor(Date.now() / 1000)
         );
+        break;
       case 'expired':
-        return orders.filter(order =>
+        filteredOrders = orders.filter(order =>
           order.orderDetailsWithID.status === 0 &&
           Number(order.orderDetailsWithID.orderDetails.expirationTime) < Math.floor(Date.now() / 1000)
         );
+        break;
       case 'completed':
-        return orders.filter(order => order.orderDetailsWithID.status === 2);
+        filteredOrders = orders.filter(order => order.orderDetailsWithID.status === 2);
+        break;
       case 'cancelled':
-        return orders.filter(order => order.orderDetailsWithID.status === 1);
+        filteredOrders = orders.filter(order => order.orderDetailsWithID.status === 1);
+        break;
       default:
-        return orders;
+        filteredOrders = orders;
     }
+
+    // Apply search filter (same logic as displayOrders)
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      filteredOrders = filteredOrders.filter(order => {
+        // Check order ID (exact match only)
+        const orderId = order.orderDetailsWithID.orderID.toString();
+        if (orderId === query) {
+          return true;
+        }
+
+        // Check seller address
+        const sellerAddress = order.userDetails.orderOwner.toLowerCase();
+        if (sellerAddress.includes(query)) {
+          return true;
+        }
+
+        // Get sell token info
+        const sellTokenInfo = getTokenInfo(order.orderDetailsWithID.orderDetails.sellToken);
+        const sellTicker = sellTokenInfo.ticker.toLowerCase();
+        const sellAddress = sellTokenInfo.address.toLowerCase();
+
+        // Get buy token info(s)
+        const buyTokensMatch = order.orderDetailsWithID.orderDetails.buyTokensIndex.some((tokenIndex: bigint) => {
+          const buyTokenInfo = getTokenInfoByIndex(Number(tokenIndex));
+          const buyTicker = buyTokenInfo.ticker.toLowerCase();
+          const buyAddress = buyTokenInfo.address.toLowerCase();
+          return buyTicker.includes(query) || buyAddress.includes(query);
+        });
+
+        // Return true if either sell or buy token matches (by ticker or address)
+        return sellTicker.includes(query) || sellAddress.includes(query) || buyTokensMatch;
+      });
+    }
+
+    // Apply All or Nothing filter
+    if (aonFilterEnabled) {
+      filteredOrders = filteredOrders.filter(order =>
+        order.orderDetailsWithID.orderDetails.allOrNothing === true
+      );
+    }
+
+    // Apply date range filter
+    const dateRange = getActiveDateRange();
+    if (dateRange) {
+      filteredOrders = filteredOrders.filter(order => {
+        const expirationTime = Number(order.orderDetailsWithID.orderDetails.expirationTime);
+        return expirationTime >= dateRange.start && expirationTime <= dateRange.end;
+      });
+    }
+
+    // Apply dust filter (minimum USD value)
+    if (dustFilterEnabled && dustFilterMinValue) {
+      const minValue = parseFloat(dustFilterMinValue) || 0;
+      if (minValue > 0) {
+        filteredOrders = filteredOrders.filter(order => {
+          const sellTokenInfo = getTokenInfo(order.orderDetailsWithID.orderDetails.sellToken);
+          const remainingSellAmount = order.orderDetailsWithID.remainingSellAmount;
+          const sellTokenAmount = parseFloat(formatTokenAmount(remainingSellAmount, sellTokenInfo.decimals));
+          const sellTokenPrice = getTokenPrice(sellTokenInfo.address, tokenPrices);
+          const sellUsdValue = sellTokenAmount * sellTokenPrice;
+          return sellUsdValue >= minValue;
+        });
+      }
+    }
+
+    return filteredOrders;
   };
 
   const getLevel3Orders = (tokenType: 'maxi' | 'non-maxi', ownership: 'mine' | 'non-mine', status: 'active' | 'expired' | 'completed' | 'cancelled' | 'order-history') => {
@@ -2683,7 +2838,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500" />
                   <input
                     type="text"
-                    placeholder="Search"
+                    placeholder="Search by ticker, address, seller, or order ID"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="w-full pl-10 pr-4 py-2 bg-black/40 border border-white/10 text-white placeholder-white/30 focus:outline-none focus:border-white/30 focus:bg-black/60 transition-colors shadow-sm rounded-lg"
@@ -2861,7 +3016,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500" />
               <input
                 type="text"
-                placeholder="Search tokens..."
+                placeholder="Search by ticker, address, seller, or order ID"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 bg-black/40 border border-white/10 text-white placeholder-white/30 focus:outline-none focus:border-white/30 focus:bg-black/60 transition-colors shadow-sm rounded-lg"

@@ -368,7 +368,8 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
       });
     }
 
-    return maxAbs;
+    // Cap at 1000% to prevent performance issues with extreme values
+    return Math.min(maxAbs, 1000);
   }, [displayCurrentPrice, limitOrderPrice, invertPriceDisplay, pricesBound, individualLimitPrices, buyTokenAddresses, sellTokenUsdPrice, buyTokenUsdPrices]);
 
   // Auto-expand zoom level to show out-of-bounds limit prices
@@ -497,41 +498,14 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
     return percentageToPosition(percentDeviation);
   }, [pricesBound, limitPricePosition, displayedTokenIndex, displayQuoteTokenInfos, individualLimitPrices, limitOrderPrice, invertPriceDisplay, sellTokenUsdPrice, buyTokenUsdPrices]);
 
-  // Drag handlers for limit price line (bound mode)
+  // Drag handlers disabled - users adjust price via form inputs only
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (!limitOrderPrice || !onLimitPriceChange) return;
-    e.preventDefault();
+    // Dragging disabled
+  }, []);
 
-    // Clear any pending cooldown from previous drag
-    if (cooldownTimeoutRef.current) {
-      clearTimeout(cooldownTimeoutRef.current);
-      cooldownTimeoutRef.current = null;
-    }
-
-    justReleasedRef.current = false;
-    setIsDragging(true);
-    setDraggingLineIndex(null); // No specific line index for bound mode
-    setDraggedPrice(limitOrderPrice); // Initialize with current price
-    if (onDragStateChange) onDragStateChange(true);
-  }, [limitOrderPrice, onLimitPriceChange, onDragStateChange]);
-
-  // Drag handler for individual lines (unbound mode)
   const handleIndividualMouseDown = useCallback((e: React.MouseEvent, index: number, price: number) => {
-    if (!onIndividualLimitPriceChange) return;
-    e.preventDefault();
-
-    // Clear any pending cooldown from previous drag
-    if (cooldownTimeoutRef.current) {
-      clearTimeout(cooldownTimeoutRef.current);
-      cooldownTimeoutRef.current = null;
-    }
-
-    justReleasedRef.current = false;
-    setIsDragging(true);
-    setDraggingLineIndex(index);
-    setDraggedPrice(price); // Initialize with current price for this line
-    if (onDragStateChange) onDragStateChange(true);
-  }, [onIndividualLimitPriceChange, onDragStateChange]);
+    // Dragging disabled
+  }, []);
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!isDragging || !containerRef.current || !currentPrice) return;
@@ -962,7 +936,7 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
               /* Single draggable line when prices are bound */
               priceToDisplay && limitPricePosition !== null && onLimitPriceChange && (
                 <div
-                  className={`absolute w-full ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+                  className="absolute w-full"
                   style={{
                     bottom: `${limitPricePosition}%`,
                     height: '40px',
@@ -1229,7 +1203,7 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
 
                 return (
                   <div
-                    className={`absolute w-full ${onIndividualLimitPriceChange ? (isThisLineDragging ? 'cursor-grabbing' : 'cursor-grab') : ''}`}
+                    className="absolute w-full"
                     style={{
                       bottom: `${individualPricePosition}%`,
                       height: '40px',
