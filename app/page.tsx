@@ -37,22 +37,22 @@ function FAQItem({ question, answer, isOpen, onToggle }: { question: string; ans
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </motion.svg>
       </button>
-      <AnimatePresence initial={false} mode="sync">
-        {isOpen && (
-          <motion.div
-            key="content"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2, ease: 'easeInOut' }}
-            style={{ overflow: 'hidden' }}
-          >
-            <div className="px-6 pb-6 pt-0">
-              <div className="text-gray-400 whitespace-pre-line" dangerouslySetInnerHTML={{ __html: answer }} />
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <motion.div
+        initial={false}
+        animate={{
+          height: isOpen ? 'auto' : 0,
+          opacity: isOpen ? 1 : 0
+        }}
+        transition={{
+          duration: 0.2,
+          ease: 'easeInOut'
+        }}
+        style={{ overflow: 'hidden' }}
+      >
+        <div className="px-6 pb-6 pt-0">
+          <div className="text-gray-400 whitespace-pre-line" dangerouslySetInnerHTML={{ __html: answer }} />
+        </div>
+      </motion.div>
     </LiquidGlassCard>
   );
 }
@@ -140,7 +140,21 @@ export default function Home() {
   });
   const [individualLimitPrices, setIndividualLimitPrices] = useState<(number | undefined)[]>([]);
   const [displayedTokenIndex, setDisplayedTokenIndex] = useState(0);
+  const [showUsdPrices, setShowUsdPrices] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('limitOrderShowUsdPrices');
+      return saved === 'true';
+    }
+    return false;
+  });
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
+
+  // Persist showUsdPrices to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('limitOrderShowUsdPrices', showUsdPrices.toString());
+    }
+  }, [showUsdPrices]);
 
   // Test functions for toast notifications
   const testSuccessToast = () => {
@@ -675,8 +689,8 @@ export default function Home() {
                           </svg>
                         </div>
                         <div>
-                          <h3 className="text-white font-semibold mb-1">Send to Contract Protection</h3>
-                          <p className="text-gray-400 text-sm">Direct transfers to the contract are rejected. You can't accidentally send to the Contract address and lose them forever.</p>
+                          <h3 className="text-white font-semibold mb-1">PLS Send to Contract Protection</h3>
+                          <p className="text-gray-400 text-sm">Direct transfers of PLS to the contract are rejected. You can't accidentally send to the Contract address and lose them forever.</p>
                         </div>
                       </div>
                     </LiquidGlassCard>
@@ -748,7 +762,7 @@ export default function Home() {
                     />
                     <FAQItem
                       question="Is it safe?"
-                      answer="AgoráX is a decentralized, immutable smart contract. Your tokens never leave the smart contract until a trade executes. There's no centralized person, or entity that can take or freeze your funds. All code is on-tchain and verifiable."
+                      answer="AgoráX is a decentralized, immutable smart contract. Your tokens never leave the smart contract until a trade executes. There's no centralized person, or entity that can take or freeze your funds. All code is on-chain and verifiable."
                       isOpen={openFaqIndex === 5}
                       onToggle={() => setOpenFaqIndex(openFaqIndex === 5 ? null : 5)}
                     />
@@ -766,7 +780,7 @@ export default function Home() {
                     />
                     <FAQItem
                       question="Which tokens can I trade?"
-                      answer="You can sell any PRC-20 token on PulseChain and buy from a whitelist of 100+ tokens. For whitelist additions DM us at https://x.com/Time_Haven"
+                      answer="<strong class='text-white'>Sell Tokens (What You Offer):</strong><br/>You can sell <strong class='text-green-400'>any PRC-20 token</strong> on PulseChain, including non-whitelisted tokens.<br/><br/><strong class='text-red-400'>⚠️ Not Supported:</strong><br/>• <strong>Rebasing tokens</strong> - tokens that auto-adjust balances will cause transactions to fail<br/>• <strong>Fee-on-transfer/tax tokens</strong> - tokens that take fees on transfers will revert<br/><br/><strong class='text-white'>Buy Tokens (What You Receive):</strong><br/>Buy tokens must be <strong class='text-cyan-400'>whitelisted and active</strong> on the platform. This protects order fillers from receiving scam or worthless tokens.<br/><br/><strong class='text-white'>Why the difference?</strong><br/>Sellers can exit any position they hold, while fillers are protected from problematic tokens. The whitelist currently includes 100+ major PulseChain tokens.<br/><br/>For whitelist additions DM us at <a href='https://x.com/Time_Haven' target='_blank' class='text-cyan-400 hover:underline'>x.com/Time_Haven</a>"
                       isOpen={openFaqIndex === 8}
                       onToggle={() => setOpenFaqIndex(openFaqIndex === 8 ? null : 8)}
                     />
@@ -856,6 +870,8 @@ export default function Home() {
                           onDisplayedTokenIndexChange={(index) => {
                             setDisplayedTokenIndex(index);
                           }}
+                          showUsdPrices={showUsdPrices}
+                          onShowUsdPricesChange={setShowUsdPrices}
                         />
                       </div>
 
@@ -867,6 +883,7 @@ export default function Home() {
                           externalIndividualLimitPrices={individualLimitPrices}
                           isDragging={isDragging}
                           displayedTokenIndex={displayedTokenIndex}
+                          showUsdPrices={showUsdPrices}
                           onTokenChange={(sell, buyTokens) => {
                             setSellTokenAddress(sell);
                             setBuyTokenAddresses(buyTokens);
@@ -952,6 +969,8 @@ export default function Home() {
                             onDisplayedTokenIndexChange={(index) => {
                               setDisplayedTokenIndex(index);
                             }}
+                            showUsdPrices={showUsdPrices}
+                            onShowUsdPricesChange={setShowUsdPrices}
                           />
                         </div>
 
@@ -967,6 +986,7 @@ export default function Home() {
                           externalIndividualLimitPrices={individualLimitPrices}
                           isDragging={isDragging}
                           displayedTokenIndex={displayedTokenIndex}
+                          showUsdPrices={showUsdPrices}
                           onTokenChange={(sell, buyTokens) => {
                             setSellTokenAddress(sell);
                             setBuyTokenAddresses(buyTokens);

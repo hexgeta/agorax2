@@ -1,12 +1,10 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import NumberFlow from '@number-flow/react';
 import { TOKEN_CONSTANTS } from '@/constants/crypto';
 import { formatTokenTicker } from '@/utils/tokenUtils';
-import { CoinLogo } from '@/components/ui/CoinLogo';
 import { TokenLogo } from '@/components/TokenLogo';
-import logoManifest from '@/constants/logo-manifest.json';
 
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 
@@ -18,14 +16,16 @@ interface LimitOrderChartProps {
   pricesBound?: boolean;
   individualLimitPrices?: (number | undefined)[];
   displayedTokenIndex?: number;
+  showUsdPrices?: boolean;
   onLimitPriceChange?: (newPrice: number) => void;
   onIndividualLimitPriceChange?: (index: number, newPrice: number) => void;
   onCurrentPriceChange?: (price: number) => void;
   onDragStateChange?: (isDragging: boolean) => void;
   onDisplayedTokenIndexChange?: (index: number) => void;
+  onShowUsdPricesChange?: (show: boolean) => void;
 }
 
-export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limitOrderPrice, invertPriceDisplay = true, pricesBound = true, individualLimitPrices = [], displayedTokenIndex: externalDisplayedTokenIndex, onLimitPriceChange, onIndividualLimitPriceChange, onCurrentPriceChange, onDragStateChange, onDisplayedTokenIndexChange }: LimitOrderChartProps) {
+export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limitOrderPrice, invertPriceDisplay = true, pricesBound = true, individualLimitPrices = [], displayedTokenIndex: externalDisplayedTokenIndex, showUsdPrices: externalShowUsdPrices, onLimitPriceChange, onIndividualLimitPriceChange, onCurrentPriceChange, onDragStateChange, onDisplayedTokenIndexChange, onShowUsdPricesChange }: LimitOrderChartProps) {
   const [currentPrice, setCurrentPrice] = useState<number | null>(null);
   const [buyTokenUsdPrices, setBuyTokenUsdPrices] = useState<Record<string, number>>({});
   const [sellTokenUsdPrice, setSellTokenUsdPrice] = useState<number>(0);
@@ -34,6 +34,14 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
   const [draggedPrice, setDraggedPrice] = useState<number | null>(null);
   const [draggingLineIndex, setDraggingLineIndex] = useState<number | null>(null); // Track which line is being dragged (for unbound mode)
   const [internalDisplayedTokenIndex, setInternalDisplayedTokenIndex] = useState(0); // For cycling through tokens
+  const [internalShowUsdPrices, setInternalShowUsdPrices] = useState(false); // Toggle between token units and USD
+
+  // Use external showUsdPrices if provided (controlled mode), otherwise use internal state
+  const showUsdPrices = externalShowUsdPrices ?? internalShowUsdPrices;
+  const setShowUsdPrices = (value: boolean) => {
+    setInternalShowUsdPrices(value);
+    onShowUsdPricesChange?.(value);
+  };
 
   // Use external index if provided (controlled mode), otherwise use internal state
   const displayedTokenIndex = externalDisplayedTokenIndex ?? internalDisplayedTokenIndex;
@@ -408,6 +416,37 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
     ? stableLimitPricePositionRef.current
     : calculatedLimitPricePosition;
 
+  // Calculate effective limit price position for current price label positioning
+  // In unbound mode, use the active token's individual limit price position
+  const effectiveLimitPricePosition = useMemo(() => {
+    if (pricesBound) {
+      return limitPricePosition;
+    }
+    // Unbound mode: calculate position for the active token
+    const activeTokenInfo = displayQuoteTokenInfos[displayedTokenIndex];
+    if (!activeTokenInfo) return limitPricePosition;
+
+    let basePrice = individualLimitPrices[displayedTokenIndex];
+    if (!basePrice && limitOrderPrice) {
+      basePrice = calculateLimitPriceForToken(activeTokenInfo.a) || undefined;
+    }
+    if (!basePrice) return limitPricePosition;
+
+    const displayPrice = invertPriceDisplay && basePrice > 0 ? 1 / basePrice : basePrice;
+    const tokenAddress = activeTokenInfo.a?.toLowerCase();
+    const tokenMarketPrice = tokenAddress && sellTokenUsdPrice && buyTokenUsdPrices[tokenAddress]
+      ? (invertPriceDisplay
+          ? buyTokenUsdPrices[tokenAddress] / sellTokenUsdPrice
+          : sellTokenUsdPrice / buyTokenUsdPrices[tokenAddress])
+      : null;
+    if (!tokenMarketPrice) return limitPricePosition;
+
+    const percentDeviation = displayPrice
+      ? ((displayPrice - tokenMarketPrice) / tokenMarketPrice) * 100
+      : 0;
+    return percentageToPosition(percentDeviation);
+  }, [pricesBound, limitPricePosition, displayedTokenIndex, displayQuoteTokenInfos, individualLimitPrices, limitOrderPrice, invertPriceDisplay, sellTokenUsdPrice, buyTokenUsdPrices]);
+
   // Drag handlers for limit price line (bound mode)
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (!limitOrderPrice || !onLimitPriceChange) return;
@@ -634,23 +673,29 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
           <div className="flex items-center justify-between">
             <h3 className="text-2xl font-bold text-white">
               <span className="flex items-center gap-2">
-                <img
-                  src={(() => {
-                    const format = (logoManifest as Record<string, string>)[displayBaseTokenInfo.ticker];
-                    return format ? `/coin-logos/${displayBaseTokenInfo.ticker}.${format}` : '/coin-logos/default.svg';
-                  })()}
-                  alt={`${displayBaseTokenInfo.ticker} logo`}
+                <TokenLogo
+                  ticker={displayBaseTokenInfo.ticker}
                   className="w-6 h-6 inline-block"
-                  onError={(e) => {
-                    e.currentTarget.src = '/coin-logos/default.svg';
-                  }}
                 />
                 {formatTokenTicker(displayBaseTokenInfo.ticker)} Price
               </span>
             </h3>
-            {loading && (
-              <span className="text-xs text-white/50 animate-pulse">Updating...</span>
-            )}
+            <div className="flex items-center gap-2">
+              {loading && (
+                <span className="text-xs text-white/50 animate-pulse">Updating...</span>
+              )}
+              {/* USD/Units Toggle */}
+              <button
+                onClick={() => setShowUsdPrices(!showUsdPrices)}
+                className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+                  showUsdPrices
+                    ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                    : 'bg-white/10 text-white/60 border border-white/20 hover:bg-white/20'
+                }`}
+              >
+                {showUsdPrices ? '$' : 'Units'}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -708,7 +753,7 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
               style={{
                 bottom: `${currentPricePosition}%`,
                 height: '40px',
-                zIndex: currentPricePosition < (limitPricePosition || 0) ? 20 : 10,
+                zIndex: currentPricePosition < (effectiveLimitPricePosition || 0) ? 20 : 10,
                 transform: 'translateY(50%)',
                 transition: 'bottom 200ms'
               }}
@@ -718,9 +763,9 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                 className="absolute top-1/2 -translate-y-1/2 left-[58px] right-0 h-[2px] bg-[#00D9FF] rounded-full transition-all duration-500 pointer-events-none"
               />
               <LiquidGlassCard
-                className={`group absolute right-0 flex items-center justify-between bg-cyan-500/10 px-3 py-1 border-cyan-500/30 w-fit min-w-[250px] ${displayQuoteTokenInfos.length > 1 ? 'cursor-pointer pointer-events-auto' : 'pointer-events-none'} ${limitPricePosition && limitPricePosition < currentPricePosition ? 'top-0' : 'bottom-0'}`}
+                className={`group absolute right-0 flex items-center justify-between bg-cyan-500/10 px-3 py-1 border-cyan-500/30 w-fit min-w-[250px] ${displayQuoteTokenInfos.length > 1 ? 'cursor-pointer pointer-events-auto' : 'pointer-events-none'} ${effectiveLimitPricePosition && effectiveLimitPricePosition < currentPricePosition ? 'top-0' : 'bottom-0'}`}
                 style={{
-                  transform: limitPricePosition && limitPricePosition < currentPricePosition
+                  transform: effectiveLimitPricePosition && effectiveLimitPricePosition < currentPricePosition
                     ? 'translateY(-45%)'
                     : 'translateY(45%)'
                 }}
@@ -745,6 +790,11 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                   // When inverted, show sell token as unit; otherwise show buy token
                   const unitTokenInfo = invertPriceDisplay ? sellTokenInfo : tokenInfo;
 
+                  // Calculate USD price (price of 1 base token in USD)
+                  const baseTokenUsdPrice = invertPriceDisplay
+                    ? (tokenAddress ? buyTokenUsdPrices[tokenAddress] : 0)
+                    : sellTokenUsdPrice;
+
                   return (
                     <>
                       <span className="text-xs text-white/70 whitespace-nowrap flex items-center gap-1">
@@ -756,19 +806,32 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                         )}
                       </span>
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-bold text-white">
-                          {tokenCurrentPrice?.toLocaleString(undefined, {
-                            minimumSignificantDigits: 1,
-                            maximumSignificantDigits: 4
-                          }) || '0'}
-                        </span>
-                        <span className="text-xs text-[#00D9FF]">
-                          {formatTokenTicker(unitTokenInfo?.ticker || '')}
-                        </span>
-                        <TokenLogo
-                          ticker={unitTokenInfo?.ticker || ''}
-                          className="w-[16px] h-[16px] object-contain"
-                        />
+                        {showUsdPrices ? (
+                          <>
+                            <span className="text-sm font-bold text-white">
+                              ${baseTokenUsdPrice?.toLocaleString(undefined, {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: baseTokenUsdPrice < 0.01 ? 6 : baseTokenUsdPrice < 1 ? 4 : 2
+                              }) || '0'}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-sm font-bold text-white">
+                              {tokenCurrentPrice?.toLocaleString(undefined, {
+                                minimumSignificantDigits: 1,
+                                maximumSignificantDigits: 4
+                              }) || '0'}
+                            </span>
+                            <span className="text-xs text-[#00D9FF]">
+                              {formatTokenTicker(unitTokenInfo?.ticker || '')}
+                            </span>
+                            <TokenLogo
+                              ticker={unitTokenInfo?.ticker || ''}
+                              className="w-[16px] h-[16px] object-contain"
+                            />
+                          </>
+                        )}
                       </div>
                     </>
                   );
@@ -829,6 +892,14 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                       // When not inverted, price is "X buy_tokens per 1 sell_token", so show buy token as unit
                       const unitTokenInfo = invertPriceDisplay ? sellTokenInfo : tokenInfo;
 
+                      // Calculate USD price for limit (what 1 base token would be worth at this limit price)
+                      // When inverted, base token is the buy token
+                      const tokenAddrLower = tokenAddress?.toLowerCase();
+                      const buyTokenUsdPrice = tokenAddrLower ? buyTokenUsdPrices[tokenAddrLower] : 0;
+                      const limitUsdPrice = invertPriceDisplay
+                        ? (priceForThisToken && sellTokenUsdPrice ? priceForThisToken * sellTokenUsdPrice : 0)
+                        : (priceForThisToken && buyTokenUsdPrice ? priceForThisToken * buyTokenUsdPrice : 0);
+
                       // Use compact layout for 5+ tokens
                       const useCompactLayout = displayQuoteTokenInfos.length >= 5;
 
@@ -844,7 +915,12 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                               {formatTokenTicker(tokenInfo?.ticker || '')}
                             </span>
                             <span className="text-sm font-bold text-white whitespace-nowrap">
-                              {(priceForThisToken || 0).toPrecision(4).replace(/\.?0+$/, '')}
+                              {showUsdPrices
+                                ? `$${limitUsdPrice.toLocaleString(undefined, {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: limitUsdPrice < 0.01 ? 6 : limitUsdPrice < 1 ? 4 : 2
+                                  })}`
+                                : (priceForThisToken || 0).toPrecision(4).replace(/\.?0+$/, '')}
                             </span>
                             <span className="text-[10px] text-white/40">
                               ({displayedTokenIndex + 1}/{displayQuoteTokenInfos.length})
@@ -864,16 +940,27 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                             )}
                           </span>
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-bold text-white">
-                              {(priceForThisToken || 0).toPrecision(4).replace(/\.?0+$/, '')}
-                            </span>
-                            <span className="text-xs text-[#FF0080]">
-                              {formatTokenTicker(unitTokenInfo?.ticker || '')}
-                            </span>
-                            <TokenLogo
-                              ticker={unitTokenInfo?.ticker || ''}
-                              className="w-[16px] h-[16px] object-contain"
-                            />
+                            {showUsdPrices ? (
+                              <span className="text-sm font-bold text-white">
+                                ${limitUsdPrice.toLocaleString(undefined, {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: limitUsdPrice < 0.01 ? 6 : limitUsdPrice < 1 ? 4 : 2
+                                })}
+                              </span>
+                            ) : (
+                              <>
+                                <span className="text-sm font-bold text-white">
+                                  {(priceForThisToken || 0).toPrecision(4).replace(/\.?0+$/, '')}
+                                </span>
+                                <span className="text-xs text-[#FF0080]">
+                                  {formatTokenTicker(unitTokenInfo?.ticker || '')}
+                                </span>
+                                <TokenLogo
+                                  ticker={unitTokenInfo?.ticker || ''}
+                                  className="w-[16px] h-[16px] object-contain"
+                                />
+                              </>
+                            )}
                           </div>
                         </>
                       );
@@ -882,27 +969,97 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                 </div>
               )
             ) : (
-              /* Unbound prices: Single line for currently displayed token, dragging affects only that token */
-              (() => {
-                const activeIndex = displayedTokenIndex;
-                const activeTokenInfo = displayQuoteTokenInfos[activeIndex];
-                if (!activeTokenInfo) return null;
+              /* Unbound prices: Show faded lines for non-active tokens + full line for active token */
+              <>
+                {/* Faded lines for non-active tokens (no labels) */}
+                {displayQuoteTokenInfos.map((tokenInfo, idx) => {
+                  if (idx === displayedTokenIndex) return null; // Skip active token, rendered separately
+                  if (!tokenInfo) return null;
 
-                // Token colors matching LimitOrderForm - first token is pink, others use this array
-                const tokenColors = [
-                  { accent: '#FF0080', bg: 'bg-pink-500/10', border: 'border-pink-500/30' },      // First token (index 0)
-                  { accent: '#8B5CF6', bg: 'bg-purple-500/10', border: 'border-purple-500/30' },  // Purple
-                  { accent: '#F59E0B', bg: 'bg-amber-500/10', border: 'border-amber-500/30' },    // Amber
-                  { accent: '#10B981', bg: 'bg-emerald-500/10', border: 'border-emerald-500/30' }, // Emerald
-                  { accent: '#EF4444', bg: 'bg-red-500/10', border: 'border-red-500/30' },        // Red
-                  { accent: '#3B82F6', bg: 'bg-blue-500/10', border: 'border-blue-500/30' },      // Blue
-                  { accent: '#EC4899', bg: 'bg-fuchsia-500/10', border: 'border-fuchsia-500/30' }, // Fuchsia
-                  { accent: '#14B8A6', bg: 'bg-teal-500/10', border: 'border-teal-500/30' },      // Teal
-                  { accent: '#F97316', bg: 'bg-orange-500/10', border: 'border-orange-500/30' },  // Orange
-                  { accent: '#6366F1', bg: 'bg-indigo-500/10', border: 'border-indigo-500/30' },  // Indigo
-                ];
-                const colors = tokenColors[activeIndex % tokenColors.length];
-                const lineColor = colors.accent;
+                  // Token colors
+                  const tokenColors = [
+                    { accent: '#FF0080' },      // Pink
+                    { accent: '#8B5CF6' },      // Purple
+                    { accent: '#F59E0B' },      // Amber
+                    { accent: '#10B981' },      // Emerald
+                    { accent: '#EF4444' },      // Red
+                    { accent: '#3B82F6' },      // Blue
+                    { accent: '#EC4899' },      // Fuchsia
+                    { accent: '#14B8A6' },      // Teal
+                    { accent: '#F97316' },      // Orange
+                    { accent: '#6366F1' },      // Indigo
+                  ];
+                  const lineColor = tokenColors[idx % tokenColors.length].accent;
+
+                  // Get individual price for this token
+                  let basePrice = individualLimitPrices[idx];
+                  if (!basePrice && limitOrderPrice) {
+                    const tokenAddress = tokenInfo?.a;
+                    basePrice = calculateLimitPriceForToken(tokenAddress) || undefined;
+                  }
+                  if (!basePrice) return null;
+
+                  // Apply inversion if needed
+                  const displayPrice = invertPriceDisplay && basePrice > 0 ? 1 / basePrice : basePrice;
+
+                  // Calculate market price for this token
+                  const tokenAddress = tokenInfo?.a?.toLowerCase();
+                  const tokenMarketPrice = tokenAddress && sellTokenUsdPrice && buyTokenUsdPrices[tokenAddress]
+                    ? (invertPriceDisplay
+                        ? buyTokenUsdPrices[tokenAddress] / sellTokenUsdPrice
+                        : sellTokenUsdPrice / buyTokenUsdPrices[tokenAddress])
+                    : null;
+                  if (!tokenMarketPrice) return null;
+
+                  // Calculate percentage deviation
+                  const percentDeviation = displayPrice
+                    ? ((displayPrice - tokenMarketPrice) / tokenMarketPrice) * 100
+                    : 0;
+                  const pricePosition = percentageToPosition(percentDeviation);
+                  if (pricePosition === null) return null;
+
+                  return (
+                    <div
+                      key={`inactive-line-${idx}`}
+                      className="absolute w-full pointer-events-none"
+                      style={{
+                        bottom: `${pricePosition}%`,
+                        height: '4px',
+                        zIndex: 5,
+                        transform: 'translateY(50%)',
+                        transition: 'bottom 200ms'
+                      }}
+                    >
+                      {/* Faded line - no label */}
+                      <div
+                        className="absolute top-1/2 -translate-y-1/2 left-[58px] right-0 h-[2px] rounded-full opacity-30"
+                        style={{ backgroundColor: lineColor }}
+                      />
+                    </div>
+                  );
+                })}
+
+                {/* Active token line with full label */}
+                {(() => {
+                  const activeIndex = displayedTokenIndex;
+                  const activeTokenInfo = displayQuoteTokenInfos[activeIndex];
+                  if (!activeTokenInfo) return null;
+
+                  // Token colors matching LimitOrderForm - first token is pink, others use this array
+                  const tokenColors = [
+                    { accent: '#FF0080', bg: 'bg-pink-500/10', border: 'border-pink-500/30' },      // First token (index 0)
+                    { accent: '#8B5CF6', bg: 'bg-purple-500/10', border: 'border-purple-500/30' },  // Purple
+                    { accent: '#F59E0B', bg: 'bg-amber-500/10', border: 'border-amber-500/30' },    // Amber
+                    { accent: '#10B981', bg: 'bg-emerald-500/10', border: 'border-emerald-500/30' }, // Emerald
+                    { accent: '#EF4444', bg: 'bg-red-500/10', border: 'border-red-500/30' },        // Red
+                    { accent: '#3B82F6', bg: 'bg-blue-500/10', border: 'border-blue-500/30' },      // Blue
+                    { accent: '#EC4899', bg: 'bg-fuchsia-500/10', border: 'border-fuchsia-500/30' }, // Fuchsia
+                    { accent: '#14B8A6', bg: 'bg-teal-500/10', border: 'border-teal-500/30' },      // Teal
+                    { accent: '#F97316', bg: 'bg-orange-500/10', border: 'border-orange-500/30' },  // Orange
+                    { accent: '#6366F1', bg: 'bg-indigo-500/10', border: 'border-indigo-500/30' },  // Indigo
+                  ];
+                  const colors = tokenColors[activeIndex % tokenColors.length];
+                  const lineColor = colors.accent;
 
                 // Get the individual limit price for the active token
                 // Use draggedPrice during dragging OR during cooldown period (justReleasedRef)
@@ -988,16 +1145,38 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                         )}
                       </span>
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-bold text-white">
-                          {(displayIndividualPrice || 0).toPrecision(4).replace(/\.?0+$/, '')}
-                        </span>
-                        <span className="text-xs" style={{ color: lineColor }}>
-                          {formatTokenTicker(unitTokenInfo?.ticker || '')}
-                        </span>
-                        <TokenLogo
-                          ticker={unitTokenInfo?.ticker || ''}
-                          className="w-[16px] h-[16px] object-contain"
-                        />
+                        {(() => {
+                          // Calculate USD price for this token's limit
+                          const activeTokenUsdPrice = tokenAddress ? buyTokenUsdPrices[tokenAddress] : 0;
+                          const limitUsdPrice = invertPriceDisplay
+                            ? (displayIndividualPrice && sellTokenUsdPrice ? displayIndividualPrice * sellTokenUsdPrice : 0)
+                            : (displayIndividualPrice && activeTokenUsdPrice ? displayIndividualPrice * activeTokenUsdPrice : 0);
+
+                          if (showUsdPrices) {
+                            return (
+                              <span className="text-sm font-bold text-white">
+                                ${limitUsdPrice.toLocaleString(undefined, {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: limitUsdPrice < 0.01 ? 6 : limitUsdPrice < 1 ? 4 : 2
+                                })}
+                              </span>
+                            );
+                          }
+                          return (
+                            <>
+                              <span className="text-sm font-bold text-white">
+                                {(displayIndividualPrice || 0).toPrecision(4).replace(/\.?0+$/, '')}
+                              </span>
+                              <span className="text-xs" style={{ color: lineColor }}>
+                                {formatTokenTicker(unitTokenInfo?.ticker || '')}
+                              </span>
+                              <TokenLogo
+                                ticker={unitTokenInfo?.ticker || ''}
+                                className="w-[16px] h-[16px] object-contain"
+                              />
+                            </>
+                          );
+                        })()}
                         {displayQuoteTokenInfos.length > 1 && (
                           <span className="text-[10px] text-white/40 group-hover:text-white transition-colors ml-1">
                             ({activeIndex + 1}/{displayQuoteTokenInfos.length})
@@ -1007,7 +1186,8 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                     </LiquidGlassCard>
                   </div>
                 );
-              })()
+              })()}
+              </>
             )}
           </div>
         </div>

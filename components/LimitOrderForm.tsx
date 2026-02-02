@@ -40,6 +40,7 @@ interface LimitOrderFormProps {
   externalIndividualLimitPrices?: (number | undefined)[];
   isDragging?: boolean;
   displayedTokenIndex?: number;
+  showUsdPrices?: boolean;
   onDisplayedTokenIndexChange?: (index: number) => void;
   onCreateOrderClick?: (sellToken: TokenOption | null, buyTokens: (TokenOption | null)[], sellAmount: string, buyAmounts: string[], expirationDays: number) => void;
   onOrderCreated?: () => void;
@@ -170,6 +171,7 @@ export function LimitOrderForm({
   externalIndividualLimitPrices,
   isDragging = false,
   displayedTokenIndex: externalDisplayedTokenIndex,
+  showUsdPrices = false,
   onDisplayedTokenIndexChange,
   onCreateOrderClick,
   onOrderCreated,
@@ -3661,6 +3663,18 @@ export function LimitOrderForm({
                         return buyAmounts[i] || '';
                       });
                       setBuyAmounts(newAmounts);
+
+                      // Reset individual limit prices to match the primary token's price ratio
+                      // This ensures alt tokens don't remember old unlinked prices
+                      setIndividualLimitPrices(buyTokens.map((token, i) => {
+                        if (i === 0 || !token) return storedPrice;
+                        const tokenUsdPrice = getPrice(token.a);
+                        if (sellTokenUsdPrice > 0 && tokenUsdPrice > 0) {
+                          const marketPriceForThis = sellTokenUsdPrice / tokenUsdPrice;
+                          return marketPriceForThis * premiumMultiplier;
+                        }
+                        return storedPrice;
+                      }));
                     }
 
                     // Also check if all buyTokens belong to a common basket and restore it
@@ -3949,7 +3963,11 @@ export function LimitOrderForm({
                   <div className="mt-4">
                     <div className="flex justify-between items-center mb-2">
                       <div className="flex items-center gap-2">
-                        {invertPriceDisplay && buyTokens.length > 1 ? (
+                        {showUsdPrices ? (
+                          <label className="text-[#FF0080]/90 text-sm font-semibold">
+                            Limit Price: ($)
+                          </label>
+                        ) : invertPriceDisplay && buyTokens.length > 1 ? (
                           <button
                             type="button"
                             onClick={() => {
@@ -4008,11 +4026,14 @@ export function LimitOrderForm({
                         value={isLimitPriceInputFocused ? limitPriceInputValue : (() => {
                           if (!limitPrice || parseFloat(limitPrice) <= 0) return '';
                           const basePrice = parseFloat(limitPrice);
-                          const tokenIndex = displayedPriceTokenIndex % buyTokens.length;
+
+                          // When showing USD, always use the base token (index 0) since USD is universal
+                          // When showing token units, use the displayed token index
+                          const tokenIndex = showUsdPrices ? 0 : (displayedPriceTokenIndex % buyTokens.length);
                           let displayPrice = basePrice;
 
-                          // When showing a different token's price, use external individual prices as source of truth
-                          if (tokenIndex > 0 && buyTokens[tokenIndex]) {
+                          // When showing a different token's price (not in USD mode), use external individual prices as source of truth
+                          if (!showUsdPrices && tokenIndex > 0 && buyTokens[tokenIndex]) {
                             // Use external individual limit price from chart if available
                             const externalPrice = externalIndividualLimitPrices?.[tokenIndex];
                             if (externalPrice !== undefined && externalPrice > 0) {
@@ -4026,10 +4047,28 @@ export function LimitOrderForm({
                             }
                           }
 
+                          // Calculate final display value
+                          let finalDisplayPrice = displayPrice;
                           if (invertPriceDisplay && displayPrice > 0) {
-                            return formatNumberWithCommas(formatLimitPriceDisplay(1 / displayPrice));
+                            finalDisplayPrice = 1 / displayPrice;
                           }
-                          return formatNumberWithCommas(formatLimitPriceDisplay(displayPrice));
+
+                          // If showing USD prices, convert to USD
+                          if (showUsdPrices && finalDisplayPrice > 0) {
+                            // Get USD price of the unit token (what the price is denominated in)
+                            // Always use sell token when inverted, first buy token otherwise
+                            const unitToken = invertPriceDisplay ? sellToken : buyTokens[0];
+                            const unitTokenUsdPrice = unitToken ? getPrice(unitToken.a) : 0;
+                            if (unitTokenUsdPrice > 0) {
+                              const usdValue = finalDisplayPrice * unitTokenUsdPrice;
+                              return '$' + formatNumberWithCommas(usdValue.toLocaleString(undefined, {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: usdValue < 0.01 ? 6 : usdValue < 1 ? 4 : 2
+                              }));
+                            }
+                          }
+
+                          return formatNumberWithCommas(formatLimitPriceDisplay(finalDisplayPrice));
                         })()}
                         onChange={(e) => {
                           const input = e.target;
@@ -4121,7 +4160,7 @@ export function LimitOrderForm({
                         }}
                         onBlur={() => setIsLimitPriceInputFocused(false)}
                       />
-                      {sellToken && (
+                      {sellToken && !showUsdPrices && (
                         <button
                           type="button"
                           onClick={() => {
@@ -4529,7 +4568,7 @@ export function LimitOrderForm({
                       <div className="flex justify-between items-center mb-2">
                         <div className="flex items-center gap-2">
                           <label className="text-[#FF0080]/90 text-sm font-semibold">
-                            Limit Price: ({invertPriceDisplay ? formatTokenTicker(buyToken.ticker, chainId) : formatTokenTicker(sellToken?.ticker || '', chainId)})
+                            Limit Price: ({showUsdPrices ? '$' : (invertPriceDisplay ? formatTokenTicker(buyToken.ticker, chainId) : formatTokenTicker(sellToken?.ticker || '', chainId))})
                           </label>
                           {sellToken && (
                             <button
@@ -4570,10 +4609,23 @@ export function LimitOrderForm({
                           value={isLimitPriceInputFocused ? limitPriceInputValue : (() => {
                             if (!limitPrice || parseFloat(limitPrice) <= 0) return '';
                             const price = parseFloat(limitPrice);
+                            let displayPrice = price;
                             if (invertPriceDisplay && price > 0) {
-                              return formatNumberWithCommas(formatLimitPriceDisplay(1 / price));
+                              displayPrice = 1 / price;
                             }
-                            return formatNumberWithCommas(formatLimitPriceDisplay(price));
+                            // If showing USD prices, convert to USD
+                            if (showUsdPrices && displayPrice > 0) {
+                              const unitToken = invertPriceDisplay ? sellToken : buyToken;
+                              const unitTokenUsdPrice = unitToken ? getPrice(unitToken.a) : 0;
+                              if (unitTokenUsdPrice > 0) {
+                                const usdValue = displayPrice * unitTokenUsdPrice;
+                                return '$' + formatNumberWithCommas(usdValue.toLocaleString(undefined, {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: usdValue < 0.01 ? 6 : usdValue < 1 ? 4 : 2
+                                }));
+                              }
+                            }
+                            return formatNumberWithCommas(formatLimitPriceDisplay(displayPrice));
                           })()}
                           onChange={(e) => {
                             const input = e.target;
@@ -4665,7 +4717,7 @@ export function LimitOrderForm({
                           }}
                           onBlur={() => setIsLimitPriceInputFocused(false)}
                         />
-                        {sellToken && (
+                        {sellToken && !showUsdPrices && (
                           <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[#FF0080]/70 text-sm font-medium pointer-events-none">
                             {invertPriceDisplay ? formatTokenTicker(sellToken.ticker, chainId) : formatTokenTicker(buyToken.ticker, chainId)}
                           </div>
@@ -4802,7 +4854,7 @@ export function LimitOrderForm({
                         <div className="mt-4">
                           <div className="flex justify-between items-center mb-2">
                             <label className="text-sm font-semibold" style={{ color: accentColor }}>
-                              Limit Price: ({invertPriceDisplay ? formatTokenTicker(sellToken?.ticker || '', chainId) : formatTokenTicker(buyToken.ticker, chainId)})
+                              Limit Price: ({showUsdPrices ? '$' : (invertPriceDisplay ? formatTokenTicker(sellToken?.ticker || '', chainId) : formatTokenTicker(buyToken.ticker, chainId))})
                             </label>
                             {tokenPricePercentage !== null && Math.abs(tokenPricePercentage) > 0.01 && (
                               <span className="text-sm font-bold" style={{ color: accentColor }}>
@@ -4827,25 +4879,51 @@ export function LimitOrderForm({
                                 if (!limitPrice || parseFloat(limitPrice) <= 0) return '';
                                 const mainPrice = parseFloat(limitPrice);
                                 // Convert from sell/buyToken[0] ratio to sell/thisToken ratio
-                                const sellTokenUsdPrice = sellToken ? getPrice(sellToken.a) : 0;
+                                const sellTokenUsdPriceLocal = sellToken ? getPrice(sellToken.a) : 0;
                                 const firstBuyTokenUsdPrice = buyTokens[0] ? getPrice(buyTokens[0].a) : 0;
-                                const thisTokenUsdPrice = getPrice(buyToken.a);
-                                if (sellTokenUsdPrice > 0 && firstBuyTokenUsdPrice > 0 && thisTokenUsdPrice > 0) {
+                                const thisTokenUsdPriceLocal = getPrice(buyToken.a);
+                                if (sellTokenUsdPriceLocal > 0 && firstBuyTokenUsdPrice > 0 && thisTokenUsdPriceLocal > 0) {
                                   // mainPrice is in terms of buyTokens[0] per sellToken
                                   // We need to convert to thisToken per sellToken
-                                  const derivedPrice = mainPrice * (firstBuyTokenUsdPrice / thisTokenUsdPrice);
+                                  const derivedPrice = mainPrice * (firstBuyTokenUsdPrice / thisTokenUsdPriceLocal);
+                                  let displayPrice = derivedPrice;
                                   if (invertPriceDisplay && derivedPrice > 0) {
-                                    return (1 / derivedPrice).toFixed(8).replace(/\.?0+$/, '');
+                                    displayPrice = 1 / derivedPrice;
                                   }
-                                  return derivedPrice.toFixed(8).replace(/\.?0+$/, '');
+                                  // If showing USD prices, convert to USD
+                                  if (showUsdPrices && displayPrice > 0) {
+                                    const unitToken = invertPriceDisplay ? sellToken : buyToken;
+                                    const unitTokenUsdPriceLocal = unitToken ? getPrice(unitToken.a) : 0;
+                                    if (unitTokenUsdPriceLocal > 0) {
+                                      const usdValue = displayPrice * unitTokenUsdPriceLocal;
+                                      return '$' + usdValue.toLocaleString(undefined, {
+                                        minimumFractionDigits: 2,
+                                        maximumFractionDigits: usdValue < 0.01 ? 6 : usdValue < 1 ? 4 : 2
+                                      });
+                                    }
+                                  }
+                                  return displayPrice.toFixed(8).replace(/\.?0+$/, '');
                                 }
                                 return '';
                               })() : (individualPriceInputFocused[index] ? (individualPriceInputValues[index] || '') : (() => {
                                 if (!tokenLimitPrice || tokenLimitPrice <= 0) return '';
+                                let displayPrice = tokenLimitPrice;
                                 if (invertPriceDisplay && tokenLimitPrice > 0) {
-                                  return (1 / tokenLimitPrice).toFixed(8).replace(/\.?0+$/, '');
+                                  displayPrice = 1 / tokenLimitPrice;
                                 }
-                                return tokenLimitPrice.toFixed(8).replace(/\.?0+$/, '');
+                                // If showing USD prices, convert to USD
+                                if (showUsdPrices && displayPrice > 0) {
+                                  const unitToken = invertPriceDisplay ? sellToken : buyToken;
+                                  const unitTokenUsdPriceLocal = unitToken ? getPrice(unitToken.a) : 0;
+                                  if (unitTokenUsdPriceLocal > 0) {
+                                    const usdValue = displayPrice * unitTokenUsdPriceLocal;
+                                    return '$' + usdValue.toLocaleString(undefined, {
+                                      minimumFractionDigits: 2,
+                                      maximumFractionDigits: usdValue < 0.01 ? 6 : usdValue < 1 ? 4 : 2
+                                    });
+                                  }
+                                }
+                                return displayPrice.toFixed(8).replace(/\.?0+$/, '');
                               })())}
                               onChange={(e) => {
                                 if (pricesBound) return;
@@ -4908,7 +4986,7 @@ export function LimitOrderForm({
                                 });
                               }}
                             />
-                            {sellToken && (
+                            {sellToken && !showUsdPrices && (
                               <div
                                 className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-medium pointer-events-none"
                                 style={{ color: `${accentColor}B3` }}
