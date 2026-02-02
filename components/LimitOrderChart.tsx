@@ -5,6 +5,7 @@ import NumberFlow from '@number-flow/react';
 import { TOKEN_CONSTANTS } from '@/constants/crypto';
 import { formatTokenTicker } from '@/utils/tokenUtils';
 import { TokenLogo } from '@/components/TokenLogo';
+import { ZoomIn, ZoomOut } from 'lucide-react';
 
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 
@@ -44,6 +45,8 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
   const [draggingLineIndex, setDraggingLineIndex] = useState<number | null>(null); // Track which line is being dragged (for unbound mode)
   const [internalDisplayedTokenIndex, setInternalDisplayedTokenIndex] = useState(0); // For cycling through tokens
   const [internalShowUsdPrices, setInternalShowUsdPrices] = useState(false); // Toggle between token units and USD
+  const [zoomLevel, setZoomLevel] = useState(30); // Default ±30%, can zoom in/out
+  const [zoomOverride, setZoomOverride] = useState(false); // When true, user has manually set zoom - don't auto-expand
 
   // Use external showUsdPrices if provided (controlled mode), otherwise use internal state
   const showUsdPrices = externalShowUsdPrices ?? internalShowUsdPrices;
@@ -61,6 +64,7 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
   const containerRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number | null>(null);
   const justReleasedRef = useRef<boolean>(false);
+  const justReleasedLineIndexRef = useRef<number | null>(null); // Track which line was just released
   const lastUpdateRef = useRef<number>(0);
   const cooldownTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -73,14 +77,6 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
   const limitPriceAtTokenChangeRef = useRef<number | undefined>(undefined);
   // Use state for transition pending so it triggers re-renders when cleared
   const [tokenTransitionPending, setTokenTransitionPending] = useState(false);
-
-  // Format number to 4 significant figures
-  const formatSignificantFigures = (num: number, sigFigs: number = 4): string => {
-    if (num === 0) return '0';
-    const magnitude = Math.floor(Math.log10(Math.abs(num)));
-    const scale = Math.pow(10, sigFigs - magnitude - 1);
-    return (Math.round(num * scale) / scale).toString();
-  };
 
   // Default to PLS -> HEX if no tokens provided
   const sellToken = sellTokenAddress || '0x000000000000000000000000000000000000dead'; // PLS
@@ -343,13 +339,55 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
     ? 1 / limitOrderPrice
     : limitOrderPrice;
 
+  // Calculate the maximum percent deviation needed to show all limit price lines
+  // This ensures lines are always visible even when set to extreme values
+  const maxRequiredDeviation = useMemo(() => {
+    let maxAbs = 0;
+
+    // Check main limit price deviation
+    if (displayCurrentPrice && limitOrderPrice) {
+      const displayLimit = invertPriceDisplay && limitOrderPrice > 0 ? 1 / limitOrderPrice : limitOrderPrice;
+      const deviation = ((displayLimit - displayCurrentPrice) / displayCurrentPrice) * 100;
+      maxAbs = Math.max(maxAbs, Math.abs(deviation));
+    }
+
+    // Check individual limit prices (for unbound mode)
+    if (!pricesBound && individualLimitPrices.length > 0) {
+      individualLimitPrices.forEach((price, idx) => {
+        if (!price) return;
+        const tokenAddress = buyTokenAddresses[idx]?.toLowerCase();
+        if (!tokenAddress || !sellTokenUsdPrice || !buyTokenUsdPrices[tokenAddress]) return;
+
+        const tokenMarketPrice = invertPriceDisplay
+          ? buyTokenUsdPrices[tokenAddress] / sellTokenUsdPrice
+          : sellTokenUsdPrice / buyTokenUsdPrices[tokenAddress];
+
+        const displayPrice = invertPriceDisplay && price > 0 ? 1 / price : price;
+        const deviation = ((displayPrice - tokenMarketPrice) / tokenMarketPrice) * 100;
+        maxAbs = Math.max(maxAbs, Math.abs(deviation));
+      });
+    }
+
+    return maxAbs;
+  }, [displayCurrentPrice, limitOrderPrice, invertPriceDisplay, pricesBound, individualLimitPrices, buyTokenAddresses, sellTokenUsdPrice, buyTokenUsdPrices]);
+
+  // Auto-expand zoom level to show out-of-bounds limit prices
+  // But if user has manually set zoom (zoomOverride), respect their choice
+  // Round up to the next nice number (so 201% becomes 250%, not 200%)
+  const rawEffectiveZoom = zoomOverride
+    ? zoomLevel  // User manually set zoom - don't auto-expand
+    : Math.max(zoomLevel, maxRequiredDeviation);
+  const effectiveZoomLevel = rawEffectiveZoom <= 50
+    ? Math.ceil(rawEffectiveZoom / 10) * 10  // Round up to nearest 10 (e.g., 31 -> 40)
+    : Math.ceil(rawEffectiveZoom / 50) * 50; // Round up to nearest 50 (e.g., 201 -> 250)
+
   // NEW: Use percentage-based positioning
-  // The chart shows -30% to +30% from market price
+  // The chart shows -effectiveZoomLevel% to +effectiveZoomLevel% from market price
   // Current price (market) is always at 50% (center)
   // This allows multiple tokens with different absolute prices to be compared
-  const percentageRangeMin = -30; // -30% from market
-  const percentageRangeMax = 30;  // +30% from market
-  const percentageRange = percentageRangeMax - percentageRangeMin; // 60%
+  const percentageRangeMin = -effectiveZoomLevel; // -effectiveZoomLevel% from market
+  const percentageRangeMax = effectiveZoomLevel;  // +effectiveZoomLevel% from market
+  const percentageRange = percentageRangeMax - percentageRangeMin; // 2 * effectiveZoomLevel
 
   // Convert a percentage deviation to a Y position (0-100%)
   const percentageToPosition = (percentDeviation: number): number => {
@@ -387,6 +425,7 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
   useEffect(() => {
     if (sellChanged || buyChanged) {
       setTokenTransitionPending(true);
+      setZoomOverride(false); // Reset zoom override when tokens change - allow auto-expand
     } else if (tokenTransitionPending && limitOrderPrice !== limitPriceAtTokenChangeRef.current) {
       // New price arrived - clear transition
       setTokenTransitionPending(false);
@@ -395,7 +434,9 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
   }, [sellChanged, buyChanged, tokenTransitionPending, limitOrderPrice]);
 
   // Use draggedPrice during drag and briefly after for smooth rendering
-  const basePriceToDisplay = (isDragging || justReleasedRef.current) && draggedPrice
+  // For bound mode (draggingLineIndex === null), use draggedPrice if the bound line was just released
+  const isBoundLineJustReleased = justReleasedRef.current && justReleasedLineIndexRef.current === null;
+  const basePriceToDisplay = ((isDragging && draggingLineIndex === null) || isBoundLineJustReleased) && draggedPrice
     ? draggedPrice
     : limitOrderPrice;
 
@@ -607,6 +648,8 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
     }
 
     setIsDragging(false);
+    // Store the line index BEFORE clearing it, so we know which line to use draggedPrice for during cooldown
+    justReleasedLineIndexRef.current = draggingLineIndex;
     setDraggingLineIndex(null);
     justReleasedRef.current = true; // Keep using dragged price during cooldown
     if (onDragStateChange) onDragStateChange(false);
@@ -614,6 +657,7 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
     // Keep using draggedPrice briefly to allow props to sync
     cooldownTimeoutRef.current = setTimeout(() => {
       justReleasedRef.current = false;
+      justReleasedLineIndexRef.current = null;
       // Don't clear draggedPrice here - let the useEffect below handle it
       // when the prop catches up
       cooldownTimeoutRef.current = null;
@@ -695,6 +739,39 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
               {loading && (
                 <span className="text-xs text-white/50 animate-pulse">Updating...</span>
               )}
+              {/* Zoom Controls */}
+              <div className="flex items-center">
+                <button
+                  onClick={() => {
+                    setZoomOverride(true); // User is manually controlling zoom
+                    setZoomLevel(prev => {
+                      // Zoom out: use larger steps at higher levels
+                      if (prev >= 100) return prev + 50;
+                      if (prev >= 50) return prev + 25;
+                      return prev + 10;
+                    });
+                  }}
+                  className="px-2 py-1 rounded-l text-xs font-medium transition-colors bg-white/10 text-white/60 border border-white/20 hover:bg-white/20 hover:text-white"
+                  title={`Zoom out (±${effectiveZoomLevel}%${zoomOverride ? '' : ' auto'})`}
+                >
+                  <ZoomOut className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => {
+                    setZoomOverride(true); // User is manually controlling zoom
+                    setZoomLevel(prev => {
+                      // Zoom in: use larger steps at higher levels
+                      if (prev > 100) return Math.max(prev - 50, 100);
+                      if (prev > 50) return Math.max(prev - 25, 50);
+                      return Math.max(prev - 10, 10);
+                    });
+                  }}
+                  className="px-2 py-1 rounded-r text-xs font-medium transition-colors bg-white/10 text-white/60 border border-l-0 border-white/20 hover:bg-white/20 hover:text-white"
+                  title={`Zoom in (±${effectiveZoomLevel}%${zoomOverride ? '' : ' auto'})`}
+                >
+                  <ZoomIn className="w-4 h-4" />
+                </button>
+              </div>
               {/* USD/Units Toggle */}
               <button
                 onClick={() => setShowUsdPrices(!showUsdPrices)}
@@ -731,7 +808,37 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
             }}
           >
             {/* Y-axis tick marks - using percentage-based positioning */}
-            {[-30, -25, -20, -15, -10, -5, 0, 5, 10, 15, 20, 25, 30].map((percentDiff) => {
+            {(() => {
+              // Generate tick marks based on effective zoom level (includes auto-expand)
+              // Use sparser ticks at higher zoom levels to avoid crowding
+              // Always generate ticks symmetrically around 0% with nice round numbers
+              let tickIncrement: number;
+              if (effectiveZoomLevel <= 30) {
+                tickIncrement = 5;
+              } else if (effectiveZoomLevel <= 50) {
+                tickIncrement = 10;
+              } else if (effectiveZoomLevel <= 100) {
+                tickIncrement = 20;
+              } else if (effectiveZoomLevel <= 200) {
+                tickIncrement = 50;
+              } else if (effectiveZoomLevel <= 500) {
+                tickIncrement = 100;
+              } else if (effectiveZoomLevel <= 1000) {
+                tickIncrement = 200;
+              } else {
+                tickIncrement = 500;
+              }
+              const ticks: number[] = [0]; // Always include 0%
+              // Add positive ticks
+              for (let i = tickIncrement; i <= effectiveZoomLevel; i += tickIncrement) {
+                ticks.push(i);
+              }
+              // Add negative ticks
+              for (let i = -tickIncrement; i >= -effectiveZoomLevel; i -= tickIncrement) {
+                ticks.push(i);
+              }
+              return ticks.sort((a, b) => a - b);
+            })().map((percentDiff) => {
               // Use percentage-based positioning directly
               const position = percentageToPosition(percentDiff);
 
@@ -1074,7 +1181,9 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
 
                 // Get the individual limit price for the active token
                 // Use draggedPrice during dragging OR during cooldown period (justReleasedRef)
-                let baseIndividualPrice = ((isDragging && draggingLineIndex === activeIndex) || justReleasedRef.current) && draggedPrice
+                // IMPORTANT: During cooldown, only use draggedPrice if THIS line was the one that was just released
+                const isThisLineJustReleased = justReleasedRef.current && justReleasedLineIndexRef.current === activeIndex;
+                let baseIndividualPrice = ((isDragging && draggingLineIndex === activeIndex) || isThisLineJustReleased) && draggedPrice
                   ? draggedPrice
                   : individualLimitPrices[activeIndex];
 

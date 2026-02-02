@@ -205,7 +205,24 @@ export function LimitOrderForm({
     }
     return '';
   });
-  const [buyAmounts, setBuyAmounts] = useState<string[]>(['']);
+  const [buyAmounts, setBuyAmounts] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      // Only restore buy amounts if in unlinked mode (pricesBound = false)
+      const pricesBoundSaved = localStorage.getItem('limitOrderPricesBound');
+      const isUnlinked = pricesBoundSaved === 'false';
+      if (isUnlinked) {
+        const saved = localStorage.getItem('limitOrderBuyAmounts');
+        if (saved) {
+          try {
+            return JSON.parse(saved);
+          } catch {
+            return [''];
+          }
+        }
+      }
+    }
+    return [''];
+  });
   const [expirationDays, setExpirationDays] = useState(() => {
     if (typeof window !== 'undefined') {
       return Number(localStorage.getItem('limitOrderExpirationDays')) || 7;
@@ -1500,6 +1517,19 @@ export function LimitOrderForm({
     }
   }, [individualLimitPrices]);
 
+  // Save buy amounts to localStorage when in unlinked mode
+  useEffect(() => {
+    if (!pricesBound) {
+      // Only save if we have actual amounts (not all empty)
+      if (buyAmounts.some(a => a && a.trim() !== '')) {
+        localStorage.setItem('limitOrderBuyAmounts', JSON.stringify(buyAmounts));
+      }
+    } else {
+      // Clear saved buy amounts when switching to linked mode
+      localStorage.removeItem('limitOrderBuyAmounts');
+    }
+  }, [buyAmounts, pricesBound]);
+
   // Track if we're receiving updates from chart drag to avoid circular updates
   const isReceivingExternalIndividualPriceRef = useRef(false);
 
@@ -2128,6 +2158,7 @@ export function LimitOrderForm({
       if (typeof window !== 'undefined') {
         localStorage.removeItem('limitOrderSellAmount');
         localStorage.removeItem('limitOrderBuyAmount');
+        localStorage.removeItem('limitOrderBuyAmounts');
       }
 
       // Trigger table refresh
@@ -3943,17 +3974,6 @@ export function LimitOrderForm({
                           </button>
                         )}
                       </div>
-                      {pricePercentage !== null && Math.abs(pricePercentage) > 0.01 && (() => {
-                        // When inverted, flip the percentage sign
-                        const displayPct = invertPriceDisplay ? -pricePercentage : pricePercentage;
-                        return (
-                          <span className="text-sm font-bold text-[#FF0080]">
-                            {displayPct >= 0 ? '+' : ''}{Math.abs(displayPct) >= 10
-                              ? displayPct.toFixed(1)
-                              : displayPct.toFixed(2)}%
-                          </span>
-                        );
-                      })()}
                     </div>
                     <div className="relative">
                       <input
@@ -4160,15 +4180,61 @@ export function LimitOrderForm({
                         >
                           {invertPriceDisplay ? '-5%' : '+5%'} {invertPriceDisplay ? '↓' : '↑'}
                         </button>
-                        <button
-                          onClick={() => handlePercentageClick(10, invertPriceDisplay ? 'below' : 'above')}
-                          className={`flex-1 py-2 border-accent-pink text-xs transition-all font-medium rounded-full ${pricePercentage !== null && Math.abs(Math.abs(pricePercentage) - 10) < 0.01 && (invertPriceDisplay ? pricePercentage < 0 : pricePercentage > 0)
-                            ? 'bg-[#FF0080]/20 text-white'
-                            : 'bg-black/40 text-[#FF0080] hover:bg-[#FF0080]/20 hover:text-white'
-                            }`}
-                        >
-                          {invertPriceDisplay ? '-10%' : '+10%'} {invertPriceDisplay ? '↓' : '↑'}
-                        </button>
+                        {(() => {
+                          // Check if current percentage is a custom value (not a preset button)
+                          const presetValues = [0, 1, 2, 5];
+                          const isCustomActive = pricePercentage !== null &&
+                            !presetValues.some(p => Math.abs(Math.abs(pricePercentage) - p) < 0.01) &&
+                            (invertPriceDisplay ? pricePercentage < 0 : pricePercentage > 0);
+                          const isWholeNumber = (n: number) => Math.abs(n - Math.round(n)) < 0.01;
+                          const formatPct = (n: number) => isWholeNumber(n) ? String(Math.round(n)) : n.toFixed(1);
+                          const displayValue = isCustomActive ? `${pricePercentage > 0 ? '+' : ''}${formatPct(pricePercentage)}%` : '';
+
+                          return (
+                            <div className="flex-1 relative">
+                              <input
+                                key={isCustomActive ? `active-${displayValue}` : 'inactive'}
+                                type="text"
+                                inputMode="decimal"
+                                defaultValue={displayValue}
+                                className={`peer w-full py-2 px-2 border text-xs font-medium rounded-full text-center focus:outline-none focus:border-[#FF0080] focus:bg-[#FF0080]/20 focus:text-white ${
+                                  isCustomActive
+                                    ? 'bg-[#FF0080]/20 border-[#FF0080]/40 text-white'
+                                    : 'bg-black/40 border-[#FF0080]/40 text-[#FF0080] placeholder-transparent'
+                                }`}
+                                onFocus={(e) => {
+                                  // Store original value to restore if nothing typed
+                                  e.target.dataset.originalValue = e.target.value;
+                                  e.target.value = '';
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    const input = e.target as HTMLInputElement;
+                                    const value = parseFloat(input.value.replace(/[^0-9.-]/g, ''));
+                                    if (!isNaN(value) && value !== 0) {
+                                      handlePercentageClick(Math.abs(value), value > 0 ? 'above' : 'below');
+                                      input.blur();
+                                    }
+                                  }
+                                }}
+                                onBlur={(e) => {
+                                  const value = parseFloat(e.target.value.replace(/[^0-9.-]/g, ''));
+                                  if (!isNaN(value) && value !== 0) {
+                                    handlePercentageClick(Math.abs(value), value > 0 ? 'above' : 'below');
+                                  } else if (e.target.value === '' && e.target.dataset.originalValue) {
+                                    // Restore original value if nothing was typed
+                                    e.target.value = e.target.dataset.originalValue;
+                                  }
+                                }}
+                              />
+                              {!isCustomActive && (
+                                <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-[#FF0080]/60 pointer-events-none peer-focus:hidden">
+                                  ?%
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                     )}
                   </div>
@@ -4526,17 +4592,6 @@ export function LimitOrderForm({
                             </button>
                           )}
                         </div>
-                        {pricePercentage !== null && Math.abs(pricePercentage) > 0.01 && (() => {
-                          // When inverted, flip the percentage sign
-                          const displayPct = invertPriceDisplay ? -pricePercentage : pricePercentage;
-                          return (
-                            <span className="text-sm font-bold text-[#FF0080]">
-                              {displayPct >= 0 ? '+' : ''}{Math.abs(displayPct) >= 10
-                                ? displayPct.toFixed(1)
-                                : displayPct.toFixed(2)}%
-                            </span>
-                          );
-                        })()}
                       </div>
                       <div className="relative">
                         <input
@@ -4744,15 +4799,61 @@ export function LimitOrderForm({
                           >
                             {invertPriceDisplay ? '-5%' : '+5%'} {invertPriceDisplay ? '↓' : '↑'}
                           </button>
-                          <button
-                            onClick={() => handlePercentageClick(10, invertPriceDisplay ? 'below' : 'above')}
-                            className={`flex-1 py-2 border-accent-pink text-xs transition-all font-medium rounded-full ${pricePercentage !== null && Math.abs(Math.abs(pricePercentage) - 10) < 0.01 && (invertPriceDisplay ? pricePercentage < 0 : pricePercentage > 0)
-                              ? 'bg-[#FF0080]/20 text-white'
-                              : 'bg-black/40 text-[#FF0080] hover:bg-[#FF0080]/20 hover:text-white'
-                              }`}
-                          >
-                            {invertPriceDisplay ? '-10%' : '+10%'} {invertPriceDisplay ? '↓' : '↑'}
-                          </button>
+                          {(() => {
+                            // Check if current percentage is a custom value (not a preset button)
+                            const presetValues = [0, 1, 2, 5];
+                            const isCustomActive = pricePercentage !== null &&
+                              !presetValues.some(p => Math.abs(Math.abs(pricePercentage) - p) < 0.01) &&
+                              (invertPriceDisplay ? pricePercentage < 0 : pricePercentage > 0);
+                            const isWholeNumber = (n: number) => Math.abs(n - Math.round(n)) < 0.01;
+                            const formatPct = (n: number) => isWholeNumber(n) ? String(Math.round(n)) : n.toFixed(1);
+                            const displayValue = isCustomActive ? `${pricePercentage > 0 ? '+' : ''}${formatPct(pricePercentage)}%` : '';
+
+                            return (
+                              <div className="flex-1 relative">
+                                <input
+                                  key={isCustomActive ? `active-${displayValue}` : 'inactive'}
+                                  type="text"
+                                  inputMode="decimal"
+                                  defaultValue={displayValue}
+                                  className={`peer w-full py-2 px-2 border text-xs font-medium rounded-full text-center focus:outline-none focus:border-[#FF0080] focus:bg-[#FF0080]/20 focus:text-white ${
+                                    isCustomActive
+                                      ? 'bg-[#FF0080]/20 border-[#FF0080]/40 text-white'
+                                      : 'bg-black/40 border-[#FF0080]/40 text-[#FF0080] placeholder-transparent'
+                                  }`}
+                                  onFocus={(e) => {
+                                    // Store original value to restore if nothing typed
+                                    e.target.dataset.originalValue = e.target.value;
+                                    e.target.value = '';
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      const input = e.target as HTMLInputElement;
+                                      const value = parseFloat(input.value.replace(/[^0-9.-]/g, ''));
+                                      if (!isNaN(value) && value !== 0) {
+                                        handlePercentageClick(Math.abs(value), value > 0 ? 'above' : 'below');
+                                        input.blur();
+                                      }
+                                    }
+                                  }}
+                                  onBlur={(e) => {
+                                    const value = parseFloat(e.target.value.replace(/[^0-9.-]/g, ''));
+                                    if (!isNaN(value) && value !== 0) {
+                                      handlePercentageClick(Math.abs(value), value > 0 ? 'above' : 'below');
+                                    } else if (e.target.value === '' && e.target.dataset.originalValue) {
+                                      // Restore original value if nothing was typed
+                                      e.target.value = e.target.dataset.originalValue;
+                                    }
+                                  }}
+                                />
+                                {!isCustomActive && (
+                                  <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-[#FF0080]/60 pointer-events-none peer-focus:hidden">
+                                    ?%
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </div>
                       )}
                     </div>
@@ -4795,11 +4896,6 @@ export function LimitOrderForm({
                             <label className="text-sm font-semibold" style={{ color: accentColor }}>
                               Limit Price: ({showUsdPrices ? '$' : (invertPriceDisplay ? formatTokenTicker(sellToken?.ticker || '', chainId) : formatTokenTicker(buyToken.ticker, chainId))})
                             </label>
-                            {tokenPricePercentage !== null && Math.abs(tokenPricePercentage) > 0.01 && (
-                              <span className="text-sm font-bold" style={{ color: accentColor }}>
-                                {tokenPricePercentage > 0 ? '+' : ''}{tokenPricePercentage.toFixed(2)}%
-                              </span>
-                            )}
                           </div>
                           <div className="relative">
                             <input
@@ -5008,17 +5104,71 @@ export function LimitOrderForm({
                                 >
                                   {invertPriceDisplay ? '-5%' : '+5%'} {invertPriceDisplay ? '↓' : '↑'}
                                 </button>
-                                <button
-                                  onClick={() => handleIndividualPercentageClick(index, 10, invertPriceDisplay ? 'below' : 'above')}
-                                  className="flex-1 py-2 text-xs transition-all font-medium rounded-full"
-                                  style={{
-                                    backgroundColor: tokenPricePercentage !== null && Math.abs(Math.abs(tokenPricePercentage) - 10) < 0.1 && (invertPriceDisplay ? tokenPricePercentage < 0 : tokenPricePercentage > 0) ? `${accentColor}33` : 'rgba(0,0,0,0.4)',
-                                    color: tokenPricePercentage !== null && Math.abs(Math.abs(tokenPricePercentage) - 10) < 0.1 && (invertPriceDisplay ? tokenPricePercentage < 0 : tokenPricePercentage > 0) ? 'white' : accentColor,
-                                    border: `1px solid ${accentColor}40`
-                                  }}
-                                >
-                                  {invertPriceDisplay ? '-10%' : '+10%'} {invertPriceDisplay ? '↓' : '↑'}
-                                </button>
+                                {(() => {
+                                  // Check if current percentage is a custom value (not a preset button)
+                                  const presetValues = [0, 1, 2, 5];
+                                  const isCustomActive = tokenPricePercentage !== null &&
+                                    !presetValues.some(p => Math.abs(Math.abs(tokenPricePercentage) - p) < 0.1) &&
+                                    (invertPriceDisplay ? tokenPricePercentage < 0 : tokenPricePercentage > 0);
+                                  const isWholeNumber = (n: number) => Math.abs(n - Math.round(n)) < 0.01;
+                                  const formatPct = (n: number) => isWholeNumber(n) ? String(Math.round(n)) : n.toFixed(1);
+                                  const displayValue = isCustomActive ? `${tokenPricePercentage > 0 ? '+' : ''}${formatPct(tokenPricePercentage)}%` : '';
+
+                                  return (
+                                    <div className="flex-1 relative">
+                                      <input
+                                        key={isCustomActive ? `active-${displayValue}` : 'inactive'}
+                                        type="text"
+                                        inputMode="decimal"
+                                        defaultValue={displayValue}
+                                        className="peer w-full py-2 px-2 text-xs font-medium rounded-full text-center focus:outline-none"
+                                        style={{
+                                          backgroundColor: isCustomActive ? `${accentColor}33` : 'rgba(0,0,0,0.4)',
+                                          color: isCustomActive ? 'white' : accentColor,
+                                          border: `1px solid ${isCustomActive ? accentColor : accentColor + '40'}`,
+                                        }}
+                                        onFocus={(e) => {
+                                          e.target.style.backgroundColor = `${accentColor}33`;
+                                          e.target.style.borderColor = accentColor;
+                                          e.target.style.color = 'white';
+                                          // Store original value to restore if nothing typed
+                                          e.target.dataset.originalValue = e.target.value;
+                                          e.target.value = '';
+                                        }}
+                                        onBlur={(e) => {
+                                          const value = parseFloat(e.target.value.replace(/[^0-9.-]/g, ''));
+                                          if (!isNaN(value) && value !== 0) {
+                                            handleIndividualPercentageClick(index, Math.abs(value), value > 0 ? 'above' : 'below');
+                                          } else if (e.target.value === '' && e.target.dataset.originalValue) {
+                                            // Restore original value if nothing was typed
+                                            e.target.value = e.target.dataset.originalValue;
+                                          }
+                                          // Reset styles if not active
+                                          if (!isCustomActive) {
+                                            e.target.style.backgroundColor = 'rgba(0,0,0,0.4)';
+                                            e.target.style.borderColor = `${accentColor}40`;
+                                            e.target.style.color = accentColor;
+                                          }
+                                        }}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') {
+                                            const input = e.target as HTMLInputElement;
+                                            const value = parseFloat(input.value.replace(/[^0-9.-]/g, ''));
+                                            if (!isNaN(value) && value !== 0) {
+                                              handleIndividualPercentageClick(index, Math.abs(value), value > 0 ? 'above' : 'below');
+                                              input.blur();
+                                            }
+                                          }
+                                        }}
+                                      />
+                                      {!isCustomActive && (
+                                        <span className="absolute inset-0 flex items-center justify-center text-xs font-medium pointer-events-none peer-focus:hidden" style={{ color: `${accentColor}99` }}>
+                                          ?%
+                                        </span>
+                                      )}
+                                    </div>
+                                  );
+                                })()}
                               </div>
                             ) : (
                               <div className="mt-3 text-center text-xs text-white/40 py-2">
