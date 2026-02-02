@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect, Suspense, useCallback } from 'react';
+import { useState, useEffect, Suspense, useCallback, useMemo } from 'react';
 import { useSearchParams, usePathname } from 'next/navigation';
 import { DisclaimerDialog } from '@/components/DisclaimerDialog';
 import { LogoPreloader } from '@/components/LogoPreloader';
 import { OpenPositionsTable } from '@/components/OpenPositionsTable';
 import PixelBlastBackground from '@/components/ui/PixelBlastBackground';
+import { TOKEN_CONSTANTS } from '@/constants/crypto';
 
 function MarketplaceContent() {
   const [showDisclaimer, setShowDisclaimer] = useState(false);
@@ -50,6 +51,17 @@ function MarketplaceContent() {
   const dustParam = searchParams.get('min-usd');
   const initialDustFilter = dustParam && !isNaN(parseFloat(dustParam)) ? dustParam : undefined;
 
+  // Build array of known tickers for URL param detection
+  const knownTickers = useMemo(() => {
+    const tickers: string[] = [];
+    TOKEN_CONSTANTS.forEach(token => {
+      if (token.ticker) {
+        tickers.push(token.ticker.toLowerCase());
+      }
+    });
+    return tickers;
+  }, []);
+
   // Update URL when filters change
   const handleFiltersChange = useCallback((filters: {
     searchQuery: string;
@@ -65,15 +77,17 @@ function MarketplaceContent() {
     // Add search query - detect type based on format
     if (filters.searchQuery) {
       const query = filters.searchQuery.trim();
+      const queryLower = query.toLowerCase();
+
       if (/^\d+$/.test(query)) {
         // Pure numbers = order ID
         params.set('order-id', query);
-      } else if (query.startsWith('0x')) {
-        // Starts with 0x = address (seller)
-        params.set('seller', query);
-      } else {
-        // Otherwise = ticker
+      } else if (knownTickers.some(ticker => ticker.includes(queryLower))) {
+        // Query is a partial match for a known ticker = ticker search
         params.set('ticker', query);
+      } else {
+        // Otherwise assume it's a seller address (partial or full)
+        params.set('seller', query);
       }
     }
 
@@ -110,7 +124,7 @@ function MarketplaceContent() {
     // Update URL without navigation (just replace state)
     const newUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname;
     window.history.replaceState(null, '', newUrl);
-  }, [pathname]);
+  }, [pathname, knownTickers]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {

@@ -2151,11 +2151,13 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     // Level 4: Filter by search query (ticker names, contract addresses, seller address, or order ID)
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
+      const isPureNumber = /^\d+$/.test(query);
+
       filteredOrders = filteredOrders.filter(order => {
-        // Check order ID (exact match only)
-        const orderId = order.orderDetailsWithID.orderID.toString();
-        if (orderId === query) {
-          return true;
+        // For pure number queries, only match exact order ID
+        if (isPureNumber) {
+          const orderId = order.orderDetailsWithID.orderID.toString();
+          return orderId === query;
         }
 
         // Check seller address
@@ -2498,11 +2500,13 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     // Apply search filter (same logic as displayOrders)
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
+      const isPureNumber = /^\d+$/.test(query);
+
       filteredOrders = filteredOrders.filter(order => {
-        // Check order ID (exact match only)
-        const orderId = order.orderDetailsWithID.orderID.toString();
-        if (orderId === query) {
-          return true;
+        // For pure number queries, only match exact order ID
+        if (isPureNumber) {
+          const orderId = order.orderDetailsWithID.orderID.toString();
+          return orderId === query;
         }
 
         // Check seller address
@@ -2838,7 +2842,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500" />
                   <input
                     type="text"
-                    placeholder="Search by ticker, address, seller, or order ID"
+                    placeholder="Search by ticker, address, or order ID"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="w-full pl-10 pr-4 py-2 bg-black/40 border border-white/10 text-white placeholder-white/30 focus:outline-none focus:border-white/30 focus:bg-black/60 transition-colors shadow-sm rounded-lg"
