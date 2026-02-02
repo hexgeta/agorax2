@@ -120,7 +120,16 @@ export default function Home() {
   // Chart and form state
   const [sellTokenAddress, setSellTokenAddress] = useState<string | undefined>();
   const [buyTokenAddresses, setBuyTokenAddresses] = useState<(string | undefined)[]>([]);
-  const [limitOrderPrice, setLimitOrderPrice] = useState<number | undefined>();
+  const [limitOrderPrice, setLimitOrderPrice] = useState<number | undefined>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('limitOrderPrice');
+      if (saved) {
+        const parsed = parseFloat(saved);
+        return parsed > 0 ? parsed : undefined;
+      }
+    }
+    return undefined;
+  });
   const [currentMarketPrice, setCurrentMarketPrice] = useState<number | undefined>();
   const [isDragging, setIsDragging] = useState(false);
   const [invertPriceDisplay, setInvertPriceDisplay] = useState(() => {
@@ -138,7 +147,19 @@ export default function Home() {
     }
     return true;
   });
-  const [individualLimitPrices, setIndividualLimitPrices] = useState<(number | undefined)[]>([]);
+  const [individualLimitPrices, setIndividualLimitPrices] = useState<(number | undefined)[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('limitOrderIndividualPrices');
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch {
+          return [];
+        }
+      }
+    }
+    return [];
+  });
   const [displayedTokenIndex, setDisplayedTokenIndex] = useState(0);
   const [showUsdPrices, setShowUsdPrices] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -148,6 +169,16 @@ export default function Home() {
     return false;
   });
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
+
+  // USD prices from form - passed to chart for consistent percentage calculations
+  const [formSellTokenUsdPrice, setFormSellTokenUsdPrice] = useState<number | undefined>();
+  const [formBuyTokenUsdPrices, setFormBuyTokenUsdPrices] = useState<Record<string, number> | undefined>();
+
+  // Handle prices from form
+  const handlePricesChange = (sellTokenUsdPrice: number, buyTokenUsdPrices: Record<string, number>) => {
+    setFormSellTokenUsdPrice(sellTokenUsdPrice);
+    setFormBuyTokenUsdPrices(buyTokenUsdPrices);
+  };
 
   // Persist showUsdPrices to localStorage
   useEffect(() => {
@@ -843,6 +874,8 @@ export default function Home() {
                           pricesBound={pricesBound}
                           individualLimitPrices={individualLimitPrices}
                           displayedTokenIndex={displayedTokenIndex}
+                          externalSellTokenUsdPrice={formSellTokenUsdPrice}
+                          externalBuyTokenUsdPrices={formBuyTokenUsdPrices}
                           onLimitPriceChange={(newPrice) => {
                             setLimitOrderPrice(newPrice);
                             setIndividualLimitPrices(prev => {
@@ -908,6 +941,7 @@ export default function Home() {
                           onDisplayedTokenIndexChange={(index) => {
                             setDisplayedTokenIndex(index);
                           }}
+                          onPricesChange={handlePricesChange}
                           onCreateOrderClick={(sellToken, buyTokens, sellAmount, buyAmounts, expirationDays) => {
                           }}
                           onOrderCreated={() => {
@@ -942,6 +976,8 @@ export default function Home() {
                             pricesBound={pricesBound}
                             individualLimitPrices={individualLimitPrices}
                             displayedTokenIndex={displayedTokenIndex}
+                            externalSellTokenUsdPrice={formSellTokenUsdPrice}
+                            externalBuyTokenUsdPrices={formBuyTokenUsdPrices}
                             onLimitPriceChange={(newPrice) => {
                               setLimitOrderPrice(newPrice);
                               setIndividualLimitPrices(prev => {
@@ -1011,6 +1047,7 @@ export default function Home() {
                           onDisplayedTokenIndexChange={(index) => {
                             setDisplayedTokenIndex(index);
                           }}
+                          onPricesChange={handlePricesChange}
                           onCreateOrderClick={(sellToken, buyTokens, sellAmount, buyAmounts, expirationDays) => {
                           }}
                           onOrderCreated={() => {

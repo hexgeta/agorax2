@@ -17,6 +17,10 @@ interface LimitOrderChartProps {
   individualLimitPrices?: (number | undefined)[];
   displayedTokenIndex?: number;
   showUsdPrices?: boolean;
+  // External USD prices - when provided, chart uses these instead of fetching its own
+  // This ensures chart and form use the same price source for consistent percentages
+  externalSellTokenUsdPrice?: number;
+  externalBuyTokenUsdPrices?: Record<string, number>;
   onLimitPriceChange?: (newPrice: number) => void;
   onIndividualLimitPriceChange?: (index: number, newPrice: number) => void;
   onCurrentPriceChange?: (price: number) => void;
@@ -25,10 +29,15 @@ interface LimitOrderChartProps {
   onShowUsdPricesChange?: (show: boolean) => void;
 }
 
-export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limitOrderPrice, invertPriceDisplay = true, pricesBound = true, individualLimitPrices = [], displayedTokenIndex: externalDisplayedTokenIndex, showUsdPrices: externalShowUsdPrices, onLimitPriceChange, onIndividualLimitPriceChange, onCurrentPriceChange, onDragStateChange, onDisplayedTokenIndexChange, onShowUsdPricesChange }: LimitOrderChartProps) {
+export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limitOrderPrice, invertPriceDisplay = true, pricesBound = true, individualLimitPrices = [], displayedTokenIndex: externalDisplayedTokenIndex, showUsdPrices: externalShowUsdPrices, externalSellTokenUsdPrice, externalBuyTokenUsdPrices, onLimitPriceChange, onIndividualLimitPriceChange, onCurrentPriceChange, onDragStateChange, onDisplayedTokenIndexChange, onShowUsdPricesChange }: LimitOrderChartProps) {
   const [currentPrice, setCurrentPrice] = useState<number | null>(null);
-  const [buyTokenUsdPrices, setBuyTokenUsdPrices] = useState<Record<string, number>>({});
-  const [sellTokenUsdPrice, setSellTokenUsdPrice] = useState<number>(0);
+  // Internal state for fetched prices - used as fallback when external prices not provided
+  const [fetchedBuyTokenUsdPrices, setFetchedBuyTokenUsdPrices] = useState<Record<string, number>>({});
+  const [fetchedSellTokenUsdPrice, setFetchedSellTokenUsdPrice] = useState<number>(0);
+
+  // Use external prices when provided (ensures consistency with form), fallback to fetched prices
+  const buyTokenUsdPrices = externalBuyTokenUsdPrices ?? fetchedBuyTokenUsdPrices;
+  const sellTokenUsdPrice = externalSellTokenUsdPrice ?? fetchedSellTokenUsdPrice;
   const [loading, setLoading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [draggedPrice, setDraggedPrice] = useState<number | null>(null);
@@ -177,7 +186,7 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
         return;
       }
 
-      setSellTokenUsdPrice(sellPriceUsd);
+      setFetchedSellTokenUsdPrice(sellPriceUsd);
 
       // Fetch prices for all buy tokens
       const validBuyAddresses = buyTokenAddresses.filter(addr => addr);
@@ -231,7 +240,7 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
           newBuyTokenPrices[result.address] = result.price;
         }
       });
-      setBuyTokenUsdPrices(newBuyTokenPrices);
+      setFetchedBuyTokenUsdPrices(newBuyTokenPrices);
 
       // Calculate current ratio for the first buy token
       const firstBuyTokenPrice = newBuyTokenPrices[buyToken.toLowerCase()];
@@ -645,11 +654,13 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
   }, []);
 
   // Proactively send calculated individual limit prices to parent when values change
-  // This makes the chart the single source of truth for limit prices across all tokens
+  // This ONLY applies when prices are BOUND - when unbound, each token keeps its own price
   useEffect(() => {
+    // Skip when prices are unbound - individual tokens maintain their own prices
+    if (!pricesBound) return;
     if (!onIndividualLimitPriceChange || !limitOrderPrice || !sellTokenUsdPrice || isDragging) return;
 
-    // Calculate and send prices for all buy tokens
+    // Calculate and send prices for all buy tokens (bound mode only)
     buyTokenAddresses.forEach((tokenAddress, index) => {
       if (!tokenAddress) return;
 
@@ -658,7 +669,7 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
         onIndividualLimitPriceChange(index, calculatedPrice);
       }
     });
-  }, [limitOrderPrice, buyTokenUsdPrices, sellTokenUsdPrice, buyTokenAddresses, isDragging]);
+  }, [limitOrderPrice, buyTokenUsdPrices, sellTokenUsdPrice, buyTokenAddresses, isDragging, pricesBound]);
 
   return (
     <LiquidGlassCard

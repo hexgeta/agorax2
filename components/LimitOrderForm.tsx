@@ -35,6 +35,8 @@ interface LimitOrderFormProps {
   onInvertPriceDisplayChange?: (inverted: boolean) => void;
   onPricesBoundChange?: (bound: boolean) => void;
   onIndividualLimitPricesChange?: (prices: (number | undefined)[]) => void;
+  // Callback when USD prices are loaded/updated - allows parent to pass to chart for consistency
+  onPricesChange?: (sellTokenUsdPrice: number, buyTokenUsdPrices: Record<string, number>) => void;
   externalLimitPrice?: number;
   externalMarketPrice?: number;
   externalIndividualLimitPrices?: (number | undefined)[];
@@ -166,6 +168,7 @@ export function LimitOrderForm({
   onInvertPriceDisplayChange,
   onPricesBoundChange,
   onIndividualLimitPricesChange,
+  onPricesChange,
   externalLimitPrice,
   externalMarketPrice,
   externalIndividualLimitPrices,
@@ -337,7 +340,20 @@ export function LimitOrderForm({
   const { balances: dropdownTokenBalances } = useTokenBalances();
 
   // Individual limit prices for each buy token (used when pricesBound is false)
-  const [individualLimitPrices, setIndividualLimitPrices] = useState<(number | undefined)[]>([]);
+  // Persisted to localStorage so they survive page reload
+  const [individualLimitPrices, setIndividualLimitPrices] = useState<(number | undefined)[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('limitOrderIndividualPrices');
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch {
+          return [];
+        }
+      }
+    }
+    return [];
+  });
 
   const sellDropdownRef = useRef<HTMLDivElement>(null);
   const buyDropdownRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -684,17 +700,44 @@ export function LimitOrderForm({
     return entry && entry[1].price > 0 ? entry[1].price : 0;
   }, [prices]);
 
+  // Emit prices to parent for chart synchronization
+  // This ensures the chart uses the same prices as the form for consistent percentage calculations
+  useEffect(() => {
+    if (!onPricesChange || !sellToken) return;
+
+    const sellTokenUsdPrice = getPrice(sellToken.a);
+    if (sellTokenUsdPrice <= 0) return;
+
+    // Build buy token prices map
+    const buyTokenUsdPrices: Record<string, number> = {};
+    buyTokens.forEach(token => {
+      if (token?.a) {
+        const price = getPrice(token.a);
+        if (price > 0) {
+          buyTokenUsdPrices[token.a.toLowerCase()] = price;
+        }
+      }
+    });
+
+    // Only emit if we have at least one buy token price
+    if (Object.keys(buyTokenUsdPrices).length > 0) {
+      onPricesChange(sellTokenUsdPrice, buyTokenUsdPrices);
+    }
+  }, [onPricesChange, sellToken, buyTokens, getPrice]);
+
   // ============================================================================
   // CENTRALIZED PRICING LOGIC - See /docs/limit-order-data-flow.md
   // ============================================================================
   const pricing = useLimitOrderPricing(
-    { sellAmount, buyAmounts, limitPrice, pricePercentage },
+    { sellAmount, buyAmounts, limitPrice, pricePercentage, individualLimitPrices, pricesBound },
     {
       setSellAmount,
       setBuyAmounts,
       setLimitPrice,
       setPricePercentage,
-      onLimitPriceChange: onLimitPriceChange ? (price) => onLimitPriceChange(price) : undefined
+      setIndividualLimitPrices,
+      onLimitPriceChange: onLimitPriceChange ? (price) => onLimitPriceChange(price) : undefined,
+      onIndividualLimitPricesChange: onIndividualLimitPricesChange ? (prices) => onIndividualLimitPricesChange(prices) : undefined
     },
     { getPrice }
   );
@@ -1449,6 +1492,14 @@ export function LimitOrderForm({
     }
   }, [pricesBound, onPricesBoundChange]);
 
+  // Save individual limit prices to localStorage
+  useEffect(() => {
+    // Only save if we have actual prices (not all undefined)
+    if (individualLimitPrices.some(p => p !== undefined)) {
+      localStorage.setItem('limitOrderIndividualPrices', JSON.stringify(individualLimitPrices));
+    }
+  }, [individualLimitPrices]);
+
   // Track if we're receiving updates from chart drag to avoid circular updates
   const isReceivingExternalIndividualPriceRef = useRef(false);
 
@@ -1467,50 +1518,25 @@ export function LimitOrderForm({
   // Initialize individual limit prices ONLY when:
   // 1. Switching from bound to unbound (not when limitPrice changes while unbound)
   // 2. When new tokens are added while unbound (only initialize the new token, not all)
+  // IMPORTANT: This effect must NOT depend on priorityPrices or it will cause race conditions
+  // where prices are reset when the API refreshes prices (~every 30 seconds)
   useEffect(() => {
     if (!pricesBound && buyTokens.length > 0) {
       const wasBound = prevPricesBoundRef.current;
       const prevLength = prevBuyTokensLengthRef.current;
       const tokenCountIncreased = buyTokens.length > prevLength;
 
-      const sellTokenUsdPrice = sellToken ? getPrice(sellToken.a) : 0;
       const limitPriceNum = parseFloat(limitPrice) || 0;
 
-      // Only proceed if we have valid prices
+      // Only proceed if we have valid limit price
       if (limitPriceNum > 0) {
-        // Case 1: Just switched from bound to unbound - initialize all prices
+        // Case 1: Just switched from bound to unbound - use the hook to initialize
         if (wasBound) {
-          const newIndividualPrices: (number | undefined)[] = buyTokens.map((token, index) => {
-            if (!token) return undefined;
-
-            // First token always uses the main limit price
-            if (index === 0) {
-              return limitPriceNum;
-            }
-
-            // For additional tokens, calculate based on USD if possible
-            const firstBuyTokenUsdPrice = buyTokens[0] ? getPrice(buyTokens[0].a) : 0;
-            const tokenUsdPrice = getPrice(token.a);
-
-            if (sellTokenUsdPrice > 0 && firstBuyTokenUsdPrice > 0 && tokenUsdPrice > 0) {
-              // marketPrice = buy tokens per sell token (e.g., how many HEX for 1 PLS)
-              const marketPriceForFirst = sellTokenUsdPrice / firstBuyTokenUsdPrice;
-              const premiumMultiplier = limitPriceNum / marketPriceForFirst;
-              const marketPriceForThis = sellTokenUsdPrice / tokenUsdPrice;
-              return marketPriceForThis * premiumMultiplier;
-            }
-
-            // Fallback: use the same limit price as first token (will be different units but at least visible)
-            return limitPriceNum;
-          });
-
-          setIndividualLimitPrices(newIndividualPrices);
-          if (onIndividualLimitPricesChange) {
-            onIndividualLimitPricesChange(newIndividualPrices);
-          }
+          pricing.initializeIndividualPrices(sellToken, buyTokens);
         }
         // Case 2: New token added while already unbound - only initialize the new token at market price
         else if (tokenCountIncreased) {
+          const sellTokenUsdPrice = sellToken ? getPrice(sellToken.a) : 0;
           setIndividualLimitPrices(prev => {
             const newPrices = [...prev];
             // Initialize new tokens at market price (not first token's premium)
@@ -1520,7 +1546,6 @@ export function LimitOrderForm({
                 const tokenUsdPrice = getPrice(token.a);
                 if (sellTokenUsdPrice > 0 && tokenUsdPrice > 0) {
                   // Use market price for new tokens (premiumMultiplier = 1)
-                  // marketPrice = buy tokens per sell token
                   newPrices[i] = sellTokenUsdPrice / tokenUsdPrice;
                 }
               }
@@ -1528,35 +1553,17 @@ export function LimitOrderForm({
             return newPrices;
           });
         }
-        // Case 3: Already unbound but individualLimitPrices is empty (e.g., page reload with unbound state)
-        else if (individualLimitPrices.length === 0 || individualLimitPrices.every(p => p === undefined)) {
-          const newIndividualPrices: (number | undefined)[] = buyTokens.map((token, index) => {
-            if (!token) return undefined;
-
-            // First token uses the main limit price
-            if (index === 0) {
-              return limitPriceNum;
-            }
-
-            // For additional tokens, calculate based on USD if possible
-            const firstBuyTokenUsdPrice = buyTokens[0] ? getPrice(buyTokens[0].a) : 0;
-            const tokenUsdPrice = getPrice(token.a);
-
-            if (sellTokenUsdPrice > 0 && firstBuyTokenUsdPrice > 0 && tokenUsdPrice > 0) {
-              // marketPrice = buy tokens per sell token
-              const marketPriceForFirst = sellTokenUsdPrice / firstBuyTokenUsdPrice;
-              const premiumMultiplier = limitPriceNum / marketPriceForFirst;
-              const marketPriceForThis = sellTokenUsdPrice / tokenUsdPrice;
-              return marketPriceForThis * premiumMultiplier;
-            }
-
-            return limitPriceNum;
-          });
-
-          setIndividualLimitPrices(newIndividualPrices);
-          if (onIndividualLimitPricesChange) {
-            onIndividualLimitPricesChange(newIndividualPrices);
-          }
+        // Case 3: Already unbound but individualLimitPrices needs initialization
+        // This triggers on page reload when prices are unbound and:
+        // - Array is empty, or
+        // - All values are undefined, or
+        // - Array length doesn't match token count (tokens changed between sessions)
+        else if (
+          individualLimitPrices.length === 0 ||
+          individualLimitPrices.every(p => p === undefined) ||
+          individualLimitPrices.length !== buyTokens.length
+        ) {
+          pricing.initializeIndividualPrices(sellToken, buyTokens);
         }
       }
     }
@@ -1565,7 +1572,7 @@ export function LimitOrderForm({
     prevPricesBoundRef.current = pricesBound;
     prevBuyTokensLengthRef.current = buyTokens.length;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pricesBound, buyTokens.length, priorityPrices, sellToken?.a, individualLimitPrices.length]);
+  }, [pricesBound, buyTokens.length, sellToken?.a]);
 
   // Recalculate percentage when invert display changes
   useEffect(() => {
@@ -1798,57 +1805,19 @@ export function LimitOrderForm({
   }, [externalLimitPrice, sellAmountNum, marketPrice, invertPriceDisplay, pricesBound, buyTokens, prices]);
 
   // Sync external individual limit price changes (from chart dragging individual token lines)
+  // Uses centralized hook for clean one-way data flow
   useEffect(() => {
     if (!externalIndividualLimitPrices) return;
-    // Skip when user is typing in any individual price input (same pattern as primary token)
+    // Skip when user is typing in any individual price input
     if (individualPriceInputFocused.some(focused => focused)) return;
 
-    // Set flag FIRST before any state updates to block the notify effect
+    // Set flag to block the notify effect from sending stale data back
     isReceivingExternalIndividualPriceRef.current = true;
 
-    // Batch all updates to avoid multiple re-renders
-    let hasLimitPriceChanges = false;
-    let hasBuyAmountChanges = false;
-    const newLimitPrices = [...individualLimitPrices];
-    const newBuyAmounts = [...buyAmounts];
+    // Use the hook's sync function for centralized logic
+    pricing.syncExternalIndividualPrices(externalIndividualLimitPrices, sellToken, buyTokens);
 
-    const sellTokenUsdPrice = sellToken ? getPrice(sellToken.a) : 0;
-
-    externalIndividualLimitPrices.forEach((newPrice, index) => {
-      if (newPrice === undefined || index === 0) return; // Skip first token (handled by main limit price)
-
-      const token = buyTokens[index];
-      if (!token) return;
-
-      // Check if price actually changed
-      if (newLimitPrices[index] !== newPrice) {
-        newLimitPrices[index] = newPrice;
-        hasLimitPriceChanges = true;
-
-        // Calculate new buy amount for this token
-        const tokenUsdPrice = getPrice(token.a);
-        if (sellTokenUsdPrice > 0 && tokenUsdPrice > 0 && sellAmountNum > 0) {
-          const sellUsdValue = sellAmountNum * sellTokenUsdPrice;
-          const tokenMarketPrice = sellTokenUsdPrice / tokenUsdPrice;
-          const premiumMultiplier = newPrice / tokenMarketPrice;
-          const marketAmount = sellUsdValue / tokenUsdPrice;
-          const adjustedAmount = marketAmount * premiumMultiplier;
-          newBuyAmounts[index] = formatCalculatedValue(adjustedAmount);
-          hasBuyAmountChanges = true;
-        }
-      }
-    });
-
-    // Apply batched updates
-    if (hasLimitPriceChanges) {
-      setIndividualLimitPrices(newLimitPrices);
-    }
-    if (hasBuyAmountChanges) {
-      setBuyAmounts(newBuyAmounts);
-    }
-
-    // Reset flag after a longer delay to prevent stale data from being sent back
-    // This needs to outlast any React batching and re-render cycles
+    // Reset flag after React batching completes
     setTimeout(() => {
       isReceivingExternalIndividualPriceRef.current = false;
     }, 300);
@@ -2521,47 +2490,20 @@ export function LimitOrderForm({
   };
 
   // Handler for individual token percentage clicks (when prices are unbound)
+  // Uses centralized pricing hook for clean one-way data flow
   const handleIndividualPercentageClick = (tokenIndex: number, percentage: number, direction: 'above' | 'below' = 'above') => {
     const token = buyTokens[tokenIndex];
     if (!token || !sellToken) return;
 
-    const sellTokenUsdPrice = getPrice(sellToken.a);
-    const tokenUsdPrice = getPrice(token.a);
-
-    if (sellTokenUsdPrice <= 0 || tokenUsdPrice <= 0) return;
-
-    const tokenMarketPrice = sellTokenUsdPrice / tokenUsdPrice;
-    const adjustedPercentage = direction === 'above' ? percentage : -percentage;
-
-    // When invertPriceDisplay is true, the percentage is applied to the inverted price
-    // So we need to calculate: invertedLimit = invertedMarket * (1 + adjustedPercentage/100)
-    // Then: newPrice = 1 / invertedLimit
-    let newPrice: number;
-    if (invertPriceDisplay) {
-      const invertedMarketPrice = 1 / tokenMarketPrice;
-      const invertedLimitPrice = invertedMarketPrice * (1 + adjustedPercentage / 100);
-      newPrice = 1 / invertedLimitPrice;
-    } else {
-      newPrice = tokenMarketPrice * (1 + adjustedPercentage / 100);
-    }
-
-    // Update individual limit prices and notify parent
-    setIndividualLimitPrices(prev => {
-      const newPrices = [...prev];
-      newPrices[tokenIndex] = newPrice;
-      return newPrices;
-    });
-
-    // Update the buy amount for this token
-    // buyAmount = sellAmount * limitPrice (where limitPrice is in "buy tokens per sell token")
-    const effectiveSellAmount = sellAmountNum > 0 ? sellAmountNum : 1;
-    const newBuyAmount = effectiveSellAmount * newPrice;
-
-    setBuyAmounts(prev => {
-      const newAmounts = [...prev];
-      newAmounts[tokenIndex] = formatCalculatedValue(newBuyAmount);
-      return newAmounts;
-    });
+    // Use centralized hook handler - handles limit price, buy amount, and parent notifications
+    pricing.handleIndividualPercentageClick(
+      tokenIndex,
+      percentage,
+      direction,
+      sellToken,
+      token,
+      invertPriceDisplay
+    );
   };
 
   // Handler for setting individual token limit price to backing value
@@ -2589,22 +2531,19 @@ export function LimitOrderForm({
 
     if (!limitPrice) return;
 
-    // Update individual limit prices
-    setIndividualLimitPrices(prev => {
-      const newPrices = [...prev];
-      newPrices[tokenIndex] = limitPrice!;
-      return newPrices;
-    });
+    // Update individual limit prices and notify parent
+    const newPrices = [...individualLimitPrices];
+    newPrices[tokenIndex] = limitPrice;
+    setIndividualLimitPrices(newPrices);
+    onIndividualLimitPricesChange?.(newPrices);
 
     // Update the buy amount for this token
     const effectiveSellAmount = sellAmountNum > 0 ? sellAmountNum : 1;
     const newBuyAmount = effectiveSellAmount * limitPrice;
 
-    setBuyAmounts(prev => {
-      const newAmounts = [...prev];
-      newAmounts[tokenIndex] = formatCalculatedValue(newBuyAmount);
-      return newAmounts;
-    });
+    const newAmounts = [...buyAmounts];
+    newAmounts[tokenIndex] = formatCalculatedValue(newBuyAmount);
+    setBuyAmounts(newAmounts);
   };
 
   // Check if we can show backing button for a specific additional token
@@ -4196,7 +4135,7 @@ export function LimitOrderForm({
                         </button>
                         <button
                           onClick={() => handlePercentageClick(1, invertPriceDisplay ? 'below' : 'above')}
-                          className={`flex-1 py-2 border-accent-pink text-xs transition-all font-medium rounded-full ${pricePercentage !== null && Math.abs(Math.abs(pricePercentage) - 1) < 0.01
+                          className={`flex-1 py-2 border-accent-pink text-xs transition-all font-medium rounded-full ${pricePercentage !== null && Math.abs(Math.abs(pricePercentage) - 1) < 0.01 && (invertPriceDisplay ? pricePercentage < 0 : pricePercentage > 0)
                             ? 'bg-[#FF0080]/20 text-white'
                             : 'bg-black/40 text-[#FF0080] hover:bg-[#FF0080]/20 hover:text-white'
                             }`}
@@ -4205,7 +4144,7 @@ export function LimitOrderForm({
                         </button>
                         <button
                           onClick={() => handlePercentageClick(2, invertPriceDisplay ? 'below' : 'above')}
-                          className={`flex-1 py-2 border-accent-pink text-xs transition-all font-medium rounded-full ${pricePercentage !== null && Math.abs(Math.abs(pricePercentage) - 2) < 0.01
+                          className={`flex-1 py-2 border-accent-pink text-xs transition-all font-medium rounded-full ${pricePercentage !== null && Math.abs(Math.abs(pricePercentage) - 2) < 0.01 && (invertPriceDisplay ? pricePercentage < 0 : pricePercentage > 0)
                             ? 'bg-[#FF0080]/20 text-white'
                             : 'bg-black/40 text-[#FF0080] hover:bg-[#FF0080]/20 hover:text-white'
                             }`}
@@ -4214,7 +4153,7 @@ export function LimitOrderForm({
                         </button>
                         <button
                           onClick={() => handlePercentageClick(5, invertPriceDisplay ? 'below' : 'above')}
-                          className={`flex-1 py-2 border-accent-pink text-xs transition-all font-medium rounded-full ${pricePercentage !== null && Math.abs(Math.abs(pricePercentage) - 5) < 0.01
+                          className={`flex-1 py-2 border-accent-pink text-xs transition-all font-medium rounded-full ${pricePercentage !== null && Math.abs(Math.abs(pricePercentage) - 5) < 0.01 && (invertPriceDisplay ? pricePercentage < 0 : pricePercentage > 0)
                             ? 'bg-[#FF0080]/20 text-white'
                             : 'bg-black/40 text-[#FF0080] hover:bg-[#FF0080]/20 hover:text-white'
                             }`}
@@ -4223,7 +4162,7 @@ export function LimitOrderForm({
                         </button>
                         <button
                           onClick={() => handlePercentageClick(10, invertPriceDisplay ? 'below' : 'above')}
-                          className={`flex-1 py-2 border-accent-pink text-xs transition-all font-medium rounded-full ${pricePercentage !== null && Math.abs(Math.abs(pricePercentage) - 10) < 0.01
+                          className={`flex-1 py-2 border-accent-pink text-xs transition-all font-medium rounded-full ${pricePercentage !== null && Math.abs(Math.abs(pricePercentage) - 10) < 0.01 && (invertPriceDisplay ? pricePercentage < 0 : pricePercentage > 0)
                             ? 'bg-[#FF0080]/20 text-white'
                             : 'bg-black/40 text-[#FF0080] hover:bg-[#FF0080]/20 hover:text-white'
                             }`}
@@ -4779,7 +4718,7 @@ export function LimitOrderForm({
                           ) : (
                             <button
                               onClick={() => handlePercentageClick(1, invertPriceDisplay ? 'below' : 'above')}
-                              className={`flex-1 py-2 border-accent-pink text-xs transition-all font-medium rounded-full ${pricePercentage !== null && Math.abs(Math.abs(pricePercentage) - 1) < 0.01
+                              className={`flex-1 py-2 border-accent-pink text-xs transition-all font-medium rounded-full ${pricePercentage !== null && Math.abs(Math.abs(pricePercentage) - 1) < 0.01 && (invertPriceDisplay ? pricePercentage < 0 : pricePercentage > 0)
                                 ? 'bg-[#FF0080]/20 text-white'
                                 : 'bg-black/40 text-[#FF0080] hover:bg-[#FF0080]/20 hover:text-white'
                                 }`}
@@ -4789,7 +4728,7 @@ export function LimitOrderForm({
                           )}
                           <button
                             onClick={() => handlePercentageClick(2, invertPriceDisplay ? 'below' : 'above')}
-                            className={`flex-1 py-2 border-accent-pink text-xs transition-all font-medium rounded-full ${pricePercentage !== null && Math.abs(Math.abs(pricePercentage) - 2) < 0.01
+                            className={`flex-1 py-2 border-accent-pink text-xs transition-all font-medium rounded-full ${pricePercentage !== null && Math.abs(Math.abs(pricePercentage) - 2) < 0.01 && (invertPriceDisplay ? pricePercentage < 0 : pricePercentage > 0)
                               ? 'bg-[#FF0080]/20 text-white'
                               : 'bg-black/40 text-[#FF0080] hover:bg-[#FF0080]/20 hover:text-white'
                               }`}
@@ -4798,7 +4737,7 @@ export function LimitOrderForm({
                           </button>
                           <button
                             onClick={() => handlePercentageClick(5, invertPriceDisplay ? 'below' : 'above')}
-                            className={`flex-1 py-2 border-accent-pink text-xs transition-all font-medium rounded-full ${pricePercentage !== null && Math.abs(Math.abs(pricePercentage) - 5) < 0.01
+                            className={`flex-1 py-2 border-accent-pink text-xs transition-all font-medium rounded-full ${pricePercentage !== null && Math.abs(Math.abs(pricePercentage) - 5) < 0.01 && (invertPriceDisplay ? pricePercentage < 0 : pricePercentage > 0)
                               ? 'bg-[#FF0080]/20 text-white'
                               : 'bg-black/40 text-[#FF0080] hover:bg-[#FF0080]/20 hover:text-white'
                               }`}
@@ -4807,7 +4746,7 @@ export function LimitOrderForm({
                           </button>
                           <button
                             onClick={() => handlePercentageClick(10, invertPriceDisplay ? 'below' : 'above')}
-                            className={`flex-1 py-2 border-accent-pink text-xs transition-all font-medium rounded-full ${pricePercentage !== null && Math.abs(Math.abs(pricePercentage) - 10) < 0.01
+                            className={`flex-1 py-2 border-accent-pink text-xs transition-all font-medium rounded-full ${pricePercentage !== null && Math.abs(Math.abs(pricePercentage) - 10) < 0.01 && (invertPriceDisplay ? pricePercentage < 0 : pricePercentage > 0)
                               ? 'bg-[#FF0080]/20 text-white'
                               : 'bg-black/40 text-[#FF0080] hover:bg-[#FF0080]/20 hover:text-white'
                               }`}
@@ -5051,8 +4990,8 @@ export function LimitOrderForm({
                                   onClick={() => handleIndividualPercentageClick(index, 2, invertPriceDisplay ? 'below' : 'above')}
                                   className="flex-1 py-2 text-xs transition-all font-medium rounded-full"
                                   style={{
-                                    backgroundColor: tokenPricePercentage !== null && Math.abs(Math.abs(tokenPricePercentage) - 2) < 0.1 ? `${accentColor}33` : 'rgba(0,0,0,0.4)',
-                                    color: tokenPricePercentage !== null && Math.abs(Math.abs(tokenPricePercentage) - 2) < 0.1 ? 'white' : accentColor,
+                                    backgroundColor: tokenPricePercentage !== null && Math.abs(Math.abs(tokenPricePercentage) - 2) < 0.1 && (invertPriceDisplay ? tokenPricePercentage < 0 : tokenPricePercentage > 0) ? `${accentColor}33` : 'rgba(0,0,0,0.4)',
+                                    color: tokenPricePercentage !== null && Math.abs(Math.abs(tokenPricePercentage) - 2) < 0.1 && (invertPriceDisplay ? tokenPricePercentage < 0 : tokenPricePercentage > 0) ? 'white' : accentColor,
                                     border: `1px solid ${accentColor}40`
                                   }}
                                 >
@@ -5062,8 +5001,8 @@ export function LimitOrderForm({
                                   onClick={() => handleIndividualPercentageClick(index, 5, invertPriceDisplay ? 'below' : 'above')}
                                   className="flex-1 py-2 text-xs transition-all font-medium rounded-full"
                                   style={{
-                                    backgroundColor: tokenPricePercentage !== null && Math.abs(Math.abs(tokenPricePercentage) - 5) < 0.1 ? `${accentColor}33` : 'rgba(0,0,0,0.4)',
-                                    color: tokenPricePercentage !== null && Math.abs(Math.abs(tokenPricePercentage) - 5) < 0.1 ? 'white' : accentColor,
+                                    backgroundColor: tokenPricePercentage !== null && Math.abs(Math.abs(tokenPricePercentage) - 5) < 0.1 && (invertPriceDisplay ? tokenPricePercentage < 0 : tokenPricePercentage > 0) ? `${accentColor}33` : 'rgba(0,0,0,0.4)',
+                                    color: tokenPricePercentage !== null && Math.abs(Math.abs(tokenPricePercentage) - 5) < 0.1 && (invertPriceDisplay ? tokenPricePercentage < 0 : tokenPricePercentage > 0) ? 'white' : accentColor,
                                     border: `1px solid ${accentColor}40`
                                   }}
                                 >
@@ -5073,8 +5012,8 @@ export function LimitOrderForm({
                                   onClick={() => handleIndividualPercentageClick(index, 10, invertPriceDisplay ? 'below' : 'above')}
                                   className="flex-1 py-2 text-xs transition-all font-medium rounded-full"
                                   style={{
-                                    backgroundColor: tokenPricePercentage !== null && Math.abs(Math.abs(tokenPricePercentage) - 10) < 0.1 ? `${accentColor}33` : 'rgba(0,0,0,0.4)',
-                                    color: tokenPricePercentage !== null && Math.abs(Math.abs(tokenPricePercentage) - 10) < 0.1 ? 'white' : accentColor,
+                                    backgroundColor: tokenPricePercentage !== null && Math.abs(Math.abs(tokenPricePercentage) - 10) < 0.1 && (invertPriceDisplay ? tokenPricePercentage < 0 : tokenPricePercentage > 0) ? `${accentColor}33` : 'rgba(0,0,0,0.4)',
+                                    color: tokenPricePercentage !== null && Math.abs(Math.abs(tokenPricePercentage) - 10) < 0.1 && (invertPriceDisplay ? tokenPricePercentage < 0 : tokenPricePercentage > 0) ? 'white' : accentColor,
                                     border: `1px solid ${accentColor}40`
                                   }}
                                 >

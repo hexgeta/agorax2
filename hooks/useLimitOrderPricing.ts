@@ -67,6 +67,10 @@ export interface PricingState {
   buyAmounts: string[];
   limitPrice: string;
   pricePercentage: number | null;
+  // Individual limit prices for unbound mode (each buy token has its own price)
+  individualLimitPrices: (number | undefined)[];
+  // Whether prices are bound (all tokens share same %) or unbound (independent prices)
+  pricesBound: boolean;
 }
 
 export interface TokenPrices {
@@ -78,7 +82,9 @@ export interface PricingCallbacks {
   setBuyAmounts: (value: string[]) => void;
   setLimitPrice: (value: string) => void;
   setPricePercentage: (value: number | null) => void;
+  setIndividualLimitPrices: (value: (number | undefined)[]) => void;
   onLimitPriceChange?: (price: number) => void;
+  onIndividualLimitPricesChange?: (prices: (number | undefined)[]) => void;
 }
 
 export interface TokenInfo {
@@ -95,8 +101,8 @@ export function useLimitOrderPricing(
   callbacks: PricingCallbacks,
   prices: TokenPrices
 ) {
-  const { sellAmount, buyAmounts, limitPrice, pricePercentage } = state;
-  const { setSellAmount, setBuyAmounts, setLimitPrice, setPricePercentage, onLimitPriceChange } = callbacks;
+  const { sellAmount, buyAmounts, limitPrice, pricePercentage, individualLimitPrices, pricesBound } = state;
+  const { setSellAmount, setBuyAmounts, setLimitPrice, setPricePercentage, setIndividualLimitPrices, onLimitPriceChange, onIndividualLimitPricesChange } = callbacks;
   const { getPrice } = prices;
 
   /**
@@ -415,6 +421,208 @@ export function useLimitOrderPricing(
     setBuyAmounts(newAmounts);
   }, [sellAmount, limitPrice, buyAmounts, getPrice, setBuyAmounts]);
 
+  // ============================================================================
+  // INDIVIDUAL LIMIT PRICE HANDLERS (for unbound mode)
+  // ============================================================================
+
+  /**
+   * Handle when user drags an individual token's chart line (unbound mode)
+   * This is the SINGLE source of truth for individual limit price changes from the chart.
+   *
+   * Keeps: sellAmount, other tokens' prices
+   * Recalculates: this token's limitPrice, buyAmount
+   */
+  const handleIndividualLimitPriceChange = useCallback((
+    index: number,
+    newLimitPrice: number,
+    sellToken: TokenInfo | null,
+    buyTokens: (TokenInfo | null)[]
+  ) => {
+    if (!sellToken || newLimitPrice <= 0) return;
+    const buyToken = buyTokens[index];
+    if (!buyToken) return;
+
+    // Update this token's individual limit price
+    const newPrices = [...individualLimitPrices];
+    newPrices[index] = newLimitPrice;
+    setIndividualLimitPrices(newPrices);
+    onIndividualLimitPricesChange?.(newPrices);
+
+    // If this is the first token (index 0), also update the main limit price
+    if (index === 0) {
+      setLimitPrice(newLimitPrice.toFixed(8));
+      onLimitPriceChange?.(newLimitPrice);
+
+      // Calculate percentage for display
+      const marketPrice = calculateMarketPrice(sellToken.a, buyToken.a);
+      if (marketPrice > 0) {
+        const newPercentage = calculatePercentageFromLimitPrice(newLimitPrice, marketPrice);
+        setPricePercentage(newPercentage);
+      }
+    }
+
+    // Calculate new buy amount for this token
+    const sellAmt = sellAmount ? parseFloat(removeCommas(sellAmount)) : 0;
+    if (sellAmt > 0) {
+      const newBuyAmount = calculateBuyAmount(sellAmt, newLimitPrice);
+      const newAmounts = [...buyAmounts];
+      newAmounts[index] = formatCalculatedValue(newBuyAmount);
+      setBuyAmounts(newAmounts);
+    }
+  }, [
+    sellAmount, buyAmounts, individualLimitPrices,
+    calculateMarketPrice, calculatePercentageFromLimitPrice, calculateBuyAmount,
+    setLimitPrice, setPricePercentage, setIndividualLimitPrices, setBuyAmounts,
+    onLimitPriceChange, onIndividualLimitPricesChange
+  ]);
+
+  /**
+   * Handle clicking a percentage button for an individual token (unbound mode)
+   * Keeps: sellAmount, other tokens' prices
+   * Recalculates: this token's limitPrice, buyAmount
+   */
+  const handleIndividualPercentageClick = useCallback((
+    index: number,
+    percentage: number,
+    direction: 'above' | 'below',
+    sellToken: TokenInfo | null,
+    buyToken: TokenInfo | null,
+    invertPriceDisplay: boolean
+  ) => {
+    if (!sellToken || !buyToken) return;
+
+    const sellUsd = getPrice(sellToken.a);
+    const tokenUsd = getPrice(buyToken.a);
+    if (sellUsd <= 0 || tokenUsd <= 0) return;
+
+    const tokenMarketPrice = sellUsd / tokenUsd;
+    const adjustedPercentage = direction === 'above' ? percentage : -percentage;
+
+    // Calculate new limit price based on invert display mode
+    let newPrice: number;
+    if (invertPriceDisplay) {
+      const invertedMarketPrice = 1 / tokenMarketPrice;
+      const invertedLimitPrice = invertedMarketPrice * (1 + adjustedPercentage / 100);
+      newPrice = 1 / invertedLimitPrice;
+    } else {
+      newPrice = tokenMarketPrice * (1 + adjustedPercentage / 100);
+    }
+
+    // Update individual limit prices
+    const newPrices = [...individualLimitPrices];
+    newPrices[index] = newPrice;
+    setIndividualLimitPrices(newPrices);
+    onIndividualLimitPricesChange?.(newPrices);
+
+    // If this is the first token, also update main limit price
+    if (index === 0) {
+      setLimitPrice(newPrice.toFixed(8));
+      onLimitPriceChange?.(newPrice);
+      setPricePercentage(adjustedPercentage);
+    }
+
+    // Update the buy amount for this token
+    const sellAmt = sellAmount ? parseFloat(removeCommas(sellAmount)) : 0;
+    const effectiveSellAmount = sellAmt > 0 ? sellAmt : 1;
+    const newBuyAmount = effectiveSellAmount * newPrice;
+
+    const newAmounts = [...buyAmounts];
+    newAmounts[index] = formatCalculatedValue(newBuyAmount);
+    setBuyAmounts(newAmounts);
+  }, [
+    sellAmount, buyAmounts, individualLimitPrices, getPrice,
+    setLimitPrice, setPricePercentage, setIndividualLimitPrices, setBuyAmounts,
+    onLimitPriceChange, onIndividualLimitPricesChange
+  ]);
+
+  /**
+   * Initialize individual limit prices when switching from bound to unbound mode.
+   * Call this once when pricesBound changes from true to false.
+   */
+  const initializeIndividualPrices = useCallback((
+    sellToken: TokenInfo | null,
+    buyTokens: (TokenInfo | null)[]
+  ) => {
+    if (!sellToken || buyTokens.length === 0) return;
+
+    const sellUsd = getPrice(sellToken.a);
+    const limitPriceNum = parseFloat(limitPrice) || 0;
+    if (limitPriceNum <= 0 || sellUsd <= 0) return;
+
+    // Calculate premium multiplier from first token
+    const firstBuyToken = buyTokens[0];
+    const firstBuyUsd = firstBuyToken ? getPrice(firstBuyToken.a) : 0;
+    const marketPriceForFirst = firstBuyUsd > 0 ? sellUsd / firstBuyUsd : 0;
+    const premiumMultiplier = marketPriceForFirst > 0 ? limitPriceNum / marketPriceForFirst : 1;
+
+    const newPrices: (number | undefined)[] = buyTokens.map((token, index) => {
+      if (!token) return undefined;
+
+      // First token uses the main limit price
+      if (index === 0) {
+        return limitPriceNum;
+      }
+
+      // For additional tokens, apply the same premium multiplier
+      const tokenUsd = getPrice(token.a);
+      if (tokenUsd > 0) {
+        const marketPriceForThis = sellUsd / tokenUsd;
+        return marketPriceForThis * premiumMultiplier;
+      }
+
+      return limitPriceNum;
+    });
+
+    setIndividualLimitPrices(newPrices);
+    onIndividualLimitPricesChange?.(newPrices);
+  }, [limitPrice, getPrice, setIndividualLimitPrices, onIndividualLimitPricesChange]);
+
+  /**
+   * Sync external individual limit prices (from chart drag).
+   * Call this when receiving new prices from the chart.
+   * Returns true if any prices were updated.
+   */
+  const syncExternalIndividualPrices = useCallback((
+    externalPrices: (number | undefined)[],
+    sellToken: TokenInfo | null,
+    buyTokens: (TokenInfo | null)[]
+  ): boolean => {
+    if (!externalPrices || !sellToken) return false;
+
+    let hasChanges = false;
+    const newPrices = [...individualLimitPrices];
+    const newAmounts = [...buyAmounts];
+    const sellAmt = sellAmount ? parseFloat(removeCommas(sellAmount)) : 0;
+    const sellUsd = getPrice(sellToken.a);
+
+    externalPrices.forEach((newPrice, index) => {
+      // Skip undefined prices and first token (handled by main limit price)
+      if (newPrice === undefined || index === 0) return;
+
+      const buyToken = buyTokens[index];
+      if (!buyToken) return;
+
+      // Check if price actually changed
+      if (newPrices[index] !== newPrice) {
+        newPrices[index] = newPrice;
+        hasChanges = true;
+
+        // Calculate new buy amount for this token
+        if (sellAmt > 0 && sellUsd > 0) {
+          const newBuyAmount = sellAmt * newPrice;
+          newAmounts[index] = formatCalculatedValue(newBuyAmount);
+        }
+      }
+    });
+
+    if (hasChanges) {
+      setIndividualLimitPrices(newPrices);
+      setBuyAmounts(newAmounts);
+    }
+
+    return hasChanges;
+  }, [sellAmount, buyAmounts, individualLimitPrices, getPrice, setIndividualLimitPrices, setBuyAmounts]);
+
   return {
     // Utility functions
     calculateMarketPrice,
@@ -431,6 +639,12 @@ export function useLimitOrderPricing(
     handleSellAmountChange,
     handleBuyAmountChange,
     handleAdditionalBuyTokenChange,
+
+    // Individual limit price handlers (unbound mode)
+    handleIndividualLimitPriceChange,
+    handleIndividualPercentageClick,
+    initializeIndividualPrices,
+    syncExternalIndividualPrices,
 
     // Helpers
     formatCalculatedValue,
