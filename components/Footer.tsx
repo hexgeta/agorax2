@@ -28,13 +28,21 @@ const Footer = () => {
             <ul className="space-y-1">
               <li>
                 <Link
-                  href="/"
+                  href="/swap"
                   className="text-sm text-white/70 hover:text-white transition-colors"
                 >
-                  My orders
+                  Swap
                 </Link>
               </li>
-                                          <li>
+              <li>
+                <Link
+                  href="/my-orders"
+                  className="text-sm text-white/70 hover:text-white transition-colors"
+                >
+                  My Orders
+                </Link>
+              </li>
+              <li>
                 <Link
                   href="/marketplace"
                   className="text-sm text-white/70 hover:text-white transition-colors"
@@ -42,7 +50,7 @@ const Footer = () => {
                   Marketplace
                 </Link>
               </li>
-                            <li>
+              <li>
                 <Link
                   href="https://x.com/agoraxwin"
                   className="text-sm text-white/70 hover:text-white transition-colors"

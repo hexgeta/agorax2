@@ -46,7 +46,6 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
   const [internalDisplayedTokenIndex, setInternalDisplayedTokenIndex] = useState(0); // For cycling through tokens
   const [internalShowUsdPrices, setInternalShowUsdPrices] = useState(false); // Toggle between token units and USD
   const [zoomLevel, setZoomLevel] = useState(30); // Default ±30%, can zoom in/out
-  const [zoomOverride, setZoomOverride] = useState(false); // When true, user has manually set zoom - don't auto-expand
 
   // Use external showUsdPrices if provided (controlled mode), otherwise use internal state
   const showUsdPrices = externalShowUsdPrices ?? internalShowUsdPrices;
@@ -373,14 +372,17 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
   }, [displayCurrentPrice, limitOrderPrice, invertPriceDisplay, pricesBound, individualLimitPrices, buyTokenAddresses, sellTokenUsdPrice, buyTokenUsdPrices]);
 
   // Auto-expand zoom level to show out-of-bounds limit prices
-  // But if user has manually set zoom (zoomOverride), respect their choice
+  // Always expand to show all limit lines, but use user's manual zoom as the minimum when zooming out
   // Round up to the next nice number (so 201% becomes 250%, not 200%)
-  const rawEffectiveZoom = zoomOverride
-    ? zoomLevel  // User manually set zoom - don't auto-expand
-    : Math.max(zoomLevel, maxRequiredDeviation);
+  // Add a small buffer (10%) to prevent the line from sitting exactly at the edge
+  const requiredWithBuffer = maxRequiredDeviation * 1.1;
+  const rawEffectiveZoom = Math.max(zoomLevel, requiredWithBuffer);
   const effectiveZoomLevel = rawEffectiveZoom <= 50
     ? Math.ceil(rawEffectiveZoom / 10) * 10  // Round up to nearest 10 (e.g., 31 -> 40)
     : Math.ceil(rawEffectiveZoom / 50) * 50; // Round up to nearest 50 (e.g., 201 -> 250)
+
+  // Track if chart is auto-expanded beyond base zoom to show limit price lines
+  const isAutoExpanded = effectiveZoomLevel > zoomLevel;
 
   // NEW: Use percentage-based positioning
   // The chart shows -effectiveZoomLevel% to +effectiveZoomLevel% from market price
@@ -426,7 +428,6 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
   useEffect(() => {
     if (sellChanged || buyChanged) {
       setTokenTransitionPending(true);
-      setZoomOverride(false); // Reset zoom override when tokens change - allow auto-expand
     } else if (tokenTransitionPending && limitOrderPrice !== limitPriceAtTokenChangeRef.current) {
       // New price arrived - clear transition
       setTokenTransitionPending(false);
@@ -698,7 +699,7 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
     >
       {/* Token Pair Info */}
       {displayBaseTokenInfo && displayQuoteTokenInfo && (
-        <div className="flex flex-col gap-4 mb-6">
+        <div className="flex flex-col gap-2 mb-4">
           <div className="flex items-center justify-between">
             <h3 className="text-2xl font-bold text-white">
               <span className="flex items-center gap-2">
@@ -717,7 +718,6 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
               <div className="flex items-center">
                 <button
                   onClick={() => {
-                    setZoomOverride(true); // User is manually controlling zoom
                     setZoomLevel(prev => {
                       // Zoom out: use larger steps at higher levels
                       if (prev >= 100) return prev + 50;
@@ -726,13 +726,12 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                     });
                   }}
                   className="px-2 py-1 rounded-l text-xs font-medium transition-colors bg-white/10 text-white/60 border border-white/20 hover:bg-white/20 hover:text-white"
-                  title={`Zoom out (±${effectiveZoomLevel}%${zoomOverride ? '' : ' auto'})`}
+                  title={`Zoom out (±${effectiveZoomLevel}%${isAutoExpanded ? ' - auto-expanded' : ''})`}
                 >
                   <ZoomOut className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => {
-                    setZoomOverride(true); // User is manually controlling zoom
                     setZoomLevel(prev => {
                       // Zoom in: use larger steps at higher levels
                       if (prev > 100) return Math.max(prev - 50, 100);
@@ -741,7 +740,7 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                     });
                   }}
                   className="px-2 py-1 rounded-r text-xs font-medium transition-colors bg-white/10 text-white/60 border border-l-0 border-white/20 hover:bg-white/20 hover:text-white"
-                  title={`Zoom in (±${effectiveZoomLevel}%${zoomOverride ? '' : ' auto'})`}
+                  title={`Zoom in (±${effectiveZoomLevel}%${isAutoExpanded ? ' - auto-expanded' : ''})`}
                 >
                   <ZoomIn className="w-4 h-4" />
                 </button>
@@ -759,6 +758,10 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
               </button>
             </div>
           </div>
+          {/* Explanation of percentage scale */}
+          <p className="text-xs text-white/50">
+            Scale shows % from market price (0% = current price)
+          </p>
         </div>
       )}
 

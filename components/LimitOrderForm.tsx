@@ -4232,10 +4232,15 @@ export function LimitOrderForm({
                             !presetValues.some(p => Math.abs(Math.abs(pricePercentage) - p) < 0.01) &&
                             (invertPriceDisplay ? pricePercentage < 0 : pricePercentage > 0);
                           const isWholeNumber = (n: number) => Math.abs(n - Math.round(n)) < 0.01;
-                          const formatPct = (n: number) => isWholeNumber(n) ? String(Math.round(n)) : n.toFixed(1);
+                          // Format: show sign, absolute value, no .0 suffix
+                          const formatPct = (n: number) => {
+                            const sign = n < 0 ? '-' : '+';
+                            const absVal = isWholeNumber(n) ? String(Math.round(Math.abs(n))) : Math.abs(n).toFixed(1).replace(/\.0$/, '');
+                            return sign + absVal;
+                          };
                           // Cap display at ±999% to prevent UI overflow
                           const cappedPct = pricePercentage !== null ? Math.max(-999, Math.min(999, pricePercentage)) : 0;
-                          const displayValue = isCustomActive ? `${cappedPct > 0 ? '+' : ''}${formatPct(cappedPct)}%` : '';
+                          const displayValue = isCustomActive ? formatPct(cappedPct) : '';
 
                           return (
                             <div className="flex-1 relative">
@@ -4253,43 +4258,50 @@ export function LimitOrderForm({
                                 onFocus={(e) => {
                                   // Store original value to restore if nothing typed
                                   e.target.dataset.originalValue = e.target.value;
-                                  e.target.value = '';
+                                  // When focused, show the sign prefix for the direction
+                                  e.target.value = invertPriceDisplay ? '-' : '+';
                                 }}
                                 onInput={(e) => {
                                   const input = e.target as HTMLInputElement;
                                   const prevValue = input.dataset.prevValue || '';
-                                  // Only allow digits, minus sign at start, and one decimal point
-                                  let cleaned = input.value.replace(/[^0-9.-]/g, '');
-                                  // Ensure minus is only at start
-                                  if (cleaned.indexOf('-') > 0) cleaned = cleaned.replace(/-/g, '');
+                                  // Keep the sign at the start, only allow digits and one decimal point after
+                                  let val = input.value;
+                                  const sign = val.startsWith('-') ? '-' : (val.startsWith('+') ? '+' : (invertPriceDisplay ? '-' : '+'));
+                                  let cleaned = val.replace(/[^0-9.]/g, '');
                                   // Only one decimal point
                                   const parts = cleaned.split('.');
                                   if (parts.length > 2) cleaned = parts[0] + '.' + parts.slice(1).join('');
                                   // Block if would exceed 999
                                   const num = parseFloat(cleaned);
-                                  if (!isNaN(num) && Math.abs(num) > 999) {
-                                    cleaned = prevValue; // Revert to previous value
+                                  if (!isNaN(num) && num > 999) {
+                                    cleaned = prevValue.replace(/[^0-9.]/g, ''); // Revert to previous value
                                   }
-                                  input.value = cleaned;
-                                  input.dataset.prevValue = cleaned;
+                                  input.value = sign + cleaned;
+                                  input.dataset.prevValue = input.value;
                                 }}
                                 onKeyDown={(e) => {
                                   if (e.key === 'Enter') {
                                     const input = e.target as HTMLInputElement;
-                                    const value = parseFloat(input.value);
+                                    const val = input.value;
+                                    const isNegative = val.startsWith('-');
+                                    const numStr = val.replace(/[^0-9.]/g, '');
+                                    const value = parseFloat(numStr);
                                     if (!isNaN(value) && value !== 0) {
-                                      const capped = Math.max(-999, Math.min(999, value));
-                                      handlePercentageClick(Math.abs(capped), capped > 0 ? 'above' : 'below');
+                                      const capped = Math.min(999, value);
+                                      handlePercentageClick(capped, isNegative ? 'below' : 'above');
                                       input.blur();
                                     }
                                   }
                                 }}
                                 onBlur={(e) => {
-                                  const value = parseFloat(e.target.value);
+                                  const val = e.target.value;
+                                  const isNegative = val.startsWith('-');
+                                  const numStr = val.replace(/[^0-9.]/g, '');
+                                  const value = parseFloat(numStr);
                                   if (!isNaN(value) && value !== 0) {
-                                    const capped = Math.max(-999, Math.min(999, value));
-                                    handlePercentageClick(Math.abs(capped), capped > 0 ? 'above' : 'below');
-                                  } else if (e.target.value === '' && e.target.dataset.originalValue) {
+                                    const capped = Math.min(999, value);
+                                    handlePercentageClick(capped, isNegative ? 'below' : 'above');
+                                  } else if (e.target.dataset.originalValue) {
                                     // Restore original value if nothing was typed
                                     e.target.value = e.target.dataset.originalValue;
                                   }
@@ -4874,10 +4886,15 @@ export function LimitOrderForm({
                               !presetValues.some(p => Math.abs(Math.abs(pricePercentage) - p) < 0.01) &&
                               (invertPriceDisplay ? pricePercentage < 0 : pricePercentage > 0);
                             const isWholeNumber = (n: number) => Math.abs(n - Math.round(n)) < 0.01;
-                            const formatPct = (n: number) => isWholeNumber(n) ? String(Math.round(n)) : n.toFixed(1);
+                            // Format: show sign, absolute value, no .0 suffix
+                            const formatPct = (n: number) => {
+                              const sign = n < 0 ? '-' : '+';
+                              const absVal = isWholeNumber(n) ? String(Math.round(Math.abs(n))) : Math.abs(n).toFixed(1).replace(/\.0$/, '');
+                              return sign + absVal;
+                            };
                             // Cap display at ±999% to prevent UI overflow
                             const cappedPct = pricePercentage !== null ? Math.max(-999, Math.min(999, pricePercentage)) : 0;
-                            const displayValue = isCustomActive ? `${cappedPct > 0 ? '+' : ''}${formatPct(cappedPct)}%` : '';
+                            const displayValue = isCustomActive ? formatPct(cappedPct) : '';
 
                             return (
                               <div className="flex-1 relative">
@@ -4895,43 +4912,50 @@ export function LimitOrderForm({
                                   onFocus={(e) => {
                                     // Store original value to restore if nothing typed
                                     e.target.dataset.originalValue = e.target.value;
-                                    e.target.value = '';
+                                    // When focused, show the sign prefix for the direction
+                                    e.target.value = invertPriceDisplay ? '-' : '+';
                                   }}
                                   onInput={(e) => {
                                     const input = e.target as HTMLInputElement;
                                     const prevValue = input.dataset.prevValue || '';
-                                    // Only allow digits, minus sign at start, and one decimal point
-                                    let cleaned = input.value.replace(/[^0-9.-]/g, '');
-                                    // Ensure minus is only at start
-                                    if (cleaned.indexOf('-') > 0) cleaned = cleaned.replace(/-/g, '');
+                                    // Keep the sign at the start, only allow digits and one decimal point after
+                                    let val = input.value;
+                                    const sign = val.startsWith('-') ? '-' : (val.startsWith('+') ? '+' : (invertPriceDisplay ? '-' : '+'));
+                                    let cleaned = val.replace(/[^0-9.]/g, '');
                                     // Only one decimal point
                                     const parts = cleaned.split('.');
                                     if (parts.length > 2) cleaned = parts[0] + '.' + parts.slice(1).join('');
                                     // Block if would exceed 999
                                     const num = parseFloat(cleaned);
-                                    if (!isNaN(num) && Math.abs(num) > 999) {
-                                      cleaned = prevValue; // Revert to previous value
+                                    if (!isNaN(num) && num > 999) {
+                                      cleaned = prevValue.replace(/[^0-9.]/g, ''); // Revert to previous value
                                     }
-                                    input.value = cleaned;
-                                    input.dataset.prevValue = cleaned;
+                                    input.value = sign + cleaned;
+                                    input.dataset.prevValue = input.value;
                                   }}
                                   onKeyDown={(e) => {
                                     if (e.key === 'Enter') {
                                       const input = e.target as HTMLInputElement;
-                                      const value = parseFloat(input.value);
+                                      const val = input.value;
+                                      const isNegative = val.startsWith('-');
+                                      const numStr = val.replace(/[^0-9.]/g, '');
+                                      const value = parseFloat(numStr);
                                       if (!isNaN(value) && value !== 0) {
-                                        const capped = Math.max(-999, Math.min(999, value));
-                                        handlePercentageClick(Math.abs(capped), capped > 0 ? 'above' : 'below');
+                                        const capped = Math.min(999, value);
+                                        handlePercentageClick(capped, isNegative ? 'below' : 'above');
                                         input.blur();
                                       }
                                     }
                                   }}
                                   onBlur={(e) => {
-                                    const value = parseFloat(e.target.value);
+                                    const val = e.target.value;
+                                    const isNegative = val.startsWith('-');
+                                    const numStr = val.replace(/[^0-9.]/g, '');
+                                    const value = parseFloat(numStr);
                                     if (!isNaN(value) && value !== 0) {
-                                      const capped = Math.max(-999, Math.min(999, value));
-                                      handlePercentageClick(Math.abs(capped), capped > 0 ? 'above' : 'below');
-                                    } else if (e.target.value === '' && e.target.dataset.originalValue) {
+                                      const capped = Math.min(999, value);
+                                      handlePercentageClick(capped, isNegative ? 'below' : 'above');
+                                    } else if (e.target.dataset.originalValue) {
                                       // Restore original value if nothing was typed
                                       e.target.value = e.target.dataset.originalValue;
                                     }
@@ -5022,13 +5046,13 @@ export function LimitOrderForm({
                                     const unitTokenUsdPriceLocal = unitToken ? getPrice(unitToken.a) : 0;
                                     if (unitTokenUsdPriceLocal > 0) {
                                       const usdValue = displayPrice * unitTokenUsdPriceLocal;
-                                      return '$' + usdValue.toLocaleString(undefined, {
+                                      return '$' + formatNumberWithCommas(usdValue.toLocaleString(undefined, {
                                         minimumFractionDigits: 2,
                                         maximumFractionDigits: usdValue < 0.01 ? 6 : usdValue < 1 ? 4 : 2
-                                      });
+                                      }));
                                     }
                                   }
-                                  return displayPrice.toFixed(8).replace(/\.?0+$/, '');
+                                  return formatNumberWithCommas(formatLimitPriceDisplay(displayPrice));
                                 }
                                 return '';
                               })() : (individualPriceInputFocused[index] ? (individualPriceInputValues[index] || '') : (() => {
@@ -5043,23 +5067,50 @@ export function LimitOrderForm({
                                   const unitTokenUsdPriceLocal = unitToken ? getPrice(unitToken.a) : 0;
                                   if (unitTokenUsdPriceLocal > 0) {
                                     const usdValue = displayPrice * unitTokenUsdPriceLocal;
-                                    return '$' + usdValue.toLocaleString(undefined, {
+                                    return '$' + formatNumberWithCommas(usdValue.toLocaleString(undefined, {
                                       minimumFractionDigits: 2,
                                       maximumFractionDigits: usdValue < 0.01 ? 6 : usdValue < 1 ? 4 : 2
-                                    });
+                                    }));
                                   }
                                 }
-                                return displayPrice.toFixed(8).replace(/\.?0+$/, '');
+                                return formatNumberWithCommas(formatLimitPriceDisplay(displayPrice));
                               })())}
                               onChange={(e) => {
                                 if (pricesBound) return;
-                                const inputValue = e.target.value.replace(/[^0-9.]/g, '');
+                                const input = e.target;
+                                const cursorPos = input.selectionStart || 0;
+                                const oldValue = input.value;
+
+                                // Remove commas first, then filter to only numbers and decimal
+                                const rawValue = removeCommas(e.target.value).replace(/[^0-9.]/g, '');
+                                // Format with commas for display
+                                const formattedValue = formatNumberWithCommas(rawValue);
                                 setIndividualPriceInputValues(prev => {
                                   const newValues = [...prev];
-                                  newValues[index] = inputValue;
+                                  newValues[index] = formattedValue;
                                   return newValues;
                                 });
-                                if (inputValue === '' || inputValue === '.') {
+
+                                // Calculate new cursor position
+                                const digitsBeforeCursor = removeCommas(oldValue.slice(0, cursorPos)).length;
+                                let newCursorPos = 0;
+                                let digitCount = 0;
+                                for (let i = 0; i < formattedValue.length; i++) {
+                                  if (digitCount >= digitsBeforeCursor) {
+                                    newCursorPos = i;
+                                    break;
+                                  }
+                                  if (formattedValue[i] !== ',') {
+                                    digitCount++;
+                                  }
+                                  newCursorPos = i + 1;
+                                }
+
+                                requestAnimationFrame(() => {
+                                  input.setSelectionRange(newCursorPos, newCursorPos);
+                                });
+
+                                if (rawValue === '' || rawValue === '.') {
                                   setIndividualLimitPrices(prev => {
                                     const newPrices = [...prev];
                                     newPrices[index] = undefined;
@@ -5067,7 +5118,7 @@ export function LimitOrderForm({
                                   });
                                   return;
                                 }
-                                const displayPrice = parseFloat(inputValue);
+                                const displayPrice = parseFloat(rawValue);
                                 if (!isNaN(displayPrice) && displayPrice > 0) {
                                   const basePrice = invertPriceDisplay ? 1 / displayPrice : displayPrice;
                                   setIndividualLimitPrices(prev => {
@@ -5091,7 +5142,7 @@ export function LimitOrderForm({
                                     : tokenLimitPrice.toFixed(8).replace(/\.?0+$/, '');
                                   setIndividualPriceInputValues(prev => {
                                     const newValues = [...prev];
-                                    newValues[index] = displayValue;
+                                    newValues[index] = formatNumberWithCommas(displayValue);
                                     return newValues;
                                   });
                                 } else {
@@ -5202,10 +5253,15 @@ export function LimitOrderForm({
                                     !presetValues.some(p => Math.abs(Math.abs(tokenPricePercentage) - p) < 0.1) &&
                                     (invertPriceDisplay ? tokenPricePercentage < 0 : tokenPricePercentage > 0);
                                   const isWholeNumber = (n: number) => Math.abs(n - Math.round(n)) < 0.01;
-                                  const formatPct = (n: number) => isWholeNumber(n) ? String(Math.round(n)) : n.toFixed(1);
+                                  // Format: show sign, absolute value, no .0 suffix
+                                  const formatPct = (n: number) => {
+                                    const sign = n < 0 ? '-' : '+';
+                                    const absVal = isWholeNumber(n) ? String(Math.round(Math.abs(n))) : Math.abs(n).toFixed(1).replace(/\.0$/, '');
+                                    return sign + absVal;
+                                  };
                                   // Cap display at ±999% to prevent UI overflow
                                   const cappedPct = tokenPricePercentage !== null ? Math.max(-999, Math.min(999, tokenPricePercentage)) : 0;
-                                  const displayValue = isCustomActive ? `${cappedPct > 0 ? '+' : ''}${formatPct(cappedPct)}%` : '';
+                                  const displayValue = isCustomActive ? formatPct(cappedPct) : '';
 
                                   return (
                                     <div className="flex-1 relative">
@@ -5227,32 +5283,36 @@ export function LimitOrderForm({
                                           e.target.style.color = 'white';
                                           // Store original value to restore if nothing typed
                                           e.target.dataset.originalValue = e.target.value;
-                                          e.target.value = '';
+                                          // When focused, show the sign prefix for the direction
+                                          e.target.value = invertPriceDisplay ? '-' : '+';
                                         }}
                                         onInput={(e) => {
                                           const input = e.target as HTMLInputElement;
                                           const prevValue = input.dataset.prevValue || '';
-                                          // Only allow digits, minus sign at start, and one decimal point
-                                          let cleaned = input.value.replace(/[^0-9.-]/g, '');
-                                          // Ensure minus is only at start
-                                          if (cleaned.indexOf('-') > 0) cleaned = cleaned.replace(/-/g, '');
+                                          // Keep the sign at the start, only allow digits and one decimal point after
+                                          let val = input.value;
+                                          const sign = val.startsWith('-') ? '-' : (val.startsWith('+') ? '+' : (invertPriceDisplay ? '-' : '+'));
+                                          let cleaned = val.replace(/[^0-9.]/g, '');
                                           // Only one decimal point
                                           const parts = cleaned.split('.');
                                           if (parts.length > 2) cleaned = parts[0] + '.' + parts.slice(1).join('');
                                           // Block if would exceed 999
                                           const num = parseFloat(cleaned);
-                                          if (!isNaN(num) && Math.abs(num) > 999) {
-                                            cleaned = prevValue; // Revert to previous value
+                                          if (!isNaN(num) && num > 999) {
+                                            cleaned = prevValue.replace(/[^0-9.]/g, ''); // Revert to previous value
                                           }
-                                          input.value = cleaned;
-                                          input.dataset.prevValue = cleaned;
+                                          input.value = sign + cleaned;
+                                          input.dataset.prevValue = input.value;
                                         }}
                                         onBlur={(e) => {
-                                          const value = parseFloat(e.target.value);
+                                          const val = e.target.value;
+                                          const isNegative = val.startsWith('-');
+                                          const numStr = val.replace(/[^0-9.]/g, '');
+                                          const value = parseFloat(numStr);
                                           if (!isNaN(value) && value !== 0) {
-                                            const capped = Math.max(-999, Math.min(999, value));
-                                            handleIndividualPercentageClick(index, Math.abs(capped), capped > 0 ? 'above' : 'below');
-                                          } else if (e.target.value === '' && e.target.dataset.originalValue) {
+                                            const capped = Math.min(999, value);
+                                            handleIndividualPercentageClick(index, capped, isNegative ? 'below' : 'above');
+                                          } else if (e.target.dataset.originalValue) {
                                             // Restore original value if nothing was typed
                                             e.target.value = e.target.dataset.originalValue;
                                           }
@@ -5266,10 +5326,13 @@ export function LimitOrderForm({
                                         onKeyDown={(e) => {
                                           if (e.key === 'Enter') {
                                             const input = e.target as HTMLInputElement;
-                                            const value = parseFloat(input.value);
+                                            const val = input.value;
+                                            const isNegative = val.startsWith('-');
+                                            const numStr = val.replace(/[^0-9.]/g, '');
+                                            const value = parseFloat(numStr);
                                             if (!isNaN(value) && value !== 0) {
-                                              const capped = Math.max(-999, Math.min(999, value));
-                                              handleIndividualPercentageClick(index, Math.abs(capped), capped > 0 ? 'above' : 'below');
+                                              const capped = Math.min(999, value);
+                                              handleIndividualPercentageClick(index, capped, isNegative ? 'below' : 'above');
                                               input.blur();
                                             }
                                           }

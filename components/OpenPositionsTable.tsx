@@ -367,9 +367,10 @@ interface OpenPositionsTableProps {
     aonFilter: boolean;
     dustFilter: string | null; // null = disabled, string = min USD value
   }) => void; // Callback when filters change (for URL sync)
+  mockOrders?: CompleteOrderDetails[]; // Mock orders for testing UI - bypasses real data fetching
 }
 
-export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ isMarketplaceMode = false, isLandingPageMode = false, initialSearchQuery = '', initialStatus, initialDateFilter, initialCustomDateStart, initialCustomDateEnd, initialAonFilter, initialDustFilter, onFiltersChange }, ref) => {
+export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ isMarketplaceMode = false, isLandingPageMode = false, initialSearchQuery = '', initialStatus, initialDateFilter, initialCustomDateStart, initialCustomDateEnd, initialAonFilter, initialDustFilter, onFiltersChange, mockOrders }, ref) => {
   const { fillOrExecuteOrder, cancelOrder, collectProceeds, cancelAllExpiredOrders, updateOrderExpiration, isWalletConnected } = useContractWhitelist();
   const { address, chainId } = useAccount();
   const publicClient = usePublicClient();
@@ -543,14 +544,28 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     contractSymbol,
     totalSupply,
     orderCounter,
-    allOrders,
-    activeOrders,
-    completedOrders,
-    cancelledOrders,
-    isLoading,
+    allOrders: realAllOrders,
+    activeOrders: realActiveOrders,
+    completedOrders: realCompletedOrders,
+    cancelledOrders: realCancelledOrders,
+    isLoading: realIsLoading,
     error,
     refetch
   } = useOpenPositions(address, isMarketplaceMode);
+
+  // Use mock orders if provided, otherwise use real data
+  const isMockMode = !!mockOrders;
+  const allOrders = isMockMode ? mockOrders : realAllOrders;
+  const activeOrders = isMockMode
+    ? mockOrders.filter(o => o.orderDetailsWithID.status === 0)
+    : realActiveOrders;
+  const completedOrders = isMockMode
+    ? mockOrders.filter(o => o.orderDetailsWithID.status === 2)
+    : realCompletedOrders;
+  const cancelledOrders = isMockMode
+    ? mockOrders.filter(o => o.orderDetailsWithID.status === 1)
+    : realCancelledOrders;
+  const isLoading = isMockMode ? false : realIsLoading;
 
   // Get unique sell token addresses for price fetching
   const sellTokenAddresses = allOrders ? [...new Set(allOrders.map(order =>

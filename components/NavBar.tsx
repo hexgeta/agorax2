@@ -4,7 +4,6 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import { useAccount } from 'wagmi';
 import { ConnectButton } from './ConnectButton';
 import { ChainSwitcher } from './ChainSwitcher';
 import { TESTING_MODE } from '@/config/testing';
@@ -15,7 +14,6 @@ const NavBar = () => {
   const pathname = usePathname();
   const [hoveredPath, setHoveredPath] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { isConnected } = useAccount();
 
   // Close mobile menu when route changes
   useEffect(() => {
@@ -89,26 +87,42 @@ const NavBar = () => {
 
             {/* Desktop Navigation */}
             <div className="hidden md:flex items-center gap-4">
-              {isConnected && (
-                <Link
-                  href="/"
-                  className={`transition-colors font-medium text-base px-4 py-2 cursor-pointer group ${pathname === '/'
-                    ? 'text-white'
-                    : 'text-white/80 hover:text-white'
+              <Link
+                href="/swap"
+                className={`transition-colors font-medium text-base px-4 py-2 cursor-pointer group ${pathname === '/swap'
+                  ? 'text-white'
+                  : 'text-white/80 hover:text-white'
+                  }`}
+                onMouseEnter={() => setHoveredPath('/swap')}
+                onMouseLeave={() => setHoveredPath(null)}
+              >
+                <span className="relative inline-block">
+                  Swap
+                  <span className={`absolute bottom-[-4px] left-0 w-full h-0.5 bg-white transition-transform duration-300 ease-out ${pathname === '/swap'
+                    ? (hoveredPath && hoveredPath !== '/swap' ? 'scale-x-0 origin-left' : 'scale-x-100 origin-left')
+                    : 'scale-x-0 group-hover:scale-x-100 origin-left'
                     }`}
-                  onMouseEnter={() => setHoveredPath('/')}
-                  onMouseLeave={() => setHoveredPath(null)}
-                >
-                  <span className="relative inline-block">
-                    My Orders
-                    <span className={`absolute bottom-[-4px] left-0 w-full h-0.5 bg-white transition-transform duration-300 ease-out ${pathname === '/'
-                      ? (hoveredPath && hoveredPath !== '/' ? 'scale-x-0 origin-left' : 'scale-x-100 origin-left')
-                      : 'scale-x-0 group-hover:scale-x-100 origin-left'
-                      }`}
-                    />
-                  </span>
-                </Link>
-              )}
+                  />
+                </span>
+              </Link>
+              <Link
+                href="/my-orders"
+                className={`transition-colors font-medium text-base px-4 py-2 cursor-pointer group ${pathname === '/my-orders'
+                  ? 'text-white'
+                  : 'text-white/80 hover:text-white'
+                  }`}
+                onMouseEnter={() => setHoveredPath('/my-orders')}
+                onMouseLeave={() => setHoveredPath(null)}
+              >
+                <span className="relative inline-block">
+                  My Orders
+                  <span className={`absolute bottom-[-4px] left-0 w-full h-0.5 bg-white transition-transform duration-300 ease-out ${pathname === '/my-orders'
+                    ? (hoveredPath && hoveredPath !== '/my-orders' ? 'scale-x-0 origin-left' : 'scale-x-100 origin-left')
+                    : 'scale-x-0 group-hover:scale-x-100 origin-left'
+                    }`}
+                  />
+                </span>
+              </Link>
               <Link
                 href="/marketplace"
                 className={`transition-colors font-medium text-base px-4 py-2 cursor-pointer group ${pathname === '/marketplace'
@@ -222,18 +236,26 @@ const NavBar = () => {
         >
           {/* Navigation Links */}
           <nav className="flex flex-col items-center gap-2 w-full px-8">
-            {isConnected && (
-              <Link
-                href="/"
-                onClick={() => setMobileMenuOpen(false)}
-                className={`text-xl font-medium py-3 px-6 rounded-lg transition-colors w-full text-center ${pathname === '/'
-                  ? 'text-white bg-white/10'
-                  : 'text-white/80 hover:text-white hover:bg-white/5'
-                  }`}
-              >
-                My Orders
-              </Link>
-            )}
+            <Link
+              href="/swap"
+              onClick={() => setMobileMenuOpen(false)}
+              className={`text-xl font-medium py-3 px-6 rounded-lg transition-colors w-full text-center ${pathname === '/swap'
+                ? 'text-white bg-white/10'
+                : 'text-white/80 hover:text-white hover:bg-white/5'
+                }`}
+            >
+              Swap
+            </Link>
+            <Link
+              href="/my-orders"
+              onClick={() => setMobileMenuOpen(false)}
+              className={`text-xl font-medium py-3 px-6 rounded-lg transition-colors w-full text-center ${pathname === '/my-orders'
+                ? 'text-white bg-white/10'
+                : 'text-white/80 hover:text-white hover:bg-white/5'
+                }`}
+            >
+              My Orders
+            </Link>
             <Link
               href="/marketplace"
               onClick={() => setMobileMenuOpen(false)}
