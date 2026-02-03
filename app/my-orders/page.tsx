@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAccount } from 'wagmi';
+import { useSearchParams, usePathname } from 'next/navigation';
 import { DisclaimerDialog } from '@/components/DisclaimerDialog';
 import { LogoPreloader } from '@/components/LogoPreloader';
 import { PixelSpinner } from '@/components/ui/PixelSpinner';
@@ -12,9 +13,89 @@ import { OpenPositionsTable } from '@/components/OpenPositionsTable';
 import Link from 'next/link';
 
 export default function MyOrdersPage() {
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const orderIdFromUrl = searchParams.get('orderId') || '';
+
+  // Parse filter query parameters
+  const claimableParam = searchParams.get('claimable');
+  const fillMinParam = searchParams.get('fillMin');
+  const fillMaxParam = searchParams.get('fillMax');
+  const posMinParam = searchParams.get('posMin');
+  const posMaxParam = searchParams.get('posMax');
+  const statusParam = searchParams.get('status') as 'active' | 'expired' | 'completed' | 'cancelled' | null;
+
+  // Parse claimable filter
+  const initialClaimable = claimableParam === 'true';
+
+  // Parse fill range (default 0-100)
+  const initialFillRange: [number, number] | undefined =
+    (fillMinParam !== null || fillMaxParam !== null)
+      ? [
+          fillMinParam ? Math.max(0, Math.min(100, parseInt(fillMinParam, 10) || 0)) : 0,
+          fillMaxParam ? Math.max(0, Math.min(100, parseInt(fillMaxParam, 10) || 100)) : 100
+        ]
+      : undefined;
+
+  // Parse position range (default -100 to 100)
+  const initialPositionRange: [number, number] | undefined =
+    (posMinParam !== null || posMaxParam !== null)
+      ? [
+          posMinParam ? Math.max(-100, Math.min(100, parseInt(posMinParam, 10) || -100)) : -100,
+          posMaxParam ? Math.max(-100, Math.min(100, parseInt(posMaxParam, 10) || 100)) : 100
+        ]
+      : undefined;
+
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const { isConnected, isConnecting } = useAccount();
   const [isInitializing, setIsInitializing] = useState(true);
+
+  // Update URL when filters change
+  const handleFiltersChange = useCallback((filters: {
+    searchQuery: string;
+    status: 'active' | 'expired' | 'completed' | 'cancelled' | 'order-history';
+    dateFilter: '1h' | '12h' | '24h' | '7d' | '30d' | '90d' | '180d' | 'custom' | null;
+    customDateStart: number | null;
+    customDateEnd: number | null;
+    aonFilter: boolean;
+    dustFilter: string | null;
+    claimableFilter: boolean;
+    fillRange: [number, number];
+    positionRange: [number, number];
+  }) => {
+    const params = new URLSearchParams();
+
+    // Add order ID search query
+    if (filters.searchQuery && /^\d+$/.test(filters.searchQuery.trim())) {
+      params.set('orderId', filters.searchQuery.trim());
+    }
+
+    // Add status if not default (active)
+    if (filters.status && filters.status !== 'active' && filters.status !== 'order-history') {
+      params.set('status', filters.status);
+    }
+
+    // Add claimable filter
+    if (filters.claimableFilter) {
+      params.set('claimable', 'true');
+    }
+
+    // Add fill range if not default (0-100)
+    if (filters.fillRange[0] > 0 || filters.fillRange[1] < 100) {
+      if (filters.fillRange[0] > 0) params.set('fillMin', filters.fillRange[0].toString());
+      if (filters.fillRange[1] < 100) params.set('fillMax', filters.fillRange[1].toString());
+    }
+
+    // Add position range if not default (-100 to 100)
+    if (filters.positionRange[0] > -100 || filters.positionRange[1] < 100) {
+      if (filters.positionRange[0] > -100) params.set('posMin', filters.positionRange[0].toString());
+      if (filters.positionRange[1] < 100) params.set('posMax', filters.positionRange[1].toString());
+    }
+
+    // Update URL without navigation (just replace state)
+    const newUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname;
+    window.history.replaceState(null, '', newUrl);
+  }, [pathname]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -90,20 +171,28 @@ export default function MyOrdersPage() {
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.4 }}
               >
-                <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-2">
                   {/* Header */}
-                  <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center justify-between">
                     <h1 className="text-2xl md:text-3xl font-bold text-white">My Orders</h1>
                     <Link
                       href="/swap"
-                      className="px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg text-white font-medium transition-colors"
+                      className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-full text-white font-medium transition-colors"
                     >
+                      <span className="text-lg">+</span>
                       Create New Order
                     </Link>
                   </div>
 
                   {/* Orders Table */}
-                  <OpenPositionsTable />
+                  <OpenPositionsTable
+                    initialSearchQuery={orderIdFromUrl}
+                    initialStatus={statusParam || undefined}
+                    initialClaimableFilter={initialClaimable}
+                    initialFillRange={initialFillRange}
+                    initialPositionRange={initialPositionRange}
+                    onFiltersChange={handleFiltersChange}
+                  />
                 </div>
               </motion.div>
             )}

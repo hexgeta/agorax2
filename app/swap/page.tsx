@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useAccount } from 'wagmi';
 import { DisclaimerDialog } from '@/components/DisclaimerDialog';
 import { LogoPreloader } from '@/components/LogoPreloader';
@@ -127,11 +127,11 @@ export default function MyOrdersPage() {
   const [formSellTokenUsdPrice, setFormSellTokenUsdPrice] = useState<number | undefined>();
   const [formBuyTokenUsdPrices, setFormBuyTokenUsdPrices] = useState<Record<string, number> | undefined>();
 
-  // Handle prices from form
-  const handlePricesChange = (sellTokenUsdPrice: number, buyTokenUsdPrices: Record<string, number>) => {
+  // Handle prices from form - memoized to prevent infinite loops
+  const handlePricesChange = useCallback((sellTokenUsdPrice: number, buyTokenUsdPrices: Record<string, number>) => {
     setFormSellTokenUsdPrice(sellTokenUsdPrice);
     setFormBuyTokenUsdPrices(buyTokenUsdPrices);
-  };
+  }, []);
 
   // Persist showUsdPrices to localStorage
   useEffect(() => {
@@ -294,7 +294,7 @@ export default function MyOrdersPage() {
 
                       {/* Orders Table - order 3 on mobile */}
                       <div className="order-3 w-full">
-                        <OpenPositionsTable ref={openPositionsTableRef} />
+                        <OpenPositionsTable ref={openPositionsTableRef} showViewAllLink compactMode />
                       </div>
 
                     </div>
@@ -351,7 +351,7 @@ export default function MyOrdersPage() {
                         </div>
 
                         {/* Orders Table */}
-                        <OpenPositionsTable ref={openPositionsTableRef} />
+                        <OpenPositionsTable ref={openPositionsTableRef} showViewAllLink compactMode />
                       </div>
 
                       {/* Right Column - Order Form, sticky on desktop */}

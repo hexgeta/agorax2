@@ -3,7 +3,9 @@
 import { useState, useEffect, useCallback, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CircleDollarSign, ChevronDown, Trash2, Lock, Search, ArrowRight, MoveRight, ChevronRight, Play, CalendarDays } from 'lucide-react';
+import { CircleDollarSign, ChevronDown, Trash2, Lock, Search, ArrowRight, MoveRight, ChevronRight, Play, CalendarDays, ExternalLink } from 'lucide-react';
+import { Slider } from '@/components/ui/slider';
+import Link from 'next/link';
 import { PixelSpinner } from './ui/PixelSpinner';
 import PaywallModal from './PaywallModal';
 import { DisclaimerDialog } from './DisclaimerDialog';
@@ -358,6 +360,9 @@ interface OpenPositionsTableProps {
   initialCustomDateEnd?: number; // Unix timestamp for custom date range end
   initialAonFilter?: boolean; // Pre-set All or Nothing filter
   initialDustFilter?: string; // Pre-set dust filter minimum value (e.g., "10" for $10 minimum)
+  initialClaimableFilter?: boolean; // Pre-set claimable filter
+  initialFillRange?: [number, number]; // Pre-set fill percentage range [min, max]
+  initialPositionRange?: [number, number]; // Pre-set limit position range [min, max]
   onFiltersChange?: (filters: {
     searchQuery: string;
     status: 'active' | 'expired' | 'completed' | 'cancelled' | 'order-history';
@@ -366,11 +371,16 @@ interface OpenPositionsTableProps {
     customDateEnd: number | null; // Unix timestamp
     aonFilter: boolean;
     dustFilter: string | null; // null = disabled, string = min USD value
+    claimableFilter: boolean;
+    fillRange: [number, number];
+    positionRange: [number, number];
   }) => void; // Callback when filters change (for URL sync)
   mockOrders?: CompleteOrderDetails[]; // Mock orders for testing UI - bypasses real data fetching
+  showViewAllLink?: boolean; // Show a "View All" link to /my-orders page
+  compactMode?: boolean; // Compact view - replaces "Limit order position" column with arrow link to my-orders
 }
 
-export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ isMarketplaceMode = false, isLandingPageMode = false, initialSearchQuery = '', initialStatus, initialDateFilter, initialCustomDateStart, initialCustomDateEnd, initialAonFilter, initialDustFilter, onFiltersChange, mockOrders }, ref) => {
+export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ isMarketplaceMode = false, isLandingPageMode = false, initialSearchQuery = '', initialStatus, initialDateFilter, initialCustomDateStart, initialCustomDateEnd, initialAonFilter, initialDustFilter, initialClaimableFilter, initialFillRange, initialPositionRange, onFiltersChange, mockOrders, showViewAllLink = false, compactMode = false }, ref) => {
   const { fillOrExecuteOrder, cancelOrder, collectProceeds, cancelAllExpiredOrders, updateOrderExpiration, isWalletConnected } = useContractWhitelist();
   const { address, chainId } = useAccount();
   const publicClient = usePublicClient();
@@ -435,6 +445,12 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
   // Dust filter - hide low value orders
   const [dustFilterEnabled, setDustFilterEnabled] = useState<boolean>(!!initialDustFilter);
   const [dustFilterMinValue, setDustFilterMinValue] = useState<string>(initialDustFilter || '10');
+  // Fill percentage range filter (0-100%)
+  const [fillRange, setFillRange] = useState<[number, number]>(initialFillRange || [0, 100]);
+  // Limit order position range filter (% from market price, -100% to +100%)
+  const [positionRange, setPositionRange] = useState<[number, number]>(initialPositionRange || [-100, 100]);
+  // Claimable proceeds filter - only show orders with unclaimed proceeds
+  const [claimableFilterEnabled, setClaimableFilterEnabled] = useState<boolean>(initialClaimableFilter || false);
   // Advanced options shelf state (persisted to localStorage)
   const [showAdvancedOptions, setShowAdvancedOptions] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
@@ -623,9 +639,9 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     localStorage.setItem('openPositionsAdvancedOptions', showAdvancedOptions.toString());
   }, [showAdvancedOptions]);
 
-  // Notify parent when filters change (for URL sync in marketplace mode)
+  // Notify parent when filters change (for URL sync)
   useEffect(() => {
-    if (onFiltersChange && isMarketplaceMode) {
+    if (onFiltersChange) {
       onFiltersChange({
         searchQuery,
         status: statusFilter,
@@ -634,13 +650,17 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
         customDateEnd: customDateEnd ? Math.floor(customDateEnd.getTime() / 1000) : null,
         aonFilter: aonFilterEnabled,
         dustFilter: dustFilterEnabled ? dustFilterMinValue : null,
+        claimableFilter: claimableFilterEnabled,
+        fillRange,
+        positionRange,
       });
     }
-  }, [searchQuery, statusFilter, dateFilterPreset, customDateStart, customDateEnd, aonFilterEnabled, dustFilterEnabled, dustFilterMinValue, onFiltersChange, isMarketplaceMode]);
+  }, [searchQuery, statusFilter, dateFilterPreset, customDateStart, customDateEnd, aonFilterEnabled, dustFilterEnabled, dustFilterMinValue, claimableFilterEnabled, fillRange, positionRange, onFiltersChange]);
 
   // Auto-switch to correct status tab when searching by exact order ID (pure number)
+  // Works for both marketplace mode and when navigating with initialSearchQuery from URL
   useEffect(() => {
-    if (!isMarketplaceMode || !allOrders || allOrders.length === 0) return;
+    if (!allOrders || allOrders.length === 0) return;
 
     const query = searchQuery.trim();
     // Only auto-switch for pure number queries (order IDs)
@@ -670,7 +690,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     if (statusFilter !== targetStatus) {
       setStatusFilter(targetStatus);
     }
-  }, [searchQuery, allOrders, isMarketplaceMode, statusFilter]);
+  }, [searchQuery, allOrders, statusFilter]);
 
   // Effect to handle initial load completion
   useEffect(() => {
@@ -2108,6 +2128,20 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     }
   };
 
+  // Count active filters for the badge
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (searchQuery.trim()) count++;
+    if (aonFilterEnabled) count++;
+    if (dustFilterEnabled) count++;
+    if (claimableFilterEnabled) count++;
+    if (hideMyOrders && isMarketplaceMode) count++;
+    if (fillRange[0] > 0 || fillRange[1] < 100) count++;
+    if (positionRange[0] > -100 || positionRange[1] < 100) count++;
+    if (dateFilterPreset) count++;
+    return count;
+  }, [searchQuery, aonFilterEnabled, dustFilterEnabled, claimableFilterEnabled, hideMyOrders, isMarketplaceMode, fillRange, positionRange, dateFilterPreset]);
+
   // Memoize the display orders with 3-level filtering
   const displayOrders = useMemo(() => {
     if (!allOrders) return [];
@@ -2229,6 +2263,75 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
           return sellUsdValue >= minValue;
         });
       }
+    }
+
+    // Level 8: Filter by fill percentage range (only if not at default 0-100)
+    if (fillRange[0] > 0 || fillRange[1] < 100) {
+      filteredOrders = filteredOrders.filter(order => {
+        const originalAmount = order.orderDetailsWithID.orderDetails.sellAmount;
+        const remainingAmount = order.orderDetailsWithID.remainingSellAmount;
+        // Fill percentage = (original - remaining) / original * 100
+        const filledPercentage = originalAmount > 0n
+          ? Number((originalAmount - remainingAmount) * 100n / originalAmount)
+          : 0;
+        return filledPercentage >= fillRange[0] && filledPercentage <= fillRange[1];
+      });
+    }
+
+    // Level 9: Filter by limit order position (% from market price, only if not at default -100 to +100)
+    if (positionRange[0] > -100 || positionRange[1] < 100) {
+      filteredOrders = filteredOrders.filter(order => {
+        const sellTokenInfo = getTokenInfo(order.orderDetailsWithID.orderDetails.sellToken);
+        const sellTokenPrice = getTokenPrice(sellTokenInfo.address, tokenPrices);
+        if (!sellTokenPrice || sellTokenPrice === 0) return true; // Can't calculate, include order
+
+        const originalSellAmount = order.orderDetailsWithID.orderDetails.sellAmount;
+        const remainingSellAmount = order.orderDetailsWithID.remainingSellAmount;
+        const remainingPercentage = originalSellAmount > 0n
+          ? Number(remainingSellAmount * 10000n / originalSellAmount) / 10000
+          : 0;
+        const isCompletedOrCancelled = order.orderDetailsWithID.status === 1 || order.orderDetailsWithID.status === 2;
+
+        const sellAmountToUse = isCompletedOrCancelled
+          ? originalSellAmount
+          : remainingSellAmount;
+        const sellTokenAmount = parseFloat(formatTokenAmount(sellAmountToUse, sellTokenInfo.decimals));
+        const sellUsdValue = sellTokenAmount * sellTokenPrice;
+
+        const buyTokensIndex = order.orderDetailsWithID.orderDetails.buyTokensIndex;
+        const buyAmounts = order.orderDetailsWithID.orderDetails.buyAmounts;
+
+        if (!buyTokensIndex || !buyAmounts || buyTokensIndex.length === 0) return true;
+
+        // Calculate position for first buy token
+        const firstBuyTokenIndex = Number(buyTokensIndex[0]);
+        const firstBuyTokenInfo = getTokenInfoByIndex(firstBuyTokenIndex);
+        const firstBuyAmount = buyAmounts[0];
+
+        const buyAmountToUse = isCompletedOrCancelled
+          ? firstBuyAmount
+          : (firstBuyAmount * BigInt(Math.floor(remainingPercentage * 1e18))) / BigInt(1e18);
+
+        const buyTokenAmount = parseFloat(formatTokenAmount(buyAmountToUse, firstBuyTokenInfo.decimals));
+        const buyTokenMarketPrice = getTokenPrice(firstBuyTokenInfo.address, tokenPrices);
+
+        if (sellUsdValue <= 0 || buyTokenAmount <= 0 || buyTokenMarketPrice <= 0) return true;
+
+        const limitBuyTokenPrice = sellUsdValue / buyTokenAmount;
+        const positionPercentage = ((limitBuyTokenPrice - buyTokenMarketPrice) / buyTokenMarketPrice) * 100;
+
+        return positionPercentage >= positionRange[0] && positionPercentage <= positionRange[1];
+      });
+    }
+
+    // Level 10: Filter for orders with claimable proceeds
+    if (claimableFilterEnabled) {
+      filteredOrders = filteredOrders.filter(order => {
+        const sellAmount = order.orderDetailsWithID.orderDetails.sellAmount;
+        const filled = sellAmount - order.orderDetailsWithID.remainingSellAmount;
+        const hasProceeds = filled > order.orderDetailsWithID.redeemedSellAmount;
+        return hasProceeds;
+      });
     }
 
     // Apply sorting
@@ -2385,7 +2488,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     });
 
     return sortedOrders;
-  }, [allOrders, tokenFilter, ownershipFilter, statusFilter, searchQuery, aonFilterEnabled, hideMyOrders, dustFilterEnabled, dustFilterMinValue, isMarketplaceMode, getActiveDateRange, sortField, sortDirection, tokenPrices, tokenStats, address, purchasedOrderIds, purchaseTransactions]);
+  }, [allOrders, tokenFilter, ownershipFilter, statusFilter, searchQuery, aonFilterEnabled, hideMyOrders, dustFilterEnabled, dustFilterMinValue, fillRange, positionRange, claimableFilterEnabled, isMarketplaceMode, getActiveDateRange, sortField, sortDirection, tokenPrices, tokenStats, address, purchasedOrderIds, purchaseTransactions]);
 
   // Helper functions
   const formatTimestamp = (timestamp: number) => {
@@ -2719,6 +2822,11 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
   const landingPageOrders = isLandingPageMode ? displayOrders.slice(0, 10) : displayOrders;
 
   return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
+    >
     <LiquidGlassCard
       className={`w-full max-w-[1200px] mb-6 mt-2 p-0 ${isLandingPageMode ? 'overflow-hidden' : 'mx-auto'}`}
       shadowIntensity="sm"
@@ -2801,6 +2909,11 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
           className="flex items-center gap-1.5 text-white/50 hover:text-white/80 transition-colors text-sm whitespace-nowrap py-2"
         >
           <span>Filters</span>
+          {activeFilterCount > 0 && !showAdvancedOptions && (
+            <span className="flex items-center justify-center w-5 h-5 text-xs font-medium bg-white/20 text-white rounded-full">
+              {activeFilterCount}
+            </span>
+          )}
           <svg
             className={`w-3 h-3 transition-transform duration-200 ${showAdvancedOptions ? 'rotate-180' : ''}`}
             fill="none"
@@ -2810,6 +2923,17 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
           </svg>
         </button>
+
+        {/* View All Orders Link - shown on swap page to link to full my-orders page */}
+        {showViewAllLink && (
+          <Link
+            href="/my-orders"
+            className="flex items-center gap-1.5 text-white/50 hover:text-white transition-colors text-sm whitespace-nowrap py-2 ml-auto"
+          >
+            <span>View All</span>
+            <ChevronRight className="w-4 h-4" />
+          </Link>
+        )}
       </div>
       )}
 
@@ -2851,8 +2975,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                 );
               })()}
 
-              {/* Search Bar */}
-              <div className="w-full max-w-[480px]">
+              {/* Search Bar - Full Width */}
+              <div className="w-full">
                 <div className="relative w-full">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500" />
                   <input
@@ -2865,160 +2989,233 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                 </div>
               </div>
 
-              {/* All or Nothing Filter Toggle */}
-              <div className="flex items-center justify-between max-w-[480px]">
-                <div className="flex flex-col">
-                  <span className="text-white/70 text-sm">All or Nothing</span>
-                  <span className="text-white/40 text-xs">Show only orders that must be filled completely</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setAonFilterEnabled(!aonFilterEnabled)}
-                  className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${
-                    aonFilterEnabled ? 'bg-green-500' : 'bg-white/20'
-                  }`}
-                >
-                  <span
-                    className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform duration-200 ${
-                      aonFilterEnabled ? 'translate-x-5' : 'translate-x-0'
-                    }`}
-                  />
-                </button>
-              </div>
-
-              {/* Dust Filter Toggle */}
-              <div className="flex items-center justify-between max-w-[480px]">
-                <div className="flex flex-col">
-                  <span className="text-white/70 text-sm">Hide dust orders</span>
-                  <span className="text-white/40 text-xs">Filter out low value orders</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  {dustFilterEnabled && (
-                    <div className="flex items-center gap-1">
-                      <span className="text-white/40 text-xs">&lt; $</span>
-                      <input
-                        type="text"
-                        value={dustFilterMinValue}
-                        onChange={(e) => {
-                          const val = e.target.value.replace(/[^0-9.]/g, '');
-                          setDustFilterMinValue(val);
-                        }}
-                        className="w-16 px-2 py-1 bg-black/40 border border-white/20 rounded text-white text-xs text-right focus:outline-none focus:border-white/40"
-                        placeholder="0"
+              {/* Two Column Layout: Toggles Left, Sliders Right */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full border border-white/10 rounded-lg p-4">
+                {/* Left Column - Toggle Filters */}
+                <div className="flex flex-col gap-4">
+                  {/* All or Nothing Filter Toggle */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex flex-col">
+                      <span className="text-white/70 text-sm">All or Nothing</span>
+                      <span className="text-white/40 text-xs">Show only orders that must be filled completely</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setAonFilterEnabled(!aonFilterEnabled)}
+                      className={`relative w-11 h-6 rounded-full transition-colors duration-200 flex-shrink-0 ${
+                        aonFilterEnabled ? 'bg-green-500' : 'bg-white/20'
+                      }`}
+                    >
+                      <span
+                        className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform duration-200 ${
+                          aonFilterEnabled ? 'translate-x-5' : 'translate-x-0'
+                        }`}
                       />
+                    </button>
+                  </div>
+
+                  {/* Dust Filter Toggle */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex flex-col">
+                      <span className="text-white/70 text-sm">Hide dust orders</span>
+                      <span className="text-white/40 text-xs">Filter out low value orders</span>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {dustFilterEnabled && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-white/40 text-xs">&lt; $</span>
+                          <input
+                            type="text"
+                            value={dustFilterMinValue}
+                            onChange={(e) => {
+                              const val = e.target.value.replace(/[^0-9.]/g, '');
+                              setDustFilterMinValue(val);
+                            }}
+                            className="w-16 px-2 py-1 bg-black/40 border border-white/20 rounded text-white text-xs text-right focus:outline-none focus:border-white/40"
+                            placeholder="0"
+                          />
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setDustFilterEnabled(!dustFilterEnabled)}
+                        className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${
+                          dustFilterEnabled ? 'bg-green-500' : 'bg-white/20'
+                        }`}
+                      >
+                        <span
+                          className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform duration-200 ${
+                            dustFilterEnabled ? 'translate-x-5' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Claimable Proceeds Filter - only show for non-marketplace mode with mine filter */}
+                  {!isMarketplaceMode && ownershipFilter === 'mine' && (
+                    <div className="flex items-center justify-between">
+                      <div className="flex flex-col">
+                        <span className="text-white/70 text-sm">Claimable</span>
+                        <span className="text-white/40 text-xs">Only show orders with unclaimed proceeds</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setClaimableFilterEnabled(!claimableFilterEnabled)}
+                        className={`relative w-11 h-6 rounded-full transition-colors duration-200 flex-shrink-0 ${
+                          claimableFilterEnabled ? 'bg-green-500' : 'bg-white/20'
+                        }`}
+                      >
+                        <span
+                          className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform duration-200 ${
+                            claimableFilterEnabled ? 'translate-x-5' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
                     </div>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => setDustFilterEnabled(!dustFilterEnabled)}
-                    className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${
-                      dustFilterEnabled ? 'bg-green-500' : 'bg-white/20'
-                    }`}
-                  >
-                    <span
-                      className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform duration-200 ${
-                        dustFilterEnabled ? 'translate-x-5' : 'translate-x-0'
-                      }`}
-                    />
-                  </button>
-                </div>
-              </div>
 
-              {/* Date Filter - only show for active orders */}
-              {statusFilter === 'active' && (
-              <div className="space-y-2">
-                <span className="text-white/70 text-sm">Expires within</span>
-                <div className="flex flex-wrap items-center gap-2">
-                  {(['1h', '12h', '24h', '7d', '30d', '90d', '180d'] as const).map((preset) => (
-                    <button
-                      key={preset}
-                      onClick={() => {
-                        setDateFilterPreset(dateFilterPreset === preset ? null : preset);
-                        setShowDatePicker(false);
-                      }}
-                      className={`px-4 py-2 rounded-full border text-sm font-medium transition-all duration-200 ${
-                        dateFilterPreset === preset
-                          ? 'bg-white text-black border-white'
-                          : 'bg-black/40 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'
-                      }`}
-                    >
-                      {preset}
-                    </button>
-                  ))}
-                  {/* Custom Date Picker Button */}
-                  <div className="relative" ref={datePickerRef}>
-                    <button
-                      onClick={() => {
-                        setShowDatePicker(!showDatePicker);
-                      }}
-                      className={`px-3 py-2 rounded-full border text-sm font-medium transition-all duration-200 flex items-center gap-1 ${
-                        dateFilterPreset === 'custom' && customDateStart && customDateEnd
-                          ? 'bg-white text-black border-white'
-                          : 'bg-black/40 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'
-                      }`}
-                    >
-                      <CalendarDays className="w-4 h-4" />
-                    </button>
-                    {/* Date Picker Dropdown - uses fixed positioning for proper containment */}
-                    {showDatePicker && (
-                      <div className="fixed inset-0 z-50 flex items-start justify-center pt-32 px-4">
-                        <div
-                          className="fixed inset-0 bg-black/50"
-                          onClick={() => setShowDatePicker(false)}
-                        />
-                        <div className="relative bg-black border border-white/20 rounded-lg p-4 shadow-xl max-w-[95vw] max-h-[60vh] overflow-y-auto">
-                          <div className="flex flex-col gap-3">
-                            <span className="text-white/60 text-xs">Select date range (UTC)</span>
-                            <Calendar
-                              mode="range"
-                              defaultMonth={customDateStart || new Date()}
-                              selected={{ from: customDateStart, to: customDateEnd }}
-                              onSelect={(range) => {
-                                setCustomDateStart(range?.from);
-                                setCustomDateEnd(range?.to);
-                              }}
-                              numberOfMonths={2}
-                              className="[&_.rdp-months]:flex-col [&_.rdp-months]:md:flex-row"
-                            />
-                            <button
-                              onClick={() => {
-                                // Only apply custom filter if both dates are selected
-                                if (customDateStart && customDateEnd) {
-                                  setDateFilterPreset('custom');
-                                }
-                                setShowDatePicker(false);
-                              }}
-                              className="w-full py-2 bg-white text-black rounded-lg text-sm font-medium hover:bg-white/90 transition-colors"
-                            >
-                              Apply
-                            </button>
-                          </div>
+                  {/* Date Filter - only show for active orders in my-orders mode */}
+                  {!isMarketplaceMode && statusFilter === 'active' && (
+                    <div className="space-y-2 pt-2 border-t border-white/10">
+                      <span className="text-white/70 text-sm">Expires within</span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {(['1h', '12h', '24h', '7d', '30d', '90d', '180d'] as const).map((preset) => (
+                          <button
+                            key={preset}
+                            onClick={() => {
+                              setDateFilterPreset(dateFilterPreset === preset ? null : preset);
+                              setShowDatePicker(false);
+                            }}
+                            className={`px-3 py-1.5 rounded-full border text-xs font-medium transition-all duration-200 ${
+                              dateFilterPreset === preset
+                                ? 'bg-white text-black border-white'
+                                : 'bg-black/40 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'
+                            }`}
+                          >
+                            {preset}
+                          </button>
+                        ))}
+                        {/* Custom Date Picker Button */}
+                        <div className="relative" ref={datePickerRef}>
+                          <button
+                            onClick={() => {
+                              setShowDatePicker(!showDatePicker);
+                            }}
+                            className={`px-2 py-1.5 rounded-full border text-xs font-medium transition-all duration-200 flex items-center gap-1 ${
+                              dateFilterPreset === 'custom' && customDateStart && customDateEnd
+                                ? 'bg-white text-black border-white'
+                                : 'bg-black/40 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'
+                            }`}
+                          >
+                            <CalendarDays className="w-3 h-3" />
+                          </button>
+                          {/* Date Picker Dropdown - uses fixed positioning for proper containment */}
+                          {showDatePicker && (
+                            <div className="fixed inset-0 z-50 flex items-start justify-center pt-32 px-4">
+                              <div
+                                className="fixed inset-0 bg-black/50"
+                                onClick={() => setShowDatePicker(false)}
+                              />
+                              <div className="relative bg-black border border-white/20 rounded-lg p-4 shadow-xl max-w-[95vw] max-h-[60vh] overflow-y-auto">
+                                <div className="flex flex-col gap-3">
+                                  <span className="text-white/60 text-xs">Select date range (UTC)</span>
+                                  <Calendar
+                                    mode="range"
+                                    defaultMonth={customDateStart || new Date()}
+                                    selected={{ from: customDateStart, to: customDateEnd }}
+                                    onSelect={(range) => {
+                                      setCustomDateStart(range?.from);
+                                      setCustomDateEnd(range?.to);
+                                    }}
+                                    numberOfMonths={2}
+                                    className="[&_.rdp-months]:flex-col [&_.rdp-months]:md:flex-row"
+                                  />
+                                  <button
+                                    onClick={() => {
+                                      if (customDateStart && customDateEnd) {
+                                        setDateFilterPreset('custom');
+                                      }
+                                      setShowDatePicker(false);
+                                    }}
+                                    className="w-full py-2 bg-white text-black rounded-lg text-sm font-medium hover:bg-white/90 transition-colors"
+                                  >
+                                    Apply
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
+                        {/* Clear Filter Button */}
+                        {dateFilterPreset && (dateFilterPreset !== 'custom' || (customDateStart && customDateEnd)) && (
+                          <button
+                            onClick={() => {
+                              setDateFilterPreset(null);
+                              setCustomDateStart(undefined);
+                              setCustomDateEnd(undefined);
+                              setShowDatePicker(false);
+                            }}
+                            className="px-2 py-1 text-red-400 hover:text-red-300 text-xs transition-colors"
+                          >
+                            Clear
+                          </button>
+                        )}
                       </div>
-                    )}
-                  </div>
-                  {/* Clear Filter Button - only show when a filter is actually applied */}
-                  {dateFilterPreset && (dateFilterPreset !== 'custom' || (customDateStart && customDateEnd)) && (
-                    <button
-                      onClick={() => {
-                        setDateFilterPreset(null);
-                        setCustomDateStart(undefined);
-                        setCustomDateEnd(undefined);
-                        setShowDatePicker(false);
-                      }}
-                      className="px-3 py-2 text-red-400 hover:text-red-300 text-sm transition-colors"
-                    >
-                      Clear
-                    </button>
+                      {dateFilterPreset === 'custom' && customDateStart && customDateEnd && (
+                        <div className="text-white/50 text-xs">
+                          {customDateStart.toLocaleDateString()} - {customDateEnd.toLocaleDateString()}
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
-                {dateFilterPreset === 'custom' && customDateStart && customDateEnd && (
-                  <div className="text-white/50 text-xs mt-1">
-                    {customDateStart.toLocaleDateString()} - {customDateEnd.toLocaleDateString()}
+
+                {/* Right Column - Slider Filters */}
+                <div className="flex flex-col gap-4">
+                  {/* Fill Percentage Range Filter */}
+                  <div className="space-y-2">
+                    <div className="flex flex-col">
+                      <span className="text-white/70 text-sm">Order fill status %</span>
+                    </div>
+                    <div className="pt-1 pb-1">
+                      <div className="flex justify-between text-xs text-white/50 mb-2">
+                        <span>{fillRange[0]}%</span>
+                        <span>{fillRange[1]}%</span>
+                      </div>
+                      <Slider
+                        value={fillRange}
+                        onValueChange={(value) => setFillRange(value as [number, number])}
+                        min={0}
+                        max={100}
+                        step={1}
+                        className="w-full"
+                      />
+                    </div>
                   </div>
-                )}
+
+                  {/* Limit Order Position Range Filter */}
+                  <div className="space-y-2">
+                    <div className="flex flex-col">
+                      <span className="text-white/70 text-sm">Limit order position %</span>
+                    </div>
+                    <div className="pt-1 pb-1">
+                      <div className="flex justify-between text-xs text-white/50 mb-2">
+                        <span>{positionRange[0] > 0 ? '+' : ''}{positionRange[0]}%</span>
+                        <span>{positionRange[1] > 0 ? '+' : ''}{positionRange[1]}%</span>
+                      </div>
+                      <Slider
+                        value={positionRange}
+                        onValueChange={(value) => setPositionRange(value as [number, number])}
+                        min={-100}
+                        max={100}
+                        step={1}
+                        className="w-full"
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
-              )}
             </div>
           )}
         </div>
@@ -3030,8 +3227,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
         {/* Filters Content */}
         {showAdvancedOptions && (
           <div className="space-y-4 p-0 bg-black/20">
-            {/* Search Bar */}
-            <div className="relative w-full max-w-[480px]">
+            {/* Search Bar - Full Width */}
+            <div className="relative w-full">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500" />
               <input
                 type="text"
@@ -3042,183 +3239,236 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
               />
             </div>
 
-            {/* Hide My Orders Toggle - only show if wallet connected */}
-            {address && (
-              <div className="flex items-center justify-between max-w-[480px]">
-                <div className="flex flex-col">
-                  <span className="text-white/70 text-sm">Hide my orders</span>
-                  <span className="text-white/40 text-xs">Don't show orders I created</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setHideMyOrders(!hideMyOrders)}
-                  className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${
-                    hideMyOrders ? 'bg-green-500' : 'bg-white/20'
-                  }`}
-                >
-                  <span
-                    className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform duration-200 ${
-                      hideMyOrders ? 'translate-x-5' : 'translate-x-0'
-                    }`}
-                  />
-                </button>
-              </div>
-            )}
-
-            {/* All or Nothing Toggle */}
-            <div className="flex items-center justify-between max-w-[480px]">
-              <div className="flex flex-col">
-                <span className="text-white/70 text-sm">All or Nothing</span>
-                <span className="text-white/40 text-xs">Show only orders that must be filled completely</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setAonFilterEnabled(!aonFilterEnabled)}
-                className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${
-                  aonFilterEnabled ? 'bg-green-500' : 'bg-white/20'
-                }`}
-              >
-                <span
-                  className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform duration-200 ${
-                    aonFilterEnabled ? 'translate-x-5' : 'translate-x-0'
-                  }`}
-                />
-              </button>
-            </div>
-
-            {/* Dust Filter Toggle */}
-            <div className="flex items-center justify-between max-w-[480px]">
-              <div className="flex flex-col">
-                <span className="text-white/70 text-sm">Hide dust orders</span>
-                <span className="text-white/40 text-xs">Filter out low value orders</span>
-              </div>
-              <div className="flex items-center gap-2">
-                {dustFilterEnabled && (
-                  <div className="flex items-center gap-1">
-                    <span className="text-white/40 text-xs">&lt; $</span>
-                    <input
-                      type="text"
-                      value={dustFilterMinValue}
-                      onChange={(e) => {
-                        const val = e.target.value.replace(/[^0-9.]/g, '');
-                        setDustFilterMinValue(val);
-                      }}
-                      className="w-16 px-2 py-1 bg-black/40 border border-white/20 rounded text-white text-xs text-right focus:outline-none focus:border-white/40"
-                      placeholder="0"
-                    />
+            {/* Two Column Layout: Toggles Left, Sliders Right */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full border border-white/10 rounded-lg p-4">
+              {/* Left Column - Toggle Filters */}
+              <div className="flex flex-col gap-4">
+                {/* Hide My Orders Toggle - only show if wallet connected */}
+                {address && (
+                  <div className="flex items-center justify-between">
+                    <div className="flex flex-col">
+                      <span className="text-white/70 text-sm">Hide my orders</span>
+                      <span className="text-white/40 text-xs">Don't show orders I created</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setHideMyOrders(!hideMyOrders)}
+                      className={`relative w-11 h-6 rounded-full transition-colors duration-200 flex-shrink-0 ${
+                        hideMyOrders ? 'bg-green-500' : 'bg-white/20'
+                      }`}
+                    >
+                      <span
+                        className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform duration-200 ${
+                          hideMyOrders ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
                   </div>
                 )}
-                <button
-                  type="button"
-                  onClick={() => setDustFilterEnabled(!dustFilterEnabled)}
-                  className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${
-                    dustFilterEnabled ? 'bg-green-500' : 'bg-white/20'
-                  }`}
-                >
-                  <span
-                    className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform duration-200 ${
-                      dustFilterEnabled ? 'translate-x-5' : 'translate-x-0'
-                    }`}
-                  />
-                </button>
-              </div>
-            </div>
 
-            {/* Date Filter - only show for active orders */}
-            {statusFilter === 'active' && (
-            <div className="space-y-2">
-              <span className="text-white/70 text-sm">Expires within</span>
-              <div className="flex flex-wrap items-center gap-2">
-                {(['1h', '12h', '24h', '7d', '30d', '90d', '180d'] as const).map((preset) => (
+                {/* All or Nothing Toggle */}
+                <div className="flex items-center justify-between">
+                  <div className="flex flex-col">
+                    <span className="text-white/70 text-sm">All or Nothing</span>
+                    <span className="text-white/40 text-xs">Show only orders that must be filled completely</span>
+                  </div>
                   <button
-                    key={preset}
-                    onClick={() => {
-                      setDateFilterPreset(dateFilterPreset === preset ? null : preset);
-                      setShowDatePicker(false);
-                    }}
-                    className={`px-4 py-2 rounded-full border text-sm font-medium transition-all duration-200 ${
-                      dateFilterPreset === preset
-                        ? 'bg-white text-black border-white'
-                        : 'bg-black/40 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'
+                    type="button"
+                    onClick={() => setAonFilterEnabled(!aonFilterEnabled)}
+                    className={`relative w-11 h-6 rounded-full transition-colors duration-200 flex-shrink-0 ${
+                      aonFilterEnabled ? 'bg-green-500' : 'bg-white/20'
                     }`}
                   >
-                    {preset}
+                    <span
+                      className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform duration-200 ${
+                        aonFilterEnabled ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
                   </button>
-                ))}
-                {/* Custom Date Picker Button */}
-                <div className="relative" ref={datePickerRef}>
-                  <button
-                    onClick={() => {
-                      setShowDatePicker(!showDatePicker);
-                    }}
-                    className={`px-3 py-2 rounded-full border text-sm font-medium transition-all duration-200 flex items-center gap-1 ${
-                      dateFilterPreset === 'custom' && customDateStart && customDateEnd
-                        ? 'bg-white text-black border-white'
-                        : 'bg-black/40 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'
-                    }`}
-                  >
-                    <CalendarDays className="w-4 h-4" />
-                  </button>
-                  {/* Date Picker Dropdown - uses fixed positioning for proper containment */}
-                  {showDatePicker && (
-                    <div className="fixed inset-0 z-50 flex items-start justify-center pt-32 px-4">
-                      <div
-                        className="fixed inset-0 bg-black/50"
-                        onClick={() => setShowDatePicker(false)}
-                      />
-                      <div className="relative bg-black border border-white/20 rounded-lg p-4 shadow-xl max-w-[95vw] max-h-[60vh] overflow-y-auto">
-                        <div className="flex flex-col gap-3">
-                          <span className="text-white/60 text-xs">Select date range (UTC)</span>
-                          <Calendar
-                            mode="range"
-                            defaultMonth={customDateStart || new Date()}
-                            selected={{ from: customDateStart, to: customDateEnd }}
-                            onSelect={(range) => {
-                              setCustomDateStart(range?.from);
-                              setCustomDateEnd(range?.to);
-                            }}
-                            numberOfMonths={2}
-                            className="[&_.rdp-months]:flex-col [&_.rdp-months]:md:flex-row"
-                          />
-                          <button
-                            onClick={() => {
-                              // Only apply custom filter if both dates are selected
-                              if (customDateStart && customDateEnd) {
-                                setDateFilterPreset('custom');
-                              }
-                              setShowDatePicker(false);
-                            }}
-                            className="w-full py-2 bg-white text-black rounded-lg text-sm font-medium hover:bg-white/90 transition-colors"
-                          >
-                            Apply
-                          </button>
-                        </div>
+                </div>
+
+                {/* Dust Filter Toggle */}
+                <div className="flex items-center justify-between">
+                  <div className="flex flex-col">
+                    <span className="text-white/70 text-sm">Hide dust orders</span>
+                    <span className="text-white/40 text-xs">Filter out low value orders</span>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {dustFilterEnabled && (
+                      <div className="flex items-center gap-1">
+                        <span className="text-white/40 text-xs">&lt; $</span>
+                        <input
+                          type="text"
+                          value={dustFilterMinValue}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(/[^0-9.]/g, '');
+                            setDustFilterMinValue(val);
+                          }}
+                          className="w-16 px-2 py-1 bg-black/40 border border-white/20 rounded text-white text-xs text-right focus:outline-none focus:border-white/40"
+                          placeholder="0"
+                        />
                       </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setDustFilterEnabled(!dustFilterEnabled)}
+                      className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${
+                        dustFilterEnabled ? 'bg-green-500' : 'bg-white/20'
+                      }`}
+                    >
+                      <span
+                        className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform duration-200 ${
+                          dustFilterEnabled ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column - Slider Filters */}
+              <div className="flex flex-col gap-4">
+                {/* Fill Percentage Range Filter */}
+                <div className="space-y-2">
+                  <div className="flex flex-col">
+                    <span className="text-white/70 text-sm">% Filled</span>
+                    <span className="text-white/40 text-xs">Filter by order fill percentage</span>
+                  </div>
+                  <div className="pt-1 pb-1">
+                    <div className="flex justify-between text-xs text-white/50 mb-2">
+                      <span>{fillRange[0]}%</span>
+                      <span>{fillRange[1]}%</span>
+                    </div>
+                    <Slider
+                      value={fillRange}
+                      onValueChange={(value) => setFillRange(value as [number, number])}
+                      min={0}
+                      max={100}
+                      step={1}
+                      className="w-full"
+                    />
+                  </div>
+                </div>
+
+                {/* Limit Order Position Range Filter */}
+                <div className="space-y-2">
+                  <div className="flex flex-col">
+                    <span className="text-white/70 text-sm">Limit Position</span>
+                    <span className="text-white/40 text-xs">Filter by % from market price</span>
+                  </div>
+                  <div className="pt-1 pb-1">
+                    <div className="flex justify-between text-xs text-white/50 mb-2">
+                      <span>{positionRange[0] > 0 ? '+' : ''}{positionRange[0]}%</span>
+                      <span>{positionRange[1] > 0 ? '+' : ''}{positionRange[1]}%</span>
+                    </div>
+                    <Slider
+                      value={positionRange}
+                      onValueChange={(value) => setPositionRange(value as [number, number])}
+                      min={-100}
+                      max={100}
+                      step={1}
+                      className="w-full"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Date Filter - only show for active orders, spans both columns */}
+              {statusFilter === 'active' && (
+                <div className="col-span-1 md:col-span-2 space-y-2 pt-2 border-t border-white/10">
+                  <span className="text-white/70 text-sm">Expires within</span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {(['1h', '12h', '24h', '7d', '30d', '90d', '180d'] as const).map((preset) => (
+                      <button
+                        key={preset}
+                        onClick={() => {
+                          setDateFilterPreset(dateFilterPreset === preset ? null : preset);
+                          setShowDatePicker(false);
+                        }}
+                        className={`px-4 py-2 rounded-full border text-sm font-medium transition-all duration-200 ${
+                          dateFilterPreset === preset
+                            ? 'bg-white text-black border-white'
+                            : 'bg-black/40 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'
+                        }`}
+                      >
+                        {preset}
+                      </button>
+                    ))}
+                    {/* Custom Date Picker Button */}
+                    <div className="relative" ref={datePickerRef}>
+                      <button
+                        onClick={() => {
+                          setShowDatePicker(!showDatePicker);
+                        }}
+                        className={`px-3 py-2 rounded-full border text-sm font-medium transition-all duration-200 flex items-center gap-1 ${
+                          dateFilterPreset === 'custom' && customDateStart && customDateEnd
+                            ? 'bg-white text-black border-white'
+                            : 'bg-black/40 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'
+                        }`}
+                      >
+                        <CalendarDays className="w-4 h-4" />
+                      </button>
+                      {/* Date Picker Dropdown - uses fixed positioning for proper containment */}
+                      {showDatePicker && (
+                        <div className="fixed inset-0 z-50 flex items-start justify-center pt-32 px-4">
+                          <div
+                            className="fixed inset-0 bg-black/50"
+                            onClick={() => setShowDatePicker(false)}
+                          />
+                          <div className="relative bg-black border border-white/20 rounded-lg p-4 shadow-xl max-w-[95vw] max-h-[60vh] overflow-y-auto">
+                            <div className="flex flex-col gap-3">
+                              <span className="text-white/60 text-xs">Select date range (UTC)</span>
+                              <Calendar
+                                mode="range"
+                                defaultMonth={customDateStart || new Date()}
+                                selected={{ from: customDateStart, to: customDateEnd }}
+                                onSelect={(range) => {
+                                  setCustomDateStart(range?.from);
+                                  setCustomDateEnd(range?.to);
+                                }}
+                                numberOfMonths={2}
+                                className="[&_.rdp-months]:flex-col [&_.rdp-months]:md:flex-row"
+                              />
+                              <button
+                                onClick={() => {
+                                  // Only apply custom filter if both dates are selected
+                                  if (customDateStart && customDateEnd) {
+                                    setDateFilterPreset('custom');
+                                  }
+                                  setShowDatePicker(false);
+                                }}
+                                className="w-full py-2 bg-white text-black rounded-lg text-sm font-medium hover:bg-white/90 transition-colors"
+                              >
+                                Apply
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    {/* Clear Filter Button - only show when a filter is actually applied */}
+                    {dateFilterPreset && (dateFilterPreset !== 'custom' || (customDateStart && customDateEnd)) && (
+                      <button
+                        onClick={() => {
+                          setDateFilterPreset(null);
+                          setCustomDateStart(undefined);
+                          setCustomDateEnd(undefined);
+                          setShowDatePicker(false);
+                        }}
+                        className="px-3 py-2 text-red-400 hover:text-red-300 text-sm transition-colors"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                  {dateFilterPreset === 'custom' && customDateStart && customDateEnd && (
+                    <div className="text-white/50 text-xs mt-1">
+                      {customDateStart.toLocaleDateString()} - {customDateEnd.toLocaleDateString()}
                     </div>
                   )}
                 </div>
-                {/* Clear Filter Button - only show when a filter is actually applied */}
-                {dateFilterPreset && (dateFilterPreset !== 'custom' || (customDateStart && customDateEnd)) && (
-                  <button
-                    onClick={() => {
-                      setDateFilterPreset(null);
-                      setCustomDateStart(undefined);
-                      setCustomDateEnd(undefined);
-                      setShowDatePicker(false);
-                    }}
-                    className="px-3 py-2 text-red-400 hover:text-red-300 text-sm transition-colors"
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-              {dateFilterPreset === 'custom' && customDateStart && customDateEnd && (
-                <div className="text-white/50 text-xs mt-1">
-                  {customDateStart.toLocaleDateString()} - {customDateEnd.toLocaleDateString()}
-                </div>
               )}
             </div>
-            )}
           </div>
         )}
       </div>
@@ -3238,14 +3488,20 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
       ) : (
         /* Horizontal scroll container with visible scrollbar */
         <div className="overflow-x-auto -mx-6 px-6 pb-2 modern-scrollbar" data-horizontal-scroll-container>
-          {!displayOrders || displayOrders.length === 0 ? (
+          {/* Don't show anything while loading - table will fade in when ready */}
+          {isLoading ? null : !displayOrders || displayOrders.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-gray-400 mb-2">No {statusFilter} {ownershipFilter === 'mine' ? 'deals' : 'orders'} found</p>
             </div>
           ) : (
-            <div className="w-full min-w-[800px] text-lg">
+            <div className={`w-full ${compactMode ? 'min-w-[600px]' : isMarketplaceMode ? 'min-w-[850px]' : 'min-w-[800px]'} text-lg`}>
               <div
-                className={`grid grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(80px,1fr)_minmax(100px,1.2fr)_minmax(80px,1fr)_minmax(100px,auto)] items-center gap-4 pb-4 border-b border-white/10 ${expandedPositions.size > 0 ? 'opacity-90' : 'opacity-100'
+                className={`grid ${compactMode
+                  ? 'grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(80px,1fr)_minmax(80px,1fr)_minmax(100px,auto)_40px]'
+                  : isMarketplaceMode
+                    ? 'grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(80px,1fr)_minmax(100px,1.2fr)_minmax(80px,1fr)_minmax(70px,auto)_50px]'
+                    : 'grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(80px,1fr)_minmax(100px,1.2fr)_minmax(80px,1fr)_minmax(70px,auto)_minmax(100px,auto)]'
+                } items-center gap-4 pb-4 border-b border-white/10 ${expandedPositions.size > 0 ? 'opacity-90' : 'opacity-100'
                   }`}
               >
                 {/* COLUMN 1: Token For Sale */}
@@ -3277,14 +3533,18 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                   Fill status % {sortField === 'progress' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
                 </button>
 
-                {/* COLUMN 4: OTC % */}
-                <button
-                  onClick={() => handleSort('otcVsMarket')}
-                  className={`text-sm font-medium text-center hover:text-white transition-colors ${sortField === 'otcVsMarket' ? 'text-white' : 'text-white/60'
-                    }`}
-                >
-                  Limit order position {sortField === 'otcVsMarket' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
-                </button>
+                {/* COLUMN 4: OTC % (or empty in compact mode) */}
+                {compactMode ? (
+                  <div />
+                ) : (
+                  <button
+                    onClick={() => handleSort('otcVsMarket')}
+                    className={`text-sm font-medium text-center hover:text-white transition-colors ${sortField === 'otcVsMarket' ? 'text-white' : 'text-white/60'
+                      }`}
+                  >
+                    Limit order position {sortField === 'otcVsMarket' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                  </button>
+                )}
 
                 {/* COLUMN 5: Expires / Expired */}
                 <button
@@ -3295,10 +3555,17 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                   {statusFilter === 'expired' ? 'Expired' : 'Expires'} {sortField === 'date' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
                 </button>
 
-                {/* COLUMN 6: Actions / Order ID */}
+                {/* COLUMN 6: Order ID */}
                 <div className="text-sm font-medium text-center text-white/60">
-                  {(statusFilter === 'completed' || statusFilter === 'cancelled') ? 'Order ID' : 'Order ID'}
+                  Order ID
                 </div>
+
+                {/* COLUMN 7: Actions */}
+                {compactMode ? (
+                  <div className="text-sm font-medium text-center text-white/60"></div>
+                ) : (
+                  <div className="text-sm font-medium text-center text-white/60">Actions</div>
+                )}
               </div>
 
               {/* Table Rows */}
@@ -3509,7 +3776,12 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
 
                   return (
                     <div key={`${orderId}-${tokenFilter}-${ownershipFilter}-${statusFilter}`} data-order-id={orderId}
-                      className={`grid grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(80px,1fr)_minmax(100px,1.2fr)_minmax(80px,1fr)_minmax(100px,auto)] items-start gap-4 py-8 ${index < displayOrders.length - 1 && !expandedPositions.has(orderId) ? 'border-b border-white/10' : ''
+                      className={`grid ${compactMode
+                        ? 'grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(80px,1fr)_minmax(80px,1fr)_minmax(100px,auto)_40px]'
+                        : isMarketplaceMode
+                          ? 'grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(80px,1fr)_minmax(100px,1.2fr)_minmax(80px,1fr)_minmax(70px,auto)_50px]'
+                          : 'grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(80px,1fr)_minmax(100px,1.2fr)_minmax(80px,1fr)_minmax(70px,auto)_minmax(100px,auto)]'
+                      } items-start gap-4 py-8 ${index < displayOrders.length - 1 && !expandedPositions.has(orderId) ? 'border-b border-white/10' : ''
                         }`}
                     >
                       {/* COLUMN 1: Token For Sale Content */}
@@ -3697,111 +3969,115 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                         )}
                       </div>
 
-                      {/* COLUMN 4: OTC % Content - show percentage for each buy token */}
-                      <div className="text-center min-w-0">
-                        {tokenPercentages.length > 0 ? (
-                          <div className="flex flex-col">
-                            {tokenPercentages.map((tokenPct, idx) => {
-                              const ratio = ratioPrices[idx];
-                              const sellTicker = formatTokenTicker(sellTokenInfo.ticker, chainId);
+                      {/* COLUMN 4: OTC % Content - show percentage for each buy token (or nothing in compact mode) */}
+                      {compactMode ? (
+                        <div />
+                      ) : (
+                        <div className="text-center min-w-0">
+                          {tokenPercentages.length > 0 ? (
+                            <div className="flex flex-col">
+                              {tokenPercentages.map((tokenPct, idx) => {
+                                const ratio = ratioPrices[idx];
+                                const sellTicker = formatTokenTicker(sellTokenInfo.ticker, chainId);
 
-                              // Format ratio value
-                              let formattedRatio = '';
-                              if (ratio) {
-                                const value = (ratioInverted[orderId] ?? false) ? ratio.buyPerSell : ratio.sellPerBuy;
-                                if (value === 0) {
-                                  formattedRatio = '0';
-                                } else if (value >= 10000) {
-                                  formattedRatio = value.toLocaleString('en-US', { maximumFractionDigits: 0 });
-                                } else if (value >= 1000) {
-                                  formattedRatio = value.toLocaleString('en-US', { maximumFractionDigits: 1 });
-                                } else if (value >= 100) {
-                                  formattedRatio = value.toLocaleString('en-US', { maximumFractionDigits: 2 });
-                                } else if (value >= 10) {
-                                  formattedRatio = value.toLocaleString('en-US', { maximumFractionDigits: 3 });
-                                } else if (value >= 1) {
-                                  formattedRatio = value.toLocaleString('en-US', { maximumFractionDigits: 4 });
-                                } else {
-                                  const sigFigs = 4;
-                                  const magnitude = Math.floor(Math.log10(Math.abs(value)));
-                                  const decimals = Math.max(0, sigFigs - 1 - magnitude);
-                                  formattedRatio = value.toFixed(decimals);
+                                // Format ratio value
+                                let formattedRatio = '';
+                                if (ratio) {
+                                  const value = (ratioInverted[orderId] ?? false) ? ratio.buyPerSell : ratio.sellPerBuy;
+                                  if (value === 0) {
+                                    formattedRatio = '0';
+                                  } else if (value >= 10000) {
+                                    formattedRatio = value.toLocaleString('en-US', { maximumFractionDigits: 0 });
+                                  } else if (value >= 1000) {
+                                    formattedRatio = value.toLocaleString('en-US', { maximumFractionDigits: 1 });
+                                  } else if (value >= 100) {
+                                    formattedRatio = value.toLocaleString('en-US', { maximumFractionDigits: 2 });
+                                  } else if (value >= 10) {
+                                    formattedRatio = value.toLocaleString('en-US', { maximumFractionDigits: 3 });
+                                  } else if (value >= 1) {
+                                    formattedRatio = value.toLocaleString('en-US', { maximumFractionDigits: 4 });
+                                  } else {
+                                    const sigFigs = 4;
+                                    const magnitude = Math.floor(Math.log10(Math.abs(value)));
+                                    const decimals = Math.max(0, sigFigs - 1 - magnitude);
+                                    formattedRatio = value.toFixed(decimals);
+                                  }
                                 }
-                              }
 
-                              return (
-                                <div key={idx} className="mb-1.5 text-center">
-                                  <div className={`text-sm font-medium ${tokenPct.isBelowMarket
-                                    ? 'text-red-400'
-                                    : 'text-green-400'
-                                    }`}>
-                                    {tokenPct.percentage !== null ? (
-                                      <>
-                                        {tokenPct.percentage.toLocaleString('en-US', {
-                                          maximumFractionDigits: 1,
-                                          minimumFractionDigits: 1,
-                                          signDisplay: 'always'
-                                        })}%
-                                      </>
-                                    ) : (
-                                      <span className="text-gray-500">--</span>
+                                return (
+                                  <div key={idx} className="mb-1.5 text-center">
+                                    <div className={`text-sm font-medium ${tokenPct.isBelowMarket
+                                      ? 'text-red-400'
+                                      : 'text-green-400'
+                                      }`}>
+                                      {tokenPct.percentage !== null ? (
+                                        <>
+                                          {tokenPct.percentage.toLocaleString('en-US', {
+                                            maximumFractionDigits: 1,
+                                            minimumFractionDigits: 1,
+                                            signDisplay: 'always'
+                                          })}%
+                                        </>
+                                      ) : (
+                                        <span className="text-gray-500">--</span>
+                                      )}
+                                    </div>
+                                    {tokenPct.percentage !== null && (
+                                      <div className="text-xs text-gray-400 -mb-0.5">
+                                        {tokenPct.isBelowMarket ? 'below market' : 'above market'}
+                                      </div>
+                                    )}
+                                    {/* Ratio price for this token - clickable to toggle */}
+                                    {ratio && (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setRatioInverted(prev => ({
+                                            ...prev,
+                                            [orderId]: !prev[orderId]
+                                          }));
+                                        }}
+                                        className="text-xs text-gray-500 hover:text-gray-300 cursor-pointer transition-colors -mt-0.5"
+                                        title="Click to switch ratio direction"
+                                      >
+                                        {(ratioInverted[orderId] ?? false)
+                                          ? `${formattedRatio} ${ratio.buyTokenTicker}/${sellTicker}`
+                                          : `${formattedRatio} ${sellTicker}/${ratio.buyTokenTicker}`
+                                        }
+                                      </button>
                                     )}
                                   </div>
-                                  {tokenPct.percentage !== null && (
-                                    <div className="text-xs text-gray-400 -mb-0.5">
-                                      {tokenPct.isBelowMarket ? 'below market' : 'above market'}
-                                    </div>
-                                  )}
-                                  {/* Ratio price for this token - clickable to toggle */}
-                                  {ratio && (
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setRatioInverted(prev => ({
-                                          ...prev,
-                                          [orderId]: !prev[orderId]
-                                        }));
-                                      }}
-                                      className="text-xs text-gray-500 hover:text-gray-300 cursor-pointer transition-colors -mt-0.5"
-                                      title="Click to switch ratio direction"
-                                    >
-                                      {(ratioInverted[orderId] ?? false)
-                                        ? `${formattedRatio} ${ratio.buyTokenTicker}/${sellTicker}`
-                                        : `${formattedRatio} ${sellTicker}/${ratio.buyTokenTicker}`
-                                      }
-                                    </button>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ) : (
-                          <span className="text-gray-500">--</span>
-                        )}
-                        {/* Add backing price stats as last row */}
-                        {backingPriceDiscount !== null && (
-                          <div className="text-xs text-gray-400 mt-1">
-                            {(PAYWALL_ENABLED && !hasTokenAccess) ? (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setShowPaywallModal(true);
-                                }}
-                                className="inline-flex items-center justify-center hover:opacity-80 transition-opacity"
-                              >
-                                <Lock className="w-4 h-4 text-gray-400 hover:text-white" />
-                              </button>
-                            ) : (
-                              <>
-                                {isAboveBackingPrice
-                                  ? `+${Math.abs(backingPriceDiscount).toLocaleString('en-US', { maximumFractionDigits: 0 })}%`
-                                  : `-${Math.abs(backingPriceDiscount).toLocaleString('en-US', { maximumFractionDigits: 0 })}%`
-                                } vs backing
-                              </>
-                            )}
-                          </div>
-                        )}
-                      </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <span className="text-gray-500">--</span>
+                          )}
+                          {/* Add backing price stats as last row */}
+                          {backingPriceDiscount !== null && (
+                            <div className="text-xs text-gray-400 mt-1">
+                              {(PAYWALL_ENABLED && !hasTokenAccess) ? (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setShowPaywallModal(true);
+                                  }}
+                                  className="inline-flex items-center justify-center hover:opacity-80 transition-opacity"
+                                >
+                                  <Lock className="w-4 h-4 text-gray-400 hover:text-white" />
+                                </button>
+                              ) : (
+                                <>
+                                  {isAboveBackingPrice
+                                    ? `+${Math.abs(backingPriceDiscount).toLocaleString('en-US', { maximumFractionDigits: 0 })}%`
+                                    : `-${Math.abs(backingPriceDiscount).toLocaleString('en-US', { maximumFractionDigits: 0 })}%`
+                                  } vs backing
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                       {/* COLUMN 5: Expires Content */}
                       <div className="text-center min-w-0 mt-1.5">
@@ -3813,119 +4089,141 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                         </div>
                       </div>
 
-                      {/* COLUMN 7: Actions / Order ID Content */}
-                      <div className="flex flex-col items-center justify-center min-w-0">
-                        {(statusFilter === 'completed' || statusFilter === 'cancelled') ? (
-                          <div className="text-gray-400 mt-1.5 text-sm">{order.orderDetailsWithID.orderID.toString()}</div>
-                        ) : (
-                          <div className="flex flex-col items-center">
-                            {ownershipFilter === 'mine' && order.orderDetailsWithID.status === 0 ? (
-                              <div className="flex items-center gap-2">
-                                {/* Collect Proceeds Button - Show if there are proceeds to collect */}
-                                {(() => {
-                                  const sellAmount = order.orderDetailsWithID.orderDetails.sellAmount;
-                                  const filled = sellAmount - order.orderDetailsWithID.remainingSellAmount;
-                                  const hasProceeds = filled > order.orderDetailsWithID.redeemedSellAmount;
-                                  return hasProceeds && (
-                                    <button
-                                      onClick={() => handleCollectProceeds(order)}
-                                      disabled={collectingOrders.has(order.orderDetailsWithID.orderID.toString())}
-                                      className="p-2 -mt-1.5 rounded hover:bg-green-700/50 transition-colors disabled:opacity-50"
-                                      title="Collect Proceeds"
-                                    >
-                                      {collectingOrders.has(order.orderDetailsWithID.orderID.toString()) ? (
-                                        <PixelSpinner size={20} className="mx-auto" />
-                                      ) : (
-                                        <CircleDollarSign className="w-5 h-5 text-green-400 hover:text-green-300 mx-auto" />
-                                      )}
-                                    </button>
-                                  );
-                                })()}
+                      {/* COLUMN 7: Order ID */}
+                      <div className="flex items-center justify-center min-w-0">
+                        <div className="text-gray-400 text-sm">{order.orderDetailsWithID.orderID.toString()}</div>
+                      </div>
 
-                                {/* Edit Expiration Button */}
-                                <button
-                                  onClick={() => {
-                                    const orderId = order.orderDetailsWithID.orderID.toString();
-                                    setShowExpirationCalendar(orderId);
-                                    // Set current expiration as default
-                                    const currentExpiration = Number(order.orderDetailsWithID.orderDetails.expirationTime) * 1000;
-                                    setSelectedExpirationDate(new Date(currentExpiration));
-                                  }}
-                                  disabled={updatingOrders.has(order.orderDetailsWithID.orderID.toString())}
-                                  className="p-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors disabled:opacity-50"
-                                  title="Update Expiration"
-                                >
-                                  {updatingOrders.has(order.orderDetailsWithID.orderID.toString()) ? (
-                                    <PixelSpinner size={20} className="mx-auto" />
-                                  ) : (
-                                    <CalendarDays className="w-5 h-5 text-blue-400 hover:text-blue-300 mx-auto" />
-                                  )}
-                                </button>
-
-                                {/* Cancel/Delete Button */}
-                                <button
-                                  onClick={() => handleCancelOrder(order)}
-                                  disabled={cancelingOrders.has(order.orderDetailsWithID.orderID.toString())}
-                                  className="p-2 rounded-lg bg-white/5 border border-white/10 hover:bg-red-500/20 transition-colors disabled:opacity-50"
-                                  title="Cancel Order"
-                                >
-                                  {cancelingOrders.has(order.orderDetailsWithID.orderID.toString()) ? (
-                                    <PixelSpinner size={20} className="mx-auto" />
-                                  ) : (
-                                    <Trash2 className="w-5 h-5 text-red-400 hover:text-red-300 mx-auto" />
-                                  )}
-                                </button>
-                              </div>
-                            ) : ownershipFilter === 'non-mine' && order.orderDetailsWithID.status === 0 && statusFilter === 'active' ? (
-                              // Check if this is user's own order in marketplace mode
-                              isMarketplaceMode && address && order.userDetails.orderOwner.toLowerCase() === address.toLowerCase() ? (
-                                <div className="flex items-center gap-2">
+                      {/* COLUMN 8: Actions */}
+                      {compactMode ? (
+                        /* Compact mode: just show Manage link */
+                        <div className="flex items-center justify-center">
+                          <Link
+                            href={`/my-orders?orderId=${orderId}`}
+                            className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-full bg-black border border-white/30 text-white hover:bg-white/10 transition-colors"
+                            title="Manage order"
+                          >
+                            <span>Manage</span>
+                            <ArrowRight className="w-3 h-3" />
+                          </Link>
+                        </div>
+                      ) : isMarketplaceMode ? (
+                        /* Marketplace mode: Buy button for non-own orders, Manage for own orders */
+                        <div className="flex items-center justify-center">
+                          {(!address || order.userDetails.orderOwner.toLowerCase() !== address.toLowerCase()) ? (
+                            // Buy button for non-own orders in marketplace
+                            order.orderDetailsWithID.status === 0 && Number(order.orderDetailsWithID.orderDetails.expirationTime) >= Math.floor(Date.now() / 1000) ? (
+                              <button
+                                onClick={() => togglePositionExpansion(order.orderDetailsWithID.orderID.toString(), order)}
+                                className={`flex items-center gap-1 px-3 py-1.5 text-xs rounded-full transition-colors ${expandedPositions.has(order.orderDetailsWithID.orderID.toString())
+                                  ? 'bg-transparent border border-white/10 text-white hover:bg-white/10'
+                                  : 'bg-white text-black hover:bg-gray-200'
+                                }`}
+                              >
+                                <span>Buy</span>
+                                <ChevronDown
+                                  className={`w-3 h-3 transition-transform duration-200 ${expandedPositions.has(order.orderDetailsWithID.orderID.toString()) ? 'rotate-180' : ''}`}
+                                />
+                              </button>
+                            ) : (
+                              // No action for expired/completed/cancelled orders
+                              <div className="w-12 h-8"></div>
+                            )
+                          ) : (
+                            // Manage button for own orders in marketplace
+                            <Link
+                              href={`/my-orders?orderId=${orderId}`}
+                              className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-full bg-black border border-white/30 text-white hover:bg-white/10 transition-colors"
+                              title="Manage order"
+                            >
+                              <span>Manage</span>
+                              <ArrowRight className="w-3 h-3" />
+                            </Link>
+                          )}
+                        </div>
+                      ) : (
+                        /* My Orders mode: show action buttons */
+                        <div className="flex items-center justify-center">
+                          {(statusFilter === 'completed' || statusFilter === 'cancelled') ? (
+                            // No actions for completed/cancelled orders
+                            <div className="w-16 h-8"></div>
+                          ) : ownershipFilter === 'mine' && order.orderDetailsWithID.status === 0 ? (
+                            <div className="flex items-center gap-1">
+                              {/* Collect Proceeds Button - Show if there are proceeds to collect */}
+                              {(() => {
+                                const sellAmount = order.orderDetailsWithID.orderDetails.sellAmount;
+                                const filled = sellAmount - order.orderDetailsWithID.remainingSellAmount;
+                                const hasProceeds = filled > order.orderDetailsWithID.redeemedSellAmount;
+                                return hasProceeds && (
                                   <button
-                                    onClick={() => {
-                                      setShowExpirationCalendar(order.orderDetailsWithID.orderID.toString());
-                                      setSelectedExpirationDate(new Date(Number(order.orderDetailsWithID.orderDetails.expirationTime) * 1000));
-                                    }}
-                                    className="p-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
-                                    title="Change expiration"
+                                    onClick={() => handleCollectProceeds(order)}
+                                    disabled={collectingOrders.has(order.orderDetailsWithID.orderID.toString())}
+                                    className="p-2 rounded-lg bg-white/5 border border-white/10 hover:bg-green-700/50 transition-colors disabled:opacity-50"
+                                    title="Collect Proceeds"
                                   >
-                                    <CalendarDays className="w-5 h-5 text-blue-400 hover:text-blue-300" />
-                                  </button>
-                                  <button
-                                    onClick={() => handleCancelOrder(order)}
-                                    disabled={cancelingOrders.has(order.orderDetailsWithID.orderID.toString())}
-                                    className="p-2 rounded-lg bg-white/5 border border-white/10 hover:bg-red-500/20 transition-colors disabled:opacity-50"
-                                    title="Cancel order"
-                                  >
-                                    {cancelingOrders.has(order.orderDetailsWithID.orderID.toString()) ? (
-                                      <PixelSpinner size={20} />
+                                    {collectingOrders.has(order.orderDetailsWithID.orderID.toString()) ? (
+                                      <PixelSpinner size={16} className="mx-auto" />
                                     ) : (
-                                      <Trash2 className="w-5 h-5 text-red-400 hover:text-red-300" />
+                                      <CircleDollarSign className="w-4 h-4 text-green-400 hover:text-green-300 mx-auto" />
                                     )}
                                   </button>
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={() => togglePositionExpansion(order.orderDetailsWithID.orderID.toString(), order)}
-                                  className={`flex items-center gap-1 px-4 py-2 text-xs rounded-full transition-colors ${expandedPositions.has(order.orderDetailsWithID.orderID.toString())
-                                    ? 'bg-transparent border border-white/10 text-white hover:bg-white/10'
-                                    : 'bg-white text-black hover:bg-gray-200'
-                                    }`}
-                                >
-                                  <span>Buy</span>
-                                  <ChevronDown
-                                    className={`w-3 h-3 transition-transform duration-200 ${expandedPositions.has(order.orderDetailsWithID.orderID.toString()) ? 'rotate-180' : ''
-                                      }`}
-                                  />
-                                </button>
-                              )
-                            ) : (
-                              // No action button for completed/expired/cancelled orders
-                              <div className="w-16 h-8"></div>
-                            )}
-                            <div className="text-gray-400 text-sm mt-1">{order.orderDetailsWithID.orderID.toString()}</div>
-                          </div>
-                        )}
-                      </div>
+                                );
+                              })()}
+
+                              {/* Edit Expiration Button */}
+                              <button
+                                onClick={() => {
+                                  const orderId = order.orderDetailsWithID.orderID.toString();
+                                  setShowExpirationCalendar(orderId);
+                                  // Set current expiration as default
+                                  const currentExpiration = Number(order.orderDetailsWithID.orderDetails.expirationTime) * 1000;
+                                  setSelectedExpirationDate(new Date(currentExpiration));
+                                }}
+                                disabled={updatingOrders.has(order.orderDetailsWithID.orderID.toString())}
+                                className="p-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors disabled:opacity-50"
+                                title="Update Expiration"
+                              >
+                                {updatingOrders.has(order.orderDetailsWithID.orderID.toString()) ? (
+                                  <PixelSpinner size={16} className="mx-auto" />
+                                ) : (
+                                  <CalendarDays className="w-4 h-4 text-blue-400 hover:text-blue-300 mx-auto" />
+                                )}
+                              </button>
+
+                              {/* Cancel/Delete Button */}
+                              <button
+                                onClick={() => handleCancelOrder(order)}
+                                disabled={cancelingOrders.has(order.orderDetailsWithID.orderID.toString())}
+                                className="p-2 rounded-lg bg-white/5 border border-white/10 hover:bg-red-500/20 transition-colors disabled:opacity-50"
+                                title="Cancel Order"
+                              >
+                                {cancelingOrders.has(order.orderDetailsWithID.orderID.toString()) ? (
+                                  <PixelSpinner size={16} className="mx-auto" />
+                                ) : (
+                                  <Trash2 className="w-4 h-4 text-red-400 hover:text-red-300 mx-auto" />
+                                )}
+                              </button>
+                            </div>
+                          ) : ownershipFilter === 'non-mine' && order.orderDetailsWithID.status === 0 && statusFilter === 'active' ? (
+                            <button
+                              onClick={() => togglePositionExpansion(order.orderDetailsWithID.orderID.toString(), order)}
+                              className={`flex items-center gap-1 px-3 py-1.5 text-xs rounded-full transition-colors ${expandedPositions.has(order.orderDetailsWithID.orderID.toString())
+                                ? 'bg-transparent border border-white/10 text-white hover:bg-white/10'
+                                : 'bg-white text-black hover:bg-gray-200'
+                                }`}
+                            >
+                              <span>Buy</span>
+                              <ChevronDown
+                                className={`w-3 h-3 transition-transform duration-200 ${expandedPositions.has(order.orderDetailsWithID.orderID.toString()) ? 'rotate-180' : ''
+                                  }`}
+                              />
+                            </button>
+                          ) : (
+                            // No action button for expired orders
+                            <div className="w-16 h-8"></div>
+                          )}
+                        </div>
+                      )}
 
                       {/* Expandable Actions Shelf */}
                       <AnimatePresence initial={false} mode="sync">
@@ -4945,7 +5243,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
           openWalletModal();
         }}
       />
-    </LiquidGlassCard >
+    </LiquidGlassCard>
+    </motion.div>
   );
 });
 

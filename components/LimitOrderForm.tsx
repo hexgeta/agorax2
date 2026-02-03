@@ -4232,7 +4232,7 @@ export function LimitOrderForm({
                             !presetValues.some(p => Math.abs(Math.abs(pricePercentage) - p) < 0.01) &&
                             (invertPriceDisplay ? pricePercentage < 0 : pricePercentage > 0);
                           const isWholeNumber = (n: number) => Math.abs(n - Math.round(n)) < 0.01;
-                          // Format: show sign, absolute value, no .0 suffix
+                          // Format: show sign, absolute value, no .0 suffix (% shown separately)
                           const formatPct = (n: number) => {
                             const sign = n < 0 ? '-' : '+';
                             const absVal = isWholeNumber(n) ? String(Math.round(Math.abs(n))) : Math.abs(n).toFixed(1).replace(/\.0$/, '');
@@ -4249,8 +4249,8 @@ export function LimitOrderForm({
                                 type="text"
                                 inputMode="decimal"
                                 defaultValue={displayValue}
-                                maxLength={5}
-                                className={`peer w-full py-2 px-2 border text-xs font-medium rounded-full text-center focus:outline-none focus:border-[#FF0080] focus:bg-[#FF0080]/20 focus:text-white ${
+                                maxLength={6}
+                                className={`peer w-full py-2 pl-2 pr-5 border text-xs font-medium rounded-full text-center focus:outline-none focus:border-[#FF0080] focus:bg-[#FF0080]/20 focus:text-white ${
                                   isCustomActive
                                     ? 'bg-[#FF0080]/20 border-[#FF0080]/40 text-white'
                                     : 'bg-black/40 border-[#FF0080]/40 text-[#FF0080] placeholder-transparent'
@@ -4307,9 +4307,15 @@ export function LimitOrderForm({
                                   }
                                 }}
                               />
+                              {/* % symbol always visible on the right side */}
+                              <span className={`absolute right-2 top-1/2 -translate-y-1/2 text-xs font-medium pointer-events-none ${
+                                isCustomActive ? 'text-white' : 'text-[#FF0080]/60'
+                              }`}>
+                                %
+                              </span>
                               {!isCustomActive && (
-                                <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-[#FF0080]/60 pointer-events-none peer-focus:hidden">
-                                  ?%
+                                <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-[#FF0080]/60 pointer-events-none peer-focus:hidden pr-3">
+                                  ?
                                 </span>
                               )}
                             </div>
@@ -4886,7 +4892,7 @@ export function LimitOrderForm({
                               !presetValues.some(p => Math.abs(Math.abs(pricePercentage) - p) < 0.01) &&
                               (invertPriceDisplay ? pricePercentage < 0 : pricePercentage > 0);
                             const isWholeNumber = (n: number) => Math.abs(n - Math.round(n)) < 0.01;
-                            // Format: show sign, absolute value, no .0 suffix
+                            // Format: show sign, absolute value, no .0 suffix (% shown separately)
                             const formatPct = (n: number) => {
                               const sign = n < 0 ? '-' : '+';
                               const absVal = isWholeNumber(n) ? String(Math.round(Math.abs(n))) : Math.abs(n).toFixed(1).replace(/\.0$/, '');
@@ -4903,8 +4909,8 @@ export function LimitOrderForm({
                                   type="text"
                                   inputMode="decimal"
                                   defaultValue={displayValue}
-                                  maxLength={5}
-                                  className={`peer w-full py-2 px-2 border text-xs font-medium rounded-full text-center focus:outline-none focus:border-[#FF0080] focus:bg-[#FF0080]/20 focus:text-white ${
+                                  maxLength={6}
+                                  className={`peer w-full py-2 pl-2 pr-5 border text-xs font-medium rounded-full text-center focus:outline-none focus:border-[#FF0080] focus:bg-[#FF0080]/20 focus:text-white ${
                                     isCustomActive
                                       ? 'bg-[#FF0080]/20 border-[#FF0080]/40 text-white'
                                       : 'bg-black/40 border-[#FF0080]/40 text-[#FF0080] placeholder-transparent'
@@ -4961,9 +4967,15 @@ export function LimitOrderForm({
                                     }
                                   }}
                                 />
+                                {/* % symbol always visible on the right side */}
+                                <span className={`absolute right-2 top-1/2 -translate-y-1/2 text-xs font-medium pointer-events-none ${
+                                  isCustomActive ? 'text-white' : 'text-[#FF0080]/60'
+                                }`}>
+                                  %
+                                </span>
                                 {!isCustomActive && (
-                                  <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-[#FF0080]/60 pointer-events-none peer-focus:hidden">
-                                    ?%
+                                  <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-[#FF0080]/60 pointer-events-none peer-focus:hidden pr-3">
+                                    ?
                                   </span>
                                 )}
                               </div>
@@ -5253,7 +5265,7 @@ export function LimitOrderForm({
                                     !presetValues.some(p => Math.abs(Math.abs(tokenPricePercentage) - p) < 0.1) &&
                                     (invertPriceDisplay ? tokenPricePercentage < 0 : tokenPricePercentage > 0);
                                   const isWholeNumber = (n: number) => Math.abs(n - Math.round(n)) < 0.01;
-                                  // Format: show sign, absolute value, no .0 suffix
+                                  // Format: show sign, absolute value, no .0 suffix (% shown separately)
                                   const formatPct = (n: number) => {
                                     const sign = n < 0 ? '-' : '+';
                                     const absVal = isWholeNumber(n) ? String(Math.round(Math.abs(n))) : Math.abs(n).toFixed(1).replace(/\.0$/, '');
@@ -5270,8 +5282,8 @@ export function LimitOrderForm({
                                         type="text"
                                         inputMode="decimal"
                                         defaultValue={displayValue}
-                                        maxLength={5}
-                                        className="peer w-full py-2 px-2 text-xs font-medium rounded-full text-center focus:outline-none"
+                                        maxLength={6}
+                                        className="peer w-full py-2 pl-2 pr-5 text-xs font-medium rounded-full text-center focus:outline-none"
                                         style={{
                                           backgroundColor: isCustomActive ? `${accentColor}33` : 'rgba(0,0,0,0.4)',
                                           color: isCustomActive ? 'white' : accentColor,
@@ -5338,9 +5350,13 @@ export function LimitOrderForm({
                                           }
                                         }}
                                       />
+                                      {/* % symbol always visible on the right side */}
+                                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-medium pointer-events-none" style={{ color: isCustomActive ? 'white' : `${accentColor}99` }}>
+                                        %
+                                      </span>
                                       {!isCustomActive && (
-                                        <span className="absolute inset-0 flex items-center justify-center text-xs font-medium pointer-events-none peer-focus:hidden" style={{ color: `${accentColor}99` }}>
-                                          ?%
+                                        <span className="absolute inset-0 flex items-center justify-center text-xs font-medium pointer-events-none peer-focus:hidden pr-3" style={{ color: `${accentColor}99` }}>
+                                          ?
                                         </span>
                                       )}
                                     </div>

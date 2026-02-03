@@ -51,6 +51,28 @@ function MarketplaceContent() {
   const dustParam = searchParams.get('min-usd');
   const initialDustFilter = dustParam && !isNaN(parseFloat(dustParam)) ? dustParam : undefined;
 
+  // Get fill range from URL params
+  const fillMinParam = searchParams.get('fillMin');
+  const fillMaxParam = searchParams.get('fillMax');
+  const initialFillRange: [number, number] | undefined =
+    (fillMinParam !== null || fillMaxParam !== null)
+      ? [
+          fillMinParam ? Math.max(0, Math.min(100, parseInt(fillMinParam, 10) || 0)) : 0,
+          fillMaxParam ? Math.max(0, Math.min(100, parseInt(fillMaxParam, 10) || 100)) : 100
+        ]
+      : undefined;
+
+  // Get position range from URL params
+  const posMinParam = searchParams.get('posMin');
+  const posMaxParam = searchParams.get('posMax');
+  const initialPositionRange: [number, number] | undefined =
+    (posMinParam !== null || posMaxParam !== null)
+      ? [
+          posMinParam ? Math.max(-100, Math.min(100, parseInt(posMinParam, 10) || -100)) : -100,
+          posMaxParam ? Math.max(-100, Math.min(100, parseInt(posMaxParam, 10) || 100)) : 100
+        ]
+      : undefined;
+
   // Build array of known tickers for URL param detection
   const knownTickers = useMemo(() => {
     const tickers: string[] = [];
@@ -71,6 +93,9 @@ function MarketplaceContent() {
     customDateEnd: number | null;
     aonFilter: boolean;
     dustFilter: string | null;
+    claimableFilter: boolean;
+    fillRange: [number, number];
+    positionRange: [number, number];
   }) => {
     const params = new URLSearchParams();
 
@@ -121,6 +146,18 @@ function MarketplaceContent() {
       params.set('min-usd', filters.dustFilter);
     }
 
+    // Add fill range if not default (0-100)
+    if (filters.fillRange[0] > 0 || filters.fillRange[1] < 100) {
+      if (filters.fillRange[0] > 0) params.set('fillMin', filters.fillRange[0].toString());
+      if (filters.fillRange[1] < 100) params.set('fillMax', filters.fillRange[1].toString());
+    }
+
+    // Add position range if not default (-100 to 100)
+    if (filters.positionRange[0] > -100 || filters.positionRange[1] < 100) {
+      if (filters.positionRange[0] > -100) params.set('posMin', filters.positionRange[0].toString());
+      if (filters.positionRange[1] < 100) params.set('posMax', filters.positionRange[1].toString());
+    }
+
     // Update URL without navigation (just replace state)
     const newUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname;
     window.history.replaceState(null, '', newUrl);
@@ -155,6 +192,8 @@ function MarketplaceContent() {
               initialCustomDateEnd={initialCustomDateEnd}
               initialAonFilter={initialAonFilter}
               initialDustFilter={initialDustFilter}
+              initialFillRange={initialFillRange}
+              initialPositionRange={initialPositionRange}
               onFiltersChange={handleFiltersChange}
             />
           </div>

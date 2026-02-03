@@ -52,6 +52,14 @@ const Footer = () => {
               </li>
               <li>
                 <Link
+                  href="/docs"
+                  className="text-sm text-white/70 hover:text-white transition-colors"
+                >
+                  Docs
+                </Link>
+              </li>
+              <li>
+                <Link
                   href="https://x.com/agoraxwin"
                   className="text-sm text-white/70 hover:text-white transition-colors"
                 >

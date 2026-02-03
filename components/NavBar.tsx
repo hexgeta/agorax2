@@ -8,12 +8,14 @@ import { ConnectButton } from './ConnectButton';
 import { ChainSwitcher } from './ChainSwitcher';
 import { TESTING_MODE } from '@/config/testing';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
+import { useClaimableOrdersCount } from '@/hooks/useClaimableOrdersCount';
 // import { NotificationBell } from './NotificationBell';
 
 const NavBar = () => {
   const pathname = usePathname();
   const [hoveredPath, setHoveredPath] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { claimableCount } = useClaimableOrdersCount();
 
   // Close mobile menu when route changes
   useEffect(() => {
@@ -107,7 +109,7 @@ const NavBar = () => {
               </Link>
               <Link
                 href="/my-orders"
-                className={`transition-colors font-medium text-base px-4 py-2 cursor-pointer group ${pathname === '/my-orders'
+                className={`transition-colors font-medium text-base px-4 py-2 cursor-pointer group relative ${pathname === '/my-orders'
                   ? 'text-white'
                   : 'text-white/80 hover:text-white'
                   }`}
@@ -122,6 +124,11 @@ const NavBar = () => {
                     }`}
                   />
                 </span>
+                {claimableCount > 0 && (
+                  <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold bg-red-500 text-white rounded-full">
+                    {claimableCount > 99 ? '99+' : claimableCount}
+                  </span>
+                )}
               </Link>
               <Link
                 href="/marketplace"
@@ -249,12 +256,17 @@ const NavBar = () => {
             <Link
               href="/my-orders"
               onClick={() => setMobileMenuOpen(false)}
-              className={`text-xl font-medium py-3 px-6 rounded-lg transition-colors w-full text-center ${pathname === '/my-orders'
+              className={`text-xl font-medium py-3 px-6 rounded-lg transition-colors w-full text-center relative ${pathname === '/my-orders'
                 ? 'text-white bg-white/10'
                 : 'text-white/80 hover:text-white hover:bg-white/5'
                 }`}
             >
               My Orders
+              {claimableCount > 0 && (
+                <span className="absolute top-2 right-4 flex items-center justify-center min-w-[20px] h-[20px] px-1 text-xs font-bold bg-red-500 text-white rounded-full">
+                  {claimableCount > 99 ? '99+' : claimableCount}
+                </span>
+              )}
             </Link>
             <Link
               href="/marketplace"
