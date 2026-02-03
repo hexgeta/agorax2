@@ -39,7 +39,6 @@ const navigation: NavItem[] = [
       { title: 'Creating Orders', href: '/docs/guide/creating-orders' },
       { title: 'Filling Orders', href: '/docs/guide/filling-orders' },
       { title: 'Managing Orders', href: '/docs/guide/managing-orders' },
-      { title: 'Discover Feature', href: '/docs/guide/discover' },
     ],
   },
   {
@@ -61,19 +60,24 @@ const navigation: NavItem[] = [
   },
 ];
 
-function NavSection({ item, pathname }: { item: NavItem; pathname: string }) {
+function NavSection({
+  item,
+  pathname,
+  isExpanded,
+  onToggle
+}: {
+  item: NavItem;
+  pathname: string;
+  isExpanded: boolean;
+  onToggle: () => void;
+}) {
   const isActive = pathname === item.href;
   const hasActiveChild = item.children?.some(child => pathname === child.href);
-  const [isExpanded, setIsExpanded] = useState(isActive || hasActiveChild);
-
-  useEffect(() => {
-    if (hasActiveChild) setIsExpanded(true);
-  }, [hasActiveChild]);
 
   return (
     <div className="mb-4">
       <button
-        onClick={() => setIsExpanded(!isExpanded)}
+        onClick={onToggle}
         className={`flex items-center justify-between w-full text-left text-sm font-semibold py-2 px-3 rounded-lg transition-colors ${
           isActive || hasActiveChild
             ? 'text-white bg-white/10'
@@ -113,9 +117,24 @@ function NavSection({ item, pathname }: { item: NavItem; pathname: string }) {
   );
 }
 
+// Find which section contains the current path
+function findActiveSection(pathname: string): string | null {
+  for (const item of navigation) {
+    if (pathname === item.href) return item.href;
+    if (item.children?.some(child => pathname === child.href)) return item.href;
+  }
+  return navigation[0]?.href || null;
+}
+
 export default function DocsLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [expandedSection, setExpandedSection] = useState<string | null>(() => findActiveSection(pathname));
+
+  // Update expanded section when route changes
+  useEffect(() => {
+    setExpandedSection(findActiveSection(pathname));
+  }, [pathname]);
 
   // Close sidebar on route change
   useEffect(() => {
@@ -209,7 +228,13 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
         >
           <nav className="space-y-2">
             {navigation.map((item) => (
-              <NavSection key={item.href} item={item} pathname={pathname} />
+              <NavSection
+                key={item.href}
+                item={item}
+                pathname={pathname}
+                isExpanded={expandedSection === item.href}
+                onToggle={() => setExpandedSection(expandedSection === item.href ? null : item.href)}
+              />
             ))}
           </nav>
 
@@ -245,7 +270,7 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
 
       {/* Main Content */}
       <main className="relative z-10 pt-[73px] md:pl-72">
-        <div className="max-w-4xl mx-auto px-4 md:px-8 py-8 md:py-12">
+        <div className="max-w-4xl mx-auto px-4 md:px-8 py-4 md:py-4">
           {children}
         </div>
       </main>

@@ -1,0 +1,48 @@
+specVersion: 0.0.5
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum
+    name: AgoraX
+    network: pulsechain
+    source:
+      address: "0xc8a47F14b1833310E2aC72e4C397b5b14a9FEf8B"
+      abi: AgoraX
+      startBlock: 21266815
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Order
+        - OrderFill
+        - User
+        - Token
+        - ProtocolStats
+      abis:
+        - name: AgoraX
+          file: ./abis/AgoraX.json
+      eventHandlers:
+        - event: OrderPlaced(indexed address,indexed uint256,indexed address,uint256,uint256[],uint256[],uint64,bool)
+          handler: handleOrderPlaced
+        - event: OrderCancelled(indexed address,indexed uint256)
+          handler: handleOrderCancelled
+        - event: OrderFilled(indexed address,indexed uint256,indexed uint256,uint256)
+          handler: handleOrderFilled
+        - event: OrderProceedsCollected(indexed address,indexed uint256)
+          handler: handleOrderProceedsCollected
+        - event: OrderExpirationUpdated(indexed uint256,uint64)
+          handler: handleOrderExpirationUpdated
+        - event: TokenWhitelisted(indexed address)
+          handler: handleTokenWhitelisted
+        - event: TokenStatusChanged(indexed address,bool)
+          handler: handleTokenStatusChanged
+        - event: Paused(indexed address,bool)
+          handler: handlePaused
+        - event: FeeAddressUpdated(indexed address,indexed address)
+          handler: handleFeeAddressUpdated
+        - event: ListingFeeUpdated(uint256,uint256)
+          handler: handleListingFeeUpdated
+        - event: ProtocolFeeUpdated(uint256,uint256)
+          handler: handleProtocolFeeUpdated
+      file: ./src/mapping.ts

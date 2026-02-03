@@ -216,12 +216,12 @@ export default function ManagingOrdersPage() {
             </div>
           </LiquidGlassCard>
         </Link>
-        <Link href="/docs/guide/discover" className="flex-1">
+        <Link href="/docs/technical/smart-contract" className="flex-1">
           <LiquidGlassCard className="p-6 h-full hover:bg-white/5 transition-colors group">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-white/60 text-sm">Next</p>
-                <p className="text-white font-medium group-hover:text-white/90">Discover Feature</p>
+                <p className="text-white font-medium group-hover:text-white/90">Smart Contract</p>
               </div>
               <svg className="w-5 h-5 text-white/40 group-hover:text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />

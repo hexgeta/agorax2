@@ -1,0 +1,107 @@
+# Order entity - represents a limit order
+type Order @entity {
+  id: ID! # orderID as string
+  orderID: BigInt!
+  maker: User!
+  sellToken: Token!
+  sellAmount: BigInt!
+  remainingSellAmount: BigInt!
+  buyTokens: [OrderBuyToken!]! @derivedFrom(field: "order")
+  expirationTime: BigInt!
+  allOrNothing: Boolean!
+  status: OrderStatus!
+  createdAt: BigInt!
+  createdAtBlock: BigInt!
+  createdTxHash: Bytes!
+  cancelledAt: BigInt
+  cancelledTxHash: Bytes
+  filledAt: BigInt
+  proceedsCollected: Boolean!
+  proceedsCollectedAt: BigInt
+  fills: [OrderFill!]! @derivedFrom(field: "order")
+  totalFillCount: Int!
+  totalBuyAmountReceived: BigInt!
+}
+
+# Buy token requirement for an order
+type OrderBuyToken @entity {
+  id: ID! # order-tokenIndex
+  order: Order!
+  tokenIndex: BigInt!
+  token: Token
+  buyAmount: BigInt!
+  filledAmount: BigInt!
+}
+
+# Individual fill transaction
+type OrderFill @entity {
+  id: ID! # txHash-logIndex
+  order: Order!
+  buyer: User!
+  buyTokenIndex: BigInt!
+  buyToken: Token
+  buyAmount: BigInt!
+  timestamp: BigInt!
+  blockNumber: BigInt!
+  txHash: Bytes!
+}
+
+# User entity
+type User @entity {
+  id: ID! # address
+  address: Bytes!
+  ordersCreated: [Order!]! @derivedFrom(field: "maker")
+  ordersFilled: [OrderFill!]! @derivedFrom(field: "buyer")
+  totalOrdersCreated: Int!
+  totalOrdersFilled: Int!
+  totalOrdersCancelled: Int!
+  firstSeenAt: BigInt!
+  lastActiveAt: BigInt!
+}
+
+# Token entity
+type Token @entity {
+  id: ID! # address
+  address: Bytes!
+  whitelistIndex: BigInt
+  isActive: Boolean!
+  whitelistedAt: BigInt!
+  ordersAsSellToken: [Order!]! @derivedFrom(field: "sellToken")
+  totalVolumeAsSellToken: BigInt!
+  totalOrdersAsSellToken: Int!
+}
+
+# Protocol-wide statistics
+type ProtocolStats @entity {
+  id: ID! # "protocol"
+  totalOrders: Int!
+  totalFills: Int!
+  totalCancellations: Int!
+  totalUsers: Int!
+  totalTokens: Int!
+  listingFee: BigInt!
+  protocolFee: BigInt!
+  feeAddress: Bytes
+  isPaused: Boolean!
+  lastUpdatedAt: BigInt!
+}
+
+# Daily stats for analytics
+type DailyStats @entity {
+  id: ID! # timestamp / 86400
+  date: BigInt!
+  ordersCreated: Int!
+  ordersFilled: Int!
+  ordersCancelled: Int!
+  uniqueUsers: Int!
+  newUsers: Int!
+}
+
+# Order status enum
+enum OrderStatus {
+  OPEN
+  PARTIALLY_FILLED
+  FILLED
+  CANCELLED
+  EXPIRED
+}

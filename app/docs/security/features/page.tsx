@@ -114,6 +114,24 @@ export default function SecurityFeaturesPage() {
               </div>
             </div>
           </LiquidGlassCard>
+
+          <LiquidGlassCard className="p-6">
+            <div className="flex items-start gap-4">
+              <div className="p-3 bg-emerald-500/20 rounded-xl text-emerald-400 flex-shrink-0">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-white mb-2">No Price Oracle Dependency</h3>
+                <p className="text-white/70 text-sm">
+                  AgoráX operates without reliance on external price oracles. Order prices are set directly
+                  by makers and accepted by fillers, eliminating oracle manipulation risks, stale price
+                  vulnerabilities, and single points of failure that plague many DeFi protocols.
+                </p>
+              </div>
+            </div>
+          </LiquidGlassCard>
         </div>
       </div>
 

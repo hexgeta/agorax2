@@ -148,6 +148,27 @@ const NavBar = () => {
                   />
                 </span>
               </Link>
+              <Link
+                href="/docs"
+                className={`transition-colors font-medium text-base px-4 py-2 cursor-pointer group flex items-center gap-1.5 ${pathname.startsWith('/docs')
+                  ? 'text-white'
+                  : 'text-white/80 hover:text-white'
+                  }`}
+                onMouseEnter={() => setHoveredPath('/docs')}
+                onMouseLeave={() => setHoveredPath(null)}
+              >
+                <span className="relative inline-block">
+                  Docs
+                  <span className={`absolute bottom-[-4px] left-0 w-full h-0.5 bg-white transition-transform duration-300 ease-out ${pathname.startsWith('/docs')
+                    ? (hoveredPath && hoveredPath !== '/docs' ? 'scale-x-0 origin-left' : 'scale-x-100 origin-left')
+                    : 'scale-x-0 group-hover:scale-x-100 origin-left'
+                    }`}
+                  />
+                </span>
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+              </Link>
               {/* <Link
                 href="/leaderboard"
                 className={`transition-colors font-medium text-base px-4 py-2 cursor-pointer group ${pathname === '/leaderboard'
@@ -277,6 +298,19 @@ const NavBar = () => {
                 }`}
             >
               Marketplace
+            </Link>
+            <Link
+              href="/docs"
+              onClick={() => setMobileMenuOpen(false)}
+              className={`text-xl font-medium py-3 px-6 rounded-lg transition-colors w-full text-center flex items-center justify-center gap-2 ${pathname.startsWith('/docs')
+                ? 'text-white bg-white/10'
+                : 'text-white/80 hover:text-white hover:bg-white/5'
+                }`}
+            >
+              Docs
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
             </Link>
             {/* <Link
               href="/leaderboard"

@@ -1,0 +1,22 @@
+{
+  "name": "agorax-subgraph",
+  "version": "1.0.0",
+  "description": "AgoraX Limit Order Protocol Subgraph for PulseChain",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/agorax/agorax-subgraph"
+  },
+  "scripts": {
+    "codegen": "graph codegen",
+    "build": "graph build",
+    "create-local": "graph create --node http://localhost:8020/ agorax/agorax",
+    "remove-local": "graph remove --node http://localhost:8020/ agorax/agorax",
+    "deploy-local": "graph deploy --node http://localhost:8020/ --ipfs http://localhost:5001 agorax/agorax",
+    "create": "graph create --node https://graph.pulsechain.com agorax/agorax",
+    "deploy": "graph deploy --node https://graph.pulsechain.com --ipfs https://ipfs.pulsechain.com --version-label v1.0.0 agorax/agorax"
+  },
+  "devDependencies": {
+    "@graphprotocol/graph-cli": "^0.68.0",
+    "@graphprotocol/graph-ts": "^0.32.0"
+  }
+}
