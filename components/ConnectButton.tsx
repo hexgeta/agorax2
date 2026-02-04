@@ -6,9 +6,15 @@ import { PixelSpinner } from './ui/PixelSpinner';
 import { useAppKit } from '@reown/appkit/react'
 import { useTransaction } from '@/context/TransactionContext'
 import { DisclaimerDialog } from './DisclaimerDialog'
+import Link from 'next/link'
 // import { PrestigeBadge } from './PrestigeBadge'
 
-export const ConnectButton = () => {
+interface ConnectButtonProps {
+  connectedText?: string;
+  connectedHref?: string;
+}
+
+export const ConnectButton = ({ connectedText, connectedHref }: ConnectButtonProps = {}) => {
   const { isConnected, address } = useAccount()
   const { open } = useAppKit()
   const { isTransactionPending } = useTransaction()
@@ -35,6 +41,18 @@ export const ConnectButton = () => {
   }
 
   if (isConnected && address) {
+    // If custom text and href provided, render as a link
+    if (connectedText && connectedHref) {
+      return (
+        <Link
+          href={connectedHref}
+          className="px-4 md:px-8 py-2 md:py-3 rounded-full font-semibold transition-colors text-sm md:text-base bg-white text-black hover:bg-white/80"
+        >
+          {connectedText}
+        </Link>
+      )
+    }
+
     return (
       <div className="flex items-center gap-2">
         {/* <PrestigeBadge /> */}

@@ -471,16 +471,6 @@ export function LimitOrderForm({
     return unique;
   }, [] as typeof TOKEN_CONSTANTS);
 
-  // Log token counts for debugging
-  useEffect(() => {
-    if (availableTokens.length > 0) {
-      console.log('🔢 Token Counts:', {
-        'Contract Whitelist': activeTokens.length,
-        'Available after filtering': availableTokens.length
-      });
-    }
-  }, [availableTokens.length, activeTokens.length]);
-
   // Get whitelisted tokens that belong to a specific basket
   const getBasketTokens = useCallback((basketId: string): TokenOption[] => {
     return availableTokens

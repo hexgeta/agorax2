@@ -1,5 +1,4 @@
 import '@/styles/global.css'
-import { FontLoader } from '@/components/ui/FontLoader'
 import NavBar from '@/components/NavBar'
 import Footer from '@/components/Footer'
 import { Providers } from '@/components/Providers'
@@ -73,8 +72,6 @@ export default async function RootLayout({
   return (
     <html lang="en" className="font-sans">
       <head>
-        <FontLoader weight="regular" priority={true} />
-        <FontLoader weight="bold" />
         <script defer data-domain="agorax2.lookintomaxi.com" src="https://plausible.io/js/script.js"></script>
       </head>
       <body className="min-h-screen bg-black text-white">

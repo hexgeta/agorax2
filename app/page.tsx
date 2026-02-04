@@ -678,7 +678,7 @@ export default function Home() {
                   Experience crypto trading the way it was meant to be.
                 </p>
                 <div className="flex justify-center">
-                  <ConnectButton />
+                  <ConnectButton connectedText="Create an Order" connectedHref="/swap" />
                 </div>
               </motion.section>
 

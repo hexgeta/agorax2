@@ -64,7 +64,7 @@ export const modal = createAppKit({
     '--w3m-color-success': '#44ff44', // Green for success
     
     // Fonts
-    '--w3m-font-family': 'Persephone, ui-sans-serif, system-ui, sans-serif',
+    '--w3m-font-family': "'Share Tech Mono', monospace, ui-monospace, 'Courier New'",
     '--w3m-font-size-master': '10px',
     '--w3m-line-height-master': '1.5', // Line height for better readability
     

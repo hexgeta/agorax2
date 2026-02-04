@@ -442,17 +442,8 @@ w3m-connect-button::part(label) {
   border: 1px solid white !important;
 }
 
-/* Try to target shadow DOM elements */
-w3m-button::shadow,
-w3m-connect-button::shadow,
-w3m-modal::shadow,
-w3m-button::shadow *,
-w3m-connect-button::shadow *,
-w3m-modal::shadow * {
-  font-family: 'Share Tech Mono', monospace, ui-monospace, 'Courier New' !important;
-  color: white !important;
-  background-color: white !important;
-}
+/* Note: ::shadow pseudo-element is deprecated and removed from CSS spec.
+   Shadow DOM styling must be done via CSS custom properties or ::part() */
 
 /* Add a style tag injection approach */
 @supports (selector(:where(*))) {
@@ -788,15 +779,7 @@ w3m-modal [data-testid="footer"] *,
   display: none !important;
 }
 
-/* Hide "UX by" branding */
-w3m-modal [data-testid="footer"]:has-text("UX by"),
-w3m-modal [data-testid="footer"]:has-text("reown"),
-[data-w3m-modal] [data-testid="footer"]:has-text("UX by"),
-[data-w3m-modal] [data-testid="footer"]:has-text("reown"),
-.w3m-modal [data-testid="footer"]:has-text("UX by"),
-.w3m-modal [data-testid="footer"]:has-text("reown") {
-  display: none !important;
-}
+/* Note: :has-text() is not valid CSS (Playwright-only). Footer already hidden above. */
 
 /* Customize search bar appearance */
 w3m-modal input[type="search"],
@@ -867,12 +850,7 @@ a[class*="branding"] {
   display: none !important;
 }
 
-/* Target specific text content */
-*:contains("UX BY"),
-*:contains("reown"),
-*:contains("UX BY reown") {
-  display: none !important;
-}
+/* Note: :contains() is not valid CSS (jQuery-only selector) */
 
 /* More specific selectors for AppKit modal */
 .w3m-modal w3m-footer,

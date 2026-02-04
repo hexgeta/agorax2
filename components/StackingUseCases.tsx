@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef, useState } from 'react';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 
 const useCases = [
@@ -61,6 +62,54 @@ const useCases = [
 ];
 
 export function StackingUseCases() {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const cardRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const [cardPositions, setCardPositions] = useState<number[]>([]);
+  const [totalHeight, setTotalHeight] = useState(0);
+
+  // Overlap percentage (5% = 0.05 means each card shows 95% of its height)
+  const OVERLAP_PERCENT = 0.05;
+
+  useEffect(() => {
+    const calculatePositions = () => {
+      const positions: number[] = [];
+      let currentTop = 0;
+
+      cardRefs.current.forEach((card, i) => {
+        if (card) {
+          positions[i] = currentTop;
+          const cardHeight = card.offsetHeight;
+          // Next card starts at (1 - overlap) * cardHeight from current position
+          currentTop += cardHeight * (1 - OVERLAP_PERCENT);
+        }
+      });
+
+      setCardPositions(positions);
+
+      // Calculate total height: last position + last card height
+      const lastCard = cardRefs.current[cardRefs.current.length - 1];
+      if (lastCard && positions.length > 0) {
+        setTotalHeight(positions[positions.length - 1] + lastCard.offsetHeight);
+      }
+    };
+
+    // Initial calculation
+    calculatePositions();
+
+    // Recalculate on resize
+    const resizeObserver = new ResizeObserver(calculatePositions);
+    cardRefs.current.forEach((card) => {
+      if (card) resizeObserver.observe(card);
+    });
+
+    return () => resizeObserver.disconnect();
+  }, []);
+
+  // Hardcoded rotations: subtle alternating pattern
+  const rotations = [0, 0.8, -0.5, 1, -0.8, 0.6, -1, 0.8, -0.6, 0.9, -0.7];
+  // Hardcoded x offsets: subtle left/right variation (in pixels)
+  const xOffsets = [0, 8, -5, 12, -8, 6, -10, 8, -6, 10, -7];
+
   return (
     <section className="relative bg-black py-16 md:py-24 px-4 md:px-6">
       {/* Header */}
@@ -73,28 +122,25 @@ export function StackingUseCases() {
         </p>
       </div>
 
-      {/* Cards - stacked with slight overlap and rotation */}
-      {/* Mobile: 200px spacing, Desktop: 170px spacing */}
+      {/* Cards - stacked with dynamic overlap based on card height */}
       <div
-        className="max-w-4xl mx-auto relative [--card-spacing:190px] md:[--card-spacing:170px]"
+        ref={containerRef}
+        className="max-w-4xl mx-auto relative"
         style={{
-          paddingBottom: `calc(${useCases.length} * var(--card-spacing) + 80px)`,
+          height: totalHeight > 0 ? `${totalHeight}px` : 'auto',
         }}
       >
         {useCases.map((useCase, i) => {
-          // Hardcoded rotations: subtle alternating pattern
-          const rotations = [0, 0.8, -0.5, 1, -0.8, 0.6, -1, 0.8, -0.6, 0.9, -0.7];
           const rotation = rotations[i] || 0;
-          // Hardcoded x offsets: subtle left/right variation (in pixels)
-          const xOffsets = [0, 8, -5, 12, -8, 6, -10, 8, -6, 10, -7];
           const xOffset = xOffsets[i] || 0;
 
           return (
             <div
               key={i}
+              ref={(el) => { cardRefs.current[i] = el; }}
               className="absolute left-1/2 w-full max-w-3xl px-4"
               style={{
-                top: `calc(${i} * var(--card-spacing))`,
+                top: cardPositions[i] ?? i * 170, // Fallback to estimate before measurement
                 transform: `translateX(calc(-50% + ${xOffset}px)) rotate(${rotation}deg)`,
                 zIndex: i + 1,
               }}

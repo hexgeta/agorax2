@@ -37,4 +37,25 @@ yarn-error.log*
 next-env.d.ts
 
 # Private configuration
-config/whitelisted-emails.private.ts 
+config/whitelisted-emails.private.ts
+
+# Hardhat
+/cache
+/artifacts
+
+# IDE
+.vscode
+.idea
+.conductor
+
+# Subgraph
+/subgraph/node_modules
+/subgraph/build
+/subgraph/generated
+
+# Misc project files
+order_query.json
+
+# Test files
+/test
+scripts/test-*.ts

@@ -102,15 +102,9 @@ export default function DiscoverPage() {
     markAsViewed(orderId, 'passed');
   }, [markAsViewed]);
 
-  // Handle fill order (would open a modal in production)
+  // Handle fill order
   const handleFillOrder = useCallback((order: ScoredOrder) => {
-    // For now, just close drawer and log
-    // In production, this would open a fill modal similar to OpenPositionsTable
-    console.log('Fill order:', order.orderDetailsWithID.orderID.toString());
     setDrawerOpen(false);
-
-    // Navigate to marketplace with order highlighted
-    // Or open a fill modal - implementation depends on existing patterns
     window.location.href = `/marketplace?orderId=${order.orderDetailsWithID.orderID}`;
   }, []);
 

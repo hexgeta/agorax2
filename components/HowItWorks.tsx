@@ -38,7 +38,7 @@ export function HowItWorks() {
           <Circle ref={sellToken2Ref} className="h-10 w-10 md:h-14 md:w-14 p-1">
             <CoinLogo symbol="INC" size="lg" />
           </Circle>
-          <Circle ref={sellToken3Ref} className="h-10 w-10 md:h-14 md:w-14 p-1">
+          <Circle ref={sellToken3Ref} className="h-10 w-10 md:h-14 md:w-14 p-2">
             <CoinLogo symbol="PLSX" size="lg" />
           </Circle>
         </div>
