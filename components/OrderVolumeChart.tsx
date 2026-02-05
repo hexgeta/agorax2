@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { ComposedChart, Bar, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 import { getTokenPrice, formatUSD } from '@/utils/format';
 import { getTokenInfo } from '@/utils/tokenUtils';
@@ -107,7 +107,7 @@ export default function OrderVolumeChart({ orders, tokenPrices, contractOrders =
     if (dates.length === 0) return [];
 
     const minDate = new Date(dates[0]);
-    const maxDate = new Date(dates[dates.length - 1]);
+    const maxDate = new Date(); // Use today's date
 
     // Fill in all days between min and max
     const allDays: {
@@ -116,19 +116,24 @@ export default function OrderVolumeChart({ orders, tokenPrices, contractOrders =
       orderCount: number;
       uniqueCreators: number;
       displayDate: string;
+      cumulative: number;
     }[] = [];
     const currentDate = new Date(minDate);
+    let cumulativeTotal = 0;
 
     while (currentDate <= maxDate) {
       const dateStr = currentDate.toISOString().split('T')[0];
       const dayData = volumeByDay[dateStr];
+      const dayVolume = dayData?.volume || 0;
+      cumulativeTotal += dayVolume;
 
       allDays.push({
         date: dateStr,
-        volume: dayData?.volume || 0,
+        volume: dayVolume,
         orderCount: dayData?.orderCount || 0,
         uniqueCreators: dayData?.uniqueCreators?.size || 0,
-        displayDate: currentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+        displayDate: currentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        cumulative: cumulativeTotal
       });
 
       // Move to next day
@@ -175,10 +180,16 @@ export default function OrderVolumeChart({ orders, tokenPrices, contractOrders =
       </div>
 
       <ResponsiveContainer width="100%" height={300}>
-        <BarChart
+        <ComposedChart
           data={chartData}
           margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
         >
+          <defs>
+            <linearGradient id="cumulativeGradientPink" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#FF0080" stopOpacity={0.3} />
+              <stop offset="95%" stopColor="#FF0080" stopOpacity={0.05} />
+            </linearGradient>
+          </defs>
           <CartesianGrid strokeDasharray="10 10" stroke="#FFFFFF20" />
           <XAxis
             dataKey="displayDate"
@@ -187,9 +198,18 @@ export default function OrderVolumeChart({ orders, tokenPrices, contractOrders =
             tickLine={{ stroke: '#FFFFFF' }}
           />
           <YAxis
+            yAxisId="left"
             stroke="#FFFFFF"
             tick={{ fill: '#FFFFFF' }}
             tickLine={{ stroke: '#FFFFFF' }}
+            tickFormatter={(value) => formatUSD(value)}
+          />
+          <YAxis
+            yAxisId="right"
+            orientation="right"
+            stroke="#FF008080"
+            tick={{ fill: '#FF008080' }}
+            tickLine={{ stroke: '#FF008080' }}
             tickFormatter={(value) => formatUSD(value)}
           />
           <Tooltip
@@ -214,6 +234,10 @@ export default function OrderVolumeChart({ orders, tokenPrices, contractOrders =
                     <span style={{ fontWeight: 'bold' }}>{formatUSD(data.volume)}</span>
                   </p>
                   <p style={{ margin: '4px 0', fontSize: '14px' }}>
+                    <span style={{ color: '#FF0080' }}>Cumulative:</span>{' '}
+                    <span style={{ fontWeight: 'bold' }}>{formatUSD(data.cumulative)}</span>
+                  </p>
+                  <p style={{ margin: '4px 0', fontSize: '14px' }}>
                     <span style={{ color: '#FFFFFF' }}>Orders Created:</span>{' '}
                     <span style={{ fontWeight: 'bold' }}>{data.orderCount}</span>
                   </p>
@@ -229,13 +253,24 @@ export default function OrderVolumeChart({ orders, tokenPrices, contractOrders =
             wrapperStyle={{ color: '#FFFFFF' }}
             iconType="square"
           />
+          <Area
+            yAxisId="right"
+            type="monotone"
+            dataKey="cumulative"
+            fill="url(#cumulativeGradientPink)"
+            stroke="#FF0080"
+            strokeWidth={2}
+            strokeOpacity={0.6}
+            name="Cumulative (USD)"
+          />
           <Bar
+            yAxisId="left"
             dataKey="volume"
             fill="#FF0080"
             radius={[8, 8, 0, 0]}
             name="Listed Value (USD)"
           />
-        </BarChart>
+        </ComposedChart>
       </ResponsiveContainer>
     </LiquidGlassCard>
   );

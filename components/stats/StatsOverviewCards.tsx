@@ -163,16 +163,11 @@ export default function StatsOverviewCards({ transactions, orders, tokenPrices, 
   }, [activeOrders, tokenPrices]);
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
       <StatCard
-        label="Total Volume Traded"
-        value={formatUSD(totalTradingVolume)}
-        subValue={`${transactions.length} fills`}
-      />
-      <StatCard
-        label="Total Volume Listed"
-        value={formatUSD(totalListedVolume)}
-        subValue={`${effectiveOrderCount} orders`}
+        label="Total Value Locked"
+        value={formatUSD(totalValueLocked)}
+        subValue={`${activeOrders.length} active orders`}
       />
       <StatCard
         label="Unique Traders"
@@ -180,29 +175,24 @@ export default function StatsOverviewCards({ transactions, orders, tokenPrices, 
         subValue="Buyers & Sellers"
       />
       <StatCard
-        label="Fill Rate"
-        value={`${fillRate.toFixed(1)}%`}
-        subValue="Volume traded vs listed"
-      />
-      <StatCard
-        label="Avg Order Size"
+        label="Avg Placement Size"
         value={formatUSD(avgOrderSize)}
         subValue="Per order created"
       />
       <StatCard
-        label="Avg Trade Size"
+        label="Avg Fill Size"
         value={formatUSD(avgTradeSize)}
         subValue="Per fill"
       />
       <StatCard
-        label="Completion Rate"
-        value={`${completionRate.toFixed(1)}%`}
-        subValue="Orders with fills"
+        label="$ Fill %"
+        value={`${fillRate.toFixed(1)}%`}
+        subValue="% of $ filled vs listed"
       />
       <StatCard
-        label="Total Value Locked"
-        value={formatUSD(totalValueLocked)}
-        subValue={`${activeOrders.length} active orders`}
+        label="Order Fill %"
+        value={`${completionRate.toFixed(1)}%`}
+        subValue="% of orders filled vs listed"
       />
     </div>
   );

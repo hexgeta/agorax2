@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { ComposedChart, Bar, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 import { getTokenPrice, formatUSD } from '@/utils/format';
 
@@ -78,7 +78,7 @@ export default function VolumeChart({ transactions, tokenPrices }: VolumeChartPr
     if (dates.length === 0) return [];
 
     const minDate = new Date(dates[0]);
-    const maxDate = new Date(dates[dates.length - 1]);
+    const maxDate = new Date(); // Use today's date
 
     // Fill in all days between min and max
     const allDays: {
@@ -87,19 +87,24 @@ export default function VolumeChart({ transactions, tokenPrices }: VolumeChartPr
       trades: number;
       uniqueAddresses: number;
       displayDate: string;
+      cumulative: number;
     }[] = [];
     const currentDate = new Date(minDate);
+    let cumulativeTotal = 0;
 
     while (currentDate <= maxDate) {
       const dateStr = currentDate.toISOString().split('T')[0];
       const dayData = volumeByDay[dateStr];
+      const dayVolume = dayData?.volume || 0;
+      cumulativeTotal += dayVolume;
 
       allDays.push({
         date: dateStr,
-        volume: dayData?.volume || 0,
+        volume: dayVolume,
         trades: dayData?.trades || 0,
         uniqueAddresses: dayData?.uniqueAddresses?.size || 0,
-        displayDate: currentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+        displayDate: currentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        cumulative: cumulativeTotal
       });
 
       // Move to next day
@@ -142,10 +147,16 @@ export default function VolumeChart({ transactions, tokenPrices }: VolumeChartPr
       </div>
 
       <ResponsiveContainer width="100%" height={300}>
-        <BarChart
+        <ComposedChart
           data={chartData}
           margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
         >
+          <defs>
+            <linearGradient id="cumulativeGradientWhite" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#FFFFFF" stopOpacity={0.3} />
+              <stop offset="95%" stopColor="#FFFFFF" stopOpacity={0.05} />
+            </linearGradient>
+          </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="#FFFFFF20" />
           <XAxis
             dataKey="displayDate"
@@ -154,20 +165,21 @@ export default function VolumeChart({ transactions, tokenPrices }: VolumeChartPr
             tickLine={{ stroke: '#FFFFFF' }}
           />
           <YAxis
+            yAxisId="left"
             stroke="#FFFFFF"
             tick={{ fill: '#FFFFFF' }}
             tickLine={{ stroke: '#FFFFFF' }}
             tickFormatter={(value) => formatUSD(value)}
           />
+          <YAxis
+            yAxisId="right"
+            orientation="right"
+            stroke="#FFFFFF80"
+            tick={{ fill: '#FFFFFF80' }}
+            tickLine={{ stroke: '#FFFFFF80' }}
+            tickFormatter={(value) => formatUSD(value)}
+          />
           <Tooltip
-            contentStyle={{
-              backgroundColor: '#000',
-              border: '2px solid #FFFFFF',
-              borderRadius: '8px',
-              color: '#fff',
-              padding: '12px',
-            }}
-            labelStyle={{ color: '#FFFFFF', fontWeight: 'bold', marginBottom: '8px' }}
             content={({ active, payload }) => {
               if (!active || !payload || !payload[0]) return null;
 
@@ -189,6 +201,10 @@ export default function VolumeChart({ transactions, tokenPrices }: VolumeChartPr
                     <span style={{ fontWeight: 'bold' }}>{formatUSD(data.volume)}</span>
                   </p>
                   <p style={{ margin: '4px 0', fontSize: '14px' }}>
+                    <span style={{ color: '#FFFFFF80' }}>Cumulative:</span>{' '}
+                    <span style={{ fontWeight: 'bold' }}>{formatUSD(data.cumulative)}</span>
+                  </p>
+                  <p style={{ margin: '4px 0', fontSize: '14px' }}>
                     <span style={{ color: '#FFFFFF' }}>Trades:</span>{' '}
                     <span style={{ fontWeight: 'bold' }}>{data.trades}</span>
                   </p>
@@ -204,13 +220,24 @@ export default function VolumeChart({ transactions, tokenPrices }: VolumeChartPr
             wrapperStyle={{ color: '#FFFFFF' }}
             iconType="square"
           />
+          <Area
+            yAxisId="right"
+            type="monotone"
+            dataKey="cumulative"
+            fill="url(#cumulativeGradientWhite)"
+            stroke="#FFFFFF"
+            strokeWidth={2}
+            strokeOpacity={0.6}
+            name="Cumulative (USD)"
+          />
           <Bar
+            yAxisId="left"
             dataKey="volume"
             fill="#FFFFFF"
             radius={[8, 8, 0, 0]}
             name="Volume (USD)"
           />
-        </BarChart>
+        </ComposedChart>
       </ResponsiveContainer>
     </LiquidGlassCard >
   );

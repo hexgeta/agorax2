@@ -8,8 +8,6 @@ import { DisclaimerDialog } from '@/components/DisclaimerDialog';
 import { PixelSpinner } from '@/components/ui/PixelSpinner';
 import { LogoPreloader } from '@/components/LogoPreloader';
 import PixelBlastBackground from '@/components/ui/PixelBlastBackground';
-import VolumeChart from '@/components/VolumeChart';
-import OrderVolumeChart from '@/components/OrderVolumeChart';
 import StatsOverviewCards from '@/components/stats/StatsOverviewCards';
 import TopTradersLeaderboard from '@/components/stats/TopTradersLeaderboard';
 import TopTokensChart from '@/components/stats/TopTokensChart';
@@ -21,6 +19,7 @@ import { useOpenPositions } from '@/hooks/contracts/useOpenPositions';
 import { useContractWhitelistRead } from '@/hooks/contracts/useContractWhitelistRead';
 import { getContractAddress } from '@/config/testing';
 import { getTokenInfo, formatTokenAmount } from '@/utils/tokenUtils';
+import { CoinLogo } from '@/components/ui/CoinLogo';
 
 interface Transaction {
   transactionHash: string;
@@ -51,6 +50,8 @@ export default function StatsPage() {
   const [orders, setOrders] = useState<OrderPlaced[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadingProgress, setLoadingProgress] = useState<string>('Initializing...');
+  const [selectedTokenFilter, setSelectedTokenFilter] = useState<{ address: string; ticker: string } | null>(null);
+  const [selectedTraderFilter, setSelectedTraderFilter] = useState<string | null>(null);
 
   const OTC_CONTRACT_ADDRESS = getContractAddress(chainId);
 
@@ -264,6 +265,110 @@ export default function StatsPage() {
 
   const hasData = transactions.length > 0 || orders.length > 0 || contractOrders.length > 0;
 
+  // Filter data based on selected token and/or trader
+  const filteredTransactions = useMemo(() => {
+    let result = transactions;
+
+    if (selectedTokenFilter) {
+      const tokenAddr = selectedTokenFilter.address.toLowerCase();
+      result = result.filter(tx =>
+        tx.sellToken.toLowerCase() === tokenAddr ||
+        Object.keys(tx.buyTokens).some(addr => addr.toLowerCase() === tokenAddr)
+      );
+    }
+
+    if (selectedTraderFilter) {
+      const traderAddr = selectedTraderFilter.toLowerCase();
+      result = result.filter(tx => tx.buyer?.toLowerCase() === traderAddr);
+    }
+
+    return result;
+  }, [transactions, selectedTokenFilter, selectedTraderFilter]);
+
+  const filteredOrders = useMemo(() => {
+    let result = orders;
+
+    if (selectedTokenFilter) {
+      const tokenAddr = selectedTokenFilter.address.toLowerCase();
+      result = result.filter(order => order.sellToken.toLowerCase() === tokenAddr);
+    }
+
+    if (selectedTraderFilter) {
+      const traderAddr = selectedTraderFilter.toLowerCase();
+      result = result.filter(order => order.orderOwner.toLowerCase() === traderAddr);
+    }
+
+    return result;
+  }, [orders, selectedTokenFilter, selectedTraderFilter]);
+
+  const filteredContractOrders = useMemo(() => {
+    let result = contractOrders;
+
+    if (selectedTokenFilter) {
+      const tokenAddr = selectedTokenFilter.address.toLowerCase();
+      result = result.filter(order =>
+        order.orderDetailsWithID.orderDetails.sellToken.toLowerCase() === tokenAddr ||
+        order.orderDetailsWithID.orderDetails.buyTokensIndex.some((idx) => {
+          const addr = whitelist[Number(idx)];
+          return addr && addr.toLowerCase() === tokenAddr;
+        })
+      );
+    }
+
+    if (selectedTraderFilter) {
+      const traderAddr = selectedTraderFilter.toLowerCase();
+      result = result.filter(order =>
+        order.userDetails.orderOwner?.toLowerCase() === traderAddr
+      );
+    }
+
+    return result;
+  }, [contractOrders, selectedTokenFilter, selectedTraderFilter, whitelist]);
+
+  const filteredActiveOrders = useMemo(() => {
+    let result = activeOrders;
+
+    if (selectedTokenFilter) {
+      const tokenAddr = selectedTokenFilter.address.toLowerCase();
+      result = result.filter(order =>
+        order.orderDetailsWithID.orderDetails.sellToken.toLowerCase() === tokenAddr ||
+        order.orderDetailsWithID.orderDetails.buyTokensIndex.some((idx) => {
+          const addr = whitelist[Number(idx)];
+          return addr && addr.toLowerCase() === tokenAddr;
+        })
+      );
+    }
+
+    if (selectedTraderFilter) {
+      const traderAddr = selectedTraderFilter.toLowerCase();
+      result = result.filter(order =>
+        order.userDetails.orderOwner?.toLowerCase() === traderAddr
+      );
+    }
+
+    return result;
+  }, [activeOrders, selectedTokenFilter, selectedTraderFilter, whitelist]);
+
+  // Handle token filter selection
+  const handleTokenFilterSelect = useCallback((address: string, ticker: string) => {
+    if (selectedTokenFilter?.address.toLowerCase() === address.toLowerCase()) {
+      // Clicking the same token clears the filter
+      setSelectedTokenFilter(null);
+    } else {
+      setSelectedTokenFilter({ address, ticker });
+    }
+  }, [selectedTokenFilter]);
+
+  // Handle trader filter selection
+  const handleTraderFilterSelect = useCallback((address: string) => {
+    if (selectedTraderFilter?.toLowerCase() === address.toLowerCase()) {
+      // Clicking the same trader clears the filter
+      setSelectedTraderFilter(null);
+    } else {
+      setSelectedTraderFilter(address);
+    }
+  }, [selectedTraderFilter]);
+
   return (
     <>
       <DisclaimerDialog open={showDisclaimer} onAccept={() => setShowDisclaimer(false)} />
@@ -282,17 +387,6 @@ export default function StatsPage() {
         {/* Main Content */}
         <div className="w-full px-2 md:px-8 mt-2 pb-12 relative z-10">
           <div className="max-w-[1200px] mx-auto">
-            {/* Header */}
-            <motion.div
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              className="mb-8"
-            >
-              <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">Protocol Stats</h1>
-              <p className="text-gray-400">Real-time analytics from on-chain data</p>
-            </motion.div>
-
             {isLoading ? (
               <motion.div
                 initial={{ opacity: 0 }}
@@ -319,36 +413,69 @@ export default function StatsPage() {
                 transition={{ duration: 0.5, delay: 0.2 }}
                 className="space-y-6"
               >
+                {/* Filter Indicator */}
+                {(selectedTokenFilter || selectedTraderFilter) && (
+                  <div className="flex flex-wrap items-center gap-3 p-3 bg-white/5 border border-white/10 rounded-lg">
+                    <span className="text-gray-400 text-sm">Filtering by:</span>
+                    {selectedTokenFilter && (
+                      <div className="flex items-center gap-2 px-2 py-1 bg-white/10 rounded">
+                        <CoinLogo symbol={selectedTokenFilter.ticker} size="sm" />
+                        <span className="text-white font-medium">{selectedTokenFilter.ticker}</span>
+                        <button
+                          onClick={() => setSelectedTokenFilter(null)}
+                          className="text-gray-400 hover:text-white transition-colors"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    )}
+                    {selectedTraderFilter && (
+                      <div className="flex items-center gap-2 px-2 py-1 bg-white/10 rounded">
+                        <span className="text-white font-mono text-sm">
+                          {selectedTraderFilter.slice(0, 6)}...{selectedTraderFilter.slice(-4)}
+                        </span>
+                        <button
+                          onClick={() => setSelectedTraderFilter(null)}
+                          className="text-gray-400 hover:text-white transition-colors"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    )}
+                    <button
+                      onClick={() => {
+                        setSelectedTokenFilter(null);
+                        setSelectedTraderFilter(null);
+                      }}
+                      className="ml-auto flex items-center gap-1 px-3 py-1 text-sm text-gray-400 hover:text-white hover:bg-white/10 rounded transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      Clear all
+                    </button>
+                  </div>
+                )}
+
                 {/* Overview Stats Cards */}
                 <StatsOverviewCards
-                  transactions={transactions}
-                  orders={orders}
+                  transactions={filteredTransactions}
+                  orders={filteredOrders}
                   tokenPrices={tokenPrices}
-                  contractOrders={contractOrders}
-                  activeOrders={activeOrders}
+                  contractOrders={filteredContractOrders}
+                  activeOrders={filteredActiveOrders}
                 />
 
-                {/* Charts Grid - 2 columns on desktop */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Order Creation Volume Chart */}
-                  <OrderVolumeChart
-                    orders={orders}
-                    tokenPrices={tokenPrices}
-                    contractOrders={contractOrders}
-                  />
-
-                  {/* Order Fill Volume Chart */}
-                  <VolumeChart
-                    transactions={transactions}
-                    tokenPrices={tokenPrices}
-                  />
-                </div>
-
-                {/* Protocol Growth Chart */}
+                {/* Protocol Activity Chart - Combined volume bars and cumulative lines */}
                 <ProtocolActivityChart
-                  transactions={transactions}
-                  orders={orders}
-                  contractOrders={contractOrders}
+                  transactions={filteredTransactions}
+                  orders={filteredOrders}
+                  contractOrders={filteredContractOrders}
+                  tokenPrices={tokenPrices}
                 />
 
                 {/* Top Tokens Chart */}
@@ -357,34 +484,35 @@ export default function StatsPage() {
                   orders={orders}
                   tokenPrices={tokenPrices}
                   contractOrders={contractOrders}
+                  onTokenSelect={handleTokenFilterSelect}
+                  selectedToken={selectedTokenFilter?.address}
+                />
+
+                {/* Top Traders Leaderboard */}
+                <TopTradersLeaderboard
+                  transactions={transactions}
+                  orders={orders}
+                  tokenPrices={tokenPrices}
+                  contractOrders={contractOrders}
+                  onTraderSelect={handleTraderFilterSelect}
+                  selectedTrader={selectedTraderFilter ?? undefined}
                 />
 
                 {/* Limit Order Price Levels Chart */}
-                {activeOrders.length > 0 && whitelist.length > 0 && (
+                {filteredActiveOrders.length > 0 && whitelist.length > 0 && (
                   <TokenOrderPricesChart
-                    orders={activeOrders}
+                    orders={filteredActiveOrders}
                     tokenPrices={tokenPrices}
                     whitelist={whitelist}
                   />
                 )}
 
-                {/* Two column layout for leaderboard and heatmap */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Top Traders Leaderboard */}
-                  <TopTradersLeaderboard
-                    transactions={transactions}
-                    orders={orders}
-                    tokenPrices={tokenPrices}
-                    contractOrders={contractOrders}
-                  />
-
-                  {/* Hourly Activity Heatmap */}
-                  <HourlyActivityChart
-                    transactions={transactions}
-                    orders={orders}
-                    contractOrders={contractOrders}
-                  />
-                </div>
+                {/* Hourly Activity Heatmap */}
+                <HourlyActivityChart
+                  transactions={filteredTransactions}
+                  orders={filteredOrders}
+                  contractOrders={filteredContractOrders}
+                />
 
                 {/* Footer note */}
                 <div className="text-center text-gray-500 text-sm pt-4">

@@ -1,12 +1,15 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
+import { useAccount } from 'wagmi';
 import { ComposedChart, Scatter, XAxis, YAxis, ReferenceLine, ResponsiveContainer, Tooltip, Line, Cell } from 'recharts';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 import { formatUSD, formatPriceSigFig, getTokenPrice } from '@/utils/format';
 import { getTokenInfo, getTokenInfoByIndex } from '@/utils/tokenUtils';
 import { CoinLogo } from '@/components/ui/CoinLogo';
 import { CompleteOrderDetails } from '@/hooks/contracts/useOpenPositions';
+import OrderbookDepthChart from './OrderbookDepthChart';
 
 interface TokenOrderPricesChartProps {
   orders: CompleteOrderDetails[];
@@ -23,6 +26,7 @@ interface OrderPriceLevel {
   counterToken: string; // The other token in the trade
   isSelling: boolean; // Is the selected token being sold or bought?
   timestamp: number; // Order creation time
+  owner: string; // Order owner address
 }
 
 interface TokenOrderData {
@@ -38,6 +42,7 @@ interface TokenOrderData {
 
 export default function TokenOrderPricesChart({ orders, tokenPrices, whitelist }: TokenOrderPricesChartProps) {
   const [selectedToken, setSelectedToken] = useState<string | null>(null);
+  const { address: connectedAddress } = useAccount();
 
   // Process orders to get price levels for ALL tokens (both sell and buy sides)
   const tokenOrderData = useMemo(() => {
@@ -125,7 +130,8 @@ export default function TokenOrderPricesChart({ orders, tokenPrices, whitelist }
           valueUSD: sellValueUSD,
           counterToken: buyTokenInfo.ticker,
           isSelling: true,
-          timestamp
+          timestamp,
+          owner: order.userDetails.orderOwner?.toLowerCase() || ''
         };
 
         tokenMap[sellTokenAddr].orders.push(sellTokenOrder);
@@ -153,7 +159,8 @@ export default function TokenOrderPricesChart({ orders, tokenPrices, whitelist }
           valueUSD: askingValueUSD,
           counterToken: sellTokenInfo.ticker,
           isSelling: false,
-          timestamp
+          timestamp,
+          owner: order.userDetails.orderOwner?.toLowerCase() || ''
         };
 
         tokenMap[buyTokenAddr].orders.push(buyTokenOrder);
@@ -484,10 +491,16 @@ export default function TokenOrderPricesChart({ orders, tokenPrices, whitelist }
           {sortedOrders.map((order, index) => {
             // Above market = green, Below market = red
             const color = order.positionPercent > 0 ? '#4ADE80' : '#FF6B6B';
+            const isOwnOrder = connectedAddress && order.owner === connectedAddress.toLowerCase();
+            const href = isOwnOrder
+              ? `/my-orders?orderId=${order.orderId}`
+              : `/marketplace?order-id=${order.orderId}`;
+
             return (
-              <div
+              <Link
                 key={`${order.orderId}-${order.counterToken}-${index}`}
-                className="flex items-center justify-between p-2 bg-white/5 rounded text-sm"
+                href={href}
+                className="flex items-center justify-between p-2 bg-white/5 hover:bg-white/10 rounded text-sm transition-colors cursor-pointer"
               >
                 <div className="flex items-center gap-3">
                   <span className="text-gray-400">#{order.orderId}</span>
@@ -500,6 +513,11 @@ export default function TokenOrderPricesChart({ orders, tokenPrices, whitelist }
                   <span className={`text-xs px-1.5 py-0.5 rounded ${order.isSelling ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'}`}>
                     {order.isSelling ? 'SELL' : 'BUY'}
                   </span>
+                  {isOwnOrder && (
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400">
+                      MANAGE
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-4">
                   <span className="text-gray-400">{formatUSD(order.valueUSD)}</span>
@@ -511,10 +529,20 @@ export default function TokenOrderPricesChart({ orders, tokenPrices, whitelist }
                     {order.positionPercent > 0 ? '+' : ''}{order.positionPercent.toFixed(1)}%
                   </span>
                 </div>
-              </div>
+              </Link>
             );
           })}
         </div>
+      </div>
+
+      {/* Orderbook Depth Chart */}
+      <div className="mt-6">
+        <OrderbookDepthChart
+          orders={orders}
+          tokenPrices={tokenPrices}
+          whitelist={whitelist}
+          selectedToken={displayToken.address}
+        />
       </div>
     </LiquidGlassCard>
   );

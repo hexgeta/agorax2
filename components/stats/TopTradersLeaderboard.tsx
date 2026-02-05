@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
+import Link from 'next/link';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 import { formatUSD, getTokenPrice } from '@/utils/format';
 import { getTokenInfo } from '@/utils/tokenUtils';
@@ -32,6 +33,8 @@ interface TopTradersLeaderboardProps {
   orders: OrderPlaced[];
   tokenPrices: Record<string, { price: number }>;
   contractOrders?: CompleteOrderDetails[];
+  onTraderSelect?: (address: string) => void;
+  selectedTrader?: string;
 }
 
 interface TraderStats {
@@ -48,7 +51,7 @@ function formatAddress(address: string): string {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
-export default function TopTradersLeaderboard({ transactions, orders, tokenPrices, contractOrders = [] }: TopTradersLeaderboardProps) {
+export default function TopTradersLeaderboard({ transactions, orders, tokenPrices, contractOrders = [], onTraderSelect, selectedTrader }: TopTradersLeaderboardProps) {
   // Calculate trader stats
   const traderStats = useMemo(() => {
     const stats: Record<string, TraderStats> = {};
@@ -160,21 +163,27 @@ export default function TopTradersLeaderboard({ transactions, orders, tokenPrice
         {/* Header */}
         <div className="grid grid-cols-12 gap-2 text-gray-400 text-xs font-medium pb-2 border-b border-white/10">
           <div className="col-span-1">#</div>
-          <div className="col-span-3">Address</div>
-          <div className="col-span-3 text-right">Buy Volume</div>
+          <div className="col-span-2">Address</div>
+          <div className="col-span-2 text-right">Buy Volume</div>
           <div className="col-span-3 text-right">Sell Volume</div>
           <div className="col-span-2 text-right">Total</div>
+          <div className="col-span-2 text-right"></div>
         </div>
 
         {/* Rows */}
         {traderStats.map((trader, index) => {
           const barWidth = (trader.totalVolume / maxVolume) * 100;
+          const isSelected = selectedTrader?.toLowerCase() === trader.address.toLowerCase();
 
           return (
-            <div key={trader.address} className="relative">
+            <div
+              key={trader.address}
+              className={`relative cursor-pointer transition-all ${isSelected ? 'ring-1 ring-white/50 rounded' : 'hover:bg-white/5 rounded'}`}
+              onClick={() => onTraderSelect?.(trader.address)}
+            >
               {/* Background bar */}
               <div
-                className="absolute inset-0 bg-white/5 rounded"
+                className={`absolute inset-0 rounded ${isSelected ? 'bg-white/10' : 'bg-white/5'}`}
                 style={{ width: `${barWidth}%` }}
               />
 
@@ -185,17 +194,17 @@ export default function TopTradersLeaderboard({ transactions, orders, tokenPrice
                     {index + 1}
                   </span>
                 </div>
-                <div className="col-span-3">
-                  <a
-                    href={`https://scan.pulsechain.com/address/${trader.address}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-white hover:text-gray-300 font-mono text-sm"
-                  >
-                    {formatAddress(trader.address)}
-                  </a>
+                <div className="col-span-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-white font-mono text-sm">
+                      {formatAddress(trader.address)}
+                    </span>
+                    {isSelected && (
+                      <span className="text-[10px] px-1.5 py-0.5 bg-white/20 text-white rounded">FILTERED</span>
+                    )}
+                  </div>
                 </div>
-                <div className="col-span-3 text-right">
+                <div className="col-span-2 text-right">
                   <span className="text-green-400 text-sm">{formatUSD(trader.buyVolume)}</span>
                   <span className="text-gray-500 text-xs ml-1">({trader.buyCount})</span>
                 </div>
@@ -205,6 +214,18 @@ export default function TopTradersLeaderboard({ transactions, orders, tokenPrice
                 </div>
                 <div className="col-span-2 text-right">
                   <span className="text-white font-bold text-sm">{formatUSD(trader.totalVolume)}</span>
+                </div>
+                <div className="col-span-2 text-right">
+                  <Link
+                    href={`/marketplace?seller=${trader.address}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white text-black text-xs font-medium rounded-full hover:bg-white/90 transition-colors"
+                  >
+                    Marketplace
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </Link>
                 </div>
               </div>
             </div>

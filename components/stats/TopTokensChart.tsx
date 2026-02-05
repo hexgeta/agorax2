@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell } from 'recharts';
+import Link from 'next/link';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 import { formatUSD, getTokenPrice } from '@/utils/format';
 import { getTokenInfo } from '@/utils/tokenUtils';
@@ -34,6 +34,8 @@ interface TopTokensChartProps {
   orders: OrderPlaced[];
   tokenPrices: Record<string, { price: number }>;
   contractOrders?: CompleteOrderDetails[];
+  onTokenSelect?: (address: string, ticker: string) => void;
+  selectedToken?: string;
 }
 
 interface TokenStats {
@@ -45,9 +47,7 @@ interface TokenStats {
   fillCount: number;
 }
 
-const COLORS = ['#FFFFFF', '#E5E5E5', '#CCCCCC', '#B3B3B3', '#999999', '#808080', '#666666', '#4D4D4D', '#333333', '#1A1A1A'];
-
-export default function TopTokensChart({ transactions, orders, tokenPrices, contractOrders = [] }: TopTokensChartProps) {
+export default function TopTokensChart({ transactions, orders, tokenPrices, contractOrders = [], onTokenSelect, selectedToken }: TopTokensChartProps) {
   // Calculate token stats
   const tokenStats = useMemo(() => {
     const stats: Record<string, TokenStats> = {};
@@ -69,7 +69,6 @@ export default function TopTokensChart({ transactions, orders, tokenPrices, cont
     // Process orders (listed volume) - prefer contract orders if available
     if (contractOrders.length > 0) {
       contractOrders.forEach(order => {
-        // Track sell token
         const sellAddr = order.orderDetailsWithID.orderDetails.sellToken.toLowerCase();
         const sellTokenInfo = getTokenInfo(sellAddr);
         const sellAmount = Number(order.orderDetailsWithID.orderDetails.sellAmount) / Math.pow(10, sellTokenInfo.decimals);
@@ -81,10 +80,8 @@ export default function TopTokensChart({ transactions, orders, tokenPrices, cont
         stats[sellAddr].orderCount += 1;
       });
     } else {
-      // Fallback to event-based orders
       orders.forEach(order => {
         const addr = order.sellToken.toLowerCase();
-        const tokenInfo = getTokenInfo(addr);
         const price = getTokenPrice(addr, tokenPrices);
         const volume = order.sellAmount * price;
 
@@ -94,9 +91,8 @@ export default function TopTokensChart({ transactions, orders, tokenPrices, cont
       });
     }
 
-    // Process fills (traded volume) - count both sell and buy tokens
+    // Process fills (traded volume) - only count sell side for fills/orders ratio
     transactions.forEach(tx => {
-      // Track sell token (what was sold from the order)
       if (tx.sellToken) {
         const sellAddr = tx.sellToken.toLowerCase();
         const sellPrice = getTokenPrice(sellAddr, tokenPrices);
@@ -107,7 +103,7 @@ export default function TopTokensChart({ transactions, orders, tokenPrices, cont
         stats[sellAddr].fillCount += 1;
       }
 
-      // Track buy tokens (what was paid by the buyer)
+      // Add buy tokens volume but don't count as fills (they weren't listed as orders)
       Object.entries(tx.buyTokens).forEach(([addr, amount]) => {
         const buyAddr = addr.toLowerCase();
         const buyPrice = getTokenPrice(buyAddr, tokenPrices);
@@ -115,11 +111,10 @@ export default function TopTokensChart({ transactions, orders, tokenPrices, cont
 
         ensureToken(buyAddr);
         stats[buyAddr].tradedVolume += buyVolume;
-        stats[buyAddr].fillCount += 1;
+        // Don't increment fillCount for buy tokens - only sell tokens have orders
       });
     });
 
-    // Sort by total volume and take top 10
     return Object.values(stats)
       .sort((a, b) => (b.listedVolume + b.tradedVolume) - (a.listedVolume + a.tradedVolume))
       .slice(0, 10);
@@ -129,13 +124,7 @@ export default function TopTokensChart({ transactions, orders, tokenPrices, cont
     return null;
   }
 
-  const chartData = tokenStats.map(token => ({
-    ticker: token.ticker,
-    address: token.address,
-    listed: token.listedVolume,
-    traded: token.tradedVolume,
-    total: token.listedVolume + token.tradedVolume
-  }));
+  const maxVolume = tokenStats[0] ? tokenStats[0].listedVolume + tokenStats[0].tradedVolume : 1;
 
   return (
     <LiquidGlassCard
@@ -143,97 +132,89 @@ export default function TopTokensChart({ transactions, orders, tokenPrices, cont
       shadowIntensity="none"
       glowIntensity="none"
     >
-      <h3 className="text-2xl font-bold text-white mb-6">Most Traded Tokens</h3>
+      <h3 className="text-2xl font-bold text-white mb-6">Top Tokens</h3>
 
-      {/* Token cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
-        {tokenStats.slice(0, 5).map((token, index) => (
-          <div
-            key={token.address}
-            className="bg-white/5 rounded-lg p-3 flex flex-col items-center"
-          >
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-gray-500 text-sm">#{index + 1}</span>
-              <CoinLogo symbol={token.ticker} size="md" />
-            </div>
-            <span className="text-white font-bold text-sm">{token.ticker}</span>
-            <span className="text-gray-400 text-xs">{formatUSD(token.listedVolume)}</span>
-            <span className="text-gray-500 text-xs">{token.orderCount} orders</span>
-          </div>
-        ))}
-      </div>
+      <div className="space-y-3">
+        {/* Header */}
+        <div className="grid grid-cols-12 gap-2 text-gray-400 text-xs font-medium pb-2 border-b border-white/10">
+          <div className="col-span-1">#</div>
+          <div className="col-span-2">Token</div>
+          <div className="col-span-2 text-right">Listed</div>
+          <div className="col-span-2 text-right">Traded</div>
+          <div className="col-span-1 text-right">Total</div>
+          <div className="col-span-2 text-right">Fills/Orders</div>
+          <div className="col-span-2 text-right"></div>
+        </div>
 
-      {/* Bar chart */}
-      <ResponsiveContainer width="100%" height={300}>
-        <BarChart
-          data={chartData}
-          layout="vertical"
-          margin={{ top: 10, right: 30, left: 60, bottom: 0 }}
-        >
-          <XAxis
-            type="number"
-            stroke="#FFFFFF"
-            tick={{ fill: '#FFFFFF', fontSize: 12 }}
-            tickLine={{ stroke: '#FFFFFF' }}
-            tickFormatter={(value) => formatUSD(value)}
-          />
-          <YAxis
-            type="category"
-            dataKey="ticker"
-            stroke="#FFFFFF"
-            tick={{ fill: '#FFFFFF', fontSize: 12 }}
-            tickLine={{ stroke: '#FFFFFF' }}
-            width={50}
-          />
-          <Tooltip
-            content={({ active, payload }) => {
-              if (!active || !payload || !payload[0]) return null;
-              const data = payload[0].payload;
+        {/* Rows */}
+        {tokenStats.map((token, index) => {
+          const totalVolume = token.listedVolume + token.tradedVolume;
+          const barWidth = (totalVolume / maxVolume) * 100;
+          const isSelected = selectedToken?.toLowerCase() === token.address.toLowerCase();
 
-              return (
-                <div style={{
-                  backgroundColor: '#1a1a1a',
-                  border: '2px solid #FFFFFF',
-                  borderRadius: '8px',
-                  padding: '12px',
-                  color: '#fff',
-                }}>
-                  <p style={{ fontWeight: 'bold', marginBottom: '8px' }}>{data.ticker}</p>
-                  <p style={{ margin: '4px 0', fontSize: '14px' }}>
-                    <span style={{ color: '#FF0080' }}>Listed:</span>{' '}
-                    <span style={{ fontWeight: 'bold' }}>{formatUSD(data.listed)}</span>
-                  </p>
-                  <p style={{ margin: '4px 0', fontSize: '14px' }}>
-                    <span style={{ color: '#FFFFFF' }}>Traded:</span>{' '}
-                    <span style={{ fontWeight: 'bold' }}>{formatUSD(data.traded)}</span>
-                  </p>
+          return (
+            <div
+              key={token.address}
+              className={`relative cursor-pointer transition-all ${isSelected ? 'ring-1 ring-white/50 rounded' : 'hover:bg-white/5 rounded'}`}
+              onClick={() => onTokenSelect?.(token.address, token.ticker)}
+            >
+              {/* Background bar */}
+              <div
+                className={`absolute inset-0 rounded ${isSelected ? 'bg-white/10' : 'bg-white/5'}`}
+                style={{ width: `${barWidth}%` }}
+              />
+
+              {/* Content */}
+              <div className="grid grid-cols-12 gap-2 items-center py-2.5 px-1 relative">
+                <div className="col-span-1">
+                  <span className={`text-sm font-bold ${index < 3 ? 'text-white' : 'text-gray-500'}`}>
+                    {index + 1}
+                  </span>
                 </div>
-              );
-            }}
-          />
-          <Bar dataKey="listed" stackId="a" fill="#FF0080" radius={[0, 0, 0, 0]} name="Listed">
-            {chartData.map((_, index) => (
-              <Cell key={`cell-listed-${index}`} fill="#FF0080" />
-            ))}
-          </Bar>
-          <Bar dataKey="traded" stackId="a" fill="#FFFFFF" radius={[0, 4, 4, 0]} name="Traded">
-            {chartData.map((_, index) => (
-              <Cell key={`cell-traded-${index}`} fill="#FFFFFF" />
-            ))}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
-
-      <div className="flex justify-center gap-6 mt-4">
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 bg-[#FF0080] rounded" />
-          <span className="text-gray-400 text-sm">Listed Volume</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 bg-white rounded" />
-          <span className="text-gray-400 text-sm">Traded Volume</span>
-        </div>
+                <div className="col-span-2">
+                  <div className="flex items-center gap-2">
+                    <CoinLogo symbol={token.ticker} size="sm" />
+                    <span className="text-white font-medium text-sm">{token.ticker}</span>
+                    {isSelected && (
+                      <span className="text-[10px] px-1.5 py-0.5 bg-white/20 text-white rounded">FILTERED</span>
+                    )}
+                  </div>
+                </div>
+                <div className="col-span-2 text-right">
+                  <span className="text-pink-400 text-sm">{formatUSD(token.listedVolume)}</span>
+                </div>
+                <div className="col-span-2 text-right">
+                  <span className="text-white text-sm">{formatUSD(token.tradedVolume)}</span>
+                </div>
+                <div className="col-span-1 text-right">
+                  <span className="text-white font-bold text-sm">{formatUSD(totalVolume)}</span>
+                </div>
+                <div className="col-span-2 text-right">
+                  <span className="text-white text-sm">{token.fillCount}</span>
+                  <span className="text-gray-500 text-sm"> / </span>
+                  <span className="text-pink-400 text-sm">{token.orderCount}</span>
+                </div>
+                <div className="col-span-2 text-right">
+                  <Link
+                    href={`/marketplace?token=${token.address}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white text-black text-xs font-medium rounded-full hover:bg-white/90 transition-colors"
+                  >
+                    Marketplace
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </Link>
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
+
+      <p className="text-gray-500 text-xs mt-4 text-center">
+        Listed = sell token value in orders | Traded = value exchanged in fills
+      </p>
     </LiquidGlassCard>
   );
 }
