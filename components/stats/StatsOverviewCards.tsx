@@ -40,16 +40,28 @@ interface StatCardProps {
   value: string;
   subValue?: string;
   trend?: 'up' | 'down' | 'neutral';
+  dotColor?: 'green' | 'yellow' | 'red' | 'blue';
 }
 
-function StatCard({ label, value, subValue }: StatCardProps) {
+function StatCard({ label, value, subValue, dotColor }: StatCardProps) {
+  const dotColorClasses: Record<string, string> = {
+    green: 'bg-green-500',
+    yellow: 'bg-yellow-500',
+    red: 'bg-red-500',
+    blue: 'bg-blue-500',
+  };
+  const dotColorClass = dotColor ? dotColorClasses[dotColor] : '';
+
   return (
     <LiquidGlassCard
       className="p-5 bg-black/40 flex flex-col justify-between min-h-[120px]"
       shadowIntensity="none"
       glowIntensity="none"
     >
-      <p className="text-gray-400 text-sm font-medium">{label}</p>
+      <div className="flex items-center gap-2">
+        {dotColor && <div className={`w-2.5 h-2.5 rounded-full ${dotColorClass}`} />}
+        <p className="text-gray-400 text-sm font-medium">{label}</p>
+      </div>
       <div>
         <p className="text-white text-2xl md:text-3xl font-bold">{value}</p>
         {subValue && (
@@ -162,38 +174,120 @@ export default function StatsOverviewCards({ transactions, orders, tokenPrices, 
     }, 0);
   }, [activeOrders, tokenPrices]);
 
+  // Calculate order counts by status (0 = Active/Expired, 1 = Cancelled, 2 = Filled)
+  const orderCounts = useMemo(() => {
+    if (contractOrders.length === 0) {
+      return { total: 0, active: 0, expired: 0, cancelled: 0, filled: 0 };
+    }
+    const currentTime = Math.floor(Date.now() / 1000);
+
+    // Active: status 0 and not expired
+    const active = contractOrders.filter(o => {
+      if (o.orderDetailsWithID.status !== 0) return false;
+      const expirationTime = Number(o.orderDetailsWithID.orderDetails.expirationTime);
+      // 0 means no expiration
+      if (expirationTime === 0) return true;
+      return expirationTime >= currentTime;
+    }).length;
+
+    // Expired: status 0 but past expiration time
+    const expired = contractOrders.filter(o => {
+      if (o.orderDetailsWithID.status !== 0) return false;
+      const expirationTime = Number(o.orderDetailsWithID.orderDetails.expirationTime);
+      return expirationTime > 0 && expirationTime < currentTime;
+    }).length;
+
+    const cancelled = contractOrders.filter(o => o.orderDetailsWithID.status === 1).length;
+    const filled = contractOrders.filter(o => o.orderDetailsWithID.status === 2).length;
+
+    return {
+      total: contractOrders.length,
+      active,
+      expired,
+      cancelled,
+      filled
+    };
+  }, [contractOrders]);
+
+  // Calculate average orders per address
+  const avgOrdersPerAddress = useMemo(() => {
+    if (uniqueTraders === 0) return 0;
+    return effectiveOrderCount / uniqueTraders;
+  }, [effectiveOrderCount, uniqueTraders]);
+
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-      <StatCard
-        label="Total Value Locked"
-        value={formatUSD(totalValueLocked)}
-        subValue={`${activeOrders.length} active orders`}
-      />
-      <StatCard
-        label="Unique Traders"
-        value={uniqueTraders.toLocaleString()}
-        subValue="Buyers & Sellers"
-      />
-      <StatCard
-        label="Avg Placement Size"
-        value={formatUSD(avgOrderSize)}
-        subValue="Per order created"
-      />
-      <StatCard
-        label="Avg Fill Size"
-        value={formatUSD(avgTradeSize)}
-        subValue="Per fill"
-      />
-      <StatCard
-        label="$ Fill %"
-        value={`${fillRate.toFixed(1)}%`}
-        subValue="% of $ filled vs listed"
-      />
-      <StatCard
-        label="Order Fill %"
-        value={`${completionRate.toFixed(1)}%`}
-        subValue="% of orders filled vs listed"
-      />
+    <div className="space-y-4">
+      {/* Stats Cards - Row 1 */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <StatCard
+          label="Total Value Locked"
+          value={formatUSD(totalValueLocked)}
+          subValue="In active orders"
+        />
+        <StatCard
+          label="Unique Traders"
+          value={uniqueTraders.toLocaleString()}
+          subValue="Buyers & Sellers"
+        />
+        <StatCard
+          label="Avg Placement Size"
+          value={formatUSD(avgOrderSize)}
+          subValue="Per order created"
+        />
+        <StatCard
+          label="Avg Fill Size"
+          value={formatUSD(avgTradeSize)}
+          subValue="Per fill"
+        />
+        <StatCard
+          label="$ Fill %"
+          value={`${fillRate.toFixed(1)}%`}
+          subValue="% of $ filled vs listed"
+        />
+        <StatCard
+          label="Order Fill %"
+          value={`${completionRate.toFixed(1)}%`}
+          subValue="% of orders filled vs listed"
+        />
+      </div>
+
+      {/* Order Status Cards - Row 2 */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <StatCard
+          label="Total Orders"
+          value={orderCounts.total.toLocaleString()}
+          subValue="All time"
+        />
+        <StatCard
+          label="Active Orders"
+          value={orderCounts.active.toLocaleString()}
+          subValue="Currently open"
+          dotColor="green"
+        />
+        <StatCard
+          label="Expired Orders"
+          value={orderCounts.expired.toLocaleString()}
+          subValue="Past expiration"
+          dotColor="yellow"
+        />
+        <StatCard
+          label="Cancelled Orders"
+          value={orderCounts.cancelled.toLocaleString()}
+          subValue="By owner"
+          dotColor="red"
+        />
+        <StatCard
+          label="Completed Orders"
+          value={orderCounts.filled.toLocaleString()}
+          subValue="Fully filled"
+          dotColor="blue"
+        />
+        <StatCard
+          label="Avg Orders/Address"
+          value={avgOrdersPerAddress.toFixed(1)}
+          subValue="Orders per trader"
+        />
+      </div>
     </div>
   );
 }

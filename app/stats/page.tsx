@@ -14,6 +14,7 @@ import TopTokensChart from '@/components/stats/TopTokensChart';
 import ProtocolActivityChart from '@/components/stats/ProtocolActivityChart';
 import HourlyActivityChart from '@/components/stats/HourlyActivityChart';
 import TokenOrderPricesChart from '@/components/stats/TokenOrderPricesChart';
+import OrderbookChart from '@/components/stats/OrderbookChart';
 import { useTokenPrices } from '@/hooks/crypto/useTokenPrices';
 import { useOpenPositions } from '@/hooks/contracts/useOpenPositions';
 import { useContractWhitelistRead } from '@/hooks/contracts/useContractWhitelistRead';
@@ -498,9 +499,9 @@ export default function StatsPage() {
                   selectedTrader={selectedTraderFilter ?? undefined}
                 />
 
-                {/* Limit Order Price Levels Chart */}
+                {/* Order Book */}
                 {filteredActiveOrders.length > 0 && whitelist.length > 0 && (
-                  <TokenOrderPricesChart
+                  <OrderbookChart
                     orders={filteredActiveOrders}
                     tokenPrices={tokenPrices}
                     whitelist={whitelist}
@@ -513,6 +514,15 @@ export default function StatsPage() {
                   orders={filteredOrders}
                   contractOrders={filteredContractOrders}
                 />
+
+                {/* Alt Limit Price Chart (Scatter) */}
+                {filteredActiveOrders.length > 0 && whitelist.length > 0 && (
+                  <TokenOrderPricesChart
+                    orders={filteredActiveOrders}
+                    tokenPrices={tokenPrices}
+                    whitelist={whitelist}
+                  />
+                )}
 
                 {/* Footer note */}
                 <div className="text-center text-gray-500 text-sm pt-4">

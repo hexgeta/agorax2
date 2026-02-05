@@ -1,15 +1,12 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import Link from 'next/link';
-import { useAccount } from 'wagmi';
-import { ComposedChart, Scatter, XAxis, YAxis, ReferenceLine, ResponsiveContainer, Tooltip, Line, Cell } from 'recharts';
+import { ComposedChart, Scatter, XAxis, YAxis, ReferenceLine, ResponsiveContainer, Tooltip, Cell } from 'recharts';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 import { formatUSD, formatPriceSigFig, getTokenPrice } from '@/utils/format';
 import { getTokenInfo, getTokenInfoByIndex } from '@/utils/tokenUtils';
 import { CoinLogo } from '@/components/ui/CoinLogo';
 import { CompleteOrderDetails } from '@/hooks/contracts/useOpenPositions';
-import OrderbookDepthChart from './OrderbookDepthChart';
 
 interface TokenOrderPricesChartProps {
   orders: CompleteOrderDetails[];
@@ -42,7 +39,6 @@ interface TokenOrderData {
 
 export default function TokenOrderPricesChart({ orders, tokenPrices, whitelist }: TokenOrderPricesChartProps) {
   const [selectedToken, setSelectedToken] = useState<string | null>(null);
-  const { address: connectedAddress } = useAccount();
 
   // Process orders to get price levels for ALL tokens (both sell and buy sides)
   const tokenOrderData = useMemo(() => {
@@ -258,7 +254,7 @@ export default function TokenOrderPricesChart({ orders, tokenPrices, whitelist }
       glowIntensity="none"
     >
       <div className="mb-6">
-        <h3 className="text-2xl font-bold text-white mb-2">Limit Order Price Levels</h3>
+        <h3 className="text-2xl font-bold text-white mb-2">Alt Limit Price Chart (Scatter)</h3>
         <p className="text-gray-400 text-sm">Implied prices for tokens in active orders</p>
       </div>
 
@@ -482,67 +478,6 @@ export default function TokenOrderPricesChart({ orders, tokenPrices, whitelist }
           <p className="text-2xl font-bold text-[#FF6B6B]">{ordersBelowMarket}</p>
           <p className="text-gray-400 text-sm">Below Market</p>
         </div>
-      </div>
-
-      {/* Order list */}
-      <div className="mt-6 pt-4 border-t border-white/10">
-        <h4 className="text-white font-medium mb-3">Order Details</h4>
-        <div className="space-y-2 max-h-[300px] overflow-y-auto">
-          {sortedOrders.map((order, index) => {
-            // Above market = green, Below market = red
-            const color = order.positionPercent > 0 ? '#4ADE80' : '#FF6B6B';
-            const isOwnOrder = connectedAddress && order.owner === connectedAddress.toLowerCase();
-            const href = isOwnOrder
-              ? `/my-orders?orderId=${order.orderId}`
-              : `/marketplace?order-id=${order.orderId}`;
-
-            return (
-              <Link
-                key={`${order.orderId}-${order.counterToken}-${index}`}
-                href={href}
-                className="flex items-center justify-between p-2 bg-white/5 hover:bg-white/10 rounded text-sm transition-colors cursor-pointer"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="text-gray-400">#{order.orderId}</span>
-                  <span className="text-white">
-                    {order.isSelling
-                      ? `${displayToken.ticker} → ${order.counterToken}`
-                      : `${order.counterToken} → ${displayToken.ticker}`
-                    }
-                  </span>
-                  <span className={`text-xs px-1.5 py-0.5 rounded ${order.isSelling ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'}`}>
-                    {order.isSelling ? 'SELL' : 'BUY'}
-                  </span>
-                  {isOwnOrder && (
-                    <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400">
-                      MANAGE
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-4">
-                  <span className="text-gray-400">{formatUSD(order.valueUSD)}</span>
-                  <span className="text-white font-medium">{formatPriceSigFig(order.impliedPrice)}</span>
-                  <span
-                    className="font-medium min-w-[60px] text-right"
-                    style={{ color }}
-                  >
-                    {order.positionPercent > 0 ? '+' : ''}{order.positionPercent.toFixed(1)}%
-                  </span>
-                </div>
-              </Link>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Orderbook Depth Chart */}
-      <div className="mt-6">
-        <OrderbookDepthChart
-          orders={orders}
-          tokenPrices={tokenPrices}
-          whitelist={whitelist}
-          selectedToken={displayToken.address}
-        />
       </div>
     </LiquidGlassCard>
   );

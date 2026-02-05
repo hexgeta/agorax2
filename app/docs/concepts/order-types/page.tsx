@@ -148,21 +148,21 @@ export default function OrderTypesPage() {
 
           <LiquidGlassCard className="p-5">
             <div className="flex items-center gap-3 mb-2">
-              <div className="w-3 h-3 rounded-full bg-blue-500" />
-              <h3 className="text-white font-semibold">Completed</h3>
-            </div>
-            <p className="text-white/60 text-sm">
-              Order has been fully filled. All sell tokens have been exchanged.
-            </p>
-          </LiquidGlassCard>
-
-          <LiquidGlassCard className="p-5">
-            <div className="flex items-center gap-3 mb-2">
               <div className="w-3 h-3 rounded-full bg-red-500" />
               <h3 className="text-white font-semibold">Cancelled</h3>
             </div>
             <p className="text-white/60 text-sm">
               Order was cancelled by the owner. Remaining tokens returned to owner.
+            </p>
+          </LiquidGlassCard>
+
+          <LiquidGlassCard className="p-5">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-3 h-3 rounded-full bg-blue-500" />
+              <h3 className="text-white font-semibold">Completed</h3>
+            </div>
+            <p className="text-white/60 text-sm">
+              Order has been fully filled. All sell tokens have been exchanged.
             </p>
           </LiquidGlassCard>
         </div>

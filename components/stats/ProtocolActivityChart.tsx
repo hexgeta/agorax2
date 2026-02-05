@@ -219,11 +219,11 @@ export default function ProtocolActivityChart({ transactions, orders, contractOr
         <div className="flex flex-wrap gap-6">
           <div>
             <p className="text-gray-400 text-sm">Listed Volume</p>
-            <p className="text-[#FF0080] text-xl font-bold">{formatUSD(totalListedVolume)}</p>
+            <p className="text-pink-400 text-xl font-bold">{formatUSD(totalListedVolume)}</p>
           </div>
           <div>
             <p className="text-gray-400 text-sm">Filled Volume</p>
-            <p className="text-white text-xl font-bold">{formatUSD(totalFilledVolume)}</p>
+            <p className="text-green-400 text-xl font-bold">{formatUSD(totalFilledVolume)}</p>
           </div>
           <div>
             <p className="text-gray-400 text-sm">Orders</p>
@@ -245,12 +245,12 @@ export default function ProtocolActivityChart({ transactions, orders, contractOr
         >
           <defs>
             <linearGradient id="colorListedVolume" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#FF0080" stopOpacity={0.3} />
-              <stop offset="95%" stopColor="#FF0080" stopOpacity={0.05} />
+              <stop offset="5%" stopColor="#EC4899" stopOpacity={0.3} />
+              <stop offset="95%" stopColor="#EC4899" stopOpacity={0.05} />
             </linearGradient>
             <linearGradient id="colorFilledVolume" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#FFFFFF" stopOpacity={0.3} />
-              <stop offset="95%" stopColor="#FFFFFF" stopOpacity={0.05} />
+              <stop offset="5%" stopColor="#4ADE80" stopOpacity={0.3} />
+              <stop offset="95%" stopColor="#4ADE80" stopOpacity={0.05} />
             </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="#FFFFFF20" />
@@ -290,22 +290,22 @@ export default function ProtocolActivityChart({ transactions, orders, contractOr
                 }}>
                   <p style={{ fontWeight: 'bold', marginBottom: '8px' }}>{data.displayDate}</p>
                   <p style={{ margin: '4px 0', fontSize: '14px' }}>
-                    <span style={{ color: '#FF0080' }}>Listed Today:</span>{' '}
+                    <span style={{ color: '#EC4899' }}>Listed Today:</span>{' '}
                     <span style={{ fontWeight: 'bold' }}>{formatUSD(data.listedVolume)}</span>
                     <span style={{ color: '#888', marginLeft: '8px' }}>({data.dailyOrders} orders)</span>
                   </p>
                   <p style={{ margin: '4px 0', fontSize: '14px' }}>
-                    <span style={{ color: '#FFFFFF' }}>Filled Today:</span>{' '}
+                    <span style={{ color: '#4ADE80' }}>Filled Today:</span>{' '}
                     <span style={{ fontWeight: 'bold' }}>{formatUSD(data.filledVolume)}</span>
                     <span style={{ color: '#888', marginLeft: '8px' }}>({data.dailyFills} fills)</span>
                   </p>
                   <hr style={{ margin: '8px 0', borderColor: '#333' }} />
                   <p style={{ margin: '4px 0', fontSize: '14px' }}>
-                    <span style={{ color: '#FF008080' }}>Cumulative Listed:</span>{' '}
+                    <span style={{ color: '#EC489980' }}>Cumulative Listed:</span>{' '}
                     <span style={{ fontWeight: 'bold' }}>{formatUSD(data.cumulativeListedVolume)}</span>
                   </p>
                   <p style={{ margin: '4px 0', fontSize: '14px' }}>
-                    <span style={{ color: '#FFFFFF80' }}>Cumulative Filled:</span>{' '}
+                    <span style={{ color: '#4ADE8080' }}>Cumulative Filled:</span>{' '}
                     <span style={{ fontWeight: 'bold' }}>{formatUSD(data.cumulativeFilledVolume)}</span>
                   </p>
                   <p style={{ margin: '4px 0', fontSize: '14px' }}>
@@ -318,43 +318,43 @@ export default function ProtocolActivityChart({ transactions, orders, contractOr
           />
           <Legend
             wrapperStyle={{ color: '#FFFFFF' }}
-            iconType="square"
+            iconType="circle"
           />
           {/* Cumulative areas behind bars */}
           <Area
             yAxisId="right"
             type="monotone"
-            dataKey="cumulativeListedVolume"
-            stroke="#FF0080"
+            dataKey="cumulativeFilledVolume"
+            stroke="#4ADE80"
             strokeWidth={2}
             strokeOpacity={0.6}
-            fill="url(#colorListedVolume)"
-            name="Cumulative Listed"
+            fill="url(#colorFilledVolume)"
+            name="Filled"
           />
           <Area
             yAxisId="right"
             type="monotone"
-            dataKey="cumulativeFilledVolume"
-            stroke="#FFFFFF"
+            dataKey="cumulativeListedVolume"
+            stroke="#EC4899"
             strokeWidth={2}
             strokeOpacity={0.6}
-            fill="url(#colorFilledVolume)"
-            name="Cumulative Filled"
+            fill="url(#colorListedVolume)"
+            name="Listed"
           />
           {/* Daily volume bars */}
           <Bar
             yAxisId="left"
-            dataKey="listedVolume"
-            fill="#FF0080"
+            dataKey="filledVolume"
+            fill="#4ADE80"
             radius={[4, 4, 0, 0]}
-            name="Daily Listed"
+            legendType="none"
           />
           <Bar
             yAxisId="left"
-            dataKey="filledVolume"
-            fill="#FFFFFF"
+            dataKey="listedVolume"
+            fill="#EC4899"
             radius={[4, 4, 0, 0]}
-            name="Daily Filled"
+            legendType="none"
           />
         </ComposedChart>
       </ResponsiveContainer>

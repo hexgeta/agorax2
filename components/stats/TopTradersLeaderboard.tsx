@@ -164,8 +164,8 @@ export default function TopTradersLeaderboard({ transactions, orders, tokenPrice
         <div className="grid grid-cols-12 gap-2 text-gray-400 text-xs font-medium pb-2 border-b border-white/10">
           <div className="col-span-1">#</div>
           <div className="col-span-2">Address</div>
-          <div className="col-span-2 text-right">Buy Volume</div>
-          <div className="col-span-3 text-right">Sell Volume</div>
+          <div className="col-span-3 text-right">Listed</div>
+          <div className="col-span-2 text-right">Filled</div>
           <div className="col-span-2 text-right">Total</div>
           <div className="col-span-2 text-right"></div>
         </div>
@@ -178,12 +178,12 @@ export default function TopTradersLeaderboard({ transactions, orders, tokenPrice
           return (
             <div
               key={trader.address}
-              className={`relative cursor-pointer transition-all ${isSelected ? 'ring-1 ring-white/50 rounded' : 'hover:bg-white/5 rounded'}`}
+              className={`group/row relative cursor-pointer transition-all rounded ${isSelected ? 'ring-1 ring-white/50' : ''}`}
               onClick={() => onTraderSelect?.(trader.address)}
             >
               {/* Background bar */}
               <div
-                className={`absolute inset-0 rounded ${isSelected ? 'bg-white/10' : 'bg-white/5'}`}
+                className={`absolute inset-0 rounded transition-colors ${isSelected ? 'bg-white/10' : 'bg-white/5 group-hover/row:bg-white/10 group-has-[a:hover]/row:bg-white/5'}`}
                 style={{ width: `${barWidth}%` }}
               />
 
@@ -204,13 +204,25 @@ export default function TopTradersLeaderboard({ transactions, orders, tokenPrice
                     )}
                   </div>
                 </div>
-                <div className="col-span-2 text-right">
-                  <span className="text-green-400 text-sm">{formatUSD(trader.buyVolume)}</span>
-                  <span className="text-gray-500 text-xs ml-1">({trader.buyCount})</span>
-                </div>
                 <div className="col-span-3 text-right">
-                  <span className="text-pink-400 text-sm">{formatUSD(trader.sellVolume)}</span>
-                  <span className="text-gray-500 text-xs ml-1">({trader.sellCount})</span>
+                  {trader.sellVolume > 0 ? (
+                    <>
+                      <span className="text-pink-400 text-sm">{formatUSD(trader.sellVolume)}</span>
+                      <span className="text-gray-500 text-xs ml-1">({trader.sellCount})</span>
+                    </>
+                  ) : (
+                    <span className="text-gray-600 text-sm">-</span>
+                  )}
+                </div>
+                <div className="col-span-2 text-right">
+                  {trader.buyVolume > 0 ? (
+                    <>
+                      <span className="text-green-400 text-sm">{formatUSD(trader.buyVolume)}</span>
+                      <span className="text-gray-500 text-xs ml-1">({trader.buyCount})</span>
+                    </>
+                  ) : (
+                    <span className="text-gray-600 text-sm">-</span>
+                  )}
                 </div>
                 <div className="col-span-2 text-right">
                   <span className="text-white font-bold text-sm">{formatUSD(trader.totalVolume)}</span>
@@ -219,7 +231,7 @@ export default function TopTradersLeaderboard({ transactions, orders, tokenPrice
                   <Link
                     href={`/marketplace?seller=${trader.address}`}
                     onClick={(e) => e.stopPropagation()}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white text-black text-xs font-medium rounded-full hover:bg-white/90 transition-colors"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-black text-white border border-white text-xs font-medium rounded-full hover:bg-white/10 transition-colors"
                   >
                     Marketplace
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -234,7 +246,7 @@ export default function TopTradersLeaderboard({ transactions, orders, tokenPrice
       </div>
 
       <p className="text-gray-500 text-xs mt-4 text-center">
-        Buy volume = value filled | Sell volume = value listed
+        Filled = value filled | Listed = value listed
       </p>
     </LiquidGlassCard>
   );

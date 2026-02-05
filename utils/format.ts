@@ -158,13 +158,67 @@ export function getTokenPrice(tokenAddress: string, tokenPrices: Record<string, 
 }
 
 /**
- * Format USD amount with K/M suffixes for large values
+ * Format USD amount with smart handling for very small and very large values
+ * - Very small (<$0.01): shows significant figures like $0.0001
+ * - Small (<$1): shows cents with appropriate precision
+ * - Normal (<$1K): shows $X.XX
+ * - Thousands: shows $X.XXK
+ * - Millions: shows $X.XXM
+ * - Billions: shows $X.XXB
+ * - Trillions: shows $X.XXT
  */
 export function formatUSD(amount: number): string {
   if (amount === 0) return '$0.00';
-  if (amount < 1000) return `$${amount.toFixed(2)}`;
-  if (amount < 1000000) return `$${(amount / 1000).toFixed(2)}K`;
-  return `$${(amount / 1000000).toFixed(2)}M`;
+
+  // Handle negative amounts
+  const isNegative = amount < 0;
+  const absAmount = Math.abs(amount);
+  const prefix = isNegative ? '-$' : '$';
+
+  // Very small amounts - show significant figures
+  if (absAmount > 0 && absAmount < 0.01) {
+    // Find first significant digit and show 2-3 sig figs
+    const str = absAmount.toString();
+    const match = str.match(/0\.0*[1-9]/);
+    if (match) {
+      const leadingZeros = match[0].length - 2; // subtract "0."
+      const decimals = Math.min(leadingZeros + 2, 8);
+      return prefix + absAmount.toFixed(decimals);
+    }
+    return prefix + absAmount.toFixed(4);
+  }
+
+  // Small amounts ($0.01 - $0.99)
+  if (absAmount < 1) {
+    return prefix + absAmount.toFixed(2);
+  }
+
+  // Normal amounts ($1 - $999.99)
+  if (absAmount < 1000) {
+    return prefix + absAmount.toFixed(2);
+  }
+
+  // Thousands ($1K - $999.99K)
+  if (absAmount < 1000000) {
+    const k = absAmount / 1000;
+    return prefix + (k < 10 ? k.toFixed(2) : k < 100 ? k.toFixed(1) : k.toFixed(0)) + 'K';
+  }
+
+  // Millions ($1M - $999.99M)
+  if (absAmount < 1000000000) {
+    const m = absAmount / 1000000;
+    return prefix + (m < 10 ? m.toFixed(2) : m < 100 ? m.toFixed(1) : m.toFixed(0)) + 'M';
+  }
+
+  // Billions ($1B - $999.99B)
+  if (absAmount < 1000000000000) {
+    const b = absAmount / 1000000000;
+    return prefix + (b < 10 ? b.toFixed(2) : b < 100 ? b.toFixed(1) : b.toFixed(0)) + 'B';
+  }
+
+  // Trillions ($1T+)
+  const t = absAmount / 1000000000000;
+  return prefix + (t < 10 ? t.toFixed(2) : t < 100 ? t.toFixed(1) : t.toFixed(0)) + 'T';
 }
 
 /**

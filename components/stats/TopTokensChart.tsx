@@ -139,10 +139,9 @@ export default function TopTokensChart({ transactions, orders, tokenPrices, cont
         <div className="grid grid-cols-12 gap-2 text-gray-400 text-xs font-medium pb-2 border-b border-white/10">
           <div className="col-span-1">#</div>
           <div className="col-span-2">Token</div>
-          <div className="col-span-2 text-right">Listed</div>
-          <div className="col-span-2 text-right">Traded</div>
-          <div className="col-span-1 text-right">Total</div>
-          <div className="col-span-2 text-right">Fills/Orders</div>
+          <div className="col-span-3 text-right">Listed</div>
+          <div className="col-span-2 text-right">Filled</div>
+          <div className="col-span-2 text-right">Total</div>
           <div className="col-span-2 text-right"></div>
         </div>
 
@@ -155,12 +154,12 @@ export default function TopTokensChart({ transactions, orders, tokenPrices, cont
           return (
             <div
               key={token.address}
-              className={`relative cursor-pointer transition-all ${isSelected ? 'ring-1 ring-white/50 rounded' : 'hover:bg-white/5 rounded'}`}
+              className={`group/row relative cursor-pointer transition-all rounded ${isSelected ? 'ring-1 ring-white/50' : ''}`}
               onClick={() => onTokenSelect?.(token.address, token.ticker)}
             >
               {/* Background bar */}
               <div
-                className={`absolute inset-0 rounded ${isSelected ? 'bg-white/10' : 'bg-white/5'}`}
+                className={`absolute inset-0 rounded transition-colors ${isSelected ? 'bg-white/10' : 'bg-white/5 group-hover/row:bg-white/10 group-has-[a:hover]/row:bg-white/5'}`}
                 style={{ width: `${barWidth}%` }}
               />
 
@@ -180,25 +179,34 @@ export default function TopTokensChart({ transactions, orders, tokenPrices, cont
                     )}
                   </div>
                 </div>
-                <div className="col-span-2 text-right">
-                  <span className="text-pink-400 text-sm">{formatUSD(token.listedVolume)}</span>
+                <div className="col-span-3 text-right">
+                  {token.listedVolume > 0 ? (
+                    <>
+                      <span className="text-pink-400 text-sm">{formatUSD(token.listedVolume)}</span>
+                      <span className="text-gray-500 text-xs ml-1">({token.orderCount})</span>
+                    </>
+                  ) : (
+                    <span className="text-gray-600 text-sm">-</span>
+                  )}
                 </div>
                 <div className="col-span-2 text-right">
-                  <span className="text-white text-sm">{formatUSD(token.tradedVolume)}</span>
+                  {token.tradedVolume > 0 ? (
+                    <>
+                      <span className="text-green-400 text-sm">{formatUSD(token.tradedVolume)}</span>
+                      <span className="text-gray-500 text-xs ml-1">({token.fillCount})</span>
+                    </>
+                  ) : (
+                    <span className="text-gray-600 text-sm">-</span>
+                  )}
                 </div>
-                <div className="col-span-1 text-right">
+                <div className="col-span-2 text-right">
                   <span className="text-white font-bold text-sm">{formatUSD(totalVolume)}</span>
-                </div>
-                <div className="col-span-2 text-right">
-                  <span className="text-white text-sm">{token.fillCount}</span>
-                  <span className="text-gray-500 text-sm"> / </span>
-                  <span className="text-pink-400 text-sm">{token.orderCount}</span>
                 </div>
                 <div className="col-span-2 text-right">
                   <Link
                     href={`/marketplace?token=${token.address}`}
                     onClick={(e) => e.stopPropagation()}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white text-black text-xs font-medium rounded-full hover:bg-white/90 transition-colors"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-black text-white border border-white text-xs font-medium rounded-full hover:bg-white/10 transition-colors"
                   >
                     Marketplace
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -213,7 +221,7 @@ export default function TopTokensChart({ transactions, orders, tokenPrices, cont
       </div>
 
       <p className="text-gray-500 text-xs mt-4 text-center">
-        Listed = sell token value in orders | Traded = value exchanged in fills
+        Listed = sell token value in orders | Filled = value exchanged in fills
       </p>
     </LiquidGlassCard>
   );
