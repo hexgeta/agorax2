@@ -81,7 +81,7 @@ export default function DocsPage() {
               Quick Start Guide
             </Link>
             <Link
-              href="/swap"
+              href="/trade"
               className="px-6 py-3 bg-white/10 text-white font-medium rounded-full hover:bg-white/20 transition-colors border border-white/20"
             >
               Launch App

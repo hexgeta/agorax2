@@ -284,7 +284,7 @@ export default function StatsOverviewCards({ transactions, orders, tokenPrices, 
         />
         <StatCard
           label="Avg Orders/Address"
-          value={avgOrdersPerAddress.toFixed(1)}
+          value={Math.round(avgOrdersPerAddress).toString()}
           subValue="Orders per trader"
         />
       </div>

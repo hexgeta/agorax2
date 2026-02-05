@@ -196,7 +196,7 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
 
             <div className="flex items-center gap-4">
               <Link
-                href="/swap"
+                href="/trade"
                 className="text-white/80 hover:text-white text-sm font-medium transition-colors"
               >
                 Launch App

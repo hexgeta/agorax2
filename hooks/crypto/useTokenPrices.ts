@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import useSWR from 'swr';
 import { TOKEN_CONSTANTS } from '@/constants/crypto'
 import { PRICE_CACHE_KEYS } from './utils/cache-keys';
+import { WPLS_ADDRESS, PLS_NATIVE_ADDRESSES } from '@/utils/format';
 
 export interface TokenPriceData {
   price: number;
@@ -311,14 +312,26 @@ export function useTokenPrices(contractAddresses: string[], options?: { disableR
   const [prices, setPrices] = useState<TokenPrices>({});
   const [error, setError] = useState<Error | null>(null);
 
+  // Ensure WPLS is fetched when any native PLS address is in the list
+  const normalizedAddresses = useMemo(() => {
+    const addresses = [...contractAddresses];
+    const hasNativePLS = addresses.some(addr =>
+      PLS_NATIVE_ADDRESSES.some(plsAddr => addr.toLowerCase() === plsAddr.toLowerCase())
+    );
+    if (hasNativePLS && !addresses.some(addr => addr.toLowerCase() === WPLS_ADDRESS)) {
+      addresses.push(WPLS_ADDRESS);
+    }
+    return addresses;
+  }, [contractAddresses]);
+
   // Create a unique key for this set of contract addresses
-  const cacheKey = contractAddresses.join(',');
+  const cacheKey = normalizedAddresses.join(',');
 
   const { data, error: swrError, isLoading } = useSWR(
     cacheKey ? PRICE_CACHE_KEYS.realtime(cacheKey) : null,
     async () => {
       try {
-        return await fetchTokenPrices(contractAddresses, options?.customTokens || []);
+        return await fetchTokenPrices(normalizedAddresses, options?.customTokens || []);
       } catch (e) {
         setError(e as Error);
         return {};

@@ -13,7 +13,6 @@ import TopTradersLeaderboard from '@/components/stats/TopTradersLeaderboard';
 import TopTokensChart from '@/components/stats/TopTokensChart';
 import ProtocolActivityChart from '@/components/stats/ProtocolActivityChart';
 import HourlyActivityChart from '@/components/stats/HourlyActivityChart';
-import TokenOrderPricesChart from '@/components/stats/TokenOrderPricesChart';
 import OrderbookChart from '@/components/stats/OrderbookChart';
 import { useTokenPrices } from '@/hooks/crypto/useTokenPrices';
 import { useOpenPositions } from '@/hooks/contracts/useOpenPositions';
@@ -514,15 +513,6 @@ export default function StatsPage() {
                   orders={filteredOrders}
                   contractOrders={filteredContractOrders}
                 />
-
-                {/* Alt Limit Price Chart (Scatter) */}
-                {filteredActiveOrders.length > 0 && whitelist.length > 0 && (
-                  <TokenOrderPricesChart
-                    orders={filteredActiveOrders}
-                    tokenPrices={tokenPrices}
-                    whitelist={whitelist}
-                  />
-                )}
 
                 {/* Footer note */}
                 <div className="text-center text-gray-500 text-sm pt-4">

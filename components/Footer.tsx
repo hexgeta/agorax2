@@ -28,10 +28,10 @@ const Footer = () => {
             <ul className="space-y-1">
               <li>
                 <Link
-                  href="/swap"
+                  href="/trade"
                   className="text-sm text-white/70 hover:text-white transition-colors"
                 >
-                  Swap
+                  Trade
                 </Link>
               </li>
               <li>

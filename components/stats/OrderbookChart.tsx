@@ -8,6 +8,7 @@ import { formatUSD, formatPriceSigFig, getTokenPrice } from '@/utils/format';
 import { getTokenInfo, getTokenInfoByIndex } from '@/utils/tokenUtils';
 import { CoinLogo } from '@/components/ui/CoinLogo';
 import { CompleteOrderDetails } from '@/hooks/contracts/useOpenPositions';
+import TokenOrderPricesChart from './TokenOrderPricesChart';
 
 interface OrderbookChartProps {
   orders: CompleteOrderDetails[];
@@ -57,7 +58,16 @@ export default function OrderbookChart({ orders, tokenPrices, whitelist }: Order
       const sellTokenInfo = getTokenInfo(sellTokenAddr);
       const sellTokenMarketPrice = getTokenPrice(sellTokenAddr, tokenPrices);
 
-      if (sellTokenMarketPrice > 0) {
+      const buyTokenIndices = order.orderDetailsWithID.orderDetails.buyTokensIndex;
+      const validBuyTokenCount = buyTokenIndices.filter((indexBigInt) => {
+        const buyTokenIndex = Number(indexBigInt);
+        const buyTokenAddr = whitelist[buyTokenIndex]?.toLowerCase();
+        if (!buyTokenAddr) return false;
+        const buyTokenMarketPrice = getTokenPrice(buyTokenAddr, tokenPrices);
+        return buyTokenMarketPrice > 0;
+      }).length;
+
+      if (sellTokenMarketPrice > 0 && validBuyTokenCount > 0) {
         if (!tokenMap[sellTokenAddr]) {
           tokenMap[sellTokenAddr] = {
             address: sellTokenAddr,
@@ -66,11 +76,11 @@ export default function OrderbookChart({ orders, tokenPrices, whitelist }: Order
             orderCount: 0
           };
         }
-        tokenMap[sellTokenAddr].orderCount += 1;
+        // Count each order-buyToken pair as a separate entry
+        tokenMap[sellTokenAddr].orderCount += validBuyTokenCount;
       }
 
       // Also count buy tokens
-      const buyTokenIndices = order.orderDetailsWithID.orderDetails.buyTokensIndex;
       buyTokenIndices.forEach((indexBigInt) => {
         const buyTokenIndex = Number(indexBigInt);
         const buyTokenAddr = whitelist[buyTokenIndex]?.toLowerCase();
@@ -232,7 +242,7 @@ export default function OrderbookChart({ orders, tokenPrices, whitelist }: Order
     return null;
   }
 
-  const { asks, bids, marketPrice, maxValue } = orderbookData;
+  const { asks, bids, marketPrice } = orderbookData;
 
   // Calculate spread
   const lowestAsk = asks[0]?.price;
@@ -312,6 +322,14 @@ export default function OrderbookChart({ orders, tokenPrices, whitelist }: Order
         </div>
       )}
 
+      {/* Price scatter chart */}
+      <TokenOrderPricesChart
+        orders={orders}
+        tokenPrices={tokenPrices}
+        whitelist={whitelist}
+        selectedToken={effectiveSelectedToken}
+      />
+
       {/* Orderbook table */}
       <div className="font-mono text-xs">
         {/* Header */}
@@ -326,7 +344,7 @@ export default function OrderbookChart({ orders, tokenPrices, whitelist }: Order
         <div className="space-y-0.5 mb-2">
           {displayAsks.flatMap((level) =>
             level.orders.map((order, orderIndex) => {
-              const barWidth = (order.valueUSD / maxValue) * 100;
+              const barWidth = (order.valueUSD / totalValue) * 100;
               const vsMarket = ((level.price - marketPrice) / marketPrice) * 100;
               const isOwnOrder = connectedAddress && order.owner === connectedAddress.toLowerCase();
               const href = isOwnOrder
@@ -371,7 +389,7 @@ export default function OrderbookChart({ orders, tokenPrices, whitelist }: Order
         <div className="space-y-0.5 mt-2">
           {displayBids.flatMap((level) =>
             level.orders.map((order, orderIndex) => {
-              const barWidth = (order.valueUSD / maxValue) * 100;
+              const barWidth = (order.valueUSD / totalValue) * 100;
               const vsMarket = ((level.price - marketPrice) / marketPrice) * 100;
               const isOwnOrder = connectedAddress && order.owner === connectedAddress.toLowerCase();
               const href = isOwnOrder

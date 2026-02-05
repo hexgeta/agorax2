@@ -176,7 +176,7 @@ export default function MyOrdersPage() {
                   <div className="flex items-center justify-between">
                     <h1 className="text-2xl md:text-3xl font-bold text-white">My Orders</h1>
                     <Link
-                      href="/swap"
+                      href="/trade"
                       className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-full text-white font-medium transition-colors"
                     >
                       <span className="text-lg">+</span>

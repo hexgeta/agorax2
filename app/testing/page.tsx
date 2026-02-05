@@ -345,7 +345,7 @@ export default function TestingPage() {
                       View Real Orders
                     </Link>
                     <Link
-                      href="/swap"
+                      href="/trade"
                       className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-full text-white font-medium transition-colors text-sm"
                     >
                       <span className="text-lg">+</span>

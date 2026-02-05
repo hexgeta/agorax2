@@ -90,18 +90,18 @@ const NavBar = () => {
             {/* Desktop Navigation */}
             <div className="hidden md:flex items-center gap-4">
               <Link
-                href="/swap"
-                className={`transition-colors font-medium text-base px-4 py-2 cursor-pointer group ${pathname === '/swap'
+                href="/trade"
+                className={`transition-colors font-medium text-base px-4 py-2 cursor-pointer group ${pathname === '/trade'
                   ? 'text-white'
                   : 'text-white/80 hover:text-white'
                   }`}
-                onMouseEnter={() => setHoveredPath('/swap')}
+                onMouseEnter={() => setHoveredPath('/trade')}
                 onMouseLeave={() => setHoveredPath(null)}
               >
                 <span className="relative inline-block">
-                  Swap
-                  <span className={`absolute bottom-[-4px] left-0 w-full h-0.5 bg-white transition-transform duration-300 ease-out ${pathname === '/swap'
-                    ? (hoveredPath && hoveredPath !== '/swap' ? 'scale-x-0 origin-left' : 'scale-x-100 origin-left')
+                  Trade
+                  <span className={`absolute bottom-[-4px] left-0 w-full h-0.5 bg-white transition-transform duration-300 ease-out ${pathname === '/trade'
+                    ? (hoveredPath && hoveredPath !== '/trade' ? 'scale-x-0 origin-left' : 'scale-x-100 origin-left')
                     : 'scale-x-0 group-hover:scale-x-100 origin-left'
                     }`}
                   />
@@ -283,14 +283,14 @@ const NavBar = () => {
           {/* Navigation Links */}
           <nav className="flex flex-col items-center gap-2 w-full px-8">
             <Link
-              href="/swap"
+              href="/trade"
               onClick={() => setMobileMenuOpen(false)}
-              className={`text-xl font-medium py-3 px-6 rounded-lg transition-colors w-full text-center ${pathname === '/swap'
+              className={`text-xl font-medium py-3 px-6 rounded-lg transition-colors w-full text-center ${pathname === '/trade'
                 ? 'text-white bg-white/10'
                 : 'text-white/80 hover:text-white hover:bg-white/5'
                 }`}
             >
-              Swap
+              Trade
             </Link>
             <Link
               href="/my-orders"

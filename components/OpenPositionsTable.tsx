@@ -2809,8 +2809,24 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
       <div
         className={`p-4 md:p-6 ${isLandingPageMode ? 'overflow-x-auto pb-2 modern-scrollbar' : 'overflow-x-auto'}`}
       >
-      {/* Status filter buttons - hide in landing page mode */}
-      {!isLandingPageMode && (
+      {/* Compact mode header - Order History title with View All */}
+      {compactMode && (
+        <div className="mb-4">
+          <h2 className="text-xl font-bold text-white mb-1">Order History</h2>
+          <div className="flex items-center justify-between">
+            <p className="text-white/60 text-sm">Showing your 10 most recent orders</p>
+            <Link
+              href="/my-orders"
+              className="flex items-center gap-1 text-white/50 hover:text-white transition-colors text-sm"
+            >
+              <span>View All</span>
+              <ChevronRight className="w-4 h-4" />
+            </Link>
+          </div>
+        </div>
+      )}
+      {/* Status filter buttons - hide in landing page mode and compact mode */}
+      {!isLandingPageMode && !compactMode && (
       <div className="flex flex-wrap justify-start gap-3 mb-6">
         <button
           onClick={() => {
@@ -3468,16 +3484,10 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
             </div>
           ) : (
             <>
-            {/* Compact mode title */}
-            {compactMode && (
-              <div className="mb-4">
-                <p className="text-white/60 text-sm">Showing your 10 most recent orders</p>
-              </div>
-            )}
             <div className={`w-full ${compactMode ? 'min-w-[550px]' : isMarketplaceMode ? 'min-w-[850px]' : 'min-w-[800px]'} text-lg`}>
               <div
                 className={`grid ${compactMode
-                  ? 'grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(80px,1fr)_minmax(80px,1fr)_minmax(100px,auto)_minmax(50px,auto)]'
+                  ? 'grid-cols-[minmax(140px,1.5fr)_minmax(140px,1.5fr)_minmax(80px,0.8fr)_minmax(90px,0.8fr)_minmax(50px,0.5fr)]'
                   : isMarketplaceMode
                     ? 'grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(80px,1fr)_minmax(100px,1.2fr)_minmax(80px,1fr)_minmax(70px,auto)_50px]'
                     : 'grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(80px,1fr)_minmax(100px,1.2fr)_minmax(80px,1fr)_minmax(70px,auto)_minmax(100px,auto)]'
@@ -3513,10 +3523,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                   Fill status % {sortField === 'progress' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
                 </button>
 
-                {/* COLUMN 4: OTC % (or empty in compact mode) */}
-                {compactMode ? (
-                  <div />
-                ) : (
+                {/* COLUMN 4: OTC % (skip in compact mode) */}
+                {!compactMode && (
                   <button
                     onClick={() => handleSort('otcVsMarket')}
                     className={`text-sm font-medium text-center hover:text-white transition-colors ${sortField === 'otcVsMarket' ? 'text-white' : 'text-white/60'
@@ -3755,11 +3763,11 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                   return (
                     <div key={`${orderId}-${tokenFilter}-${ownershipFilter}-${statusFilter}`} data-order-id={orderId}
                       className={`grid ${compactMode
-                        ? 'grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(80px,1fr)_minmax(80px,1fr)_minmax(100px,auto)_minmax(50px,auto)]'
+                        ? 'grid-cols-[minmax(140px,1.5fr)_minmax(140px,1.5fr)_minmax(80px,0.8fr)_minmax(90px,0.8fr)_minmax(50px,0.5fr)]'
                         : isMarketplaceMode
                           ? 'grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(80px,1fr)_minmax(100px,1.2fr)_minmax(80px,1fr)_minmax(70px,auto)_50px]'
                           : 'grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(80px,1fr)_minmax(100px,1.2fr)_minmax(80px,1fr)_minmax(70px,auto)_minmax(100px,auto)]'
-                      } items-start gap-4 py-8 ${index < displayOrders.length - 1 && !expandedPositions.has(orderId) ? 'border-b border-white/10' : ''
+                      } items-start gap-4 py-4 ${index < displayOrders.length - 1 && !expandedPositions.has(orderId) ? 'border-b border-white/10' : ''
                         } ${compactMode ? 'cursor-pointer hover:bg-white/5 transition-colors rounded-lg -mx-2 px-2' : ''}`}
                       onClick={compactMode ? () => window.location.href = `/my-orders?orderId=${orderId}` : undefined}
                     >
@@ -3948,10 +3956,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                         )}
                       </div>
 
-                      {/* COLUMN 4: OTC % Content - show percentage for each buy token (or nothing in compact mode) */}
-                      {compactMode ? (
-                        <div />
-                      ) : (
+                      {/* COLUMN 4: OTC % Content - show percentage for each buy token (skip in compact mode) */}
+                      {!compactMode && (
                         <div className="text-center min-w-0">
                           {tokenPercentages.length > 0 ? (
                             <div className="flex flex-col">

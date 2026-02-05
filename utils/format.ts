@@ -127,15 +127,12 @@ export function formatPriceSigFig(price: number, sigFigs = 3): string {
 
 // Known token addresses for price lookups
 const WEDAI_ADDRESS = '0xefd766ccb38eaf1dfd701853bfce31359239f305';
-const WPLS_ADDRESS = '0xa1077a294dde1b09bb078844df40758a5d0f9a27';
-const PLS_NATIVE_ADDRESSES = [
+export const WPLS_ADDRESS = '0xa1077a294dde1b09bb078844df40758a5d0f9a27';
+export const PLS_NATIVE_ADDRESSES = [
   '0x0000000000000000000000000000000000000000',
   '0x000000000000000000000000000000000000dead',
   '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', // AgoraX native PLS marker
 ];
-
-// Fallback prices when API data unavailable
-const FALLBACK_WPLS_PRICE = 0.000034;
 
 /**
  * Get token price from price data with fallbacks for known tokens
@@ -151,7 +148,7 @@ export function getTokenPrice(tokenAddress: string, tokenPrices: Record<string, 
   // Use WPLS price for native PLS addresses
   if (PLS_NATIVE_ADDRESSES.some(plsAddr => addr === plsAddr.toLowerCase())) {
     const wplsPrice = tokenPrices[WPLS_ADDRESS]?.price;
-    return wplsPrice || FALLBACK_WPLS_PRICE;
+    return wplsPrice || 0;
   }
 
   return tokenPrices[tokenAddress]?.price || tokenPrices[addr]?.price || 0;

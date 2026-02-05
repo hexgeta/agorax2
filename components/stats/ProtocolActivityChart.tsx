@@ -169,7 +169,7 @@ export default function ProtocolActivityChart({ transactions, orders, contractOr
 
       result.push({
         date: dateStr,
-        displayDate: currentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        displayDate: currentDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
         cumulativeOrders,
         cumulativeFills,
         cumulativeListedVolume,
@@ -256,24 +256,39 @@ export default function ProtocolActivityChart({ transactions, orders, contractOr
           <CartesianGrid strokeDasharray="3 3" stroke="#FFFFFF20" />
           <XAxis
             dataKey="displayDate"
-            stroke="#FFFFFF"
-            tick={{ fill: '#FFFFFF', fontSize: 12 }}
-            tickLine={{ stroke: '#FFFFFF' }}
+            stroke="#FFFFFF40"
+            tick={{ fill: '#9CA3AF', fontSize: 12 }}
+            tickLine={{ stroke: '#FFFFFF20' }}
+            axisLine={{ stroke: '#FFFFFF20' }}
           />
           <YAxis
             yAxisId="left"
-            stroke="#FFFFFF"
-            tick={{ fill: '#FFFFFF', fontSize: 12 }}
-            tickLine={{ stroke: '#FFFFFF' }}
-            tickFormatter={(value) => formatUSD(value)}
+            stroke="#FFFFFF20"
+            tick={{ fill: '#9CA3AF', fontSize: 12 }}
+            tickLine={{ stroke: '#FFFFFF20' }}
+            axisLine={{ stroke: '#FFFFFF20' }}
+            tickCount={5}
+            tickFormatter={(value) => {
+              if (value === 0) return '$0';
+              if (value >= 1000000) return `$${Math.round(value / 1000000)}M`;
+              if (value >= 1000) return `$${Math.round(value / 1000)}K`;
+              return `$${Math.round(value)}`;
+            }}
           />
           <YAxis
             yAxisId="right"
             orientation="right"
-            stroke="#FFFFFF60"
-            tick={{ fill: '#FFFFFF60', fontSize: 12 }}
-            tickLine={{ stroke: '#FFFFFF60' }}
-            tickFormatter={(value) => formatUSD(value)}
+            stroke="#FFFFFF20"
+            tick={{ fill: '#6B7280', fontSize: 12 }}
+            tickLine={{ stroke: '#FFFFFF20' }}
+            axisLine={{ stroke: '#FFFFFF20' }}
+            tickCount={5}
+            tickFormatter={(value) => {
+              if (value === 0) return '$0';
+              if (value >= 1000000) return `$${Math.round(value / 1000000)}M`;
+              if (value >= 1000) return `$${Math.round(value / 1000)}K`;
+              return `$${Math.round(value)}`;
+            }}
           />
           <Tooltip
             content={({ active, payload }) => {
@@ -282,11 +297,12 @@ export default function ProtocolActivityChart({ transactions, orders, contractOr
 
               return (
                 <div style={{
-                  backgroundColor: '#000',
-                  border: '2px solid #FFFFFF',
+                  backgroundColor: 'rgba(0, 0, 0, 0.85)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
                   borderRadius: '8px',
                   padding: '12px',
                   color: '#fff',
+                  backdropFilter: 'blur(8px)',
                 }}>
                   <p style={{ fontWeight: 'bold', marginBottom: '8px' }}>{data.displayDate}</p>
                   <p style={{ margin: '4px 0', fontSize: '14px' }}>
@@ -299,7 +315,7 @@ export default function ProtocolActivityChart({ transactions, orders, contractOr
                     <span style={{ fontWeight: 'bold' }}>{formatUSD(data.filledVolume)}</span>
                     <span style={{ color: '#888', marginLeft: '8px' }}>({data.dailyFills} fills)</span>
                   </p>
-                  <hr style={{ margin: '8px 0', borderColor: '#333' }} />
+                  <hr style={{ margin: '8px 0', borderColor: 'rgba(255, 255, 255, 0.1)' }} />
                   <p style={{ margin: '4px 0', fontSize: '14px' }}>
                     <span style={{ color: '#EC489980' }}>Cumulative Listed:</span>{' '}
                     <span style={{ fontWeight: 'bold' }}>{formatUSD(data.cumulativeListedVolume)}</span>

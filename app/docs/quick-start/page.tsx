@@ -138,7 +138,7 @@ export default function QuickStartPage() {
             </div>
           </LiquidGlassCard>
         </Link>
-        <Link href="/swap" className="flex-1">
+        <Link href="/trade" className="flex-1">
           <LiquidGlassCard className="p-6 h-full hover:bg-white/5 transition-colors group bg-white/5">
             <div className="flex items-center justify-between">
               <div>

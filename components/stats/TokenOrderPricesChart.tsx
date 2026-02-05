@@ -1,17 +1,16 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { ComposedChart, Scatter, XAxis, YAxis, ReferenceLine, ResponsiveContainer, Tooltip, Cell } from 'recharts';
-import { LiquidGlassCard } from '@/components/ui/liquid-glass';
+import { ComposedChart, Scatter, XAxis, YAxis, ReferenceLine, ResponsiveContainer, Tooltip, Cell, CartesianGrid } from 'recharts';
 import { formatUSD, formatPriceSigFig, getTokenPrice } from '@/utils/format';
 import { getTokenInfo, getTokenInfoByIndex } from '@/utils/tokenUtils';
-import { CoinLogo } from '@/components/ui/CoinLogo';
 import { CompleteOrderDetails } from '@/hooks/contracts/useOpenPositions';
 
 interface TokenOrderPricesChartProps {
   orders: CompleteOrderDetails[];
   tokenPrices: Record<string, { price: number }>;
   whitelist: string[];
+  selectedToken?: string | null;
 }
 
 interface OrderPriceLevel {
@@ -37,8 +36,8 @@ interface TokenOrderData {
   maxTime: number;
 }
 
-export default function TokenOrderPricesChart({ orders, tokenPrices, whitelist }: TokenOrderPricesChartProps) {
-  const [selectedToken, setSelectedToken] = useState<string | null>(null);
+export default function TokenOrderPricesChart({ orders, tokenPrices, whitelist, selectedToken }: TokenOrderPricesChartProps) {
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
   // Process orders to get price levels for ALL tokens (both sell and buy sides)
   const tokenOrderData = useMemo(() => {
@@ -212,142 +211,80 @@ export default function TokenOrderPricesChart({ orders, tokenPrices, whitelist }
   const xDomainMin = xMin - xPadding;
   const xDomainMax = xMax + xPadding;
 
-  // Stats
-  const ordersAboveMarket = sortedOrders.filter(o => o.positionPercent > 5).length;
-  const ordersBelowMarket = sortedOrders.filter(o => o.positionPercent < -5).length;
-  const ordersNearMarket = sortedOrders.filter(o => Math.abs(o.positionPercent) <= 5).length;
-
-  // Calculate dollar-weighted average prices (separate for sell and buy sides)
-  const sellOrders = sortedOrders.filter(o => o.isSelling);
-  const buyOrders = sortedOrders.filter(o => !o.isSelling);
-
-  // Sell-side weighted average: Σ(implied_price × valueUSD) / Σ(valueUSD)
-  const sellWeightedAvg = sellOrders.length > 0
-    ? sellOrders.reduce((sum, o) => sum + o.impliedPrice * o.valueUSD, 0) / sellOrders.reduce((sum, o) => sum + o.valueUSD, 0)
-    : null;
-
-  // Buy-side weighted average
-  const buyWeightedAvg = buyOrders.length > 0
-    ? buyOrders.reduce((sum, o) => sum + o.impliedPrice * o.valueUSD, 0) / buyOrders.reduce((sum, o) => sum + o.valueUSD, 0)
-    : null;
-
-  // Combined weighted average (all orders)
+  // Combined weighted average (all orders) for reference line
   const totalWeightedAvg = sortedOrders.length > 0
     ? sortedOrders.reduce((sum, o) => sum + o.impliedPrice * o.valueUSD, 0) / sortedOrders.reduce((sum, o) => sum + o.valueUSD, 0)
     : null;
 
-  // Calculate % difference from market for weighted averages
-  const sellAvgVsMarket = sellWeightedAvg ? ((sellWeightedAvg - displayToken.marketPrice) / displayToken.marketPrice) * 100 : null;
-  const buyAvgVsMarket = buyWeightedAvg ? ((buyWeightedAvg - displayToken.marketPrice) / displayToken.marketPrice) * 100 : null;
-  const totalAvgVsMarket = totalWeightedAvg ? ((totalWeightedAvg - displayToken.marketPrice) / displayToken.marketPrice) * 100 : null;
-
   // Format time for X axis
   const formatTime = (timestamp: number) => {
     const date = new Date(timestamp);
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
   };
 
+  // Generate nice round tick values for Y axis
+  const generateNiceTicks = (min: number, max: number, count: number = 5): { ticks: number[]; domain: [number, number] } => {
+    const range = max - min;
+    // Find the order of magnitude
+    const magnitude = Math.pow(10, Math.floor(Math.log10(range)));
+    // Nice step values: 1, 2, 5, 10, 20, 50, etc.
+    const niceSteps = [1, 2, 5, 10];
+    let step = magnitude;
+
+    // Find a step that gives us approximately the right number of ticks
+    for (const mult of niceSteps) {
+      const testStep = magnitude * mult / 10;
+      const tickCount = Math.ceil(range / testStep);
+      if (tickCount <= count + 2 && tickCount >= count - 2) {
+        step = testStep;
+        break;
+      }
+    }
+
+    // Round min down and max up to nice values - ensure we cover all data
+    const niceMin = Math.floor(min / step) * step;
+    // Add one extra step to ensure we have headroom above the highest point
+    const niceMax = Math.ceil(max / step) * step + step;
+
+    const ticks: number[] = [];
+    for (let v = niceMin; v <= niceMax; v += step) {
+      ticks.push(Number(v.toPrecision(4)));
+    }
+
+    return {
+      ticks,
+      domain: [niceMin, niceMax] as [number, number]
+    };
+  };
+
+  const { ticks: yTicks, domain: yDomain } = generateNiceTicks(yMin, yMax, 6);
+
   return (
-    <LiquidGlassCard
-      className="p-6 bg-black/40"
-      shadowIntensity="none"
-      glowIntensity="none"
-    >
-      <div className="mb-6">
-        <h3 className="text-2xl font-bold text-white mb-2">Alt Limit Price Chart (Scatter)</h3>
-        <p className="text-gray-400 text-sm">Implied prices for tokens in active orders</p>
-      </div>
-
-      {/* Token selector */}
-      <div className="flex flex-wrap gap-2 mb-6">
-        {tokenOrderData.slice(0, 10).map(token => (
-          <button
-            key={token.address}
-            onClick={() => setSelectedToken(token.address)}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-colors ${
-              displayToken.address === token.address
-                ? 'bg-white text-black border-white'
-                : 'bg-white/5 text-white border-white/20 hover:bg-white/10'
-            }`}
-          >
-            <CoinLogo symbol={token.ticker} size="sm" />
-            <span className="text-sm font-medium">{token.ticker}</span>
-            <span className="text-xs opacity-60">({token.orders.length})</span>
-          </button>
-        ))}
-      </div>
-
-      {/* Current token info */}
-      <div className="flex flex-wrap items-center gap-4 mb-6 p-4 bg-white/5 rounded-lg">
-        <CoinLogo symbol={displayToken.ticker} size="lg" />
-        <div>
-          <p className="text-white font-bold text-lg">{displayToken.ticker}</p>
-          <p className="text-gray-400 text-sm">
-            Market: <span className="font-medium" style={{ color: '#00D9FF' }}>{formatPriceSigFig(displayToken.marketPrice)}</span>
-          </p>
-        </div>
-
-        {/* Weighted Average Prices */}
-        <div className="flex gap-4 ml-auto">
-          {sellWeightedAvg && (
-            <div className="text-center px-3 py-1 bg-white/5 rounded">
-              <p className="text-gray-400 text-xs">Avg Ask</p>
-              <p className="text-white font-medium text-sm">{formatPriceSigFig(sellWeightedAvg)}</p>
-              <p className="text-xs" style={{ color: sellAvgVsMarket && sellAvgVsMarket > 0 ? '#4ADE80' : '#FF6B6B' }}>
-                {sellAvgVsMarket ? `${sellAvgVsMarket > 0 ? '+' : ''}${sellAvgVsMarket.toFixed(1)}%` : ''}
-              </p>
-            </div>
-          )}
-          {buyWeightedAvg && (
-            <div className="text-center px-3 py-1 bg-white/5 rounded">
-              <p className="text-gray-400 text-xs">Avg Bid</p>
-              <p className="text-white font-medium text-sm">{formatPriceSigFig(buyWeightedAvg)}</p>
-              <p className="text-xs" style={{ color: buyAvgVsMarket && buyAvgVsMarket > 0 ? '#4ADE80' : '#FF6B6B' }}>
-                {buyAvgVsMarket ? `${buyAvgVsMarket > 0 ? '+' : ''}${buyAvgVsMarket.toFixed(1)}%` : ''}
-              </p>
-            </div>
-          )}
-          {totalWeightedAvg && (
-            <div className="text-center px-3 py-1 bg-white/10 rounded border border-white/20">
-              <p className="text-gray-400 text-xs">Weighted Avg</p>
-              <p className="text-white font-bold text-sm">{formatPriceSigFig(totalWeightedAvg)}</p>
-              <p className="text-xs" style={{ color: totalAvgVsMarket && totalAvgVsMarket > 0 ? '#4ADE80' : '#FF6B6B' }}>
-                {totalAvgVsMarket ? `${totalAvgVsMarket > 0 ? '+' : ''}${totalAvgVsMarket.toFixed(1)}%` : ''}
-              </p>
-            </div>
-          )}
-        </div>
-
-        <div className="text-right">
-          <p className="text-white font-bold">{sortedOrders.length}</p>
-          <p className="text-gray-400 text-sm">Price Points</p>
-        </div>
-      </div>
-
-      {/* Chart with dots and horizontal lines */}
-      <div className="mb-6">
+    <div className="mb-6">
         <ResponsiveContainer width="100%" height={300}>
           <ComposedChart margin={{ top: 20, right: 30, bottom: 20, left: 20 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#FFFFFF20" />
             <XAxis
               type="number"
               dataKey="x"
               domain={[xDomainMin, xDomainMax]}
               tickFormatter={formatTime}
-              stroke="#FFFFFF"
-              tick={{ fill: '#FFFFFF', fontSize: 12 }}
-              tickLine={{ stroke: '#FFFFFF' }}
-              axisLine={{ stroke: '#FFFFFF40' }}
+              stroke="#FFFFFF20"
+              tick={{ fill: '#9CA3AF', fontSize: 12 }}
+              tickLine={{ stroke: '#FFFFFF20' }}
+              axisLine={{ stroke: '#FFFFFF20' }}
             />
             <YAxis
               type="number"
               dataKey="y"
-              domain={[yMin, yMax]}
+              domain={yDomain}
+              ticks={yTicks}
               tickFormatter={(value) => formatPriceSigFig(value)}
-              stroke="#FFFFFF"
-              tick={{ fill: '#FFFFFF', fontSize: 12 }}
-              tickLine={{ stroke: '#FFFFFF' }}
-              axisLine={{ stroke: '#FFFFFF40' }}
-              width={70}
+              stroke="#FFFFFF20"
+              tick={{ fill: '#9CA3AF', fontSize: 12 }}
+              tickLine={{ stroke: '#FFFFFF20' }}
+              axisLine={{ stroke: '#FFFFFF20' }}
+              width={80}
             />
             <ReferenceLine
               y={displayToken.marketPrice}
@@ -355,8 +292,8 @@ export default function TokenOrderPricesChart({ orders, tokenPrices, whitelist }
               strokeWidth={2}
               strokeDasharray="5 5"
               label={{
-                value: 'Market',
-                position: 'right',
+                value: `Market: ${formatPriceSigFig(displayToken.marketPrice)}`,
+                position: 'insideTopLeft',
                 fill: '#00D9FF',
                 fontSize: 12
               }}
@@ -365,43 +302,63 @@ export default function TokenOrderPricesChart({ orders, tokenPrices, whitelist }
             {totalWeightedAvg && (
               <ReferenceLine
                 y={totalWeightedAvg}
-                stroke="#FFD700"
+                stroke="rgba(255, 215, 0, 0.3)"
                 strokeWidth={2}
-                strokeDasharray="3 3"
                 label={{
                   value: 'Avg',
                   position: 'right',
-                  fill: '#FFD700',
+                  fill: 'rgba(255, 215, 0, 0.5)',
                   fontSize: 10
                 }}
               />
             )}
-            {/* Horizontal lines for each price point */}
+            {/* Horizontal lines for each price point - with hover zones */}
             {scatterData.map((entry, index) => {
-              const color = entry.positionPercent > 0 ? '#4ADE80' : '#FF6B6B';
+              // Pink for sell orders, green for buy orders (matching orderbook)
+              const color = entry.isSelling ? '#EC4899' : '#4ADE80';
+              const isHovered = hoveredIndex === index;
               return (
                 <ReferenceLine
                   key={`line-${index}`}
                   y={entry.y}
                   stroke={color}
-                  strokeWidth={1}
-                  strokeOpacity={0.5}
+                  strokeWidth={isHovered ? 3 : 1}
+                  strokeOpacity={isHovered ? 1 : 0.5}
+                  ifOverflow="extendDomain"
+                  segment={[{ x: xDomainMin, y: entry.y }, { x: xDomainMax, y: entry.y }]}
+                  style={{ cursor: 'pointer' }}
+                  onMouseEnter={() => setHoveredIndex(index)}
+                  onMouseLeave={() => setHoveredIndex(null)}
                 />
               );
             })}
+            {/* Invisible wider hit zones for easier line hover */}
+            {scatterData.map((entry, index) => (
+              <ReferenceLine
+                key={`hitzone-${index}`}
+                y={entry.y}
+                stroke="transparent"
+                strokeWidth={20}
+                style={{ cursor: 'pointer' }}
+                onMouseEnter={() => setHoveredIndex(index)}
+                onMouseLeave={() => setHoveredIndex(null)}
+              />
+            ))}
             <Tooltip
               content={({ active, payload }) => {
                 if (!active || !payload || !payload[0]) return null;
                 const data = payload[0].payload as OrderPriceLevel & { x: number; y: number };
-                const color = data.positionPercent > 0 ? '#4ADE80' : '#FF6B6B';
+                // Pink for sell orders, green for buy orders (matching orderbook)
+                const color = data.isSelling ? '#EC4899' : '#4ADE80';
 
                 return (
                   <div style={{
-                    backgroundColor: '#1a1a1a',
-                    border: '2px solid #FFFFFF',
+                    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
                     borderRadius: '8px',
                     padding: '12px',
                     color: '#fff',
+                    backdropFilter: 'blur(8px)',
                   }}>
                     <p style={{ fontWeight: 'bold', marginBottom: '8px' }}>Order #{data.orderId}</p>
                     <p style={{ margin: '4px 0', fontSize: '14px' }}>
@@ -432,53 +389,26 @@ export default function TokenOrderPricesChart({ orders, tokenPrices, whitelist }
               data={scatterData}
               fill="#FFFFFF"
               cursor="pointer"
+              onMouseLeave={() => setHoveredIndex(null)}
             >
               {scatterData.map((entry, index) => {
-                // Above market = green (good deal for sellers), Below market = red (bad deal)
-                const color = entry.positionPercent > 0 ? '#4ADE80' : '#FF6B6B';
-                return <Cell key={`cell-${index}`} fill={color} />;
+                // Pink for sell orders, green for buy orders (matching orderbook)
+                const color = entry.isSelling ? '#EC4899' : '#4ADE80';
+                const isHovered = hoveredIndex === index;
+                return (
+                  <Cell
+                    key={`cell-${index}`}
+                    fill={color}
+                    stroke={isHovered ? '#FFFFFF' : 'none'}
+                    strokeWidth={isHovered ? 2 : 0}
+                    onMouseEnter={() => setHoveredIndex(index)}
+                    onMouseLeave={() => setHoveredIndex(null)}
+                  />
+                );
               })}
             </Scatter>
           </ComposedChart>
         </ResponsiveContainer>
-      </div>
-
-      {/* Legend */}
-      <div className="flex flex-wrap justify-center gap-4 mb-6">
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-[#4ADE80]" />
-          <span className="text-gray-400 text-sm">Above Market</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-[#FF6B6B]" />
-          <span className="text-gray-400 text-sm">Below Market</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-0.5" style={{ backgroundColor: '#00D9FF' }} />
-          <span className="text-gray-400 text-sm">Market Price</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-0.5" style={{ backgroundColor: '#FFD700', borderStyle: 'dashed' }} />
-          <span className="text-gray-400 text-sm">$-Weighted Avg</span>
-        </div>
-      </div>
-
-      {/* Stats summary */}
-      <div className="grid grid-cols-3 gap-4 pt-4 border-t border-white/10">
-        <div className="text-center">
-          <p className="text-2xl font-bold text-[#4ADE80]">{ordersAboveMarket}</p>
-          <p className="text-gray-400 text-sm">Above Market</p>
-        </div>
-        <div className="text-center">
-          <p className="text-2xl font-bold text-white">{ordersNearMarket}</p>
-          <p className="text-gray-400 text-sm">Near Market</p>
-          <p className="text-gray-500 text-xs">(±5%)</p>
-        </div>
-        <div className="text-center">
-          <p className="text-2xl font-bold text-[#FF6B6B]">{ordersBelowMarket}</p>
-          <p className="text-gray-400 text-sm">Below Market</p>
-        </div>
-      </div>
-    </LiquidGlassCard>
+    </div>
   );
 }
