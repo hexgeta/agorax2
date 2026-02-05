@@ -293,9 +293,11 @@ export default function TokenOrderPricesChart({ orders, tokenPrices, whitelist, 
               strokeDasharray="5 5"
               label={{
                 value: `Market: ${formatPriceSigFig(displayToken.marketPrice)}`,
-                position: 'insideTopLeft',
-                fill: '#00D9FF',
-                fontSize: 12
+                position: 'insideLeft',
+                fill: '#00D9FF4D',
+                fontSize: 48,
+                fontWeight: 'bold',
+                dy: -20
               }}
             />
             {/* Weighted average line */}
