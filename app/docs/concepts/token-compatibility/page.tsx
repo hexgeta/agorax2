@@ -60,7 +60,7 @@ export default function TokenCompatibilityPage() {
             </div>
             <div className="flex items-start gap-3">
               <span className="text-green-400">✓</span>
-              <span className="text-white/70">Native PLS (wrapped automatically)</span>
+              <span className="text-white/70">Native PLS is also supported without the need for wrapping</span>
             </div>
           </div>
         </LiquidGlassCard>
@@ -85,9 +85,8 @@ export default function TokenCompatibilityPage() {
           <div className="bg-white/5 p-4 rounded-lg">
             <h4 className="text-white font-medium mb-2">Why Whitelisting?</h4>
             <ul className="space-y-2 text-white/60 text-sm">
+              <li>• Filters out problematic rebasing and tax/fee-on-transfer tokens</li>
               <li>• Protects buyers from receiving scam/worthless tokens</li>
-              <li>• Ensures price oracle support for accurate valuations</li>
-              <li>• Maintains liquidity for received tokens</li>
             </ul>
           </div>
         </LiquidGlassCard>
@@ -118,7 +117,7 @@ export default function TokenCompatibilityPage() {
             </p>
             <div className="bg-yellow-500/10 p-3 rounded-lg">
               <p className="text-yellow-300 text-sm">
-                May cause balance discrepancies during order placement.
+                They may cause unexpected behavior, transaction failures, or stuck funds.
               </p>
             </div>
           </LiquidGlassCard>
@@ -161,7 +160,7 @@ export default function TokenCompatibilityPage() {
               <tr>
                 <td className="py-3">Rebasing tokens</td>
                 <td className="py-3 text-center"><span className="text-yellow-400">⚠</span></td>
-                <td className="py-3 text-center"><span className="text-yellow-400">⚠</span></td>
+                <td className="py-3 text-center"><span className="text-red-400">✗</span></td>
               </tr>
             </tbody>
           </table>
