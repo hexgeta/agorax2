@@ -5,6 +5,7 @@ import { CircleDollarSign, Lock } from 'lucide-react';
 import { getTokenInfo, getTokenInfoByIndex, formatTokenTicker, formatTokenAmount } from '@/utils/tokenUtils';
 import { getRemainingPercentage } from '@/utils/orderUtils';
 import { getBlockExplorerTxUrl } from '@/utils/blockExplorer';
+import { getTokenPrice } from '@/utils/format';
 import { useTokenPrices } from '@/hooks/crypto/useTokenPrices';
 import { useTokenStats } from '@/hooks/crypto/useTokenStats';
 import { useAccount, usePublicClient } from 'wagmi';
@@ -120,26 +121,6 @@ const formatTokenAmountDisplay = (amount: number): string => {
     return amount.toLocaleString();
   }
   return amount.toFixed(2);
-};
-
-// Helper function to get token price
-const getTokenPrice = (tokenAddress: string, tokenPrices: any): number => {
-  // Hardcode weDAI to $1.00
-  if (tokenAddress.toLowerCase() === '0xefd766ccb38eaf1dfd701853bfce31359239f305') {
-    return 1.0;
-  }
-
-  // Use WPLS price for PLS (native token addresses)
-  const plsAddresses = [
-    '0x0000000000000000000000000000000000000000',
-    '0x000000000000000000000000000000000000dead',
-  ];
-  if (plsAddresses.some(addr => tokenAddress.toLowerCase() === addr.toLowerCase())) {
-    const wplsPrice = tokenPrices['0xa1077a294dde1b09bb078844df40758a5d0f9a27']?.price;
-    return wplsPrice || 0.000034;
-  }
-
-  return tokenPrices[tokenAddress]?.price || 0;
 };
 
 const formatPercentage = (percentage: number) => {

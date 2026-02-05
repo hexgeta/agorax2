@@ -22,7 +22,7 @@ import { useContractWhitelistRead } from '@/hooks/contracts/useContractWhitelist
 import { CONTRACT_ABI } from '@/config/abis';
 import { formatEther, parseEther, parseAbiItem } from 'viem';
 import { getTokenInfo, getTokenInfoByIndex, formatAddress, formatTokenTicker, parseTokenAmount, formatTokenAmount } from '@/utils/tokenUtils';
-import { formatSmartNumber } from '@/utils/format';
+import { formatSmartNumber, getTokenPrice } from '@/utils/format';
 import { isNativeToken } from '@/utils/tokenApproval';
 import { getRemainingPercentage } from '@/utils/orderUtils';
 import { getBlockExplorerTxUrl } from '@/utils/blockExplorer';
@@ -198,33 +198,6 @@ const formatTokenAmountDisplay = (amount: number): string => {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2
   });
-};
-
-// Helper function to get token price with hardcoded overrides
-const getTokenPrice = (tokenAddress: string, tokenPrices: any): number => {
-  // Hardcode weDAI to $1.00
-  if (tokenAddress.toLowerCase() === '0xefd766ccb38eaf1dfd701853bfce31359239f305') {
-    return 1.0;
-  }
-
-  // Use WPLS price for PLS (native token addresses)
-  const plsAddresses = [
-    '0x0000000000000000000000000000000000000000', // 0x0
-    '0x000000000000000000000000000000000000dead', // 0xdEaD
-  ];
-  if (plsAddresses.some(addr => tokenAddress.toLowerCase() === addr.toLowerCase())) {
-    // Try to get WPLS price from API, fallback to hardcoded value from DexScreener
-    const wplsPrice = tokenPrices['0xa1077a294dde1b09bb078844df40758a5d0f9a27']?.price;
-    return wplsPrice || 0.000034; // Fallback to current DexScreener price
-  }
-
-  // Debug for other tokens that return 0
-  const price = tokenPrices[tokenAddress]?.price || 0;
-  if (price === 0) {
-  }
-
-  // Return regular price for other tokens
-  return price;
 };
 
 // Map wrapped tokens to base tokens for price fetching

@@ -2,7 +2,10 @@
 
 import { useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { LiquidGlassCard } from '@/components/ui/liquid-glass';
+import { getTokenPrice, formatUSD } from '@/utils/format';
 import { getTokenInfo } from '@/utils/tokenUtils';
+import { CompleteOrderDetails } from '@/hooks/contracts/useOpenPositions';
 
 interface OrderPlaced {
   transactionHash: string;
@@ -17,43 +20,12 @@ interface OrderPlaced {
 interface OrderVolumeChartProps {
   orders: OrderPlaced[];
   tokenPrices: Record<string, { price: number }>;
+  contractOrders?: CompleteOrderDetails[];
 }
 
-// Helper to get token price
-const getTokenPrice = (tokenAddress: string, tokenPrices: any): number => {
-  // Hardcode weDAI to $1.00
-  if (tokenAddress.toLowerCase() === '0xefd766ccb38eaf1dfd701853bfce31359239f305') {
-    return 1.0;
-  }
-
-  // Use WPLS price for PLS (native token addresses)
-  const plsAddresses = [
-    '0x0000000000000000000000000000000000000000',
-    '0x000000000000000000000000000000000000dead',
-  ];
-  if (plsAddresses.some(addr => tokenAddress.toLowerCase() === addr.toLowerCase())) {
-    const wplsPrice = tokenPrices['0xa1077a294dde1b09bb078844df40758a5d0f9a27']?.price;
-    return wplsPrice || 0.000034;
-  }
-
-  return tokenPrices[tokenAddress]?.price || 0;
-};
-
-// Format USD amount
-const formatUSD = (amount: number) => {
-  if (amount === 0) return '$0.00';
-  if (amount < 1000) return `$${amount.toFixed(2)}`;
-  if (amount < 1000000) return `$${(amount / 1000).toFixed(2)}K`;
-  return `$${(amount / 1000000).toFixed(2)}M`;
-};
-
-import { LiquidGlassCard } from '@/components/ui/liquid-glass';
-
-export default function OrderVolumeChart({ orders, tokenPrices }: OrderVolumeChartProps) {
+export default function OrderVolumeChart({ orders, tokenPrices, contractOrders = [] }: OrderVolumeChartProps) {
   // Calculate daily order volume data
   const chartData = useMemo(() => {
-    if (!orders || orders.length === 0) return [];
-
     // Group orders by day
     const volumeByDay: Record<string, {
       date: string;
@@ -62,34 +34,73 @@ export default function OrderVolumeChart({ orders, tokenPrices }: OrderVolumeCha
       uniqueCreators: Set<string>;
     }> = {};
 
-    orders.forEach(order => {
-      if (!order.timestamp) return;
+    // Use contract orders if available, otherwise fall back to event orders
+    if (contractOrders.length > 0) {
+      contractOrders.forEach(order => {
+        const timestamp = Number(order.orderDetailsWithID.lastUpdateTime);
+        if (!timestamp || timestamp <= 0) return;
 
-      // Get date string (YYYY-MM-DD)
-      const date = new Date(order.timestamp * 1000);
-      const dateStr = date.toISOString().split('T')[0];
+        // Get date string (YYYY-MM-DD)
+        const date = new Date(timestamp * 1000);
+        const dateStr = date.toISOString().split('T')[0];
 
-      // Calculate order value in USD
-      const tokenPrice = getTokenPrice(order.sellToken, tokenPrices);
-      const orderValueUSD = order.sellAmount * tokenPrice;
+        // Calculate order value in USD
+        const sellTokenAddr = order.orderDetailsWithID.orderDetails.sellToken;
+        const tokenInfo = getTokenInfo(sellTokenAddr);
+        const sellAmount = Number(order.orderDetailsWithID.orderDetails.sellAmount) / Math.pow(10, tokenInfo.decimals);
+        const tokenPrice = getTokenPrice(sellTokenAddr, tokenPrices);
+        const orderValueUSD = sellAmount * tokenPrice;
 
-      // Add to daily total
-      if (!volumeByDay[dateStr]) {
-        volumeByDay[dateStr] = {
-          date: dateStr,
-          volume: 0,
-          orderCount: 0,
-          uniqueCreators: new Set()
-        };
-      }
-      volumeByDay[dateStr].volume += orderValueUSD;
-      volumeByDay[dateStr].orderCount += 1;
+        // Add to daily total
+        if (!volumeByDay[dateStr]) {
+          volumeByDay[dateStr] = {
+            date: dateStr,
+            volume: 0,
+            orderCount: 0,
+            uniqueCreators: new Set()
+          };
+        }
+        volumeByDay[dateStr].volume += orderValueUSD;
+        volumeByDay[dateStr].orderCount += 1;
 
-      // Track unique order creators
-      if (order.orderOwner) {
-        volumeByDay[dateStr].uniqueCreators.add(order.orderOwner.toLowerCase());
-      }
-    });
+        // Track unique order creators
+        const owner = order.userDetails.orderOwner;
+        if (owner) {
+          volumeByDay[dateStr].uniqueCreators.add(owner.toLowerCase());
+        }
+      });
+    } else {
+      if (!orders || orders.length === 0) return [];
+
+      orders.forEach(order => {
+        if (!order.timestamp) return;
+
+        // Get date string (YYYY-MM-DD)
+        const date = new Date(order.timestamp * 1000);
+        const dateStr = date.toISOString().split('T')[0];
+
+        // Calculate order value in USD
+        const tokenPrice = getTokenPrice(order.sellToken, tokenPrices);
+        const orderValueUSD = order.sellAmount * tokenPrice;
+
+        // Add to daily total
+        if (!volumeByDay[dateStr]) {
+          volumeByDay[dateStr] = {
+            date: dateStr,
+            volume: 0,
+            orderCount: 0,
+            uniqueCreators: new Set()
+          };
+        }
+        volumeByDay[dateStr].volume += orderValueUSD;
+        volumeByDay[dateStr].orderCount += 1;
+
+        // Track unique order creators
+        if (order.orderOwner) {
+          volumeByDay[dateStr].uniqueCreators.add(order.orderOwner.toLowerCase());
+        }
+      });
+    }
 
     // Find min and max dates
     const dates = Object.keys(volumeByDay).sort();
@@ -125,15 +136,15 @@ export default function OrderVolumeChart({ orders, tokenPrices }: OrderVolumeCha
     }
 
     return allDays;
-  }, [orders, tokenPrices]);
+  }, [orders, tokenPrices, contractOrders]);
 
   const totalVolume = useMemo(() => {
     return chartData.reduce((sum, day) => sum + day.volume, 0);
   }, [chartData]);
 
   const totalOrders = useMemo(() => {
-    return orders.length;
-  }, [orders]);
+    return contractOrders.length > 0 ? contractOrders.length : orders.length;
+  }, [orders.length, contractOrders.length]);
 
   if (chartData.length === 0) {
     return null;

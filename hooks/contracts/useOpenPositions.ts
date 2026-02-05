@@ -241,10 +241,24 @@ async function fetchContractData(contractAddress: Address, chainId: number, user
       }
     }
 
-    // Filter orders by status
-    const activeOrders = allOrders.filter(order => order.orderDetailsWithID.status === 0);
+    // Filter orders by status AND expiration
+    const currentTime = Math.floor(Date.now() / 1000);
+    const activeOrders = allOrders.filter(order => {
+      // Must have active status
+      if (order.orderDetailsWithID.status !== 0) return false;
+      // Must not be expired (0 means no expiration)
+      const expirationTime = Number(order.orderDetailsWithID.orderDetails.expirationTime);
+      if (expirationTime > 0 && expirationTime < currentTime) return false;
+      return true;
+    });
     const completedOrders = allOrders.filter(order => order.orderDetailsWithID.status === 2);
     const cancelledOrders = allOrders.filter(order => order.orderDetailsWithID.status === 1);
+    // Expired orders: status 0 but past expiration time
+    const expiredOrders = allOrders.filter(order => {
+      if (order.orderDetailsWithID.status !== 0) return false;
+      const expirationTime = Number(order.orderDetailsWithID.orderDetails.expirationTime);
+      return expirationTime > 0 && expirationTime < currentTime;
+    });
 
 
     const result = {
@@ -257,6 +271,7 @@ async function fetchContractData(contractAddress: Address, chainId: number, user
       activeOrders: activeOrders,
       completedOrders: completedOrders,
       cancelledOrders: cancelledOrders,
+      expiredOrders: expiredOrders,
     };
     
     return result;
@@ -271,6 +286,7 @@ async function fetchContractData(contractAddress: Address, chainId: number, user
       activeOrders: [],
       completedOrders: [],
       cancelledOrders: [],
+      expiredOrders: [],
     };
   }
 }
@@ -296,6 +312,7 @@ export function useOpenPositions(userAddress?: Address | null, fetchAllOrders?: 
     activeOrders: CompleteOrderDetails[];
     completedOrders: CompleteOrderDetails[];
     cancelledOrders: CompleteOrderDetails[];
+    expiredOrders: CompleteOrderDetails[];
   } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
@@ -351,6 +368,7 @@ export function useOpenPositions(userAddress?: Address | null, fetchAllOrders?: 
     activeOrders: data?.activeOrders || [],
     completedOrders: data?.completedOrders || [],
     cancelledOrders: data?.cancelledOrders || [],
+    expiredOrders: data?.expiredOrders || [],
     isLoading: !isClient || isLoading,
     error,
     refetch: fetchData,

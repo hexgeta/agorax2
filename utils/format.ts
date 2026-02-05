@@ -105,12 +105,12 @@ export function formatSmartNumber(value: number, maxDecimals = 6): string {
 
 export function formatPriceSigFig(price: number, sigFigs = 3): string {
   if (price === 0) return '$0.00';
-  
+
   // For numbers >= 1, always show 2 decimal places
   if (price >= 1) {
     return '$' + price.toFixed(2);
   }
-  
+
   // For small numbers, count leading zeros after decimal point
   const str = price.toString();
   const [, decimal = ''] = str.split('.');
@@ -119,8 +119,66 @@ export function formatPriceSigFig(price: number, sigFigs = 3): string {
     if (char === '0') leadingZeros++;
     else break;
   }
-  
+
   // Show all leading zeros plus 3 significant digits
   const totalDecimals = Math.max(leadingZeros + 3, 2);
   return '$' + price.toFixed(totalDecimals);
+}
+
+// Known token addresses for price lookups
+const WEDAI_ADDRESS = '0xefd766ccb38eaf1dfd701853bfce31359239f305';
+const WPLS_ADDRESS = '0xa1077a294dde1b09bb078844df40758a5d0f9a27';
+const PLS_NATIVE_ADDRESSES = [
+  '0x0000000000000000000000000000000000000000',
+  '0x000000000000000000000000000000000000dead',
+  '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', // AgoraX native PLS marker
+];
+
+// Fallback prices when API data unavailable
+const FALLBACK_WPLS_PRICE = 0.000034;
+
+/**
+ * Get token price from price data with fallbacks for known tokens
+ */
+export function getTokenPrice(tokenAddress: string, tokenPrices: Record<string, { price: number }>): number {
+  const addr = tokenAddress.toLowerCase();
+
+  // Hardcode weDAI to $1.00
+  if (addr === WEDAI_ADDRESS) {
+    return 1.0;
+  }
+
+  // Use WPLS price for native PLS addresses
+  if (PLS_NATIVE_ADDRESSES.some(plsAddr => addr === plsAddr.toLowerCase())) {
+    const wplsPrice = tokenPrices[WPLS_ADDRESS]?.price;
+    return wplsPrice || FALLBACK_WPLS_PRICE;
+  }
+
+  return tokenPrices[tokenAddress]?.price || tokenPrices[addr]?.price || 0;
+}
+
+/**
+ * Format USD amount with K/M suffixes for large values
+ */
+export function formatUSD(amount: number): string {
+  if (amount === 0) return '$0.00';
+  if (amount < 1000) return `$${amount.toFixed(2)}`;
+  if (amount < 1000000) return `$${(amount / 1000).toFixed(2)}K`;
+  return `$${(amount / 1000000).toFixed(2)}M`;
+}
+
+/**
+ * Format number with commas (e.g., 1000000 -> "1,000,000")
+ */
+export function formatNumberWithCommas(value: string): string {
+  const parts = value.split('.');
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return parts.join('.');
+}
+
+/**
+ * Remove commas from formatted number string
+ */
+export function removeCommas(value: string): string {
+  return value.replace(/,/g, '');
 }

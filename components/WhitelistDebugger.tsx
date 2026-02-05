@@ -1,4 +1,4 @@
-comu'use client'
+'use client'
 
 import { useContractWhitelistRead } from '@/hooks/contracts/useContractWhitelistRead'
 import { getTokenInfo } from '@/utils/tokenUtils'

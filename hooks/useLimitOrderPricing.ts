@@ -37,19 +37,7 @@
  */
 
 import { useCallback } from 'react';
-
-// Helper to format numbers with commas
-const formatNumberWithCommas = (value: string): string => {
-  if (!value) return '';
-  const parts = value.split('.');
-  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-  return parts.join('.');
-};
-
-// Helper to remove commas
-const removeCommas = (value: string): string => {
-  return value.replace(/,/g, '');
-};
+import { formatNumberWithCommas, removeCommas } from '@/utils/format';
 
 // Helper to format calculated values
 const formatCalculatedValue = (value: number): string => {

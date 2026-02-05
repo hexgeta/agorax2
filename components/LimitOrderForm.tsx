@@ -10,6 +10,7 @@ import { formatEther, formatUnits, parseEther } from 'viem';
 import logoManifest from '@/constants/logo-manifest.json';
 import { formatTokenTicker, parseTokenAmount, getTokenInfoByIndex, getContractWhitelistIndex } from '@/utils/tokenUtils';
 import { getBlockExplorerTxUrl } from '@/utils/blockExplorer';
+import { formatNumberWithCommas, removeCommas } from '@/utils/format';
 import { useTokenStats } from '@/hooks/crypto/useTokenStats';
 import { useTokenAccess } from '@/context/TokenAccessContext';
 import { useTokenBalances } from '@/context/TokenBalancesContext';
@@ -55,19 +56,6 @@ interface TokenOption {
   name: string;
   decimals: number;
 }
-
-// Helper to format large numbers with commas
-const formatNumberWithCommas = (value: string): string => {
-  if (!value) return '';
-  const parts = value.split('.');
-  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-  return parts.join('.');
-};
-
-// Helper to remove commas for calculations
-const removeCommas = (value: string): string => {
-  return value.replace(/,/g, '');
-};
 
 // Helper to format balance display
 const formatBalanceDisplay = (balance: string): string => {
@@ -4240,7 +4228,7 @@ export function LimitOrderForm({
                                 inputMode="decimal"
                                 defaultValue={displayValue}
                                 maxLength={6}
-                                className={`peer w-full py-2 pl-2 pr-5 border text-xs font-medium rounded-full text-center focus:outline-none focus:border-[#FF0080] focus:bg-[#FF0080]/20 focus:text-white ${
+                                className={`peer w-full py-2 pl-2 pr-4 border text-xs font-medium rounded-full text-center focus:outline-none focus:border-[#FF0080] focus:bg-[#FF0080]/20 focus:text-white ${
                                   isCustomActive
                                     ? 'bg-[#FF0080]/20 border-[#FF0080]/40 text-white'
                                     : 'bg-black/40 border-[#FF0080]/40 text-[#FF0080] placeholder-transparent'
@@ -4291,9 +4279,9 @@ export function LimitOrderForm({
                                   if (!isNaN(value) && value !== 0) {
                                     const capped = Math.min(999, value);
                                     handlePercentageClick(capped, isNegative ? 'below' : 'above');
-                                  } else if (e.target.dataset.originalValue) {
-                                    // Restore original value if nothing was typed
-                                    e.target.value = e.target.dataset.originalValue;
+                                  } else {
+                                    // Restore original value if nothing was typed (or clear if original was empty)
+                                    e.target.value = e.target.dataset.originalValue || '';
                                   }
                                 }}
                               />
@@ -4900,7 +4888,7 @@ export function LimitOrderForm({
                                   inputMode="decimal"
                                   defaultValue={displayValue}
                                   maxLength={6}
-                                  className={`peer w-full py-2 pl-2 pr-5 border text-xs font-medium rounded-full text-center focus:outline-none focus:border-[#FF0080] focus:bg-[#FF0080]/20 focus:text-white ${
+                                  className={`peer w-full py-2 pl-2 pr-4 border text-xs font-medium rounded-full text-center focus:outline-none focus:border-[#FF0080] focus:bg-[#FF0080]/20 focus:text-white ${
                                     isCustomActive
                                       ? 'bg-[#FF0080]/20 border-[#FF0080]/40 text-white'
                                       : 'bg-black/40 border-[#FF0080]/40 text-[#FF0080] placeholder-transparent'
@@ -4951,9 +4939,9 @@ export function LimitOrderForm({
                                     if (!isNaN(value) && value !== 0) {
                                       const capped = Math.min(999, value);
                                       handlePercentageClick(capped, isNegative ? 'below' : 'above');
-                                    } else if (e.target.dataset.originalValue) {
-                                      // Restore original value if nothing was typed
-                                      e.target.value = e.target.dataset.originalValue;
+                                    } else {
+                                      // Restore original value if nothing was typed (or clear if original was empty)
+                                      e.target.value = e.target.dataset.originalValue || '';
                                     }
                                   }}
                                 />

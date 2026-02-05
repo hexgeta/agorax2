@@ -893,7 +893,7 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                   return (
                     <>
                       <span className="text-xs text-white/70 whitespace-nowrap flex items-center gap-1">
-                        Current Price:
+                        Market Price:
                         {displayQuoteTokenInfos.length > 1 && (
                           <span className="text-[10px] text-white/40 group-hover:text-white transition-colors">
                             ({formatTokenTicker(tokenInfo?.ticker || '')})

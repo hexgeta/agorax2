@@ -2,7 +2,8 @@
 
 import { useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { getTokenInfo } from '@/utils/tokenUtils';
+import { LiquidGlassCard } from '@/components/ui/liquid-glass';
+import { getTokenPrice, formatUSD } from '@/utils/format';
 
 interface Transaction {
   transactionHash: string;
@@ -12,43 +13,13 @@ interface Transaction {
   buyTokens: Record<string, number>;
   blockNumber: bigint;
   timestamp?: number;
-  buyer?: string; // Add buyer address
+  buyer?: string;
 }
 
 interface VolumeChartProps {
   transactions: Transaction[];
   tokenPrices: Record<string, { price: number }>;
 }
-
-// Helper to get token price
-const getTokenPrice = (tokenAddress: string, tokenPrices: any): number => {
-  // Hardcode weDAI to $1.00
-  if (tokenAddress.toLowerCase() === '0xefd766ccb38eaf1dfd701853bfce31359239f305') {
-    return 1.0;
-  }
-
-  // Use WPLS price for PLS (native token addresses)
-  const plsAddresses = [
-    '0x0000000000000000000000000000000000000000',
-    '0x000000000000000000000000000000000000dead',
-  ];
-  if (plsAddresses.some(addr => tokenAddress.toLowerCase() === addr.toLowerCase())) {
-    const wplsPrice = tokenPrices['0xa1077a294dde1b09bb078844df40758a5d0f9a27']?.price;
-    return wplsPrice || 0.000034;
-  }
-
-  return tokenPrices[tokenAddress]?.price || 0;
-};
-
-// Format USD amount (always 2 decimal places)
-const formatUSD = (amount: number) => {
-  if (amount === 0) return '$0.00';
-  if (amount < 1000) return `$${amount.toFixed(2)}`;
-  if (amount < 1000000) return `$${(amount / 1000).toFixed(2)}K`;
-  return `$${(amount / 1000000).toFixed(2)}M`;
-};
-
-import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 
 export default function VolumeChart({ transactions, tokenPrices }: VolumeChartProps) {
   // Calculate daily volume data
@@ -157,19 +128,15 @@ export default function VolumeChart({ transactions, tokenPrices }: VolumeChartPr
       glowIntensity="medium"
     >
       <div className="mb-6">
-        <h3 className="text-2xl font-bold text-white mb-2">Trading Volume</h3>
+        <h3 className="text-2xl font-bold text-white mb-2">Order Fill Volume</h3>
         <div className="flex gap-6">
           <div>
             <p className="text-gray-400 text-sm">Total Volume</p>
             <p className="text-white text-xl font-bold">{formatUSD(totalVolume)}</p>
           </div>
           <div>
-            <p className="text-gray-400 text-sm">Total Trades</p>
+            <p className="text-gray-400 text-sm">Total Fills</p>
             <p className="text-white text-xl font-bold">{totalTrades}</p>
-          </div>
-          <div>
-            <p className="text-gray-400 text-sm">Active Days</p>
-            <p className="text-white text-xl font-bold">{chartData.length}</p>
           </div>
         </div>
       </div>
