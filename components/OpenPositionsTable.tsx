@@ -2791,8 +2791,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
   }
 
 
-  // For landing page mode, only show top 10 active orders
-  const landingPageOrders = isLandingPageMode ? displayOrders.slice(0, 10) : displayOrders;
+  // For landing page mode or compact mode, only show top 10 orders
+  const landingPageOrders = (isLandingPageMode || compactMode) ? displayOrders.slice(0, 10) : displayOrders;
 
   return (
     <motion.div
@@ -2807,7 +2807,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
       blurIntensity="xl"
     >
       <div
-        className={`p-4 md:p-6 ${isLandingPageMode ? 'overflow-x-auto pb-2 modern-scrollbar' : ''}`}
+        className={`p-4 md:p-6 ${isLandingPageMode ? 'overflow-x-auto pb-2 modern-scrollbar' : 'overflow-x-auto'}`}
       >
       {/* Status filter buttons - hide in landing page mode */}
       {!isLandingPageMode && (
@@ -3467,10 +3467,17 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
               <p className="text-gray-400 mb-2">No {statusFilter} {ownershipFilter === 'mine' ? 'deals' : 'orders'} found</p>
             </div>
           ) : (
-            <div className={`w-full ${compactMode ? 'min-w-[600px]' : isMarketplaceMode ? 'min-w-[850px]' : 'min-w-[800px]'} text-lg`}>
+            <>
+            {/* Compact mode title */}
+            {compactMode && (
+              <div className="mb-4">
+                <p className="text-white/60 text-sm">Showing your 10 most recent orders</p>
+              </div>
+            )}
+            <div className={`w-full ${compactMode ? 'min-w-[550px]' : isMarketplaceMode ? 'min-w-[850px]' : 'min-w-[800px]'} text-lg`}>
               <div
                 className={`grid ${compactMode
-                  ? 'grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(80px,1fr)_minmax(80px,1fr)_minmax(100px,auto)_40px]'
+                  ? 'grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(80px,1fr)_minmax(80px,1fr)_minmax(100px,auto)_minmax(50px,auto)]'
                   : isMarketplaceMode
                     ? 'grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(80px,1fr)_minmax(100px,1.2fr)_minmax(80px,1fr)_minmax(70px,auto)_50px]'
                     : 'grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(80px,1fr)_minmax(100px,1.2fr)_minmax(80px,1fr)_minmax(70px,auto)_minmax(100px,auto)]'
@@ -3533,10 +3540,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                   Order ID
                 </div>
 
-                {/* COLUMN 7: Actions */}
-                {compactMode ? (
-                  <div className="text-sm font-medium text-center text-white/60"></div>
-                ) : (
+                {/* COLUMN 7: Actions - hide completely in compact mode */}
+                {!compactMode && (
                   <div className="text-sm font-medium text-center text-white/60">Actions</div>
                 )}
               </div>
@@ -3750,12 +3755,13 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                   return (
                     <div key={`${orderId}-${tokenFilter}-${ownershipFilter}-${statusFilter}`} data-order-id={orderId}
                       className={`grid ${compactMode
-                        ? 'grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(80px,1fr)_minmax(80px,1fr)_minmax(100px,auto)_40px]'
+                        ? 'grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(80px,1fr)_minmax(80px,1fr)_minmax(100px,auto)_minmax(50px,auto)]'
                         : isMarketplaceMode
                           ? 'grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(80px,1fr)_minmax(100px,1.2fr)_minmax(80px,1fr)_minmax(70px,auto)_50px]'
                           : 'grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(80px,1fr)_minmax(100px,1.2fr)_minmax(80px,1fr)_minmax(70px,auto)_minmax(100px,auto)]'
                       } items-start gap-4 py-8 ${index < displayOrders.length - 1 && !expandedPositions.has(orderId) ? 'border-b border-white/10' : ''
-                        }`}
+                        } ${compactMode ? 'cursor-pointer hover:bg-white/5 transition-colors rounded-lg -mx-2 px-2' : ''}`}
+                      onClick={compactMode ? () => window.location.href = `/my-orders?orderId=${orderId}` : undefined}
                     >
                       {/* COLUMN 1: Token For Sale Content */}
                       <div className="flex flex-col items-start space-y-1 min-w-0 overflow-hidden">
@@ -4067,20 +4073,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                         <div className="text-gray-400 text-sm">{order.orderDetailsWithID.orderID.toString()}</div>
                       </div>
 
-                      {/* COLUMN 8: Actions */}
-                      {compactMode ? (
-                        /* Compact mode: just show Manage link */
-                        <div className="flex items-center justify-center">
-                          <Link
-                            href={`/my-orders?orderId=${orderId}`}
-                            className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-full bg-black border border-white/30 text-white hover:bg-white/10 transition-colors"
-                            title="Manage order"
-                          >
-                            <span>Manage</span>
-                            <ArrowRight className="w-3 h-3" />
-                          </Link>
-                        </div>
-                      ) : isMarketplaceMode ? (
+                      {/* COLUMN 8: Actions - hidden in compact mode since entire row is clickable */}
+                      {compactMode ? null : isMarketplaceMode ? (
                         /* Marketplace mode: Buy button for non-own orders, Manage for own orders */
                         <div className="flex items-center justify-center">
                           {(!address || order.userDetails.orderOwner.toLowerCase() !== address.toLowerCase()) ? (
@@ -4965,6 +4959,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                 })}
               </div>
             </div>
+            </>
           )}
         </div>
       )
