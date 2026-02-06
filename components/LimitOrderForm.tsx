@@ -6018,22 +6018,89 @@ export function LimitOrderForm({
           ) : null
           )}
 
-        {/* Below Market Price Warning */}
-        {pricePercentage !== null && pricePercentage < -1 && sellToken && buyTokens[0] && (
-          <div className="mb-4 p-3 bg-yellow-900/20 border border-yellow-500/30 rounded-lg">
-            <div className="flex items-start gap-2">
-              <svg className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-              <div className="text-sm">
-                <p className="text-yellow-500 font-medium">Listing Below Estimated Market Price</p>
-                <p className="text-yellow-400/80 mt-1">
-                  Your limit price is an estimated {Math.abs(pricePercentage).toFixed(1)}% below market. You may be offering {formatTokenTicker(sellToken.ticker, chainId)} at a discount in exchange for quicker order execution.
-                </p>
+        {/* Below Market Price Warning - Show for each buy token that's below market */}
+        {sellToken && (() => {
+          const sellUsdPrice = getPrice(sellToken.a);
+          if (sellUsdPrice <= 0) return null;
+
+          // Calculate warnings for each buy token
+          const warnings = buyTokens.map((buyToken, index) => {
+            if (!buyToken) return null;
+
+            const buyUsdPrice = getPrice(buyToken.a);
+            if (buyUsdPrice <= 0) return null;
+
+            const marketPrice = sellUsdPrice / buyUsdPrice;
+            if (marketPrice <= 0) return null;
+
+            // Get the limit price for this token
+            // For first token (index 0), use the main limitPrice
+            // For other tokens, use individualLimitPrices if in unbound mode, otherwise derive from main limitPrice
+            let tokenLimitPrice: number;
+            if (index === 0) {
+              tokenLimitPrice = parseFloat(limitPrice) || 0;
+            } else if (!pricesBound && individualLimitPrices[index] !== undefined) {
+              tokenLimitPrice = individualLimitPrices[index]!;
+            } else {
+              // In bound mode, all tokens share the same percentage
+              // So calculate their limit price from the shared percentage
+              const baseLimitPrice = parseFloat(limitPrice) || 0;
+              const firstBuyToken = buyTokens[0];
+              if (firstBuyToken && baseLimitPrice > 0) {
+                const firstBuyUsdPrice = getPrice(firstBuyToken.a);
+                if (firstBuyUsdPrice > 0) {
+                  const firstMarketPrice = sellUsdPrice / firstBuyUsdPrice;
+                  const sharedPercentage = ((baseLimitPrice / firstMarketPrice) - 1) * 100;
+                  tokenLimitPrice = marketPrice * (1 + sharedPercentage / 100);
+                } else {
+                  tokenLimitPrice = 0;
+                }
+              } else {
+                tokenLimitPrice = 0;
+              }
+            }
+
+            if (tokenLimitPrice <= 0) return null;
+
+            // Calculate percentage difference from market
+            const tokenPercentage = ((tokenLimitPrice / marketPrice) - 1) * 100;
+
+            // Only show warning if below market by more than 1%
+            if (tokenPercentage >= -1) return null;
+
+            return {
+              token: buyToken,
+              percentage: tokenPercentage
+            };
+          }).filter(Boolean) as { token: TokenOption; percentage: number }[];
+
+          if (warnings.length === 0) return null;
+
+          // Find the largest discount percentage
+          const maxDiscount = Math.max(...warnings.map(w => Math.abs(w.percentage)));
+
+          return (
+            <div className="mb-4 p-3 bg-yellow-900/20 border border-yellow-500/30 rounded-lg">
+              <div className="flex items-start gap-2">
+                <svg className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <div className="text-sm">
+                  <p className="text-yellow-500 font-medium">Listing Below Estimated Market Price</p>
+                  {warnings.length === 1 ? (
+                    <p className="text-yellow-400/80 mt-1">
+                      Your {formatTokenTicker(sellToken.ticker, chainId)}/{formatTokenTicker(warnings[0].token.ticker, chainId)} limit price is an estimated {Math.abs(warnings[0].percentage).toFixed(1)}% below market. You may be offering {formatTokenTicker(sellToken.ticker, chainId)} at a discount in exchange for quicker order execution. Proceed with caution.
+                    </p>
+                  ) : (
+                    <p className="text-yellow-400/80 mt-1">
+                      Your limit prices for {warnings.map(w => formatTokenTicker(w.token.ticker, chainId)).join(', ')} are up to {maxDiscount.toFixed(1)}% below market. You may be offering {formatTokenTicker(sellToken.ticker, chainId)} at a discount in exchange for quicker order execution. Proceed with caution.
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Connect/Submit Button */}
         {!isConnected ? (

@@ -22,7 +22,7 @@ import { useContractWhitelistRead } from '@/hooks/contracts/useContractWhitelist
 import { CONTRACT_ABI } from '@/config/abis';
 import { formatEther, parseEther, parseAbiItem } from 'viem';
 import { getTokenInfo, getTokenInfoByIndex, formatAddress, formatTokenTicker, parseTokenAmount, formatTokenAmount } from '@/utils/tokenUtils';
-import { formatSmartNumber, getTokenPrice } from '@/utils/format';
+import { formatSmartNumber, getTokenPrice, formatLargePercent, formatLargeNumber } from '@/utils/format';
 import { isNativeToken } from '@/utils/tokenApproval';
 import { getRemainingPercentage } from '@/utils/orderUtils';
 import { getBlockExplorerTxUrl } from '@/utils/blockExplorer';
@@ -2124,21 +2124,24 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
 
     // Level 2: Filter by ownership (Mine vs Non-Mine vs Order History)
     // In marketplace mode, show ALL orders by default, but allow hiding user's orders via toggle
-    if (!isMarketplaceMode) {
-      if (ownershipFilter === 'mine') {
+    // In mock mode, skip ownership filtering to show all test orders
+    if (!isMockMode) {
+      if (!isMarketplaceMode) {
+        if (ownershipFilter === 'mine') {
+          orders = orders.filter(order =>
+            address && order.userDetails.orderOwner.toLowerCase() === address.toLowerCase()
+          );
+        } else if (ownershipFilter === 'non-mine') {
+          orders = orders.filter(order =>
+            !address || order.userDetails.orderOwner.toLowerCase() !== address.toLowerCase()
+          );
+        }
+      } else if (hideMyOrders && address) {
+        // In marketplace mode with "Hide my orders" enabled, filter out user's orders
         orders = orders.filter(order =>
-          address && order.userDetails.orderOwner.toLowerCase() === address.toLowerCase()
-        );
-      } else if (ownershipFilter === 'non-mine') {
-        orders = orders.filter(order =>
-          !address || order.userDetails.orderOwner.toLowerCase() !== address.toLowerCase()
+          order.userDetails.orderOwner.toLowerCase() !== address.toLowerCase()
         );
       }
-    } else if (hideMyOrders && address) {
-      // In marketplace mode with "Hide my orders" enabled, filter out user's orders
-      orders = orders.filter(order =>
-        order.userDetails.orderOwner.toLowerCase() !== address.toLowerCase()
-      );
     }
 
     // Level 3: Filter by status
@@ -2546,21 +2549,24 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     let orders = allOrders;
 
     // Apply ownership filter - same logic as displayOrders
-    if (!isMarketplaceMode) {
-      if (ownershipFilter === 'mine') {
+    // In mock mode, skip ownership filtering to show all test orders
+    if (!isMockMode) {
+      if (!isMarketplaceMode) {
+        if (ownershipFilter === 'mine') {
+          orders = orders.filter(order =>
+            address && order.userDetails.orderOwner.toLowerCase() === address.toLowerCase()
+          );
+        } else if (ownershipFilter === 'non-mine') {
+          orders = orders.filter(order =>
+            !address || order.userDetails.orderOwner.toLowerCase() !== address.toLowerCase()
+          );
+        }
+      } else if (hideMyOrders && address) {
+        // In marketplace mode with "Hide my orders" enabled, filter out user's orders
         orders = orders.filter(order =>
-          address && order.userDetails.orderOwner.toLowerCase() === address.toLowerCase()
-        );
-      } else if (ownershipFilter === 'non-mine') {
-        orders = orders.filter(order =>
-          !address || order.userDetails.orderOwner.toLowerCase() !== address.toLowerCase()
+          order.userDetails.orderOwner.toLowerCase() !== address.toLowerCase()
         );
       }
-    } else if (hideMyOrders && address) {
-      // In marketplace mode with "Hide my orders" enabled, filter out user's orders
-      orders = orders.filter(order =>
-        order.userDetails.orderOwner.toLowerCase() !== address.toLowerCase()
-      );
     }
 
     // Apply status filter
@@ -3470,13 +3476,15 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
             </div>
           ) : (
             <>
-            <div className={`w-full ${compactMode ? 'min-w-[550px]' : isMarketplaceMode ? 'min-w-[850px]' : 'min-w-[800px]'} text-lg`}>
+            <div className={`w-full ${compactMode ? 'min-w-[550px]' : isMarketplaceMode ? 'min-w-[850px]' : ownershipFilter === 'mine' ? 'min-w-[950px]' : 'min-w-[800px]'} text-lg`}>
               <div
                 className={`grid ${compactMode
                   ? 'grid-cols-[minmax(140px,1.5fr)_minmax(140px,1.5fr)_minmax(80px,0.8fr)_minmax(90px,0.8fr)_minmax(50px,0.5fr)]'
                   : isMarketplaceMode
                     ? 'grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(80px,1fr)_minmax(100px,1.2fr)_minmax(80px,1fr)_minmax(70px,auto)_50px]'
-                    : 'grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(80px,1fr)_minmax(100px,1.2fr)_minmax(80px,1fr)_minmax(70px,auto)_minmax(100px,auto)]'
+                    : ownershipFilter === 'mine'
+                      ? 'grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(120px,1fr)_minmax(80px,1fr)_minmax(100px,1.2fr)_minmax(80px,1fr)_minmax(70px,auto)_minmax(100px,auto)]'
+                      : 'grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(80px,1fr)_minmax(100px,1.2fr)_minmax(80px,1fr)_minmax(70px,auto)_minmax(100px,auto)]'
                 } items-center gap-4 pb-4 border-b border-white/10 ${expandedPositions.size > 0 ? 'opacity-90' : 'opacity-100'
                   }`}
               >
@@ -3500,7 +3508,14 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                   <div className="text-xs text-white/40 font-normal">(Market Price)</div>
                 </button>
 
-                {/* COLUMN 3: Fill Status % */}
+                {/* COLUMN 3: Claim (only for My Orders) */}
+                {ownershipFilter === 'mine' && !compactMode && (
+                  <div className="text-sm font-medium text-center text-white/60">
+                    Claim
+                  </div>
+                )}
+
+                {/* COLUMN 4: Fill Status % */}
                 <button
                   onClick={() => handleSort('progress')}
                   className={`text-sm font-medium text-center hover:text-white transition-colors ${sortField === 'progress' ? 'text-white' : 'text-white/60'
@@ -3509,7 +3524,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                   Fill status % {sortField === 'progress' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
                 </button>
 
-                {/* COLUMN 4: OTC % (skip in compact mode) */}
+                {/* COLUMN 5: OTC % (skip in compact mode) */}
                 {!compactMode && (
                   <button
                     onClick={() => handleSort('otcVsMarket')}
@@ -3520,7 +3535,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                   </button>
                 )}
 
-                {/* COLUMN 5: Expires / Expired */}
+                {/* COLUMN 6: Expires / Expired */}
                 <button
                   onClick={() => handleSort('date')}
                   className={`text-sm font-medium text-center hover:text-white transition-colors ${sortField === 'date' ? 'text-white' : 'text-white/60'
@@ -3529,12 +3544,12 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                   {statusFilter === 'expired' ? 'Expired' : 'Expires'} {sortField === 'date' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
                 </button>
 
-                {/* COLUMN 6: Order ID */}
+                {/* COLUMN 8: Order ID */}
                 <div className="text-sm font-medium text-center text-white/60">
                   Order ID
                 </div>
 
-                {/* COLUMN 7: Actions - hide completely in compact mode */}
+                {/* COLUMN 8: Actions - hide completely in compact mode */}
                 {!compactMode && (
                   <div className="text-sm font-medium text-center text-white/60">Actions</div>
                 )}
@@ -3752,7 +3767,9 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                         ? 'grid-cols-[minmax(140px,1.5fr)_minmax(140px,1.5fr)_minmax(80px,0.8fr)_minmax(90px,0.8fr)_minmax(50px,0.5fr)]'
                         : isMarketplaceMode
                           ? 'grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(80px,1fr)_minmax(100px,1.2fr)_minmax(80px,1fr)_minmax(70px,auto)_50px]'
-                          : 'grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(80px,1fr)_minmax(100px,1.2fr)_minmax(80px,1fr)_minmax(70px,auto)_minmax(100px,auto)]'
+                          : ownershipFilter === 'mine'
+                            ? 'grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(120px,1fr)_minmax(80px,1fr)_minmax(100px,1.2fr)_minmax(80px,1fr)_minmax(70px,auto)_minmax(100px,auto)]'
+                            : 'grid-cols-[minmax(120px,1.5fr)_minmax(120px,1.5fr)_minmax(80px,1fr)_minmax(100px,1.2fr)_minmax(80px,1fr)_minmax(70px,auto)_minmax(100px,auto)]'
                       } items-start gap-4 py-4 ${index < displayOrders.length - 1 && !expandedPositions.has(orderId) ? 'border-b border-white/10' : ''
                         } ${compactMode ? 'cursor-pointer hover:bg-white/5 transition-colors rounded-lg -mx-2 px-2' : ''}`}
                       onClick={compactMode ? () => window.location.href = `/my-orders?orderId=${orderId}` : undefined}
@@ -3841,24 +3858,14 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                   const tokenInfo = getTokenInfoByIndex(Number(tokenIndex));
                                   const originalAmount = buyAmounts[idx];
                                   // For completed orders, show original amounts; for others, show remaining amounts
-                                  // Check if we're in completed filter section - if so, always use original amounts
                                   const isCompleted = statusFilter === 'completed' || order.orderDetailsWithID.status === 1;
                                   const remainingPercentage = Number(getRemainingPercentage(order.orderDetailsWithID)) / 1e18;
-
-                                  // Debug: Log status for completed orders (only once per order)
-                                  if (statusFilter === 'completed' && idx === 0) {
-                                  }
                                   const remainingAmount = (originalAmount * BigInt(Math.floor(remainingPercentage * 1e18))) / BigInt(1e18);
                                   const tokenAmount = isCompleted ?
                                     parseFloat(formatTokenAmount(originalAmount, tokenInfo.decimals)) :
                                     parseFloat(formatTokenAmount(remainingAmount, tokenInfo.decimals));
                                   const tokenPrice = getTokenPrice(tokenInfo.address, tokenPrices);
                                   const usdValue = tokenAmount * tokenPrice;
-
-                                  // Enhanced debug: Log the actual calculation
-                                  if (statusFilter === 'completed' && idx === 0) {
-                                  }
-
 
                                   return (
                                     <div key={idx} className="flex items-center space-x-2 mb-1.5">
@@ -3889,7 +3896,53 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                         })()}
                       </div>
 
-                      {/* COLUMN 3: Fill Status % Content */}
+                      {/* COLUMN 3: Claim Buttons (only for My Orders) */}
+                      {ownershipFilter === 'mine' && !compactMode && (
+                        <div className="flex flex-col items-center min-w-0">
+                          {(() => {
+                            const sellAmount = order.orderDetailsWithID.orderDetails.sellAmount;
+                            const remainingSellAmount = order.orderDetailsWithID.remainingSellAmount;
+                            const redeemedSellAmount = order.orderDetailsWithID.redeemedSellAmount;
+                            const filledAmount = sellAmount - remainingSellAmount;
+                            const unclaimedAmount = filledAmount - redeemedSellAmount;
+                            const hasClaimable = unclaimedAmount > 0n;
+                            const claimPercentage = Number(sellAmount) > 0 ? Number(unclaimedAmount) / Number(sellAmount) : 0;
+                            const isCollecting = collectingOrders.has(order.orderDetailsWithID.orderID.toString());
+
+                            return buyTokensIndex.map((tokenIndex: bigint, idx: number) => {
+                              const tokenInfo = getTokenInfoByIndex(Number(tokenIndex));
+                              const originalAmount = buyAmounts[idx];
+                              const maxBuyAmount = parseFloat(formatTokenAmount(originalAmount, tokenInfo.decimals));
+                              const claimableBuyAmount = maxBuyAmount * claimPercentage;
+                              const tokenPrice = getTokenPrice(tokenInfo.address, tokenPrices);
+                              // Match the height of the token row based on whether price is shown
+                              const hasPrice = tokenPrice > 0;
+
+                              return (
+                                <div key={idx} className={`flex items-center mb-1.5 ${hasPrice ? 'h-[54px]' : 'h-[38px]'}`}>
+                                  {hasClaimable ? (
+                                    <button
+                                      onClick={() => handleCollectProceeds(order)}
+                                      disabled={isCollecting}
+                                      className="w-[150px] flex items-center justify-center px-3 py-1.5 rounded-full bg-green-500/20 border border-green-500/40 hover:bg-green-500/30 hover:border-green-500/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                      {isCollecting ? (
+                                        <PixelSpinner size={12} />
+                                      ) : (
+                                        <span className="text-green-400 text-xs font-medium whitespace-nowrap">
+                                          Claim {formatLargeNumber(claimableBuyAmount)} {formatTokenTicker(tokenInfo.ticker)}
+                                        </span>
+                                      )}
+                                    </button>
+                                  ) : null}
+                                </div>
+                              );
+                            });
+                          })()}
+                        </div>
+                      )}
+
+                      {/* COLUMN 4: Fill Status % Content */}
                       <div className="flex flex-col items-center space-y-1  mt-0.5 min-w-0">
                         {(() => {
                           const fillPercentage = 100 - ((Number(getRemainingPercentage(order.orderDetailsWithID)) / 1e18) * 100);
@@ -3914,27 +3967,6 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                             );
                           })()}
                         </div>
-                        {/* Claimable amount label under progress bar - for My Orders */}
-                        {ownershipFilter === 'mine' && (() => {
-                          const sellAmount = order.orderDetailsWithID.orderDetails.sellAmount;
-                          const remainingSellAmount = order.orderDetailsWithID.remainingSellAmount;
-                          const redeemedSellAmount = order.orderDetailsWithID.redeemedSellAmount;
-                          const filledAmount = sellAmount - remainingSellAmount;
-                          const unclaimedAmount = filledAmount - redeemedSellAmount;
-                          const hasUnclaimed = unclaimedAmount > 0n;
-                          const unclaimedAmountFormatted = formatTokenAmountDisplay(parseFloat(formatTokenAmount(unclaimedAmount, sellTokenInfo.decimals)));
-                          const claimedAmountFormatted = formatTokenAmountDisplay(parseFloat(formatTokenAmount(redeemedSellAmount, sellTokenInfo.decimals)));
-
-                          if (filledAmount > 0n) {
-                            return (
-                              <div className={`flex flex-col items-center text-[10px] mt-1 px-2 py-1 rounded-lg ${hasUnclaimed ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-white/10 text-gray-400 border border-white/10'}`}>
-                                <span className="font-medium">{hasUnclaimed ? 'Claimable' : 'Claimed'}</span>
-                                <span>{hasUnclaimed ? unclaimedAmountFormatted : claimedAmountFormatted} {formatTokenTicker(sellTokenInfo.ticker, chainId)}</span>
-                              </div>
-                            );
-                          }
-                          return null;
-                        })()}
                         {order.orderDetailsWithID.orderDetails.allOrNothing && (
                           <span className="px-2 py-1 mt-5 rounded-full text-xs font-medium bg-purple-500/20 text-purple-400 border border-purple-400">
                             AON
@@ -3942,7 +3974,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                         )}
                       </div>
 
-                      {/* COLUMN 4: OTC % Content - show percentage for each buy token (skip in compact mode) */}
+                      {/* COLUMN 5: OTC % Content - show percentage for each buy token (skip in compact mode) */}
                       {!compactMode && (
                         <div className="text-center min-w-0">
                           {tokenPercentages.length > 0 ? (
@@ -3951,28 +3983,11 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                 const ratio = ratioPrices[idx];
                                 const sellTicker = formatTokenTicker(sellTokenInfo.ticker, chainId);
 
-                                // Format ratio value
+                                // Format ratio value with compact notation for large numbers
                                 let formattedRatio = '';
                                 if (ratio) {
                                   const value = (ratioInverted[orderId] ?? false) ? ratio.buyPerSell : ratio.sellPerBuy;
-                                  if (value === 0) {
-                                    formattedRatio = '0';
-                                  } else if (value >= 10000) {
-                                    formattedRatio = value.toLocaleString('en-US', { maximumFractionDigits: 0 });
-                                  } else if (value >= 1000) {
-                                    formattedRatio = value.toLocaleString('en-US', { maximumFractionDigits: 1 });
-                                  } else if (value >= 100) {
-                                    formattedRatio = value.toLocaleString('en-US', { maximumFractionDigits: 2 });
-                                  } else if (value >= 10) {
-                                    formattedRatio = value.toLocaleString('en-US', { maximumFractionDigits: 3 });
-                                  } else if (value >= 1) {
-                                    formattedRatio = value.toLocaleString('en-US', { maximumFractionDigits: 4 });
-                                  } else {
-                                    const sigFigs = 4;
-                                    const magnitude = Math.floor(Math.log10(Math.abs(value)));
-                                    const decimals = Math.max(0, sigFigs - 1 - magnitude);
-                                    formattedRatio = value.toFixed(decimals);
-                                  }
+                                  formattedRatio = formatLargeNumber(value);
                                 }
 
                                 return (
@@ -3983,11 +3998,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                       }`}>
                                       {tokenPct.percentage !== null ? (
                                         <>
-                                          {tokenPct.percentage.toLocaleString('en-US', {
-                                            maximumFractionDigits: 1,
-                                            minimumFractionDigits: 1,
-                                            signDisplay: 'always'
-                                          })}%
+                                          {formatLargePercent(tokenPct.percentage)}
                                         </>
                                       ) : (
                                         <span className="text-gray-500">--</span>
@@ -4050,7 +4061,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                         </div>
                       )}
 
-                      {/* COLUMN 5: Expires Content */}
+                      {/* COLUMN 6: Expires Content */}
                       <div className="text-center min-w-0 mt-1.5">
                         <div className="text-gray-400 text-sm">
                           {formatTimestamp(Number(order.orderDetailsWithID.orderDetails.expirationTime))}
@@ -4060,8 +4071,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                         </div>
                       </div>
 
-                      {/* COLUMN 7: Order ID */}
-                      <div className="flex items-center justify-center min-w-0">
+                      {/* COLUMN 8: Order ID */}
+                      <div className="flex items-start justify-center min-w-0 mt-1.5">
                         <div className="text-gray-400 text-sm">{order.orderDetailsWithID.orderID.toString()}</div>
                       </div>
 
@@ -4107,61 +4118,69 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                             // No actions for completed/cancelled orders
                             <div className="w-16 h-8"></div>
                           ) : ownershipFilter === 'mine' && order.orderDetailsWithID.status === 0 ? (
-                            <div className="flex items-center gap-1">
-                              {/* Collect Proceeds Button - Show if there are proceeds to collect */}
+                            <div className="flex flex-col items-center gap-1">
+                              {/* Batch Claim Button - only show if there are claimable proceeds */}
                               {(() => {
                                 const sellAmount = order.orderDetailsWithID.orderDetails.sellAmount;
-                                const filled = sellAmount - order.orderDetailsWithID.remainingSellAmount;
-                                const hasProceeds = filled > order.orderDetailsWithID.redeemedSellAmount;
-                                return hasProceeds && (
+                                const remainingSellAmount = order.orderDetailsWithID.remainingSellAmount;
+                                const redeemedSellAmount = order.orderDetailsWithID.redeemedSellAmount;
+                                const filledAmount = sellAmount - remainingSellAmount;
+                                const unclaimedAmount = filledAmount - redeemedSellAmount;
+                                const hasClaimable = unclaimedAmount > 0n;
+                                const isCollecting = collectingOrders.has(order.orderDetailsWithID.orderID.toString());
+
+                                if (!hasClaimable) return null;
+
+                                return (
                                   <button
                                     onClick={() => handleCollectProceeds(order)}
-                                    disabled={collectingOrders.has(order.orderDetailsWithID.orderID.toString())}
-                                    className="p-2 rounded-lg bg-white/5 border border-white/10 hover:bg-green-700/50 transition-colors disabled:opacity-50"
-                                    title="Collect Proceeds"
+                                    disabled={isCollecting}
+                                    className="px-3 py-1.5 rounded-lg bg-green-500/20 border border-green-500/40 hover:bg-green-500/30 hover:border-green-500/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    title="Claim all proceeds"
                                   >
-                                    {collectingOrders.has(order.orderDetailsWithID.orderID.toString()) ? (
-                                      <PixelSpinner size={16} className="mx-auto" />
+                                    {isCollecting ? (
+                                      <PixelSpinner size={12} className="mx-auto" />
                                     ) : (
-                                      <CircleDollarSign className="w-4 h-4 text-green-400 hover:text-green-300 mx-auto" />
+                                      <span className="text-green-400 text-[10px] font-medium whitespace-nowrap">Batch Claim</span>
                                     )}
                                   </button>
                                 );
                               })()}
+                              <div className="flex items-center gap-1">
+                                {/* Edit Expiration Button */}
+                                <button
+                                  onClick={() => {
+                                    const orderId = order.orderDetailsWithID.orderID.toString();
+                                    setShowExpirationCalendar(orderId);
+                                    // Set current expiration as default
+                                    const currentExpiration = Number(order.orderDetailsWithID.orderDetails.expirationTime) * 1000;
+                                    setSelectedExpirationDate(new Date(currentExpiration));
+                                  }}
+                                  disabled={updatingOrders.has(order.orderDetailsWithID.orderID.toString())}
+                                  className="p-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors disabled:opacity-50"
+                                  title="Update Expiration"
+                                >
+                                  {updatingOrders.has(order.orderDetailsWithID.orderID.toString()) ? (
+                                    <PixelSpinner size={16} className="mx-auto" />
+                                  ) : (
+                                    <CalendarDays className="w-4 h-4 text-blue-400 hover:text-blue-300 mx-auto" />
+                                  )}
+                                </button>
 
-                              {/* Edit Expiration Button */}
-                              <button
-                                onClick={() => {
-                                  const orderId = order.orderDetailsWithID.orderID.toString();
-                                  setShowExpirationCalendar(orderId);
-                                  // Set current expiration as default
-                                  const currentExpiration = Number(order.orderDetailsWithID.orderDetails.expirationTime) * 1000;
-                                  setSelectedExpirationDate(new Date(currentExpiration));
-                                }}
-                                disabled={updatingOrders.has(order.orderDetailsWithID.orderID.toString())}
-                                className="p-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors disabled:opacity-50"
-                                title="Update Expiration"
-                              >
-                                {updatingOrders.has(order.orderDetailsWithID.orderID.toString()) ? (
-                                  <PixelSpinner size={16} className="mx-auto" />
-                                ) : (
-                                  <CalendarDays className="w-4 h-4 text-blue-400 hover:text-blue-300 mx-auto" />
-                                )}
-                              </button>
-
-                              {/* Cancel/Delete Button */}
-                              <button
-                                onClick={() => handleCancelOrder(order)}
-                                disabled={cancelingOrders.has(order.orderDetailsWithID.orderID.toString())}
-                                className="p-2 rounded-lg bg-white/5 border border-white/10 hover:bg-red-500/20 transition-colors disabled:opacity-50"
-                                title="Cancel Order"
-                              >
-                                {cancelingOrders.has(order.orderDetailsWithID.orderID.toString()) ? (
-                                  <PixelSpinner size={16} className="mx-auto" />
-                                ) : (
-                                  <Trash2 className="w-4 h-4 text-red-400 hover:text-red-300 mx-auto" />
-                                )}
-                              </button>
+                                {/* Cancel/Delete Button */}
+                                <button
+                                  onClick={() => handleCancelOrder(order)}
+                                  disabled={cancelingOrders.has(order.orderDetailsWithID.orderID.toString())}
+                                  className="p-2 rounded-lg bg-white/5 border border-white/10 hover:bg-red-500/20 transition-colors disabled:opacity-50"
+                                  title="Cancel Order"
+                                >
+                                  {cancelingOrders.has(order.orderDetailsWithID.orderID.toString()) ? (
+                                    <PixelSpinner size={16} className="mx-auto" />
+                                  ) : (
+                                    <Trash2 className="w-4 h-4 text-red-400 hover:text-red-300 mx-auto" />
+                                  )}
+                                </button>
+                              </div>
                             </div>
                           ) : ownershipFilter === 'non-mine' && order.orderDetailsWithID.status === 0 && statusFilter === 'active' ? (
                             <button

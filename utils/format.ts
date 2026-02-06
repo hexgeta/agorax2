@@ -86,6 +86,146 @@ export function formatPercent(value: number, opts: { alreadyPercentage?: boolean
 }
 
 /**
+ * Format large numbers with compact notation (K, M, B, T, Q)
+ * For numbers over 100,000, use K/M/B notation
+ * @param value - The number to format
+ * @returns Formatted string like "1.5M" or "250K"
+ */
+export function formatLargeNumber(value: number): string {
+  if (value === 0) return '0';
+
+  const absValue = Math.abs(value);
+  const sign = value < 0 ? '-' : '';
+
+  // Quadrillions (1e15)
+  if (absValue >= 1e15) {
+    const q = absValue / 1e15;
+    return sign + (q < 10 ? q.toFixed(1) : Math.round(q).toLocaleString()) + 'Q';
+  }
+
+  // Trillions (1e12)
+  if (absValue >= 1e12) {
+    const t = absValue / 1e12;
+    return sign + (t < 10 ? t.toFixed(1) : Math.round(t).toLocaleString()) + 'T';
+  }
+
+  // Billions (1e9)
+  if (absValue >= 1e9) {
+    const b = absValue / 1e9;
+    return sign + (b < 10 ? b.toFixed(1) : Math.round(b).toLocaleString()) + 'B';
+  }
+
+  // Millions (1e6)
+  if (absValue >= 1e6) {
+    const m = absValue / 1e6;
+    return sign + (m < 10 ? m.toFixed(1) : Math.round(m).toLocaleString()) + 'M';
+  }
+
+  // Thousands (100K+)
+  if (absValue >= 100000) {
+    const k = absValue / 1000;
+    return sign + (k < 10 ? k.toFixed(1) : Math.round(k).toLocaleString()) + 'K';
+  }
+
+  // For values >= 10000, no decimals
+  if (absValue >= 10000) {
+    return sign + absValue.toLocaleString('en-US', { maximumFractionDigits: 0 });
+  }
+
+  // For values >= 1000, 1 decimal
+  if (absValue >= 1000) {
+    return sign + absValue.toLocaleString('en-US', { maximumFractionDigits: 1 });
+  }
+
+  // For values >= 100, 2 decimals
+  if (absValue >= 100) {
+    return sign + absValue.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  }
+
+  // For values >= 10, 3 decimals
+  if (absValue >= 10) {
+    return sign + absValue.toLocaleString('en-US', { maximumFractionDigits: 3 });
+  }
+
+  // For values >= 1, 4 decimals
+  if (absValue >= 1) {
+    return sign + absValue.toLocaleString('en-US', { maximumFractionDigits: 4 });
+  }
+
+  // For values >= 0.00001, show normally with appropriate decimals
+  if (absValue >= 0.00001) {
+    const sigFigs = 4;
+    const magnitude = Math.floor(Math.log10(absValue));
+    const decimals = Math.max(0, sigFigs - 1 - magnitude);
+    return sign + absValue.toFixed(decimals);
+  }
+
+  // For very small values (< 0.00001), use subscript notation: 0.0₅1234
+  // Count leading zeros after decimal point
+  const str = absValue.toFixed(20); // Get enough precision
+  const match = str.match(/^0\.(0+)([1-9]\d*)/);
+  if (match) {
+    const leadingZeros = match[1].length;
+    const significantDigits = match[2].slice(0, 4); // Keep 4 significant digits
+    // Unicode subscript digits: ₀₁₂₃₄₅₆₇₈₉
+    const subscripts = ['₀', '₁', '₂', '₃', '₄', '₅', '₆', '₇', '₈', '₉'];
+    const subscriptNum = leadingZeros.toString().split('').map(d => subscripts[parseInt(d)]).join('');
+    return sign + '0.0' + subscriptNum + significantDigits;
+  }
+
+  // Fallback
+  return sign + absValue.toExponential(2);
+}
+
+/**
+ * Format large percentages with compact notation (K, M, B, T, Q)
+ * For percentages over 100,000%, use K/M/B notation
+ * Always includes sign (+/-) prefix
+ * @param value - The percentage value (e.g., 1500000 for 1,500,000%)
+ * @returns Formatted string like "+1.5M%" or "-250K%"
+ */
+export function formatLargePercent(value: number): string {
+  const absValue = Math.abs(value);
+  const sign = value >= 0 ? '+' : '-';
+
+  // Quadrillions (1e15)
+  if (absValue >= 1e15) {
+    const q = absValue / 1e15;
+    return sign + (q < 10 ? q.toFixed(1) : Math.round(q).toLocaleString()) + 'Q%';
+  }
+
+  // Trillions (1e12)
+  if (absValue >= 1e12) {
+    const t = absValue / 1e12;
+    return sign + (t < 10 ? t.toFixed(1) : Math.round(t).toLocaleString()) + 'T%';
+  }
+
+  // Billions (1e9)
+  if (absValue >= 1e9) {
+    const b = absValue / 1e9;
+    return sign + (b < 10 ? b.toFixed(1) : Math.round(b).toLocaleString()) + 'B%';
+  }
+
+  // Millions (1e6)
+  if (absValue >= 1e6) {
+    const m = absValue / 1e6;
+    return sign + (m < 10 ? m.toFixed(1) : Math.round(m).toLocaleString()) + 'M%';
+  }
+
+  // Thousands (100K+)
+  if (absValue >= 100000) {
+    const k = absValue / 1000;
+    return sign + (k < 10 ? k.toFixed(1) : Math.round(k).toLocaleString()) + 'K%';
+  }
+
+  // Normal percentages (<100K) - show with 1 decimal
+  return sign + absValue.toLocaleString('en-US', {
+    maximumFractionDigits: 1,
+    minimumFractionDigits: 1
+  }) + '%';
+}
+
+/**
  * Format a number with smart decimal handling:
  * - Removes unnecessary trailing zeros (e.g., 100.00 -> 100, 90.50 -> 90.5)
  * - Shows 0 with no decimals

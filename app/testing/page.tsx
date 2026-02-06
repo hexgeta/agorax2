@@ -300,6 +300,128 @@ const generateMockOrders = (): CompleteOrderDetails[] => {
         },
       },
     },
+
+    // Order 11: Multi-token with 60% filled, 20% claimed (40% claimable)
+    // Selling 10,000 HEX, accepting PLS, PLSX, INC, or DAI
+    {
+      userDetails: {
+        orderIndex: 10n,
+        orderOwner: MOCK_USER_ADDRESS,
+      },
+      orderDetailsWithID: {
+        orderID: 1011n,
+        remainingSellAmount: parseUnits('4000', 8), // 40% remaining = 60% filled
+        redeemedSellAmount: parseUnits('2000', 8), // 20% claimed
+        lastUpdateTime: Number(now - BigInt(7200)), // 2 hours ago
+        status: 0, // Active
+        creationProtocolFee: parseEther('0.01'),
+        orderDetails: {
+          sellToken: TOKENS.HEX,
+          sellAmount: parseUnits('10000', 8), // 10K HEX
+          buyTokensIndex: [TOKEN_INDEX.PLS, TOKEN_INDEX.PLSX, TOKEN_INDEX.INC, TOKEN_INDEX.DAI],
+          buyAmounts: [parseEther('500000'), parseEther('100000'), parseEther('50000'), parseEther('350')],
+          expirationTime: now + oneWeek,
+          allOrNothing: false,
+        },
+      },
+    },
+
+    // Order 12: Multi-token with 80% filled, 0% claimed (80% claimable!)
+    // Large claimable proceeds
+    {
+      userDetails: {
+        orderIndex: 11n,
+        orderOwner: MOCK_USER_ADDRESS,
+      },
+      orderDetailsWithID: {
+        orderID: 1012n,
+        remainingSellAmount: parseEther('200000'), // 20% remaining = 80% filled
+        redeemedSellAmount: 0n, // Nothing claimed yet!
+        lastUpdateTime: Number(now - oneDay),
+        status: 0, // Active
+        creationProtocolFee: parseEther('0.01'),
+        orderDetails: {
+          sellToken: TOKENS.PLS,
+          sellAmount: parseEther('1000000'), // 1M PLS
+          buyTokensIndex: [TOKEN_INDEX.HEX, TOKEN_INDEX.PLSX, TOKEN_INDEX.USDC],
+          buyAmounts: [parseUnits('50000', 8), parseEther('500000'), parseUnits('500', 6)],
+          expirationTime: now + oneMonth,
+          allOrNothing: false,
+        },
+      },
+    },
+
+    // Order 13: Multi-token with 50% filled, 50% claimed (0% claimable - all claimed)
+    {
+      userDetails: {
+        orderIndex: 12n,
+        orderOwner: MOCK_USER_ADDRESS,
+      },
+      orderDetailsWithID: {
+        orderID: 1013n,
+        remainingSellAmount: parseEther('50000'), // 50% remaining
+        redeemedSellAmount: parseEther('50000'), // All filled amount claimed
+        lastUpdateTime: Number(now - oneDay * 2n),
+        status: 0, // Active
+        creationProtocolFee: parseEther('0.01'),
+        orderDetails: {
+          sellToken: TOKENS.PLSX,
+          sellAmount: parseEther('100000'), // 100K PLSX
+          buyTokensIndex: [TOKEN_INDEX.PLS, TOKEN_INDEX.HEX, TOKEN_INDEX.DAI, TOKEN_INDEX.USDT, TOKEN_INDEX.INC],
+          buyAmounts: [parseEther('1000000'), parseUnits('100000', 8), parseEther('500'), parseUnits('500', 6), parseEther('25000')],
+          expirationTime: now + oneMonth,
+          allOrNothing: false,
+        },
+      },
+    },
+
+    // Order 14: 5-token order, 30% filled, 10% claimed (20% claimable)
+    {
+      userDetails: {
+        orderIndex: 13n,
+        orderOwner: MOCK_USER_ADDRESS,
+      },
+      orderDetailsWithID: {
+        orderID: 1014n,
+        remainingSellAmount: parseUnits('7000', 8), // 70% remaining = 30% filled
+        redeemedSellAmount: parseUnits('1000', 8), // 10% claimed
+        lastUpdateTime: Number(now - BigInt(3600)), // 1 hour ago
+        status: 0, // Active
+        creationProtocolFee: parseEther('0.01'),
+        orderDetails: {
+          sellToken: TOKENS.HEX,
+          sellAmount: parseUnits('10000', 8), // 10K HEX
+          buyTokensIndex: [TOKEN_INDEX.PLS, TOKEN_INDEX.WPLS, TOKEN_INDEX.PLSX, TOKEN_INDEX.DAI, TOKEN_INDEX.USDC],
+          buyAmounts: [parseEther('500000'), parseEther('500000'), parseEther('100000'), parseEther('350'), parseUnits('350', 6)],
+          expirationTime: now + oneWeek * 2n,
+          allOrNothing: false,
+        },
+      },
+    },
+
+    // Order 15: 3-token order, 95% filled, 90% claimed (5% claimable)
+    {
+      userDetails: {
+        orderIndex: 14n,
+        orderOwner: MOCK_USER_ADDRESS,
+      },
+      orderDetailsWithID: {
+        orderID: 1015n,
+        remainingSellAmount: parseEther('500'), // 5% remaining = 95% filled
+        redeemedSellAmount: parseEther('9000'), // 90% claimed
+        lastUpdateTime: Number(now - BigInt(1800)), // 30 mins ago
+        status: 0, // Active
+        creationProtocolFee: parseEther('0.01'),
+        orderDetails: {
+          sellToken: TOKENS.INC,
+          sellAmount: parseEther('10000'), // 10K INC
+          buyTokensIndex: [TOKEN_INDEX.HEX, TOKEN_INDEX.PLS, TOKEN_INDEX.PLSX],
+          buyAmounts: [parseUnits('5000', 8), parseEther('250000'), parseEther('50000')],
+          expirationTime: now + oneDay * 3n,
+          allOrNothing: false,
+        },
+      },
+    },
   ];
 };
 
@@ -368,6 +490,11 @@ export default function TestingPage() {
                     <li><span className="text-white">#1008</span> - All-or-Nothing order</li>
                     <li><span className="text-white">#1009</span> - Extreme decimal precision</li>
                     <li><span className="text-white">#1010</span> - Stablecoin with multiple options</li>
+                    <li><span className="text-green-400">#1011</span> - 4 tokens, 60% filled, <span className="text-green-400">40% claimable</span></li>
+                    <li><span className="text-green-400">#1012</span> - 3 tokens, 80% filled, <span className="text-green-400">80% claimable!</span></li>
+                    <li><span className="text-white">#1013</span> - 5 tokens, 50% filled, all claimed</li>
+                    <li><span className="text-green-400">#1014</span> - 5 tokens, 30% filled, <span className="text-green-400">20% claimable</span></li>
+                    <li><span className="text-green-400">#1015</span> - 3 tokens, 95% filled, <span className="text-green-400">5% claimable</span></li>
                   </ul>
                 </div>
 
