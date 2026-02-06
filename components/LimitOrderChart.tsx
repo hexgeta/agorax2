@@ -357,12 +357,10 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
         const tokenAddress = buyTokenAddresses[idx]?.toLowerCase();
         if (!tokenAddress || !sellTokenUsdPrice || !buyTokenUsdPrices[tokenAddress]) return;
 
-        const tokenMarketPrice = invertPriceDisplay
-          ? buyTokenUsdPrices[tokenAddress] / sellTokenUsdPrice
-          : sellTokenUsdPrice / buyTokenUsdPrices[tokenAddress];
-
-        const displayPrice = invertPriceDisplay && price > 0 ? 1 / price : price;
-        const deviation = ((displayPrice - tokenMarketPrice) / tokenMarketPrice) * 100;
+        // Always compute deviation using non-inverted (base) prices for consistency
+        // The stored price is always in base format (buyTokens per sellToken)
+        const tokenMarketPriceBase = sellTokenUsdPrice / buyTokenUsdPrices[tokenAddress];
+        const deviation = ((price - tokenMarketPriceBase) / tokenMarketPriceBase) * 100;
         maxAbs = Math.max(maxAbs, Math.abs(deviation));
       });
     }

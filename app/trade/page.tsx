@@ -400,8 +400,8 @@ export default function MyOrdersPage() {
                       </div>
                     </div>
 
-                    {/* Pro Stats container - shared between mobile and desktop */}
-                    <div ref={proStatsContainerRef} className="w-full lg:max-w-[60%]" />
+                    {/* Pro Stats container - below order history, aligned with left column */}
+                    <div ref={proStatsContainerRef} className="w-full lg:w-[60%]" />
                   </div>
                 </div>
               </motion.div>

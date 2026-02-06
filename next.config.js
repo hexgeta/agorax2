@@ -11,6 +11,16 @@ const nextConfig = {
     unoptimized: true, // Disable optimization for SVGs
   },
   trailingSlash: false,
+  // Turbopack configuration
+  turbopack: {
+    rules: {
+      '*.svg': {
+        loaders: ['@svgr/webpack'],
+        as: '*.js',
+      },
+    },
+  },
+  // Webpack configuration (used for production builds)
   webpack: (config) => {
     config.module.rules.push({
       test: /\.svg$/,

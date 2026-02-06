@@ -2758,29 +2758,15 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     return (
       <div className="w-full max-w-6xl mx-auto mb-8 mt-8">
         <div className="bg-white/5 p-6 rounded-lg border-2 border-white/10">
-          <h2 className="text-xl font-bold mb-4">AgoráX Contract Information</h2>
-          <div className="text-red-500">
-            <p className="font-semibold mb-2">Unable to connect to the AgoráX contract</p>
-            <p className="text-sm mb-2">Error: {error.message}</p>
-            <p className="text-sm text-gray-400 mb-2">
-              Contract Address: {OTC_CONTRACT_ADDRESS || 'Not deployed on this chain'}
-            </p>
-            <p className="text-sm text-gray-400 mb-3">
-              RPC Endpoint: https://rpc.pulsechain.com
-            </p>
-            <p className="text-sm text-gray-400 mb-3">
-              This could mean:
-            </p>
-            <ul className="text-sm text-gray-400 ml-4 mb-4">
-              <li>• The contract is not deployed at the expected address</li>
-              <li>• The contract is not properly initialized</li>
-              <li>• There's a network connectivity issue</li>
-              <li>• The RPC endpoint is not responding correctly</li>
-              <li>• Check the browser console for detailed error messages</li>
-            </ul>
+          <div className="flex flex-col items-center text-center py-8">
+            <svg className="w-12 h-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <p className="text-gray-300 text-lg font-medium mb-2">Something went wrong</p>
+            <p className="text-gray-500 text-sm mb-6">We couldn&apos;t load your orders. Please try again.</p>
             <button
               onClick={() => window.location.reload()}
-              className="px-4 py-2 bg-white text-black rounded hover:bg-white/80"
+              className="px-6 py-2 bg-white text-black rounded-full font-medium hover:bg-white/80 transition-colors"
             >
               Retry
             </button>

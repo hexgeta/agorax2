@@ -1865,9 +1865,9 @@ export function LimitOrderForm({
             const newBuyAmount = sellAmountNum * storedLimitPrice;
             newAmounts[0] = formatCalculatedValue(newBuyAmount);
           }
-          // Additional buy tokens: calculate based on USD value with same premium
-          // Only sync additional tokens if prices are BOUND
+          // Additional buy tokens: calculate based on their limit prices
           if (pricesBound) {
+            // Bound mode: use USD value with same premium
             const sellTokenUsdPrice = sellToken ? getPrice(sellToken.a) : 0;
             if (sellTokenUsdPrice > 0) {
               // Calculate the market price for first token in buy/sell format
@@ -1892,13 +1892,22 @@ export function LimitOrderForm({
                 }
               }
             }
+          } else {
+            // Unbound mode: use each token's individual limit price
+            for (let i = 1; i < buyTokens.length; i++) {
+              const tokenLimitPrice = individualLimitPrices[i];
+              if (tokenLimitPrice && tokenLimitPrice > 0) {
+                const newAmount = sellAmountNum * tokenLimitPrice;
+                newAmounts[i] = formatCalculatedValue(newAmount);
+              }
+            }
           }
           return newAmounts;
         });
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sellAmountNum, limitPrice]);
+  }, [sellAmountNum, limitPrice, pricesBound, individualLimitPrices]);
 
   // When first buy amount changes, update limit price and percentage
   // RULE: Sell amount stays the same, limit price and percentage recalculate
@@ -5116,6 +5125,15 @@ export function LimitOrderForm({
                                     newPrices[index] = basePrice;
                                     return newPrices;
                                   });
+                                  // Also update the buy amount for this token
+                                  if (sellAmountNum > 0) {
+                                    const newBuyAmount = sellAmountNum * basePrice;
+                                    setBuyAmounts(prev => {
+                                      const newAmounts = [...prev];
+                                      newAmounts[index] = formatCalculatedValue(newBuyAmount);
+                                      return newAmounts;
+                                    });
+                                  }
                                 }
                               }}
                               onFocus={(e) => {
@@ -5981,9 +5999,9 @@ export function LimitOrderForm({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
               <div className="text-sm">
-                <p className="text-yellow-500 font-medium">Selling Below Market Price</p>
+                <p className="text-yellow-500 font-medium">Listing Below Estimated Market Price</p>
                 <p className="text-yellow-400/80 mt-1">
-                  Your limit price is {Math.abs(pricePercentage).toFixed(1)}% below market. You&apos;re offering {formatTokenTicker(sellToken.ticker, chainId)} at a discount.
+                  Your limit price is an estimated {Math.abs(pricePercentage).toFixed(1)}% below market. You may be offering {formatTokenTicker(sellToken.ticker, chainId)} at a discount in exchange for quicker order execution.
                 </p>
               </div>
             </div>

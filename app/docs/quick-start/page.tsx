@@ -116,15 +116,36 @@ export default function QuickStartPage() {
             <span className="text-yellow-400">•</span>
             <span>Check the Marketplace to see current orders and market conditions</span>
           </li>
-          <li className="flex items-start gap-2">
-            <span className="text-yellow-400">•</span>
-            <span>Use the Discover feature to find attractive orders to fill</span>
-          </li>
         </ul>
       </LiquidGlassCard>
 
-      {/* Next Steps */}
+      {/* Launch CTA */}
+      <LiquidGlassCard className="p-6 text-center">
+        <h3 className="text-xl font-semibold text-white mb-2">Ready to start trading?</h3>
+        <p className="text-white/60 mb-4">Create your first limit order now</p>
+        <Link
+          href="/trade"
+          className="inline-block px-6 py-2.5 bg-white text-black text-sm font-medium rounded-full hover:bg-white/90 transition-colors"
+        >
+          Launch App
+        </Link>
+      </LiquidGlassCard>
+
+      {/* Navigation */}
       <div className="flex flex-col md:flex-row gap-4">
+        <Link href="/docs" className="flex-1">
+          <LiquidGlassCard className="p-6 h-full hover:bg-white/5 transition-colors group">
+            <div className="flex items-center gap-4">
+              <svg className="w-5 h-5 text-white/40 group-hover:text-white/60 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+              <div>
+                <p className="text-white/60 text-sm">Previous</p>
+                <p className="text-white font-medium group-hover:text-white/90">Documentation</p>
+              </div>
+            </div>
+          </LiquidGlassCard>
+        </Link>
         <Link href="/docs/concepts/how-it-works" className="flex-1">
           <LiquidGlassCard className="p-6 h-full hover:bg-white/5 transition-colors group">
             <div className="flex items-center justify-between">
@@ -135,16 +156,6 @@ export default function QuickStartPage() {
               <svg className="w-5 h-5 text-white/40 group-hover:text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
-            </div>
-          </LiquidGlassCard>
-        </Link>
-        <Link href="/trade" className="flex-1">
-          <LiquidGlassCard className="p-6 h-full hover:bg-white/5 transition-colors group bg-white/5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-white/60 text-sm">Ready?</p>
-                <p className="text-white font-medium group-hover:text-white/90">Launch App →</p>
-              </div>
             </div>
           </LiquidGlassCard>
         </Link>

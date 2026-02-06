@@ -5,7 +5,7 @@ import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 
 export default function FillingOrdersPage() {
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Header */}
       <div>
         <div className="flex items-center gap-2 text-white/60 text-sm mb-4">
@@ -27,27 +27,16 @@ export default function FillingOrdersPage() {
       <LiquidGlassCard className="p-6">
         <h2 className="text-xl font-semibold text-white mb-4">Finding Orders</h2>
         <p className="text-white/70 mb-4">
-          There are two main ways to find orders to fill:
+          Browse the marketplace to find orders to fill:
         </p>
-        <div className="grid md:grid-cols-2 gap-4">
-          <div className="bg-white/5 p-4 rounded-lg">
-            <h3 className="text-white font-medium mb-2">Marketplace</h3>
-            <p className="text-white/60 text-sm">
-              Browse all active orders with advanced filtering by token, price, size, and status.
-            </p>
-            <Link href="/marketplace" className="text-blue-400 text-sm hover:underline mt-2 inline-block">
-              Go to Marketplace →
-            </Link>
-          </div>
-          <div className="bg-white/5 p-4 rounded-lg">
-            <h3 className="text-white font-medium mb-2">Discover</h3>
-            <p className="text-white/60 text-sm">
-              AI-powered recommendations based on your token holdings and order attractiveness.
-            </p>
-            <Link href="/discover" className="text-blue-400 text-sm hover:underline mt-2 inline-block">
-              Go to Discover →
-            </Link>
-          </div>
+        <div className="bg-white/5 p-4 rounded-lg">
+          <h3 className="text-white font-medium mb-2">Marketplace</h3>
+          <p className="text-white/60 text-sm">
+            Browse all active orders with advanced filtering by token, price, size, and status.
+          </p>
+          <Link href="/marketplace" className="text-blue-400 text-sm hover:underline mt-2 inline-block">
+            Go to Marketplace →
+          </Link>
         </div>
       </LiquidGlassCard>
 
@@ -198,10 +187,6 @@ export default function FillingOrdersPage() {
           <li className="flex items-start gap-2">
             <span className="text-green-400">•</span>
             <span>Check the USD values to understand the actual trade amounts</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-green-400">•</span>
-            <span>Use Discover to find orders matched to your token holdings</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-green-400">•</span>

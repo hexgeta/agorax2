@@ -122,25 +122,6 @@ export default function DataStructuresPage() {
             </div>
           </LiquidGlassCard>
 
-          <LiquidGlassCard className="p-6">
-            <h3 className="text-lg font-semibold text-white font-mono mb-3">ScoredOrder (Discover)</h3>
-            <p className="text-white/70 text-sm mb-4">
-              Extended order type with recommendation scoring.
-            </p>
-            <div className="bg-white/5 p-4 rounded-lg font-mono text-sm overflow-x-auto">
-              <pre className="text-white/80">{`interface ScoredOrder extends CompleteOrderDetails {
-  score: number;           // 0-100 composite score
-  canFill: boolean;        // User can fully fill
-  fillPercentage: number;  // 0-100%
-  priceDiscount: number;   // % from market (neg = good)
-  breakdown: {
-    fillabilityScore: number;  // 0-40 pts
-    priceScore: number;        // 0-40 pts
-    relevanceScore: number;    // 0-20 pts
-  };
-}`}</pre>
-            </div>
-          </LiquidGlassCard>
 
           <LiquidGlassCard className="p-6">
             <h3 className="text-lg font-semibold text-white font-mono mb-3">TokenConstant</h3>

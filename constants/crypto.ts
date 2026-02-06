@@ -167,7 +167,6 @@ export const TOKEN_CONSTANTS = [{
   name: "Wrapped WETH from Eth",
   origin: [1, "0x0"],
   isWhitelisted: true,
-  baskets: ["pls-peg"]
 },  {
   chain: 369,
   a: "0xefD766cCb38EaF1dfd701853BFCe31359239F305",

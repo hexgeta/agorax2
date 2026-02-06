@@ -276,7 +276,7 @@ export default function SmartContractPage() {
 
       {/* Navigation */}
       <div className="flex flex-col md:flex-row gap-4 pt-4">
-        <Link href="/docs/guide/discover" className="flex-1">
+        <Link href="/docs/guide/managing-orders" className="flex-1">
           <LiquidGlassCard className="p-6 h-full hover:bg-white/5 transition-colors group">
             <div className="flex items-center gap-4">
               <svg className="w-5 h-5 text-white/40 group-hover:text-white/60 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -284,7 +284,7 @@ export default function SmartContractPage() {
               </svg>
               <div>
                 <p className="text-white/60 text-sm">Previous</p>
-                <p className="text-white font-medium group-hover:text-white/90">Discover Feature</p>
+                <p className="text-white font-medium group-hover:text-white/90">Managing Orders</p>
               </div>
             </div>
           </LiquidGlassCard>

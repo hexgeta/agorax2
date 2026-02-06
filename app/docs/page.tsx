@@ -25,16 +25,6 @@ const features = [
     href: '/docs/guide/creating-orders',
   },
   {
-    title: 'Discover Orders',
-    description: 'Find the best deals with our AI-powered recommendation system. Swipe to save orders.',
-    icon: (
-      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-      </svg>
-    ),
-    href: '/docs/guide/discover',
-  },
-  {
     title: 'Secure & Audited',
     description: 'Smart contract audited and battle-tested. Your funds are protected by robust security measures.',
     icon: (
@@ -65,30 +55,6 @@ export default function DocsPage() {
           with up to 50 accepted payment tokens per order.
         </p>
       </div>
-
-      {/* Quick Start CTA */}
-      <LiquidGlassCard className="p-6 md:p-8">
-        <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-          <div>
-            <h2 className="text-xl font-semibold text-white mb-2">Ready to start trading?</h2>
-            <p className="text-white/60">Connect your wallet and create your first limit order in minutes.</p>
-          </div>
-          <div className="flex gap-4">
-            <Link
-              href="/docs/quick-start"
-              className="px-6 py-3 bg-white text-black font-medium rounded-full hover:bg-white/90 transition-colors"
-            >
-              Quick Start Guide
-            </Link>
-            <Link
-              href="/trade"
-              className="px-6 py-3 bg-white/10 text-white font-medium rounded-full hover:bg-white/20 transition-colors border border-white/20"
-            >
-              Launch App
-            </Link>
-          </div>
-        </div>
-      </LiquidGlassCard>
 
       {/* Features Grid */}
       <div>
@@ -161,6 +127,23 @@ export default function DocsPage() {
           </a>
         </div>
       </LiquidGlassCard>
+
+      {/* Navigation */}
+      <div className="flex justify-end">
+        <Link href="/docs/quick-start" className="flex-1 max-w-sm">
+          <LiquidGlassCard className="p-6 h-full hover:bg-white/5 transition-colors group">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-white/60 text-sm">Next</p>
+                <p className="text-white font-medium group-hover:text-white/90">Quick Start</p>
+              </div>
+              <svg className="w-5 h-5 text-white/40 group-hover:text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+          </LiquidGlassCard>
+        </Link>
+      </div>
     </div>
   );
 }
