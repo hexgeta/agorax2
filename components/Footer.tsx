@@ -1,11 +1,19 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 
 // Cache the current year to avoid recalculating it on every render
 const CURRENT_YEAR = new Date().getFullYear();
 
 const Footer = () => {
+  const pathname = usePathname();
+
+  // Hide footer on docs pages
+  if (pathname?.startsWith('/docs')) {
+    return null;
+  }
+
   return (
     <footer className="w-full bg-black bg-blur-[1.65px] px-4 md:px-8 py-8 pb-12 md:pb-8 border-t border-white/20 relative z-[100]">
       <div className="max-w-[1200px] mx-auto">

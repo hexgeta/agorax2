@@ -5,63 +5,102 @@ import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 
 const findings = [
   {
-    id: 'M-01',
-    severity: 'medium',
-    title: 'Incomplete Order Expiry Handling During Fills',
-    description: 'When filling an active order that has just expired, the fillOrder function lacks a fresh expiry check after confirming status. This could allow filling an order that expired between checks.',
-    status: 'fixed',
-  },
-  {
-    id: 'M-02',
-    severity: 'medium',
-    title: 'Whitelist Index Bounds Check Missing',
-    description: 'The _checkTokenAndAmount function checks if a token index is out of bounds but doesn\'t verify the returned token address is non-zero, which could cause issues with sparse whitelist arrays.',
-    status: 'acknowledged',
-  },
-  {
     id: 'L-01',
     severity: 'low',
-    title: 'Missing Event Emission for Whitelist Changes',
-    description: 'Adding or modifying whitelist tokens doesn\'t emit events, making it harder to track whitelist changes off-chain.',
-    status: 'fixed',
+    title: 'Dust Orders via Strategic Partial Fills',
+    description: 'Due to integer rounding in fill calculations, an attacker could theoretically fill an order to leave a remainder smaller than the minimum fillable amount.',
+    note: 'Mitigated by allOrNothing flag - users creating orders with ratios that could result in dust should use allOrNothing = true',
   },
   {
     id: 'L-02',
     severity: 'low',
-    title: 'Unbounded Loop in Batch Cancel',
-    description: 'cancelAllExpiredOrders iterates through all provided order IDs without an explicit upper bound check in the loop itself.',
-    status: 'acknowledged',
-    note: 'Limited to 50 orders max by parameter validation',
+    title: 'No Minimum Order Size',
+    description: 'There is no minimum order size, theoretically allowing order book pollution with very small orders.',
+    note: 'The listing fee (e.g., 100 PLS) acts as an economic deterrent, making spam attacks economically unfeasible',
   },
   {
     id: 'L-03',
     severity: 'low',
-    title: 'Cooldown Period Edge Cases',
-    description: 'Very short cooldown periods (< 1 minute) could allow rapid order manipulation in edge cases.',
-    status: 'fixed',
-    note: 'Minimum cooldown enforced at 20 seconds',
+    title: 'Cooldown Upper Bound of 24 Hours',
+    description: 'The maximum cooldown period of 86400 seconds (24 hours) could theoretically be used maliciously by a compromised admin.',
+    note: 'Two-step ownership transfer (Ownable2Step) prevents accidental admin changes. Normal operation uses short cooldowns (e.g., 60 seconds)',
   },
   {
     id: 'I-01',
     severity: 'informational',
-    title: 'Consider Using SafeERC20',
-    description: 'While the contract checks return values, using OpenZeppelin\'s SafeERC20 would provide additional safety for non-compliant tokens.',
-    status: 'acknowledged',
+    title: 'Non-Transferable Receipt Tokens',
+    description: 'AGX receipt tokens cannot be transferred, traded, or approved. This is an intentional security feature that prevents accidental loss of order access and eliminates secondary market attack vectors.',
   },
   {
     id: 'I-02',
     severity: 'informational',
-    title: 'Magic Numbers in Code',
-    description: 'Some constants like maximum buy tokens (50) and batch size limits could be extracted to named constants for clarity.',
-    status: 'fixed',
+    title: 'No Price Oracle Dependency',
+    description: 'The contract has zero reliance on external price oracles, eliminating oracle manipulation, flash loan + oracle attacks, stale price exploitation, and oracle downtime issues. Order pricing is purely peer-to-peer.',
   },
   {
     id: 'I-03',
     severity: 'informational',
-    title: 'Documentation Improvements',
-    description: 'Some function parameters and return values lack comprehensive NatSpec documentation.',
-    status: 'fixed',
+    title: 'Immutable Fee Caps',
+    description: 'Fee limits (PROTOCOL_FEES_LIMIT and LISTING_FEES_LIMIT) are set at deployment and cannot be changed, providing users with permanent guarantees about maximum possible fees.',
   },
+];
+
+const securityFeatures = [
+  {
+    title: 'Reentrancy Protection',
+    description: 'All state-changing external functions (placeOrder, cancelOrder, fillOrder, collectProceeds, etc.) use the nonReentrant modifier from OpenZeppelin\'s ReentrancyGuard.',
+  },
+  {
+    title: 'Transfer Verification',
+    description: 'Exact balance checks before and after transfers prevent fee-on-transfer token exploits, deflationary token accounting errors, and rebasing token manipulation.',
+  },
+  {
+    title: 'Cooldown Mechanism',
+    description: 'Configurable cooldown period (20 seconds to 24 hours) prevents MEV and flash loan order manipulation attacks.',
+  },
+  {
+    title: 'Graceful Failure Handling',
+    description: 'Try/catch-style handling for proceeds collection prevents one failed token transfer from blocking all proceeds. Selective token collection via collectProceedsByToken() is also available.',
+  },
+  {
+    title: 'Immutable Fee Caps',
+    description: 'Protocol and listing fee limits are set at deployment and cannot be increased, providing permanent user guarantees.',
+  },
+  {
+    title: 'Grandfathered Fee Protection',
+    description: 'Orders lock in the fee rate at creation time, using the lower of creation or current fee when filling.',
+  },
+  {
+    title: 'Non-Transferable Receipt Tokens',
+    description: 'AGX tokens are non-transferable by design, preventing accidental loss, social engineering attacks, and complex secondary market exploits.',
+  },
+  {
+    title: 'Direct PLS Transfer Rejection',
+    description: 'The receive() function reverts direct PLS transfers, preventing accidental fund loss.',
+  },
+  {
+    title: 'No Oracle Dependency',
+    description: 'Zero reliance on external price oracles eliminates oracle manipulation, stale price vulnerabilities, and flash loan oracle attacks.',
+  },
+];
+
+const ownerCapabilities = [
+  { function: 'addTokenAddress()', risk: 'Medium', notes: 'Can whitelist tokens' },
+  { function: 'setTokenStatus()', risk: 'Medium', notes: 'Can enable/disable tokens' },
+  { function: 'pause() / unpause()', risk: 'Medium', notes: 'Emergency stop' },
+  { function: 'updateFeeAddress()', risk: 'Low', notes: 'Fee collection address' },
+  { function: 'updateCooldownPeriod()', risk: 'Low', notes: 'Bounded 20-86400s' },
+  { function: 'updateListingFee()', risk: 'Low', notes: 'Bounded by immutable cap' },
+  { function: 'updateProtocolFee()', risk: 'Low', notes: 'Bounded by immutable cap' },
+  { function: 'cleanInactiveUsers()', risk: 'Low', notes: 'Maintenance only' },
+];
+
+const ownerRestrictions = [
+  'Withdraw user funds',
+  'Modify existing orders',
+  'Change fee caps (immutable)',
+  'Transfer receipt tokens',
+  'Access funds during pause',
 ];
 
 const getSeverityColor = (severity: string) => {
@@ -74,11 +113,11 @@ const getSeverityColor = (severity: string) => {
   }
 };
 
-const getStatusBadge = (status: string) => {
-  switch (status) {
-    case 'fixed': return 'bg-green-500/20 text-green-400';
-    case 'acknowledged': return 'bg-yellow-500/20 text-yellow-400';
-    default: return 'bg-gray-500/20 text-gray-400';
+const getRiskColor = (risk: string) => {
+  switch (risk) {
+    case 'Medium': return 'text-yellow-400';
+    case 'Low': return 'text-blue-400';
+    default: return 'text-white/60';
   }
 };
 
@@ -98,7 +137,7 @@ export default function AuditPage() {
           Security Audit Report
         </h1>
         <p className="text-lg text-white/70">
-          Summary of the AgoráX smart contract security assessment.
+          Comprehensive security assessment of the AgoraX smart contract.
         </p>
       </div>
 
@@ -112,20 +151,20 @@ export default function AuditPage() {
           </div>
           <div>
             <h2 className="text-xl font-semibold text-green-400 mb-1">Contract Audited</h2>
-            <p className="text-white/70">The AgoraX smart contract has been audited. No critical or high severity issues were found.</p>
+            <p className="text-white/70">The AgoraX smart contract demonstrates excellent security fundamentals with comprehensive use of OpenZeppelin libraries. No critical or high severity issues were found.</p>
           </div>
         </div>
         <div className="mt-4 pt-4 border-t border-green-500/20">
           <a
-            href="/docs/SECURITY_AUDIT_FINAL.md"
+            href="https://otter.pulsechain.com/address/0xc8a47F14b1833310E2aC72e4C397b5b14a9FEf8B/contract"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 text-green-400 hover:text-green-300 transition-colors"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
             </svg>
-            View Full Audit Report
+            View Verified Contract
           </a>
         </div>
       </LiquidGlassCard>
@@ -136,11 +175,11 @@ export default function AuditPage() {
         <div className="grid md:grid-cols-2 gap-6">
           <div>
             <p className="text-white/60 text-sm mb-1">Contract</p>
-            <p className="text-white">AgoraX_mainnet.sol</p>
+            <p className="text-white">AgoraX-final.sol</p>
           </div>
           <div>
-            <p className="text-white/60 text-sm mb-1">Network</p>
-            <p className="text-white">PulseChain Mainnet</p>
+            <p className="text-white/60 text-sm mb-1">Solidity Version</p>
+            <p className="text-white">^0.8.17</p>
           </div>
           <div>
             <p className="text-white/60 text-sm mb-1">Audit Date</p>
@@ -148,7 +187,7 @@ export default function AuditPage() {
           </div>
           <div>
             <p className="text-white/60 text-sm mb-1">Scope</p>
-            <p className="text-white">Full contract audit including all user-facing functions</p>
+            <p className="text-white">Security posture, accounting integrity, and mathematical correctness</p>
           </div>
         </div>
       </LiquidGlassCard>
@@ -164,50 +203,77 @@ export default function AuditPage() {
           <p className="text-white/60 text-sm">High</p>
         </LiquidGlassCard>
         <LiquidGlassCard className="p-4 text-center">
-          <p className="text-3xl font-bold text-yellow-400">2</p>
-          <p className="text-white/60 text-sm">Medium</p>
-        </LiquidGlassCard>
-        <LiquidGlassCard className="p-4 text-center">
           <p className="text-3xl font-bold text-blue-400">3</p>
           <p className="text-white/60 text-sm">Low</p>
+        </LiquidGlassCard>
+        <LiquidGlassCard className="p-4 text-center">
+          <p className="text-3xl font-bold text-gray-400">3</p>
+          <p className="text-white/60 text-sm">Informational</p>
         </LiquidGlassCard>
       </div>
 
       {/* Key Security Features */}
-      <LiquidGlassCard className="p-6 border-l-4 border-green-500/50">
-        <h2 className="text-xl font-semibold text-white mb-4">Key Security Strengths</h2>
-        <ul className="space-y-3 text-white/70">
-          <li className="flex items-start gap-3">
-            <svg className="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-            <span><strong className="text-white">Reentrancy Protection:</strong> All state changes occur before external calls</span>
-          </li>
-          <li className="flex items-start gap-3">
-            <svg className="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-            <span><strong className="text-white">Transfer Validation:</strong> Exact balance checks prevent fee-on-transfer exploits</span>
-          </li>
-          <li className="flex items-start gap-3">
-            <svg className="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-            <span><strong className="text-white">Cooldown Mechanism:</strong> Prevents rapid order manipulation</span>
-          </li>
-          <li className="flex items-start gap-3">
-            <svg className="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-            <span><strong className="text-white">Access Control:</strong> Only order owners can modify their orders</span>
-          </li>
-          <li className="flex items-start gap-3">
-            <svg className="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-            <span><strong className="text-white">Whitelist System:</strong> Protects users from receiving malicious tokens</span>
-          </li>
+      <div className="animated-border rounded-2xl p-6">
+        <h2 className="text-xl font-semibold text-white mb-4">Security Features Analysis</h2>
+        <div className="grid md:grid-cols-2 gap-4">
+          {securityFeatures.map((feature, index) => (
+            <div key={index} className="flex items-start gap-3">
+              <svg className="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              <div>
+                <span className="text-white font-medium">{feature.title}</span>
+                <p className="text-white/60 text-sm mt-1">{feature.description}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Access Control Analysis */}
+      <LiquidGlassCard className="p-6">
+        <h2 className="text-xl font-semibold text-white mb-4">Access Control Analysis</h2>
+
+        <h3 className="text-lg font-medium text-white mb-3">Owner Capabilities</h3>
+        <div className="overflow-x-auto mb-6">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-white/10">
+                <th className="text-left py-2 text-white/60 font-medium">Function</th>
+                <th className="text-left py-2 text-white/60 font-medium">Risk Level</th>
+                <th className="text-left py-2 text-white/60 font-medium">Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ownerCapabilities.map((cap, index) => (
+                <tr key={index} className="border-b border-white/5">
+                  <td className="py-2 text-white font-mono text-xs">{cap.function}</td>
+                  <td className={`py-2 ${getRiskColor(cap.risk)}`}>{cap.risk}</td>
+                  <td className="py-2 text-white/60">{cap.notes}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <h3 className="text-lg font-medium text-white mb-3">Owner Restrictions</h3>
+        <p className="text-white/60 mb-2">The owner cannot:</p>
+        <ul className="grid md:grid-cols-2 gap-2">
+          {ownerRestrictions.map((restriction, index) => (
+            <li key={index} className="flex items-center gap-2 text-white/70">
+              <svg className="w-4 h-4 text-red-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+              {restriction}
+            </li>
+          ))}
         </ul>
+
+        <div className="mt-4 p-4 bg-white/5 rounded-lg">
+          <p className="text-white/70 text-sm">
+            <span className="text-white font-medium">Two-Step Ownership:</span> The contract uses Ownable2Step requiring the current owner to propose a new owner, who must then accept. This prevents accidental ownership transfer to wrong addresses and single-transaction ownership hijacking.
+          </p>
+        </div>
       </LiquidGlassCard>
 
       {/* Findings */}
@@ -221,38 +287,89 @@ export default function AuditPage() {
                 <span className={`px-2 py-1 rounded text-xs font-medium border ${getSeverityColor(finding.severity)}`}>
                   {finding.severity.toUpperCase()}
                 </span>
-                <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusBadge(finding.status)}`}>
-                  {finding.status.toUpperCase()}
-                </span>
               </div>
               <h3 className="text-white font-medium mb-2">{finding.title}</h3>
               <p className="text-white/60 text-sm">{finding.description}</p>
               {finding.note && (
-                <p className="text-white/50 text-sm mt-2 italic">Note: {finding.note}</p>
+                <p className="text-white/50 text-sm mt-2 italic">Mitigation: {finding.note}</p>
               )}
             </LiquidGlassCard>
           ))}
         </div>
       </div>
 
-      {/* Informational */}
+      {/* Key Constants */}
       <LiquidGlassCard className="p-6">
-        <h2 className="text-xl font-semibold text-white mb-4">Additional Informational Items</h2>
-        <ul className="space-y-2 text-white/60 text-sm">
-          <li>• Gas optimizations possible in iteration patterns</li>
-          <li>• Consider implementing EIP-2612 permit for gasless approvals</li>
-          <li>• Comprehensive test coverage recommended for edge cases</li>
-        </ul>
+        <h2 className="text-xl font-semibold text-white mb-4">Key Constants</h2>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-white/10">
+                <th className="text-left py-2 text-white/60 font-medium">Constant</th>
+                <th className="text-left py-2 text-white/60 font-medium">Value</th>
+                <th className="text-left py-2 text-white/60 font-medium">Purpose</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="border-b border-white/5">
+                <td className="py-2 text-white font-mono text-xs">PERCENTAGE_DIVISOR</td>
+                <td className="py-2 text-white/70">10000</td>
+                <td className="py-2 text-white/60">Basis points denominator</td>
+              </tr>
+              <tr className="border-b border-white/5">
+                <td className="py-2 text-white font-mono text-xs">NATIVE_ADDRESS</td>
+                <td className="py-2 text-white/70">0xEeee...eEEE</td>
+                <td className="py-2 text-white/60">PLS sentinel address</td>
+              </tr>
+              <tr className="border-b border-white/5">
+                <td className="py-2 text-white font-mono text-xs">Batch limit</td>
+                <td className="py-2 text-white/70">50</td>
+                <td className="py-2 text-white/60">Max items per batch operation</td>
+              </tr>
+              <tr className="border-b border-white/5">
+                <td className="py-2 text-white font-mono text-xs">Cooldown bounds</td>
+                <td className="py-2 text-white/70">20-86400</td>
+                <td className="py-2 text-white/60">Seconds (20s to 24h)</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </LiquidGlassCard>
 
       {/* Conclusion */}
       <LiquidGlassCard className="p-6 bg-green-500/5 border border-green-500/20">
         <h2 className="text-xl font-semibold text-white mb-4">Conclusion</h2>
+        <p className="text-white/70 mb-4">
+          The AgoraX-final.sol contract demonstrates strong security practices:
+        </p>
+        <ul className="grid md:grid-cols-2 gap-2 mb-4">
+          <li className="flex items-center gap-2 text-white/70">
+            <span className="text-green-400">✓</span> Reentrancy Protection
+          </li>
+          <li className="flex items-center gap-2 text-white/70">
+            <span className="text-green-400">✓</span> Transfer Verification
+          </li>
+          <li className="flex items-center gap-2 text-white/70">
+            <span className="text-green-400">✓</span> Cooldown Mechanism
+          </li>
+          <li className="flex items-center gap-2 text-white/70">
+            <span className="text-green-400">✓</span> Graceful Failure Handling
+          </li>
+          <li className="flex items-center gap-2 text-white/70">
+            <span className="text-green-400">✓</span> Immutable Fee Caps
+          </li>
+          <li className="flex items-center gap-2 text-white/70">
+            <span className="text-green-400">✓</span> No Oracle Dependency
+          </li>
+          <li className="flex items-center gap-2 text-white/70">
+            <span className="text-green-400">✓</span> Two-Step Ownership
+          </li>
+          <li className="flex items-center gap-2 text-white/70">
+            <span className="text-green-400">✓</span> Non-Transferable Tokens
+          </li>
+        </ul>
         <p className="text-white/70">
-          The AgoráX smart contract demonstrates a solid security foundation with proper access controls,
-          reentrancy protection, and input validation. The identified medium-severity issues have been
-          addressed or acknowledged with appropriate mitigations. The contract is considered safe for
-          production use with the noted considerations.
+          The contract is suitable for mainnet deployment. Users should be aware of the dust order edge case (use allOrNothing for protection) and understand that the listing fee serves as anti-spam protection.
         </p>
       </LiquidGlassCard>
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, Suspense } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback, Suspense } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -27,12 +27,11 @@ const searchableDocs: SearchableDoc[] = [
   { title: 'How It Works', href: '/docs/concepts/how-it-works', content: 'AgoráX uses a decentralized escrow mechanism. When you create an order, your tokens are held securely in the smart contract. Buyers can fill orders partially or completely. Sellers can claim proceeds and cancel unfilled portions anytime.', section: 'Core Concepts' },
   { title: 'Order Types', href: '/docs/concepts/order-types', content: 'Two order types: Partial Fill allows buyers to purchase any amount up to total. All-or-Nothing requires the entire order to be filled at once. Set expiration dates and accept multiple payment tokens.', section: 'Core Concepts' },
   { title: 'Token Compatibility', href: '/docs/concepts/token-compatibility', content: 'Any standard ERC20 token can be sold. Buy tokens must be whitelisted including PLS, WPLS, HEX, PLSX, INC, DAI, and more. Fee-on-transfer and rebasing tokens are not supported.', section: 'Core Concepts' },
-  { title: 'Pricing & Fees', href: '/docs/concepts/pricing-fees', content: 'Listing fee is 25,000 PLS per order. No percentage fees on trades. Set prices above or below market using percentage buttons (+1%, +2%, +5%, +10%) or drag the limit line on the price chart.', section: 'Core Concepts' },
+  { title: 'Pricing & Fees', href: '/docs/concepts/pricing-fees', content: 'Listing fee is 100 PLS per order. 0.2% seller fee on trades, zero fees for buyers. Set prices above or below market using percentage buttons (+1%, +2%, +5%, +10%) or drag the limit line on the price chart.', section: 'Core Concepts' },
   { title: 'Creating Orders', href: '/docs/guide/creating-orders', content: 'Step-by-step guide to creating limit orders. Select sell token and amount, choose accepted buy tokens, set your price above market, approve token spending, pay the listing fee, and confirm the transaction.', section: 'User Guide' },
   { title: 'Filling Orders', href: '/docs/guide/filling-orders', content: 'Browse the marketplace to find orders. Use filters for status, fill percentage, minimum USD, position relative to market. Select an order, choose payment token, enter fill amount, approve and confirm.', section: 'User Guide' },
   { title: 'Managing Orders', href: '/docs/guide/managing-orders', content: 'View all your orders in My Orders page. Claim proceeds from filled orders, cancel unfilled portions to reclaim tokens, track order status and fill history. Filter by active, expired, completed.', section: 'User Guide' },
   { title: 'Smart Contract', href: '/docs/technical/smart-contract', content: 'Technical reference for the AgoráX smart contract. Contract address 0xc8a47F14b1833310E2aC72e4C397b5b14a9FEf8B on PulseChain mainnet. Functions include createOrder, fillOrder, cancelOrder, claimProceeds.', section: 'Technical Reference' },
-  { title: 'API Reference', href: '/docs/technical/api-reference', content: 'React hooks and utilities for integrating with AgoráX. useOpenPositions for fetching orders, useTokenPrices for live prices, useWhitelist for supported tokens. Built with wagmi and viem.', section: 'Technical Reference' },
   { title: 'Data Structures', href: '/docs/technical/data-structures', content: 'TypeScript interfaces for order data. OrderDetails includes orderId, maker, sellToken, sellAmount, buyTokens, buyAmounts, expiration, isAllOrNothing. CompleteOrderDetails adds computed fields.', section: 'Technical Reference' },
   { title: 'Audit Report', href: '/docs/security/audit', content: 'Security audit findings and report. Contract reviewed for vulnerabilities including reentrancy, integer overflow, access control. All critical and high severity issues resolved before mainnet launch.', section: 'Security' },
   { title: 'Security Features', href: '/docs/security/features', content: 'Non-custodial design means you control your funds. Escrow only holds sell tokens during active orders. No admin keys or upgrade mechanisms. Permissionless and trustless trading on PulseChain.', section: 'Security' },
@@ -71,7 +70,6 @@ const navigation: NavItem[] = [
     href: '/docs/technical',
     children: [
       { title: 'Smart Contract', href: '/docs/technical/smart-contract' },
-      { title: 'API Reference', href: '/docs/technical/api-reference' },
       { title: 'Data Structures', href: '/docs/technical/data-structures' },
     ],
   },
@@ -88,49 +86,27 @@ const navigation: NavItem[] = [
 function NavSection({
   item,
   pathname,
-  isExpanded,
-  onToggle
 }: {
   item: NavItem;
   pathname: string;
-  isExpanded: boolean;
-  onToggle: () => void;
 }) {
-  const isActive = pathname === item.href;
-  const hasActiveChild = item.children?.some(child => pathname === child.href);
-
   return (
-    <div className="mb-4">
-      <button
-        onClick={onToggle}
-        className={`flex items-center justify-between w-full text-left text-sm font-semibold py-2 px-3 rounded-lg transition-colors ${
-          isActive || hasActiveChild
-            ? 'text-white bg-white/10'
-            : 'text-white/70 hover:text-white hover:bg-white/5'
-        }`}
-      >
+    <div className="mb-6">
+      {/* Section header - not clickable, just a label */}
+      <h4 className="text-base font-semibold text-white/50 uppercase tracking-wider px-3 mb-2">
         {item.title}
-        {item.children && (
-          <svg
-            className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        )}
-      </button>
-      {item.children && isExpanded && (
-        <div className="ml-3 mt-1 border-l border-white/10 pl-3 space-y-1">
+      </h4>
+      {/* Always show children */}
+      {item.children && (
+        <div className="space-y-1">
           {item.children.map((child) => (
             <Link
               key={child.href}
               href={child.href}
-              className={`block text-sm py-1.5 px-2 rounded transition-colors ${
+              className={`block text-lg py-2 px-3 rounded-md transition-colors ${
                 pathname === child.href
-                  ? 'text-white bg-white/10'
-                  : 'text-white/60 hover:text-white hover:bg-white/5'
+                  ? 'text-white bg-white/10 font-medium'
+                  : 'text-white hover:bg-white/5'
               }`}
             >
               {child.title}
@@ -140,15 +116,6 @@ function NavSection({
       )}
     </div>
   );
-}
-
-// Find which section contains the current path
-function findActiveSection(pathname: string): string | null {
-  for (const item of navigation) {
-    if (pathname === item.href) return item.href;
-    if (item.children?.some(child => pathname === child.href)) return item.href;
-  }
-  return navigation[0]?.href || null;
 }
 
 // Component to handle search highlight from URL params (needs Suspense)
@@ -263,9 +230,11 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
   const pathname = usePathname();
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [expandedSection, setExpandedSection] = useState<string | null>(() => findActiveSection(pathname));
   const [searchQuery, setSearchQuery] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [scrollBottom, setScrollBottom] = useState(1); // 1 = not at bottom, 0 = at bottom
+  const navRef = useRef<HTMLElement>(null);
 
   // Filter docs based on search query with multiple excerpts
   const searchResults = useMemo(() => {
@@ -385,11 +354,6 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
     router.push(`${href}?highlight=${encodeURIComponent(query)}`);
   };
 
-  // Update expanded section when route changes
-  useEffect(() => {
-    setExpandedSection(findActiveSection(pathname));
-  }, [pathname]);
-
   // Close sidebar on route change
   useEffect(() => {
     setSidebarOpen(false);
@@ -406,6 +370,32 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
       document.body.style.overflow = '';
     };
   }, [sidebarOpen]);
+
+  // Handle scroll position for fade gradients
+  const handleNavScroll = useCallback(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+
+    const { scrollTop: st, scrollHeight, clientHeight } = nav;
+    // Calculate how far from top (0 = at top, 1 = scrolled enough to show full gradient)
+    const topFade = Math.min(st / 50, 1); // Fade in over 50px of scroll
+    // Calculate how far from bottom (0 = at bottom, 1 = not at bottom)
+    const bottomFade = Math.min((scrollHeight - clientHeight - st) / 50, 1);
+
+    setScrollTop(topFade);
+    setScrollBottom(bottomFade);
+  }, []);
+
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+
+    // Initial check
+    handleNavScroll();
+
+    nav.addEventListener('scroll', handleNavScroll);
+    return () => nav.removeEventListener('scroll', handleNavScroll);
+  }, [handleNavScroll]);
 
   return (
     <div className="min-h-screen relative flex flex-col">
@@ -474,24 +464,24 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
       )}
 
       {/* Content wrapper with sidebar */}
-      <div className="flex-1 pt-[73px] flex items-start relative z-10">
-        {/* Sidebar */}
+      <div className="flex-1 pt-[73px] flex relative z-10">
+        {/* Sidebar - fixed position for full height */}
         <aside
-          className={`md:sticky md:top-[73px] md:self-start md:h-[calc(100vh-73px)] fixed top-[73px] left-0 bottom-0 w-72 z-40 transform transition-transform duration-200 ease-out md:translate-x-0 flex-shrink-0 ${
+          className={`fixed top-[73px] left-0 bottom-0 w-80 md:w-96 z-40 transform transition-transform duration-200 ease-out md:translate-x-0 flex-shrink-0 ${
             sidebarOpen ? 'translate-x-0' : '-translate-x-full'
           }`}
         >
         <LiquidGlassCard
-          className="h-full overflow-y-auto pt-2 pb-4 px-4 !rounded-none !rounded-tr-2xl !rounded-br-2xl md:!rounded-none"
+          className="h-full flex flex-col !rounded-none"
           shadowIntensity="none"
           glowIntensity="sm"
           blurIntensity="xl"
         >
-          {/* Search Bar */}
-          <div className="mb-4 relative">
+          {/* Search Bar - fixed at top */}
+          <div className="pt-6 pb-4 px-4 relative flex-shrink-0">
             <div className="relative">
               <svg
-                className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40"
+                className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-white/40"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -505,14 +495,14 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onFocus={() => setSearchFocused(true)}
                 onBlur={() => setTimeout(() => setSearchFocused(false), 150)}
-                className="w-full bg-white/5 border border-white/10 rounded-lg py-2 pl-10 pr-4 text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-white/30 focus:bg-white/10 transition-colors"
+                className="w-full bg-white/5 border border-white/10 rounded-lg py-3 pl-11 pr-4 text-base text-white placeholder:text-white/40 focus:outline-none focus:border-white/30 focus:bg-white/10 transition-colors"
               />
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery('')}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/60"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
@@ -529,13 +519,13 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
                     className="w-full px-4 py-3 text-left hover:bg-white/10 transition-colors border-b border-white/5 last:border-0"
                   >
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-white text-sm font-medium">{result.title}</span>
-                      <span className="text-white/40 text-xs px-1.5 py-0.5 bg-white/5 rounded">{result.section}</span>
+                      <span className="text-white text-base font-medium">{result.title}</span>
+                      <span className="text-white/40 text-sm px-1.5 py-0.5 bg-white/5 rounded">{result.section}</span>
                     </div>
                     {result.excerpts && result.excerpts.length > 0 && (
                       <div className="space-y-1.5 mt-1">
                         {result.excerpts.map((excerpt, i) => (
-                          <p key={i} className="text-white/50 text-xs leading-relaxed">
+                          <p key={i} className="text-white/50 text-sm leading-relaxed">
                             {highlightText(excerpt, searchQuery)}
                           </p>
                         ))}
@@ -549,45 +539,41 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
             {/* No Results */}
             {searchFocused && searchQuery.trim() && searchResults.length === 0 && (
               <div className="absolute top-full left-0 right-0 mt-2 bg-black/90 border border-white/10 rounded-lg p-4 shadow-xl z-50">
-                <p className="text-white/50 text-sm text-center">No results found</p>
+                <p className="text-white/50 text-base text-center">No results found</p>
               </div>
             )}
           </div>
 
-          <nav className="space-y-2">
-            {navigation.map((item) => (
-              <NavSection
-                key={item.href}
-                item={item}
-                pathname={pathname}
-                isExpanded={expandedSection === item.href}
-                onToggle={() => setExpandedSection(expandedSection === item.href ? null : item.href)}
-              />
-            ))}
-          </nav>
+          {/* Scrollable navigation area with fade indicators */}
+          <div className="flex-1 relative overflow-hidden">
+            {/* Top fade gradient - deeper shadow, fades based on scroll position */}
+            <div
+              className="absolute top-0 left-0 right-0 h-12 bg-gradient-to-b from-black via-black/60 to-transparent z-10 pointer-events-none transition-opacity duration-150"
+              style={{ opacity: scrollTop }}
+            />
 
-          {/* Footer Links */}
-          <div className="mt-8 pt-6 border-t border-white/10">
-            <div className="space-y-2">
-              <a
-                href="https://otter.pulsechain.com/address/0xc8a47F14b1833310E2aC72e4C397b5b14a9FEf8B/contract"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 text-sm text-white/60 hover:text-white transition-colors px-3 py-2"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                </svg>
-                Contract
-              </a>
-            </div>
+            {/* Bottom fade gradient - deeper shadow, fades based on scroll position */}
+            <div
+              className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-black via-black/60 to-transparent z-10 pointer-events-none transition-opacity duration-150"
+              style={{ opacity: scrollBottom }}
+            />
+
+            <nav ref={navRef} className="h-full overflow-y-auto px-4 py-2 pb-32">
+              {navigation.map((item) => (
+                <NavSection
+                  key={item.href}
+                  item={item}
+                  pathname={pathname}
+                />
+              ))}
+            </nav>
           </div>
         </LiquidGlassCard>
       </aside>
 
-        {/* Main Content */}
-        <main className="flex-1 min-w-0">
-          <div className="max-w-4xl mx-auto px-4 md:px-8">
+        {/* Main Content - offset by sidebar width on desktop */}
+        <main className="flex-1 min-w-0 md:ml-96">
+          <div className="max-w-4xl px-4 md:px-8 md:pl-24 md:pr-24 pb-24">
             {children}
           </div>
         </main>

@@ -36,11 +36,6 @@ const features = [
   },
 ];
 
-const quickLinks = [
-  { title: 'Create Your First Order', href: '/docs/guide/creating-orders', description: 'Step-by-step guide to placing limit orders' },
-  { title: 'Smart Contract Reference', href: '/docs/technical/smart-contract', description: 'Technical details for developers' },
-  { title: 'Security Audit', href: '/docs/security/audit', description: 'Review our security assessment' },
-];
 
 export default function DocsPage() {
   return (
@@ -74,26 +69,6 @@ export default function DocsPage() {
                     <p className="text-white/60 text-sm">{feature.description}</p>
                   </div>
                 </div>
-              </LiquidGlassCard>
-            </Link>
-          ))}
-        </div>
-      </div>
-
-      {/* Quick Links */}
-      <div>
-        <h2 className="text-2xl font-semibold text-white mb-6">Popular Topics</h2>
-        <div className="space-y-3">
-          {quickLinks.map((link) => (
-            <Link key={link.href} href={link.href}>
-              <LiquidGlassCard className="p-4 hover:bg-white/5 transition-colors group flex items-center justify-between">
-                <div>
-                  <h3 className="font-medium text-white group-hover:text-white/90">{link.title}</h3>
-                  <p className="text-white/50 text-sm">{link.description}</p>
-                </div>
-                <svg className="w-5 h-5 text-white/40 group-hover:text-white/60 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
               </LiquidGlassCard>
             </Link>
           ))}

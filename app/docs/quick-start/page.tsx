@@ -101,23 +101,23 @@ export default function QuickStartPage() {
       </div>
 
       {/* Tips */}
-      <LiquidGlassCard className="p-6 border-l-4 border-yellow-500/50">
+      <div className="animated-border rounded-2xl p-6">
         <h3 className="text-lg font-semibold text-white mb-3">Pro Tips</h3>
         <ul className="space-y-2 text-white/70">
           <li className="flex items-start gap-2">
-            <span className="text-yellow-400">•</span>
+            <span className="text-amber-400">•</span>
             <span>Use the "Market" button to match current prices for faster fills</span>
           </li>
           <li className="flex items-start gap-2">
-            <span className="text-yellow-400">•</span>
+            <span className="text-amber-400">•</span>
             <span>Accept multiple buy tokens to increase your chances of getting filled</span>
           </li>
           <li className="flex items-start gap-2">
-            <span className="text-yellow-400">•</span>
+            <span className="text-amber-400">•</span>
             <span>Check the Marketplace to see current orders and market conditions</span>
           </li>
         </ul>
-      </LiquidGlassCard>
+      </div>
 
       {/* Launch CTA */}
       <LiquidGlassCard className="p-6 text-center">

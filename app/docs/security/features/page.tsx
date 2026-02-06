@@ -227,7 +227,7 @@ export default function SecurityFeaturesPage() {
       </div>
 
       {/* Disclaimer */}
-      <LiquidGlassCard className="p-6 border-l-4 border-yellow-500/50">
+      <div className="animated-border rounded-2xl p-6">
         <h2 className="text-lg font-semibold text-white mb-3">Important Disclaimer</h2>
         <p className="text-white/70 text-sm">
           While AgoráX implements robust security measures, DeFi protocols carry inherent risks including
@@ -235,7 +235,7 @@ export default function SecurityFeaturesPage() {
           can afford to lose. Always do your own research and understand the risks before using any
           decentralized application.
         </p>
-      </LiquidGlassCard>
+      </div>
 
       {/* Contract Verification */}
       <LiquidGlassCard className="p-6">

@@ -193,13 +193,13 @@ export default function ManagingOrdersPage() {
       </div>
 
       {/* Claimable Badge */}
-      <LiquidGlassCard className="p-6 border-l-4 border-red-500/50">
+      <div className="animated-border rounded-2xl p-6">
         <h2 className="text-lg font-semibold text-white mb-3">Claimable Proceeds Notification</h2>
         <p className="text-white/70">
           The navigation bar shows a red badge on "My Orders" when you have unclaimed proceeds.
           This helps you stay on top of collecting your filled tokens.
         </p>
-      </LiquidGlassCard>
+      </div>
 
       {/* Navigation */}
       <div className="flex flex-col md:flex-row gap-4 pt-4">

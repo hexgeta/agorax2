@@ -24,14 +24,14 @@ export default function TokenCompatibilityPage() {
       </div>
 
       {/* Overview */}
-      <LiquidGlassCard className="p-6 border-l-4 border-blue-500/50">
+      <div className="animated-border rounded-2xl p-6">
         <h2 className="text-lg font-semibold text-white mb-2">Key Difference</h2>
         <p className="text-white/70">
           <strong className="text-white">Sell tokens</strong> can be any standard ERC20 token, while{' '}
           <strong className="text-white">buy tokens</strong> must be whitelisted on the platform.
           This asymmetry protects buyers while giving sellers maximum flexibility.
         </p>
-      </LiquidGlassCard>
+      </div>
 
       {/* Sell Tokens */}
       <div>
@@ -96,7 +96,7 @@ export default function TokenCompatibilityPage() {
       <div>
         <h2 className="text-2xl font-semibold text-white mb-4">Incompatible Token Types</h2>
         <div className="space-y-4">
-          <LiquidGlassCard className="p-6 border-l-4 border-red-500/50">
+          <div className="animated-border rounded-2xl p-6">
             <h3 className="text-lg font-semibold text-white mb-2">Fee-on-Transfer Tokens</h3>
             <p className="text-white/70 mb-3">
               Tokens that deduct a fee on every transfer are <strong className="text-red-400">NOT supported</strong>.
@@ -107,9 +107,9 @@ export default function TokenCompatibilityPage() {
                 Transaction will revert with "Transfer amount mismatch" error.
               </p>
             </div>
-          </LiquidGlassCard>
+          </div>
 
-          <LiquidGlassCard className="p-6 border-l-4 border-yellow-500/50">
+          <div className="animated-border rounded-2xl p-6">
             <h3 className="text-lg font-semibold text-white mb-2">Rebasing Tokens</h3>
             <p className="text-white/70 mb-3">
               Tokens that automatically adjust balances (elastic supply) are <strong className="text-yellow-400">NOT recommended</strong>.
@@ -120,7 +120,7 @@ export default function TokenCompatibilityPage() {
                 They may cause unexpected behavior, transaction failures, or stuck funds.
               </p>
             </div>
-          </LiquidGlassCard>
+          </div>
         </div>
       </div>
 

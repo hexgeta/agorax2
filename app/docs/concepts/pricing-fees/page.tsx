@@ -110,12 +110,12 @@ export default function PricingFeesPage() {
               <div>
                 <h3 className="text-lg font-semibold text-white">Protocol Fee</h3>
                 <p className="text-white/70 text-sm mt-1">
-                  A percentage fee (in basis points) taken from each fill. This is deducted from
-                  the buy tokens when collecting proceeds.
+                  A 0.2% fee taken from sellers when collecting proceeds. This is deducted from
+                  the buy tokens received. Buyers pay no platform fee.
                 </p>
                 <div className="mt-3 flex items-center gap-2">
                   <code className="bg-white/10 px-2 py-1 rounded text-sm text-white/80">
-                    100 basis points = 1%
+                    0.2% seller fee (20 basis points)
                   </code>
                 </div>
               </div>

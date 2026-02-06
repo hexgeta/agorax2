@@ -177,23 +177,23 @@ export default function FillingOrdersPage() {
       </LiquidGlassCard>
 
       {/* Tips */}
-      <LiquidGlassCard className="p-6 border-l-4 border-green-500/50">
+      <div className="animated-border rounded-2xl p-6">
         <h2 className="text-lg font-semibold text-white mb-4">Pro Tips</h2>
         <ul className="space-y-3 text-white/70">
           <li className="flex items-start gap-2">
-            <span className="text-green-400">•</span>
+            <span className="text-amber-400">•</span>
             <span>Look for orders with negative position (below market) for the best deals</span>
           </li>
           <li className="flex items-start gap-2">
-            <span className="text-green-400">•</span>
+            <span className="text-amber-400">•</span>
             <span>Check the USD values to understand the actual trade amounts</span>
           </li>
           <li className="flex items-start gap-2">
-            <span className="text-green-400">•</span>
+            <span className="text-amber-400">•</span>
             <span>Partially fill large orders if you don't need the full amount</span>
           </li>
         </ul>
-      </LiquidGlassCard>
+      </div>
 
       {/* Navigation */}
       <div className="flex flex-col md:flex-row gap-4 pt-4">

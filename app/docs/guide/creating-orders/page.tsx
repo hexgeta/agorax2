@@ -176,31 +176,31 @@ export default function CreatingOrdersPage() {
       </div>
 
       {/* Best Practices */}
-      <LiquidGlassCard className="p-6 border-l-4 border-yellow-500/50">
+      <div className="animated-border rounded-2xl p-6">
         <h2 className="text-lg font-semibold text-white mb-4">Best Practices</h2>
         <ul className="space-y-3 text-white/70">
           <li className="flex items-start gap-2">
-            <span className="text-yellow-400">•</span>
+            <span className="text-amber-400">•</span>
             <span>Start with smaller orders to test the process</span>
           </li>
           <li className="flex items-start gap-2">
-            <span className="text-yellow-400">•</span>
+            <span className="text-amber-400">•</span>
             <span>Accept multiple buy tokens to increase fill probability</span>
           </li>
           <li className="flex items-start gap-2">
-            <span className="text-yellow-400">•</span>
+            <span className="text-amber-400">•</span>
             <span>Check current market prices before setting your limit</span>
           </li>
           <li className="flex items-start gap-2">
-            <span className="text-yellow-400">•</span>
+            <span className="text-amber-400">•</span>
             <span>Set reasonable expiration times based on your urgency</span>
           </li>
           <li className="flex items-start gap-2">
-            <span className="text-yellow-400">•</span>
+            <span className="text-amber-400">•</span>
             <span>Monitor your orders in the "My Orders" section</span>
           </li>
         </ul>
-      </LiquidGlassCard>
+      </div>
 
       {/* Navigation */}
       <div className="flex flex-col md:flex-row gap-4 pt-4">
