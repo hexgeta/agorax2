@@ -643,22 +643,28 @@ export default function Home() {
                     onToggle={() => setOpenFaqIndex(openFaqIndex === 5 ? null : 5)}
                   />
                   <FAQItem
-                    question="Are there admin keys?"
-                    answer="Yes. There are a few basic owner functions, but they are primarily for whitelist and fee management, but even for those users are protected. Their original fee and tokens listed are protected for the remainder of their order's life. The Owner CANNOT access a users funds, but there is an emergency pause that prevents placing and filling orders. Cancelling orders and collecting proceeds are both still possible in the event of a pause."
+                    question="Is the contract audited?"
+                    answer="Yes. The contract has been audited with no critical or high severity issues found. The full audit report is available in our <a href='/docs/security/audit' class='text-cyan-400 hover:underline'>documentation</a>.<br/><br/>The <a href='https://otter.pulsechain.com/address/0xc8a47F14b1833310E2aC72e4C397b5b14a9FEf8B/contract' target='_blank' class='text-cyan-400 hover:underline'>contract</a> is verified and open to public review. Completely on-chain, transparent, and verifiable by anyone."
                     isOpen={openFaqIndex === 6}
                     onToggle={() => setOpenFaqIndex(openFaqIndex === 6 ? null : 6)}
                   />
                   <FAQItem
-                    question="Is the code immutable?"
-                    answer="Yes. 100% immutable. No upgrades, no proxy contracts."
+                    question="Are there admin keys?"
+                    answer="Yes. There are a few basic owner functions, but they are primarily for whitelist and fee management, but even for those users are protected. Their original fee and tokens listed are protected for the remainder of their order's life. The Owner CANNOT access a users funds, but there is an emergency pause that prevents placing and filling orders. Cancelling orders and collecting proceeds are both still possible in the event of a pause."
                     isOpen={openFaqIndex === 7}
                     onToggle={() => setOpenFaqIndex(openFaqIndex === 7 ? null : 7)}
                   />
                   <FAQItem
-                    question="Which tokens can I trade?"
-                    answer="<strong class='text-white'>Sell Tokens (What You Offer):</strong><br/>You can sell <strong class='text-green-400'>any PRC-20 token</strong> on PulseChain, including non-whitelisted tokens.<br/><br/><strong class='text-red-400'>⚠️ Not Supported:</strong><br/>• <strong>Rebasing tokens</strong> - tokens that auto-adjust balances will cause transactions to fail<br/>• <strong>Fee-on-transfer/tax tokens</strong> - tokens that take fees on transfers will revert<br/><br/><strong class='text-white'>Buy Tokens (What You Receive):</strong><br/>Buy tokens must be <strong class='text-cyan-400'>whitelisted and active</strong> on the platform. This protects order fillers from receiving scam or worthless tokens.<br/><br/><strong class='text-white'>Why the difference?</strong><br/>Sellers can exit any position they hold, while fillers are protected from problematic tokens. The whitelist currently includes 100+ major PulseChain tokens.<br/><br/>For whitelist additions DM us at <a href='https://x.com/Time_Haven' target='_blank' class='text-cyan-400 hover:underline'>x.com/Time_Haven</a>"
+                    question="Is the code immutable?"
+                    answer="Yes. 100% immutable. No upgrades, no proxy contracts."
                     isOpen={openFaqIndex === 8}
                     onToggle={() => setOpenFaqIndex(openFaqIndex === 8 ? null : 8)}
+                  />
+                  <FAQItem
+                    question="Which tokens can I trade?"
+                    answer="<strong class='text-white'>Sell Tokens (What You Offer):</strong><br/>You can sell <strong class='text-green-400'>any PRC-20 token</strong> on PulseChain, including non-whitelisted tokens.<br/><br/><strong class='text-red-400'>⚠️ Not Supported:</strong><br/>• <strong>Rebasing tokens</strong> - tokens that auto-adjust balances will cause transactions to fail<br/>• <strong>Fee-on-transfer/tax tokens</strong> - tokens that take fees on transfers will revert<br/><br/><strong class='text-white'>Buy Tokens (What You Receive):</strong><br/>Buy tokens must be <strong class='text-cyan-400'>whitelisted and active</strong> on the platform. This protects order fillers from receiving scam or worthless tokens.<br/><br/><strong class='text-white'>Why the difference?</strong><br/>Sellers can exit any position they hold, while fillers are protected from problematic tokens. The whitelist currently includes 100+ major PulseChain tokens.<br/><br/>For whitelist additions DM us at <a href='https://x.com/Time_Haven' target='_blank' class='text-cyan-400 hover:underline'>x.com/Time_Haven</a>"
+                    isOpen={openFaqIndex === 9}
+                    onToggle={() => setOpenFaqIndex(openFaqIndex === 9 ? null : 9)}
                   />
                 </div>
               </motion.section>

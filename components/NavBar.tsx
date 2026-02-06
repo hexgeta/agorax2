@@ -125,7 +125,7 @@ const NavBar = () => {
                   />
                 </span>
                 {claimableCount > 0 && (
-                  <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold bg-red-500 text-white rounded-full">
+                  <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold bg-green-500 text-white rounded-full">
                     {claimableCount > 99 ? '99+' : claimableCount}
                   </span>
                 )}
@@ -302,7 +302,7 @@ const NavBar = () => {
             >
               My Orders
               {claimableCount > 0 && (
-                <span className="absolute top-2 right-4 flex items-center justify-center min-w-[20px] h-[20px] px-1 text-xs font-bold bg-red-500 text-white rounded-full">
+                <span className="absolute top-2 right-4 flex items-center justify-center min-w-[20px] h-[20px] px-1 text-xs font-bold bg-green-500 text-white rounded-full">
                   {claimableCount > 99 ? '99+' : claimableCount}
                 </span>
               )}

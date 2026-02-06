@@ -108,6 +108,30 @@ export const AGORAX_ABI = [
     "stateMutability": "nonpayable",
     "type": "function"
   },
+  // Collect Proceeds By Token (collect a specific buy token)
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_orderID",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_buyTokenIndexInOrder",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "_recipient",
+        "type": "address"
+      }
+    ],
+    "name": "collectProceedsByToken",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
   // View Collectable Proceeds (NEW in AgoraX_final.sol)
   {
     "inputs": [

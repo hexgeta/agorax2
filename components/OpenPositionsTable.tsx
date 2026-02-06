@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CircleDollarSign, ChevronDown, Trash2, Lock, Search, ArrowRight, MoveRight, ChevronRight, Play, CalendarDays, ExternalLink } from 'lucide-react';
+import { CircleDollarSign, DollarSign, ChevronDown, Trash2, Lock, Search, ArrowRight, MoveRight, ChevronRight, Play, CalendarDays, ExternalLink } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import Link from 'next/link';
 import { PixelSpinner } from './ui/PixelSpinner';
@@ -354,7 +354,7 @@ interface OpenPositionsTableProps {
 }
 
 export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ isMarketplaceMode = false, isLandingPageMode = false, initialSearchQuery = '', initialStatus, initialDateFilter, initialCustomDateStart, initialCustomDateEnd, initialAonFilter, initialDustFilter, initialClaimableFilter, initialFillRange, initialPositionRange, onFiltersChange, mockOrders, showViewAllLink = false, compactMode = false }, ref) => {
-  const { fillOrExecuteOrder, cancelOrder, collectProceeds, cancelAllExpiredOrders, updateOrderExpiration, isWalletConnected } = useContractWhitelist();
+  const { fillOrExecuteOrder, cancelOrder, collectProceeds, collectProceedsByToken, cancelAllExpiredOrders, updateOrderExpiration, isWalletConnected } = useContractWhitelist();
   const { address, chainId } = useAccount();
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
@@ -497,6 +497,13 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
   // State for collecting proceeds
   const [collectingOrders, setCollectingOrders] = useState<Set<string>>(new Set());
   const [collectErrors, setCollectErrors] = useState<{ [orderId: string]: string }>({});
+
+  // State for batch claim modal
+  const [batchClaimOrder, setBatchClaimOrder] = useState<CompleteOrderDetails | null>(null);
+  const [batchClaimRecipient, setBatchClaimRecipient] = useState<string>('');
+  const [batchClaimCustomRecipient, setBatchClaimCustomRecipient] = useState<boolean>(false);
+  const [batchClaimWarningAccepted, setBatchClaimWarningAccepted] = useState<boolean>(false);
+  const [batchClaimTokenIndex, setBatchClaimTokenIndex] = useState<number | null>(null); // null = all tokens, number = specific token index in order
 
   // State for batch cancelling expired orders
   const [isCancellingAll, setIsCancellingAll] = useState(false);
@@ -1139,7 +1146,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
 
   // Lock scrolling when any modal is open
   useEffect(() => {
-    if (editingOrder || showExpirationCalendar) {
+    if (editingOrder || showExpirationCalendar || batchClaimOrder) {
       // Lock both html and body to prevent scrolling on all browsers
       document.documentElement.style.overflow = 'hidden';
       document.body.style.overflow = 'hidden';
@@ -1152,7 +1159,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
       document.documentElement.style.overflow = '';
       document.body.style.overflow = '';
     };
-  }, [editingOrder, showExpirationCalendar]);
+  }, [editingOrder, showExpirationCalendar, batchClaimOrder]);
 
   // Simplify error messages for user rejections
   const simplifyErrorMessage = (error: any) => {
@@ -1682,7 +1689,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     }
   };
 
-  const handleCollectProceeds = async (order: any) => {
+  const handleCollectProceeds = async (order: any, recipient?: string, buyTokenIndexInOrder?: number | null) => {
     const orderId = order.orderDetailsWithID.orderID.toString();
 
     if (collectingOrders.has(orderId)) {
@@ -1705,7 +1712,12 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     let txHash: string | undefined;
 
     try {
-      txHash = await collectProceeds(order.orderDetailsWithID.orderID);
+      // Use collectProceedsByToken for single token, collectProceeds for all tokens
+      if (buyTokenIndexInOrder !== null && buyTokenIndexInOrder !== undefined) {
+        txHash = await collectProceedsByToken(order.orderDetailsWithID.orderID, BigInt(buyTokenIndexInOrder), recipient);
+      } else {
+        txHash = await collectProceeds(order.orderDetailsWithID.orderID, recipient);
+      }
 
       // Wait for transaction confirmation
       const receipt = await waitForTransactionWithTimeout(
@@ -2483,12 +2495,14 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
   };
 
   const formatPercentage = (percentage: number) => {
+    // Round to 1 decimal place first to handle floating point precision
+    const rounded = Math.round(percentage * 10) / 10;
     // If it's a whole number (no decimals), don't show decimals
-    if (percentage % 1 === 0) {
-      return `${percentage}%`;
+    if (rounded % 1 === 0) {
+      return `${rounded}%`;
     }
-    // Otherwise, round to 1 decimal place
-    return `${percentage.toFixed(1)}%`;
+    // Otherwise, show 1 decimal place
+    return `${rounded.toFixed(1)}%`;
   };
 
   const getStatusText = (order: any) => {
@@ -2664,6 +2678,22 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     return filteredOrders;
   };
 
+  // Count orders with claimable proceeds for a given status
+  const getClaimableOrdersCount = (status: 'active' | 'expired' | 'completed' | 'cancelled') => {
+    // Only count claimable orders for "mine" ownership (can't claim others' orders)
+    if (ownershipFilter !== 'mine' && !isMockMode) return 0;
+
+    const orders = getOrdersForTabCount(status);
+    return orders.filter(order => {
+      const sellAmount = order.orderDetailsWithID.orderDetails.sellAmount;
+      const remainingSellAmount = order.orderDetailsWithID.remainingSellAmount;
+      const redeemedSellAmount = order.orderDetailsWithID.redeemedSellAmount;
+      const filledAmount = sellAmount - remainingSellAmount;
+      const unclaimedAmount = filledAmount - redeemedSellAmount;
+      return unclaimedAmount > 0n;
+    }).length;
+  };
+
   const getLevel3Orders = (tokenType: 'maxi' | 'non-maxi', ownership: 'mine' | 'non-mine', status: 'active' | 'expired' | 'completed' | 'cancelled' | 'order-history') => {
     const level2Orders = getLevel2Orders(tokenType, ownership);
     switch (status) {
@@ -2825,24 +2855,34 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
             setStatusFilter('active');
             clearExpandedPositions();
           }}
-          className={`px-4 md:px-6 py-2 transition-all duration-100 border whitespace-nowrap text-sm md:text-base rounded-full font-medium ${statusFilter === 'active'
+          className={`relative px-4 md:px-6 py-2 transition-all duration-100 border whitespace-nowrap text-sm md:text-base rounded-full font-medium ${statusFilter === 'active'
             ? 'bg-white text-black border-white/10'
             : 'bg-black/40 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'
             }`}
         >
           Active ({getOrdersForTabCount('active').length})
+          {getClaimableOrdersCount('active') > 0 && (
+            <span className="absolute -top-1.5 -right-1.5 flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold bg-green-500 text-white rounded-full">
+              {getClaimableOrdersCount('active')}
+            </span>
+          )}
         </button>
         <button
           onClick={() => {
             setStatusFilter('expired');
             clearExpandedPositions();
           }}
-          className={`px-4 md:px-6 py-2 transition-all duration-100 border whitespace-nowrap text-sm md:text-base rounded-full font-medium ${statusFilter === 'expired'
+          className={`relative px-4 md:px-6 py-2 transition-all duration-100 border whitespace-nowrap text-sm md:text-base rounded-full font-medium ${statusFilter === 'expired'
             ? 'bg-white text-black border-white/10'
             : 'bg-black/40 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'
             }`}
         >
           Expired ({getOrdersForTabCount('expired').length})
+          {getClaimableOrdersCount('expired') > 0 && (
+            <span className="absolute -top-1.5 -right-1.5 flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold bg-green-500 text-white rounded-full">
+              {getClaimableOrdersCount('expired')}
+            </span>
+          )}
         </button>
         <button
           onClick={() => {
@@ -3814,7 +3854,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                     {formatTokenTicker(getTokenInfo(order.orderDetailsWithID.orderDetails.sellToken).ticker)}
                                   </span>
                                   <span className="text-white/60 text-xs whitespace-nowrap">
-                                    {formatTokenAmountDisplay(tokenAmount)}
+                                    {formatLargeNumber(tokenAmount)}
                                   </span>
                                   {tokenPrice > 0 && (
                                     <span className="text-gray-500 text-xs">
@@ -3879,7 +3919,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                           {formatTokenTicker(tokenInfo.ticker)}
                                         </span>
                                         <span className="text-white/60 text-xs whitespace-nowrap">
-                                          {formatTokenAmountDisplay(tokenAmount)}
+                                          {formatLargeNumber(tokenAmount)}
                                         </span>
                                         {tokenPrice > 0 && (
                                           <span className="text-gray-500 text-xs">
@@ -3922,9 +3962,15 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                 <div key={idx} className={`flex items-center mb-1.5 ${hasPrice ? 'h-[54px]' : 'h-[38px]'}`}>
                                   {hasClaimable ? (
                                     <button
-                                      onClick={() => handleCollectProceeds(order)}
+                                      onClick={() => {
+                                        setBatchClaimOrder(order);
+                                        setBatchClaimRecipient(address || '');
+                                        setBatchClaimCustomRecipient(false);
+                                        setBatchClaimWarningAccepted(false);
+                                        setBatchClaimTokenIndex(idx); // Track specific token index
+                                      }}
                                       disabled={isCollecting}
-                                      className="w-[150px] flex items-center justify-center px-3 py-1.5 rounded-full bg-green-500/20 border border-green-500/40 hover:bg-green-500/30 hover:border-green-500/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                      className="w-[150px] flex items-center justify-center px-3 py-1.5 rounded-lg bg-green-500/20 border border-green-500/40 hover:bg-green-500/30 hover:border-green-500/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                       {isCollecting ? (
                                         <PixelSpinner size={12} />
@@ -4118,7 +4164,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                             // No actions for completed/cancelled orders
                             <div className="w-16 h-8"></div>
                           ) : ownershipFilter === 'mine' && order.orderDetailsWithID.status === 0 ? (
-                            <div className="flex flex-col items-center gap-1">
+                            <div className="flex items-center gap-1">
                               {/* Batch Claim Button - only show if there are claimable proceeds */}
                               {(() => {
                                 const sellAmount = order.orderDetailsWithID.orderDetails.sellAmount;
@@ -4133,54 +4179,58 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
 
                                 return (
                                   <button
-                                    onClick={() => handleCollectProceeds(order)}
+                                    onClick={() => {
+                                      setBatchClaimOrder(order);
+                                      setBatchClaimRecipient(address || '');
+                                      setBatchClaimCustomRecipient(false);
+                                      setBatchClaimWarningAccepted(false);
+                                      setBatchClaimTokenIndex(null); // null = claim all tokens
+                                    }}
                                     disabled={isCollecting}
-                                    className="px-3 py-1.5 rounded-lg bg-green-500/20 border border-green-500/40 hover:bg-green-500/30 hover:border-green-500/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="p-2 rounded-lg bg-green-500/20 border border-green-500/40 hover:bg-green-500/30 hover:border-green-500/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                     title="Claim all proceeds"
                                   >
                                     {isCollecting ? (
-                                      <PixelSpinner size={12} className="mx-auto" />
+                                      <PixelSpinner size={16} className="mx-auto" />
                                     ) : (
-                                      <span className="text-green-400 text-[10px] font-medium whitespace-nowrap">Batch Claim</span>
+                                      <DollarSign className="w-4 h-4 text-green-400 hover:text-green-300 mx-auto" />
                                     )}
                                   </button>
                                 );
                               })()}
-                              <div className="flex items-center gap-1">
-                                {/* Edit Expiration Button */}
-                                <button
-                                  onClick={() => {
-                                    const orderId = order.orderDetailsWithID.orderID.toString();
-                                    setShowExpirationCalendar(orderId);
-                                    // Set current expiration as default
-                                    const currentExpiration = Number(order.orderDetailsWithID.orderDetails.expirationTime) * 1000;
-                                    setSelectedExpirationDate(new Date(currentExpiration));
-                                  }}
-                                  disabled={updatingOrders.has(order.orderDetailsWithID.orderID.toString())}
-                                  className="p-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors disabled:opacity-50"
-                                  title="Update Expiration"
-                                >
-                                  {updatingOrders.has(order.orderDetailsWithID.orderID.toString()) ? (
-                                    <PixelSpinner size={16} className="mx-auto" />
-                                  ) : (
-                                    <CalendarDays className="w-4 h-4 text-blue-400 hover:text-blue-300 mx-auto" />
-                                  )}
-                                </button>
+                              {/* Edit Expiration Button */}
+                              <button
+                                onClick={() => {
+                                  const orderId = order.orderDetailsWithID.orderID.toString();
+                                  setShowExpirationCalendar(orderId);
+                                  // Set current expiration as default
+                                  const currentExpiration = Number(order.orderDetailsWithID.orderDetails.expirationTime) * 1000;
+                                  setSelectedExpirationDate(new Date(currentExpiration));
+                                }}
+                                disabled={updatingOrders.has(order.orderDetailsWithID.orderID.toString())}
+                                className="p-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors disabled:opacity-50"
+                                title="Update Expiration"
+                              >
+                                {updatingOrders.has(order.orderDetailsWithID.orderID.toString()) ? (
+                                  <PixelSpinner size={16} className="mx-auto" />
+                                ) : (
+                                  <CalendarDays className="w-4 h-4 text-blue-400 hover:text-blue-300 mx-auto" />
+                                )}
+                              </button>
 
-                                {/* Cancel/Delete Button */}
-                                <button
-                                  onClick={() => handleCancelOrder(order)}
-                                  disabled={cancelingOrders.has(order.orderDetailsWithID.orderID.toString())}
-                                  className="p-2 rounded-lg bg-white/5 border border-white/10 hover:bg-red-500/20 transition-colors disabled:opacity-50"
-                                  title="Cancel Order"
-                                >
-                                  {cancelingOrders.has(order.orderDetailsWithID.orderID.toString()) ? (
-                                    <PixelSpinner size={16} className="mx-auto" />
-                                  ) : (
-                                    <Trash2 className="w-4 h-4 text-red-400 hover:text-red-300 mx-auto" />
-                                  )}
-                                </button>
-                              </div>
+                              {/* Cancel/Delete Button */}
+                              <button
+                                onClick={() => handleCancelOrder(order)}
+                                disabled={cancelingOrders.has(order.orderDetailsWithID.orderID.toString())}
+                                className="p-2 rounded-lg bg-white/5 border border-white/10 hover:bg-red-500/20 transition-colors disabled:opacity-50"
+                                title="Cancel Order"
+                              >
+                                {cancelingOrders.has(order.orderDetailsWithID.orderID.toString()) ? (
+                                  <PixelSpinner size={16} className="mx-auto" />
+                                ) : (
+                                  <Trash2 className="w-4 h-4 text-red-400 hover:text-red-300 mx-auto" />
+                                )}
+                              </button>
                             </div>
                           ) : ownershipFilter === 'non-mine' && order.orderDetailsWithID.status === 0 && statusFilter === 'active' ? (
                             <button
@@ -5064,6 +5114,248 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
               </div>
             </div>
           </div>
+        )
+      }
+
+      {/* Batch Claim Modal */}
+      {
+        batchClaimOrder && typeof document !== 'undefined' && createPortal(
+          <div
+            className="fixed inset-0 bg-black/80 md:bg-black/80 bg-black flex items-start md:items-start items-center justify-center pt-0 md:pt-[8vh] z-[9999] animate-in fade-in duration-150 overflow-hidden"
+            onClick={() => {
+              setBatchClaimOrder(null);
+              setBatchClaimRecipient('');
+              setBatchClaimCustomRecipient(false);
+              setBatchClaimWarningAccepted(false);
+              setBatchClaimTokenIndex(null);
+            }}
+          >
+            <div
+              className="bg-black rounded-none md:rounded-xl p-6 w-full md:w-[420px] h-full md:h-auto md:mx-4 shadow-2xl border-0 md:border border-white/20 animate-in fade-in zoom-in-95 duration-150 flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-white">Batch Claim Proceeds</h3>
+                <button
+                  onClick={() => {
+                    setBatchClaimOrder(null);
+                    setBatchClaimRecipient('');
+                    setBatchClaimCustomRecipient(false);
+                    setBatchClaimWarningAccepted(false);
+                    setBatchClaimTokenIndex(null);
+                  }}
+                  className="text-white/60 hover:text-white hover:bg-white/10 rounded transition-colors p-1"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                </button>
+              </div>
+
+              {/* Claimable Summary */}
+              <div className="mb-4 p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
+                <div className="text-green-400 text-xs font-medium mb-2">
+                  {batchClaimTokenIndex !== null ? 'Claimable Token' : 'Claimable Tokens'}
+                </div>
+                {(() => {
+                  const sellAmount = batchClaimOrder.orderDetailsWithID.orderDetails.sellAmount;
+                  const remainingSellAmount = batchClaimOrder.orderDetailsWithID.remainingSellAmount;
+                  const redeemedSellAmount = batchClaimOrder.orderDetailsWithID.redeemedSellAmount;
+                  const filledAmount = sellAmount - remainingSellAmount;
+                  const unclaimedAmount = filledAmount - redeemedSellAmount;
+                  const claimPercentage = Number(sellAmount) > 0 ? Number(unclaimedAmount) / Number(sellAmount) : 0;
+
+                  const buyTokensIndex = batchClaimOrder.orderDetailsWithID.orderDetails.buyTokensIndex;
+                  const buyAmounts = batchClaimOrder.orderDetailsWithID.orderDetails.buyAmounts;
+
+                  // If specific token index, show only that token
+                  if (batchClaimTokenIndex !== null) {
+                    const tokenIndex = buyTokensIndex[batchClaimTokenIndex];
+                    const tokenInfo = getTokenInfoByIndex(Number(tokenIndex));
+                    const originalAmount = buyAmounts[batchClaimTokenIndex];
+                    const maxBuyAmount = parseFloat(formatTokenAmount(originalAmount, tokenInfo.decimals));
+                    const claimableBuyAmount = maxBuyAmount * claimPercentage;
+                    const tokenPrice = getTokenPrice(tokenInfo.address, tokenPrices);
+                    const claimableUsd = claimableBuyAmount * tokenPrice;
+
+                    return (
+                      <div className="flex items-center gap-2">
+                        <span className="text-white text-lg font-semibold">
+                          {formatLargeNumber(claimableBuyAmount)} {formatTokenTicker(tokenInfo.ticker, chainId)}
+                        </span>
+                        {tokenPrice > 0 && (
+                          <span className="text-white/50 text-sm">
+                            (${claimableUsd < 0.01 ? '<0.01' : claimableUsd.toFixed(2)})
+                          </span>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  // Show all claimable buy tokens
+                  return (
+                    <div className="space-y-1">
+                      {buyTokensIndex.map((tokenIndex: bigint, idx: number) => {
+                        const tokenInfo = getTokenInfoByIndex(Number(tokenIndex));
+                        const originalAmount = buyAmounts[idx];
+                        const maxBuyAmount = parseFloat(formatTokenAmount(originalAmount, tokenInfo.decimals));
+                        const claimableBuyAmount = maxBuyAmount * claimPercentage;
+                        const tokenPrice = getTokenPrice(tokenInfo.address, tokenPrices);
+                        const claimableUsd = claimableBuyAmount * tokenPrice;
+
+                        if (claimableBuyAmount <= 0) return null;
+
+                        return (
+                          <div key={idx} className="flex items-center gap-2">
+                            <span className="text-white text-lg font-semibold">
+                              {formatLargeNumber(claimableBuyAmount)} {formatTokenTicker(tokenInfo.ticker, chainId)}
+                            </span>
+                            {tokenPrice > 0 && (
+                              <span className="text-white/50 text-sm">
+                                (${claimableUsd < 0.01 ? '<0.01' : claimableUsd.toFixed(2)})
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Recipient Section */}
+              <div className="mb-4 p-3 border border-white/10 rounded-lg">
+                {/* Custom recipient checkbox */}
+                <label className="flex items-center gap-2 mb-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={batchClaimCustomRecipient}
+                    onChange={(e) => {
+                      setBatchClaimCustomRecipient(e.target.checked);
+                      if (!e.target.checked) {
+                        setBatchClaimWarningAccepted(false);
+                        setBatchClaimRecipient(address || '');
+                      }
+                    }}
+                    className="w-4 h-4 rounded border-white/30 bg-black accent-white focus:ring-0 focus:ring-offset-0"
+                  />
+                  <span className="text-white/60 text-xs">Send to a different address?</span>
+                </label>
+
+                <label className="text-white/60 text-xs mb-2 block">
+                  Recipient Address{!batchClaimCustomRecipient && ' (Connected Wallet)'}
+                </label>
+
+                {/* Default: Show user's own address greyed out */}
+                {!batchClaimCustomRecipient && (
+                  <div className="w-full bg-black/50 text-white/40 border border-white/10 rounded-lg px-3 py-2.5 text-sm font-mono">
+                    {address || '0x...'}
+                  </div>
+                )}
+
+                {/* Warning when custom recipient is enabled but not yet accepted */}
+                {batchClaimCustomRecipient && !batchClaimWarningAccepted && (
+                  <div className="mt-3 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+                    <p className="text-yellow-400/90 text-xs mb-3 flex items-start gap-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 mt-0.5">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                        <line x1="12" y1="9" x2="12" y2="13"></line>
+                        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                      </svg>
+                      <span>Sending proceeds to an incorrect address will result in permanent loss of funds. Double-check the address before proceeding.</span>
+                    </p>
+                    <button
+                      onClick={() => {
+                        setBatchClaimWarningAccepted(true);
+                        setBatchClaimRecipient('');
+                      }}
+                      className="w-full px-3 py-1.5 bg-yellow-500/20 border border-yellow-500/40 text-yellow-400 text-xs rounded-lg hover:bg-yellow-500/30 transition-colors"
+                    >
+                      I understand, let me enter an address
+                    </button>
+                  </div>
+                )}
+
+                {/* Custom recipient input (only shown after warning is accepted) */}
+                {batchClaimCustomRecipient && batchClaimWarningAccepted && (
+                  <>
+                    <input
+                      type="text"
+                      value={batchClaimRecipient}
+                      onChange={(e) => setBatchClaimRecipient(e.target.value)}
+                      placeholder="0x..."
+                      className="w-full mt-3 bg-black text-white border border-white/20 rounded-lg px-3 py-2.5 text-sm font-mono focus:outline-none focus:border-white/50 placeholder:text-white/30"
+                    />
+                    {(() => {
+                      const recipient = batchClaimRecipient.trim();
+                      const isValidAddress = /^0x[a-fA-F0-9]{40}$/.test(recipient);
+
+                      if (recipient.length > 0 && !isValidAddress) {
+                        return (
+                          <p className="text-red-400 text-xs mt-2 flex items-center gap-1">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <circle cx="12" cy="12" r="10"></circle>
+                              <line x1="15" y1="9" x2="9" y2="15"></line>
+                              <line x1="9" y1="9" x2="15" y2="15"></line>
+                            </svg>
+                            Invalid address format
+                          </p>
+                        );
+                      }
+
+                      return null;
+                    })()}
+                  </>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setBatchClaimOrder(null);
+                    setBatchClaimRecipient('');
+                    setBatchClaimCustomRecipient(false);
+                    setBatchClaimWarningAccepted(false);
+                    setBatchClaimTokenIndex(null);
+                  }}
+                  className="flex-1 px-4 py-2 bg-black text-white rounded-lg hover:bg-white/10 transition-colors border border-white/20 text-sm"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={async () => {
+                    // Use user's address if not using custom recipient, otherwise use the input
+                    const recipient = batchClaimCustomRecipient ? batchClaimRecipient.trim() : address;
+                    if (!recipient || !/^0x[a-fA-F0-9]{40}$/.test(recipient)) {
+                      toast({
+                        title: "Invalid Address",
+                        description: "Please enter a valid Ethereum address",
+                        variant: "destructive"
+                      });
+                      return;
+                    }
+                    await handleCollectProceeds(batchClaimOrder, recipient, batchClaimTokenIndex);
+                    setBatchClaimOrder(null);
+                    setBatchClaimRecipient('');
+                    setBatchClaimCustomRecipient(false);
+                    setBatchClaimWarningAccepted(false);
+                    setBatchClaimTokenIndex(null);
+                  }}
+                  disabled={
+                    collectingOrders.has(batchClaimOrder.orderDetailsWithID.orderID.toString()) ||
+                    (batchClaimCustomRecipient && !batchClaimWarningAccepted) ||
+                    (batchClaimCustomRecipient && batchClaimWarningAccepted && !/^0x[a-fA-F0-9]{40}$/.test(batchClaimRecipient.trim()))
+                  }
+                  className="flex-1 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                >
+                  {collectingOrders.has(batchClaimOrder.orderDetailsWithID.orderID.toString()) ? 'Claiming...' : 'Claim Proceeds'}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
         )
       }
 

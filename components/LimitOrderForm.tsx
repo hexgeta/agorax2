@@ -478,12 +478,7 @@ export function LimitOrderForm({
       const basketTokens = getBasketTokens(basket.id);
       if (basketTokens.length === 0) return false;
 
-      // Check if any token from this basket is already the sell token
-      if (sellToken && basketTokens.some(t => t.a.toLowerCase() === sellToken.a.toLowerCase())) {
-        // Still show basket if it has other tokens
-        const nonSellTokens = basketTokens.filter(t => t.a.toLowerCase() !== sellToken.a.toLowerCase());
-        if (nonSellTokens.length === 0) return false;
-      }
+      // Allow baskets even if they contain the sell token - user may want same token in buy/sell
 
       return true;
     });
@@ -607,10 +602,8 @@ export function LimitOrderForm({
         if (!selectedBasket) return false;
       }
 
-      // Exclude if it's the sell token
-      if (sellToken && sellToken.a && token.a.toLowerCase() === sellToken.a.toLowerCase()) {
-        return false;
-      }
+      // Allow same token in buy as sell - user may want to create same-token orders
+      // (e.g., for arbitrage or as a way to "park" tokens in an order)
 
       // Exclude if it's already selected in another buy token slot
       // BUT: when a basket is selected, allow basket tokens to appear so user can switch to single token
@@ -1439,35 +1432,7 @@ export function LimitOrderForm({
     }
   }, [selectedBasket]);
 
-  // Safeguard: Ensure sell token and buy tokens are never the same
-  useEffect(() => {
-    if (!sellToken?.a || buyTokens.length === 0) return;
-
-    const sellAddress = sellToken.a.toLowerCase();
-    const conflictingBuyTokenIndex = buyTokens.findIndex(
-      bt => bt && bt.a && bt.a.toLowerCase() === sellAddress
-    );
-
-    if (conflictingBuyTokenIndex !== -1) {
-      // Remove the conflicting buy token
-      const newBuyTokens = buyTokens.filter((_, i) => i !== conflictingBuyTokenIndex);
-
-      // If no buy tokens left, set default HEX (or PLS if sell is HEX)
-      if (newBuyTokens.length === 0 || !newBuyTokens.some(t => t && t.a)) {
-        const hexAddress = '0x2b591e99afe9f32eaa6214f7b7629768c40eeb39';
-        const plsAddress = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
-        const fallbackAddress = sellAddress === hexAddress.toLowerCase() ? plsAddress : hexAddress;
-        const fallbackToken = availableTokens.find(t => t.a?.toLowerCase() === fallbackAddress);
-        if (fallbackToken && fallbackToken.a) {
-          setBuyTokens([{ a: fallbackToken.a, ticker: fallbackToken.ticker, name: fallbackToken.name, decimals: fallbackToken.decimals }]);
-          setBuyAmounts(['']);
-        }
-      } else {
-        setBuyTokens(newBuyTokens);
-        setBuyAmounts(buyAmounts.filter((_, i) => i !== conflictingBuyTokenIndex));
-      }
-    }
-  }, [sellToken, buyTokens, availableTokens]);
+  // Same token allowed in both sell and buy - removed the safeguard that prevented this
 
   // Note: buy amounts are NOT saved to localStorage - they recalculate on reload based on fresh prices
 
@@ -3067,8 +3032,9 @@ export function LimitOrderForm({
     if (index > 0) {
       pricing.handleAdditionalBuyTokenChange(token, index, sellToken, newBuyTokens[0], pricesBound);
 
-      // When unbound, also set the individual limit price for the new token at market
-      if (!pricesBound && sellToken) {
+      // Always set the individual limit price to market when a new token is selected
+      // This ensures the price is initialized correctly (both bound and unbound modes)
+      if (sellToken) {
         const tokenUsdPrice = getPrice(token.a);
         const sellTokenUsdPrice = getPrice(sellToken.a);
         if (tokenUsdPrice > 0 && sellTokenUsdPrice > 0) {
@@ -3106,10 +3072,8 @@ export function LimitOrderForm({
   const handleBasketSelect = (basket: TokenBasket, index: number) => {
     const basketTokens = getBasketTokens(basket.id);
 
-    // Filter out the sell token if it's in the basket
-    const validTokens = basketTokens.filter(t =>
-      !sellToken || t.a.toLowerCase() !== sellToken.a.toLowerCase()
-    );
+    // Allow all basket tokens including sell token - user may want same token in buy/sell
+    const validTokens = basketTokens;
 
     if (validTokens.length === 0) return;
 
@@ -3239,12 +3203,41 @@ export function LimitOrderForm({
                     const amount = buyAmounts[index];
                     if (!token || !amount || amount.trim() === '') return null;
                     const amountAfterFee = parseFloat(removeCommas(amount)) * 0.998;
+
+                    // Calculate percentage from market for this token
+                    let pctFromMarket: number | null = null;
+                    if (sellToken) {
+                      const sellUsd = getPrice(sellToken.a);
+                      const buyUsd = getPrice(token.a);
+                      if (sellUsd > 0 && buyUsd > 0) {
+                        const sellAmountNum = parseFloat(removeCommas(sellAmount)) || 0;
+                        const buyAmountNum = parseFloat(removeCommas(amount)) || 0;
+                        if (sellAmountNum > 0 && buyAmountNum > 0) {
+                          const sellValueUsd = sellAmountNum * sellUsd;
+                          const buyValueUsd = buyAmountNum * buyUsd;
+                          // Positive = asking more than market (good for seller)
+                          // Negative = asking less than market (bad for seller, discount)
+                          pctFromMarket = ((buyValueUsd - sellValueUsd) / sellValueUsd) * 100;
+                        }
+                      }
+                    }
+
                     return (
                       <div key={`confirm-receive-${index}`} className="flex items-center gap-3">
                         <TokenLogo ticker={token.ticker} className="w-10 h-10" />
-                        <div>
-                          <div className="text-2xl font-bold text-white">
-                            {formatBalanceDisplay(amountAfterFee.toFixed(6))}
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-2xl font-bold text-white">
+                              {formatBalanceDisplay(amountAfterFee.toFixed(6))}
+                            </span>
+                            {pctFromMarket !== null && pctFromMarket < 0 && (
+                              <span className="text-xs px-1.5 py-0.5 bg-yellow-500/20 text-yellow-400 rounded border border-yellow-500/30 select-none flex items-center gap-1">
+                                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                </svg>
+                                Caution
+                              </span>
+                            )}
                           </div>
                           <div className="text-white/60 text-sm">{formatTokenTicker(token.ticker, chainId)}</div>
                         </div>
@@ -3621,6 +3614,28 @@ export function LimitOrderForm({
                 type="button"
                 onClick={() => {
                   const newBound = !pricesBound;
+
+                  // When trying to link prices, validate that all tokens have amounts
+                  if (newBound) {
+                    // Check if all tokens are selected and have amounts
+                    const hasInvalidToken = buyTokens.some((token, i) => {
+                      if (!token) return true; // Missing token
+                      const amount = buyAmounts[i];
+                      if (!amount || amount.trim() === '' || parseFloat(removeCommas(amount)) <= 0) return true; // Missing/zero amount
+                      return false;
+                    });
+
+                    if (hasInvalidToken) {
+                      // Don't allow linking if any token is missing or has no amount
+                      return;
+                    }
+
+                    // Also check that limit price is set
+                    if (!limitPrice || parseFloat(limitPrice) <= 0) {
+                      return;
+                    }
+                  }
+
                   setPricesBound(newBound);
 
                   // When unlinking, preserve the same % from market for each token
@@ -3704,7 +3719,6 @@ export function LimitOrderForm({
                       const buyTokenAddresses = buyTokens.filter(t => t).map(t => t!.a.toLowerCase());
                       for (const basket of TOKEN_BASKETS) {
                         const basketTokenAddresses = getBasketTokens(basket.id)
-                          .filter(t => !sellToken || t.a.toLowerCase() !== sellToken.a.toLowerCase())
                           .map(t => t.a.toLowerCase());
                         // Check if all buyTokens are in this basket
                         const allInBasket = buyTokenAddresses.every(addr => basketTokenAddresses.includes(addr));
@@ -3821,9 +3835,7 @@ export function LimitOrderForm({
                               Token Baskets
                             </div>
                             {getAvailableBaskets(0).filter(b => b.id !== selectedBasket).map((basket) => {
-                              const basketTokens = getBasketTokens(basket.id).filter(t =>
-                                !sellToken || t.a.toLowerCase() !== sellToken.a.toLowerCase()
-                              );
+                              const basketTokens = getBasketTokens(basket.id);
                               return (
                                 <button
                                   key={basket.id}
@@ -4029,6 +4041,23 @@ export function LimitOrderForm({
                           </button>
                         )}
                       </div>
+                      {/* Percentage indicator */}
+                      {(() => {
+                        if (!sellToken || !buyTokens[0]) return null;
+                        const sellUsd = getPrice(sellToken.a);
+                        const buyUsd = getPrice(buyTokens[0].a);
+                        if (sellUsd <= 0 || buyUsd <= 0) return null;
+                        const marketPrice = sellUsd / buyUsd;
+                        const currentLimitPrice = parseFloat(limitPrice) || 0;
+                        if (marketPrice <= 0 || currentLimitPrice <= 0) return null;
+                        const pctDiff = ((currentLimitPrice / marketPrice) - 1) * 100;
+                        const isPositive = pctDiff >= 0;
+                        return (
+                          <span className={`text-sm font-semibold select-none ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
+                            {isPositive ? '+' : ''}{pctDiff.toFixed(1)}%
+                          </span>
+                        );
+                      })()}
                     </div>
                     <div className="relative">
                       <input
@@ -4562,9 +4591,7 @@ export function LimitOrderForm({
                               Token Baskets
                             </div>
                             {getAvailableBaskets(index).map((basket) => {
-                              const basketTokens = getBasketTokens(basket.id).filter(t =>
-                                !sellToken || t.a.toLowerCase() !== sellToken.a.toLowerCase()
-                              );
+                              const basketTokens = getBasketTokens(basket.id);
                               return (
                                 <button
                                   key={basket.id}
@@ -4665,6 +4692,43 @@ export function LimitOrderForm({
                   </div>
                 )}
 
+                {/* Linked Tokens Preview - show when prices linked with multiple tokens (not via basket) */}
+                {index === 0 && pricesBound && !selectedBasket && buyTokens.length > 1 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {buyTokens.map((token, tokenIndex) => token && (
+                      <div
+                        key={token.a}
+                        className="group relative flex items-center gap-1 px-2 py-1 bg-white/5 hover:bg-white/10 rounded-full border border-white/10 hover:border-white/20 whitespace-nowrap transition-colors cursor-pointer"
+                        onClick={() => {
+                          if (buyTokens.length > 1) {
+                            // Remove this token from the list
+                            const newBuyTokens = buyTokens.filter((_, i) => i !== tokenIndex);
+                            const newBuyAmounts = buyAmounts.filter((_, i) => i !== tokenIndex);
+                            setBuyTokens(newBuyTokens);
+                            setBuyAmounts(newBuyAmounts);
+                          }
+                        }}
+                        title={buyTokens.length > 1 ? `Click to remove ${formatTokenTicker(token.ticker, chainId)}` : 'Cannot remove last token'}
+                      >
+                        <TokenLogo ticker={token.ticker} className="w-4 h-4 flex-shrink-0" />
+                        <span className="text-white/70 text-xs group-hover:text-white/90 transition-colors">
+                          {buyAmounts[tokenIndex] && parseFloat(removeCommas(buyAmounts[tokenIndex])) > 0
+                            ? `${formatNumberWithCommas(parseFloat(parseFloat(removeCommas(buyAmounts[tokenIndex])).toPrecision(4)).toString())} `
+                            : ''}
+                          {formatTokenTicker(token.ticker, chainId)}
+                        </span>
+                        {buyTokens.length > 1 && (
+                          <span className="ml-0.5 opacity-0 group-hover:opacity-100 transition-opacity text-white/50 hover:text-white">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 {/* Limit Price Section - inline for each buy token */}
                 {buyToken && (
                   index === 0 ? (
@@ -4692,6 +4756,23 @@ export function LimitOrderForm({
                             </button>
                           )}
                         </div>
+                        {/* Percentage indicator */}
+                        {(() => {
+                          if (!sellToken || !buyToken) return null;
+                          const sellUsd = getPrice(sellToken.a);
+                          const buyUsd = getPrice(buyToken.a);
+                          if (sellUsd <= 0 || buyUsd <= 0) return null;
+                          const marketPrice = sellUsd / buyUsd;
+                          const currentLimitPrice = parseFloat(limitPrice) || 0;
+                          if (marketPrice <= 0 || currentLimitPrice <= 0) return null;
+                          const pctDiff = ((currentLimitPrice / marketPrice) - 1) * 100;
+                          const isPositive = pctDiff >= 0;
+                          return (
+                            <span className={`text-sm font-semibold select-none ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
+                              {isPositive ? '+' : ''}{pctDiff.toFixed(1)}%
+                            </span>
+                          );
+                        })()}
                       </div>
                       <div className="relative">
                         <input
@@ -5034,9 +5115,34 @@ export function LimitOrderForm({
                       return (
                         <div className="mt-4">
                           <div className="flex justify-between items-center mb-2">
-                            <label className="text-sm font-semibold" style={{ color: accentColor }}>
-                              Limit Price: ({showUsdPrices ? '$' : (invertPriceDisplay ? formatTokenTicker(buyToken.ticker, chainId) : formatTokenTicker(sellToken?.ticker || '', chainId))})
-                            </label>
+                            <div className="flex items-center gap-2">
+                              <label className="text-sm font-semibold" style={{ color: accentColor }}>
+                                Limit Price: ({showUsdPrices ? '$' : (invertPriceDisplay ? formatTokenTicker(buyToken.ticker, chainId) : formatTokenTicker(sellToken?.ticker || '', chainId))})
+                              </label>
+                              {sellToken && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const newInverted = !invertPriceDisplay;
+                                    setInvertPriceDisplay(newInverted);
+                                    onInvertPriceDisplayChange?.(newInverted);
+                                  }}
+                                  className="p-1 hover:text-white transition-colors"
+                                  style={{ color: accentColor }}
+                                  title={`Show price in ${invertPriceDisplay ? formatTokenTicker(sellToken.ticker, chainId) : formatTokenTicker(buyToken.ticker, chainId)}`}
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                                  </svg>
+                                </button>
+                              )}
+                            </div>
+                            {/* Percentage indicator */}
+                            {tokenPricePercentage !== null && (
+                              <span className={`text-sm font-semibold select-none ${tokenPricePercentage >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                {tokenPricePercentage >= 0 ? '+' : ''}{tokenPricePercentage.toFixed(1)}%
+                              </span>
+                            )}
                           </div>
                           <div className="relative">
                             <input
@@ -6034,13 +6140,15 @@ export function LimitOrderForm({
             if (marketPrice <= 0) return null;
 
             // Get the limit price for this token
-            // For first token (index 0), use the main limitPrice
-            // For other tokens, use individualLimitPrices if in unbound mode, otherwise derive from main limitPrice
+            // When unbound, use individualLimitPrices for all tokens
+            // When bound, use main limitPrice for first token and derive others
             let tokenLimitPrice: number;
-            if (index === 0) {
-              tokenLimitPrice = parseFloat(limitPrice) || 0;
-            } else if (!pricesBound && individualLimitPrices[index] !== undefined) {
+            if (!pricesBound && individualLimitPrices[index] !== undefined) {
+              // Unbound mode: each token has its own independent price
               tokenLimitPrice = individualLimitPrices[index]!;
+            } else if (index === 0) {
+              // Bound mode or unbound with no individual price set: use main limitPrice
+              tokenLimitPrice = parseFloat(limitPrice) || 0;
             } else {
               // In bound mode, all tokens share the same percentage
               // So calculate their limit price from the shared percentage

@@ -27,12 +27,13 @@ const TOKENS = {
 };
 
 // Token index mapping (must match contract whitelist order)
+// Order from mainnet contract: PLS, WPLS, PLSX, HEX, INC, DAI, USDC, USDT, WETH, WBTC
 const TOKEN_INDEX: Record<string, bigint> = {
   PLS: 0n,
-  HEX: 1n,
+  WPLS: 1n,
   PLSX: 2n,
-  INC: 3n,
-  WPLS: 4n,
+  HEX: 3n,
+  INC: 4n,
   DAI: 5n,
   USDC: 6n,
   USDT: 7n,
@@ -48,10 +49,35 @@ const generateMockOrders = (): CompleteOrderDetails[] => {
   const oneMonth = oneDay * 30n;
 
   return [
-    // Order 1: EXTREME - Large HEX amount (1 billion), 50% filled, 25% claimable
+    // Order 0: DAI for HEX at -99% below market (massive discount for buyer)
+    // At market: ~1 DAI = ~35,000 HEX (roughly). At -99%: asking for only 350 HEX per DAI
     {
       userDetails: {
         orderIndex: 0n,
+        orderOwner: MOCK_USER_ADDRESS,
+      },
+      orderDetailsWithID: {
+        orderID: 1000n,
+        remainingSellAmount: parseEther('1000'), // 1000 DAI remaining
+        redeemedSellAmount: 0n,
+        lastUpdateTime: Number(now - BigInt(3600)), // 1 hour ago
+        status: 0, // Active
+        creationProtocolFee: parseEther('0.01'),
+        orderDetails: {
+          sellToken: TOKENS.DAI,
+          sellAmount: parseEther('1000'), // 1000 DAI
+          buyTokensIndex: [TOKEN_INDEX.HEX],
+          buyAmounts: [parseUnits('350000', 8)], // Only 350K HEX for 1000 DAI = 350 HEX/DAI (vs ~35K market = -99%)
+          expirationTime: now + oneMonth,
+          allOrNothing: false,
+        },
+      },
+    },
+
+    // Order 1: EXTREME - Large HEX amount (1 billion), 50% filled, 25% claimable
+    {
+      userDetails: {
+        orderIndex: 1n,
         orderOwner: MOCK_USER_ADDRESS,
       },
       orderDetailsWithID: {
@@ -75,7 +101,7 @@ const generateMockOrders = (): CompleteOrderDetails[] => {
     // Order 2: EXTREME - 20 buy tokens (maximum complexity)
     {
       userDetails: {
-        orderIndex: 1n,
+        orderIndex: 2n,
         orderOwner: MOCK_USER_ADDRESS,
       },
       orderDetailsWithID: {
@@ -112,7 +138,7 @@ const generateMockOrders = (): CompleteOrderDetails[] => {
     // Order 3: Tiny dust amounts - very small numbers
     {
       userDetails: {
-        orderIndex: 2n,
+        orderIndex: 3n,
         orderOwner: MOCK_USER_ADDRESS,
       },
       orderDetailsWithID: {
@@ -136,7 +162,7 @@ const generateMockOrders = (): CompleteOrderDetails[] => {
     // Order 4: 99.99% filled - almost complete
     {
       userDetails: {
-        orderIndex: 3n,
+        orderIndex: 4n,
         orderOwner: MOCK_USER_ADDRESS,
       },
       orderDetailsWithID: {
@@ -160,7 +186,7 @@ const generateMockOrders = (): CompleteOrderDetails[] => {
     // Order 5: Expired order
     {
       userDetails: {
-        orderIndex: 4n,
+        orderIndex: 5n,
         orderOwner: MOCK_USER_ADDRESS,
       },
       orderDetailsWithID: {
@@ -184,7 +210,7 @@ const generateMockOrders = (): CompleteOrderDetails[] => {
     // Order 6: Cancelled order with partial fill
     {
       userDetails: {
-        orderIndex: 5n,
+        orderIndex: 6n,
         orderOwner: MOCK_USER_ADDRESS,
       },
       orderDetailsWithID: {
@@ -208,7 +234,7 @@ const generateMockOrders = (): CompleteOrderDetails[] => {
     // Order 7: Completed order (100% filled)
     {
       userDetails: {
-        orderIndex: 6n,
+        orderIndex: 7n,
         orderOwner: MOCK_USER_ADDRESS,
       },
       orderDetailsWithID: {
@@ -232,7 +258,7 @@ const generateMockOrders = (): CompleteOrderDetails[] => {
     // Order 8: All-or-Nothing order
     {
       userDetails: {
-        orderIndex: 7n,
+        orderIndex: 8n,
         orderOwner: MOCK_USER_ADDRESS,
       },
       orderDetailsWithID: {
@@ -256,7 +282,7 @@ const generateMockOrders = (): CompleteOrderDetails[] => {
     // Order 9: EXTREME long decimal precision
     {
       userDetails: {
-        orderIndex: 8n,
+        orderIndex: 9n,
         orderOwner: MOCK_USER_ADDRESS,
       },
       orderDetailsWithID: {
@@ -280,7 +306,7 @@ const generateMockOrders = (): CompleteOrderDetails[] => {
     // Order 10: Stablecoin swap with multiple stable options
     {
       userDetails: {
-        orderIndex: 9n,
+        orderIndex: 10n,
         orderOwner: MOCK_USER_ADDRESS,
       },
       orderDetailsWithID: {
@@ -305,7 +331,7 @@ const generateMockOrders = (): CompleteOrderDetails[] => {
     // Selling 10,000 HEX, accepting PLS, PLSX, INC, or DAI
     {
       userDetails: {
-        orderIndex: 10n,
+        orderIndex: 11n,
         orderOwner: MOCK_USER_ADDRESS,
       },
       orderDetailsWithID: {
@@ -330,7 +356,7 @@ const generateMockOrders = (): CompleteOrderDetails[] => {
     // Large claimable proceeds
     {
       userDetails: {
-        orderIndex: 11n,
+        orderIndex: 12n,
         orderOwner: MOCK_USER_ADDRESS,
       },
       orderDetailsWithID: {
@@ -354,7 +380,7 @@ const generateMockOrders = (): CompleteOrderDetails[] => {
     // Order 13: Multi-token with 50% filled, 50% claimed (0% claimable - all claimed)
     {
       userDetails: {
-        orderIndex: 12n,
+        orderIndex: 13n,
         orderOwner: MOCK_USER_ADDRESS,
       },
       orderDetailsWithID: {
@@ -378,7 +404,7 @@ const generateMockOrders = (): CompleteOrderDetails[] => {
     // Order 14: 5-token order, 30% filled, 10% claimed (20% claimable)
     {
       userDetails: {
-        orderIndex: 13n,
+        orderIndex: 14n,
         orderOwner: MOCK_USER_ADDRESS,
       },
       orderDetailsWithID: {
@@ -402,7 +428,7 @@ const generateMockOrders = (): CompleteOrderDetails[] => {
     // Order 15: 3-token order, 95% filled, 90% claimed (5% claimable)
     {
       userDetails: {
-        orderIndex: 14n,
+        orderIndex: 15n,
         orderOwner: MOCK_USER_ADDRESS,
       },
       orderDetailsWithID: {
@@ -480,6 +506,7 @@ export default function TestingPage() {
                 <div className="bg-black/40 border border-white/10 rounded-lg p-4 mb-2">
                   <h3 className="text-white font-semibold mb-2">Test Cases:</h3>
                   <ul className="text-gray-400 text-sm space-y-1 grid grid-cols-1 md:grid-cols-2 gap-x-4">
+                    <li><span className="text-red-400">#1000</span> - DAI for HEX at <span className="text-red-400">-99% below market</span></li>
                     <li><span className="text-white">#1001</span> - 1B HEX, 50% filled, 25% claimable</li>
                     <li><span className="text-white">#1002</span> - 20 buy tokens (max complexity)</li>
                     <li><span className="text-white">#1003</span> - Tiny dust amounts</li>

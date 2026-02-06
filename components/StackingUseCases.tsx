@@ -59,6 +59,11 @@ const useCases = [
     description:
       'Not interested in advanced strategies? Just sell tokens at the lowest fees on PulseChain. 0.2% beats every AMM - more profit stays in your pocket.',
   },
+  {
+    title: 'Privacy-Enhanced Transfers',
+    description:
+      'Transfer tokens between wallets without a direct address-to-address link on the block explorer. At 0.2%, lower fees than ZK transfer services (0.5%), though less private than mixing pools.',
+  },
 ];
 
 export function StackingUseCases() {
@@ -106,9 +111,9 @@ export function StackingUseCases() {
   }, []);
 
   // Hardcoded rotations: subtle alternating pattern
-  const rotations = [0, 0.8, -0.5, 1, -0.8, 0.6, -1, 0.8, -0.6, 0.9, -0.7];
+  const rotations = [0, 0.8, -0.5, 1, -0.8, 0.6, -1, 0.8, -0.6, 0.9, -0.7, 0.5];
   // Hardcoded x offsets: subtle left/right variation (in pixels)
-  const xOffsets = [0, 8, -5, 12, -8, 6, -10, 8, -6, 10, -7];
+  const xOffsets = [0, 8, -5, 12, -8, 6, -10, 8, -6, 10, -7, 7];
 
   return (
     <section className="relative bg-black py-16 md:py-24 px-4 md:px-6">

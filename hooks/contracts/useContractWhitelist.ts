@@ -9,6 +9,7 @@ const WRITE_FUNCTIONS = [
   'placeOrder',            // Create a new trading order (sell tokens for buy tokens)
   'cancelOrder',           // Cancel your order after you make it
   'collectProceeds',       // Collect proceeds from filled orders
+  'collectProceedsByToken', // Collect proceeds for a specific buy token
   'redeemOrder',           // Redeem tokens from a single executed order (alias)
   'fillOrder',             // Fill/fulfill a single trading order
   'cancelAllExpiredOrders', // Cancel all expired orders at once
@@ -165,11 +166,14 @@ export function useContractWhitelist() {
     cancelOrder: (orderId: bigint, recipient?: string) => 
       executeWriteFunction('cancelOrder', [orderId, recipient || address]),
     
-    collectProceeds: (orderId: bigint, recipient?: string) => 
+    collectProceeds: (orderId: bigint, recipient?: string) =>
       executeWriteFunction('collectProceeds', [orderId, recipient || address]),
-    
+
+    collectProceedsByToken: (orderId: bigint, buyTokenIndexInOrder: bigint, recipient?: string) =>
+      executeWriteFunction('collectProceedsByToken', [orderId, buyTokenIndexInOrder, recipient || address]),
+
     // Alias for backwards compatibility
-    redeemOrder: (orderId: bigint, recipient?: string) => 
+    redeemOrder: (orderId: bigint, recipient?: string) =>
       executeWriteFunction('collectProceeds', [orderId, recipient || address]),
     
     fillOrder: (orderId: bigint, buyTokenIndex: bigint, buyAmount: bigint, value?: bigint) => 
