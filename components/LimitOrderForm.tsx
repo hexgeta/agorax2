@@ -2664,15 +2664,22 @@ export function LimitOrderForm({
       value = parts[0] + '.' + parts.slice(1).join('');
     }
 
-    // Remove leading zeros - only allow "0." for decimal input, not standalone "0"
+    // Handle leading zeros - preserve trailing zeros for easier editing
+    // e.g., "10000" → delete "1" → "0000" should stay so user can type "2" → "20000"
     if (parts[0]) {
-      parts[0] = parts[0].replace(/^0+/, '');
-      if (parts.length > 1) {
-        // Has decimal point - keep "0" before it (e.g., "0.5")
+      // Only strip leading zeros if there are non-zero digits after them
+      // This allows "0000" to stay as "0000" for editing convenience
+      const hasNonZero = /[1-9]/.test(parts[0]);
+      if (hasNonZero) {
+        parts[0] = parts[0].replace(/^0+/, '');
+      }
+      // Keep at least one zero if the whole thing is zeros
+      if (parts[0] === '' || /^0+$/.test(parts[0])) {
         parts[0] = parts[0] || '0';
+      }
+      if (parts.length > 1) {
         value = parts[0] + '.' + parts.slice(1).join('');
       } else {
-        // No decimal - empty string if all zeros
         value = parts[0];
       }
     }
@@ -2723,15 +2730,21 @@ export function LimitOrderForm({
       value = parts[0] + '.' + parts.slice(1).join('');
     }
 
-    // Remove leading zeros - only allow "0." for decimal input, not standalone "0"
+    // Handle leading zeros - preserve trailing zeros for easier editing
+    // e.g., "10000" → delete "1" → "0000" should stay so user can type "2" → "20000"
     if (parts[0]) {
-      parts[0] = parts[0].replace(/^0+/, '');
-      if (parts.length > 1) {
-        // Has decimal point - keep "0" before it (e.g., "0.5")
+      // Only strip leading zeros if there are non-zero digits after them
+      const hasNonZero = /[1-9]/.test(parts[0]);
+      if (hasNonZero) {
+        parts[0] = parts[0].replace(/^0+/, '');
+      }
+      // Keep at least one zero if the whole thing is zeros
+      if (parts[0] === '' || /^0+$/.test(parts[0])) {
         parts[0] = parts[0] || '0';
+      }
+      if (parts.length > 1) {
         value = parts[0] + '.' + parts.slice(1).join('');
       } else {
-        // No decimal - empty string if all zeros
         value = parts[0];
       }
     }
@@ -3331,7 +3344,13 @@ export function LimitOrderForm({
           {/* Token Selector and Amount Input Row */}
           <div className="relative flex items-stretch gap-2" ref={sellDropdownRef}>
             <button
-              onClick={() => setShowSellDropdown(!showSellDropdown)}
+              onClick={() => {
+                // Close all buy dropdowns when opening sell dropdown
+                if (!showSellDropdown) {
+                  setShowBuyDropdowns(showBuyDropdowns.map(() => false));
+                }
+                setShowSellDropdown(!showSellDropdown);
+              }}
               className="min-w-[120px] shrink-0 bg-black/40 border border-white/10 p-3 flex items-center justify-between hover:bg-white/5 transition-all shadow-sm rounded-lg"
             >
               <div className="flex items-center space-x-2">
@@ -3729,8 +3748,12 @@ export function LimitOrderForm({
                   <div className="flex items-stretch gap-2">
                     <button
                       onClick={() => {
-                        const newDropdowns = [...showBuyDropdowns];
-                        newDropdowns[0] = !newDropdowns[0];
+                        // Close sell dropdown and other buy dropdowns when opening this one
+                        const isOpening = !showBuyDropdowns[0];
+                        if (isOpening) {
+                          setShowSellDropdown(false);
+                        }
+                        const newDropdowns = showBuyDropdowns.map((_, i) => i === 0 ? !showBuyDropdowns[0] : false);
                         setShowBuyDropdowns(newDropdowns);
                       }}
                       className="min-w-[120px] shrink-0 bg-black/40 border border-white/10 p-3 flex items-center justify-between hover:bg-white/5 transition-all shadow-sm rounded-lg"
@@ -4334,8 +4357,12 @@ export function LimitOrderForm({
                   <div className="flex items-stretch gap-2">
                     <button
                       onClick={() => {
-                        const newDropdowns = [...showBuyDropdowns];
-                        newDropdowns[index] = !newDropdowns[index];
+                        // Close sell dropdown and other buy dropdowns when opening this one
+                        const isOpening = !showBuyDropdowns[index];
+                        if (isOpening) {
+                          setShowSellDropdown(false);
+                        }
+                        const newDropdowns = showBuyDropdowns.map((_, i) => i === index ? !showBuyDropdowns[index] : false);
                         setShowBuyDropdowns(newDropdowns);
                       }}
                       className="min-w-[120px] shrink-0 bg-black/40 border border-white/10 p-3 flex items-center justify-between hover:bg-white/5 transition-all shadow-sm rounded-lg"
