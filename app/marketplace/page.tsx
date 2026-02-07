@@ -7,11 +7,20 @@ import { LogoPreloader } from '@/components/LogoPreloader';
 import { OpenPositionsTable } from '@/components/OpenPositionsTable';
 import PixelBlastBackground from '@/components/ui/PixelBlastBackground';
 import { TOKEN_CONSTANTS } from '@/constants/crypto';
+import { useEventTracking } from '@/hooks/useEventTracking';
 
 function MarketplaceContent() {
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const searchParams = useSearchParams();
   const pathname = usePathname();
+  const { trackMarketplaceVisited, walletAddress } = useEventTracking();
+
+  // Track marketplace visit (API handles deduplication)
+  useEffect(() => {
+    if (walletAddress) {
+      trackMarketplaceVisited();
+    }
+  }, [walletAddress, trackMarketplaceVisited]);
 
   // Get search query from URL params (order-id, seller, or ticker)
   const initialSearchQuery = searchParams.get('order-id')

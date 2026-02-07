@@ -1,12 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAccount } from 'wagmi'
 import { PixelSpinner } from './ui/PixelSpinner';
 import { useAppKit } from '@reown/appkit/react'
 import { useTransaction } from '@/context/TransactionContext'
 import { DisclaimerDialog } from './DisclaimerDialog'
 import Link from 'next/link'
+import { useEventTracking } from '@/hooks/useEventTracking'
 // import { PrestigeBadge } from './PrestigeBadge'
 
 interface ConnectButtonProps {
@@ -16,6 +17,14 @@ interface ConnectButtonProps {
 
 export const ConnectButton = ({ connectedText, connectedHref }: ConnectButtonProps = {}) => {
   const { isConnected, address } = useAccount()
+  const { trackWalletConnected } = useEventTracking()
+
+  // Track wallet connection event (API handles deduplication)
+  useEffect(() => {
+    if (isConnected && address) {
+      trackWalletConnected()
+    }
+  }, [isConnected, address, trackWalletConnected])
   const { open } = useAppKit()
   const { isTransactionPending } = useTransaction()
   const [showDisclaimer, setShowDisclaimer] = useState(false)

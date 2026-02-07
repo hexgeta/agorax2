@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 import PixelBlastBackground from '@/components/ui/PixelBlastBackground';
+import { useUserAchievements } from '@/hooks/useUserAchievements';
+import { PixelSpinner } from '@/components/ui/PixelSpinner';
 
 // Prestige levels with Greek letters - user starts at Alpha
 const PRESTIGE_LEVELS = [
@@ -420,15 +422,10 @@ const PRESTIGE_CHALLENGES: Record<number, PrestigeChallenges> = {
   },
 };
 
-// Mock user data (will be replaced with real data)
-const MOCK_USER = {
-  currentXp: 1000,
-  // Track completed challenges per prestige level
-  completedChallenges: {
-    0: ['First Steps', 'Window Shopper', 'First Order', 'First Fill', 'Small Fish', 'Paper Hands'], // Alpha - all complete
-    1: [], // Beta - none
-    2: [], // Gamma - none
-  } as Record<number, string[]>,
+// Default empty user data (used when not connected or no data)
+const EMPTY_USER = {
+  currentXp: 0,
+  completedChallenges: {} as Record<number, string[]>,
 };
 
 // Helper to check if all challenges for a prestige are complete
@@ -544,28 +541,55 @@ function ChallengeTable({
 }
 
 // Find current active prestige (first incomplete one) - used for initial state
-function getInitialActivePrestige(): number {
+function getInitialActivePrestige(completedChallenges: Record<number, string[]>): number {
   const activeIndex = PRESTIGE_LEVELS.findIndex(
-    (_, idx) => !isPrestigeComplete(idx, MOCK_USER.completedChallenges)
+    (_, idx) => !isPrestigeComplete(idx, completedChallenges)
   );
   return activeIndex === -1 ? PRESTIGE_LEVELS.length - 1 : activeIndex;
 }
 
 export default function RanksPage() {
-  const [selectedPrestige, setSelectedPrestige] = useState<number>(getInitialActivePrestige);
+  const [selectedPrestige, setSelectedPrestige] = useState<number>(0);
   const [activeCategory, setActiveCategory] = useState<ChallengeCategory>('bootcamp');
 
+  // Fetch real user data from Supabase
+  const { stats, completedChallenges: rawCompletedChallenges, isLoading, isConnected } = useUserAchievements();
+
+  // Transform completed challenges into the format expected by the UI
+  const userData = useMemo(() => {
+    if (!rawCompletedChallenges || rawCompletedChallenges.length === 0) {
+      return EMPTY_USER;
+    }
+
+    // Group completed challenges by prestige level
+    const completedByPrestige: Record<number, string[]> = {};
+    let totalXp = 0;
+
+    rawCompletedChallenges.forEach((challenge) => {
+      if (!completedByPrestige[challenge.prestige_level]) {
+        completedByPrestige[challenge.prestige_level] = [];
+      }
+      completedByPrestige[challenge.prestige_level].push(challenge.challenge_name);
+      totalXp += challenge.xp_awarded;
+    });
+
+    return {
+      currentXp: stats?.total_xp || totalXp,
+      completedChallenges: completedByPrestige,
+    };
+  }, [rawCompletedChallenges, stats]);
+
   const currentPrestige = PRESTIGE_LEVELS[selectedPrestige];
-  const isViewingCompleted = isPrestigeComplete(selectedPrestige, MOCK_USER.completedChallenges);
+  const isViewingCompleted = isPrestigeComplete(selectedPrestige, userData.completedChallenges);
 
   // Find current active prestige (first incomplete one)
   const currentActivePrestige = PRESTIGE_LEVELS.findIndex(
-    (_, idx) => !isPrestigeComplete(idx, MOCK_USER.completedChallenges)
+    (_, idx) => !isPrestigeComplete(idx, userData.completedChallenges)
   );
 
   // Calculate challenges completed for selected prestige
   const selectedPrestigeChallenges = PRESTIGE_CHALLENGES[selectedPrestige];
-  const completedInPrestige = MOCK_USER.completedChallenges[selectedPrestige] || [];
+  const completedInPrestige = userData.completedChallenges[selectedPrestige] || [];
   const totalInPrestige = selectedPrestigeChallenges
     ? (Object.keys(selectedPrestigeChallenges) as ChallengeCategory[]).reduce(
         (acc, cat) => acc + selectedPrestigeChallenges[cat].challenges.length,
@@ -602,7 +626,7 @@ export default function RanksPage() {
               </p>
               <div className="flex items-center justify-center gap-3 md:gap-4 flex-wrap">
                 {PRESTIGE_LEVELS.map((prestige, index) => {
-                  const isComplete = isPrestigeComplete(index, MOCK_USER.completedChallenges);
+                  const isComplete = isPrestigeComplete(index, userData.completedChallenges);
                   const isSelected = selectedPrestige === index;
                   const isCurrent = currentActivePrestige === index;
                   const isLocked = index > currentActivePrestige && !isComplete;
@@ -670,7 +694,7 @@ export default function RanksPage() {
               </div>
               <div className="text-right">
                 <div className={`font-bold ${currentPrestige.color}`}>
-                  {getPrestigeEarnedXp(selectedPrestige, MOCK_USER.completedChallenges).toLocaleString()} /{' '}
+                  {getPrestigeEarnedXp(selectedPrestige, userData.completedChallenges).toLocaleString()} /{' '}
                   {getPrestigeTotalXp(selectedPrestige).toLocaleString()} XP
                 </div>
               </div>

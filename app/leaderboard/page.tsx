@@ -80,9 +80,10 @@ function formatAddress(address: string): string {
   return address;
 }
 
-function formatTimestamp(timestamp: number): string {
+function formatTimestamp(timestamp: number | bigint): string {
   if (!timestamp) return '-';
-  const date = new Date(timestamp * 1000);
+  const ts = typeof timestamp === 'bigint' ? Number(timestamp) : timestamp;
+  const date = new Date(ts * 1000);
   return date.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',

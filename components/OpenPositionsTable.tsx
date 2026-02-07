@@ -34,6 +34,7 @@ import { useTransaction } from '@/context/TransactionContext';
 import { useTokenAccess } from '@/context/TokenAccessContext';
 import { PAYWALL_ENABLED, REQUIRED_PARTY_TOKENS, REQUIRED_TEAM_TOKENS, PAYWALL_TITLE, PAYWALL_DESCRIPTION } from '@/config/paywall';
 import { getContractAddress } from '@/config/testing';
+import { useEventTracking } from '@/hooks/useEventTracking';
 
 // Sorting types
 type SortField = 'sellAmount' | 'askingFor' | 'progress' | 'owner' | 'status' | 'date' | 'backingPrice' | 'currentPrice' | 'otcVsMarket';
@@ -359,6 +360,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
   const { open: openWalletModal } = useAppKit();
+  const { trackOrderFilled, trackOrderCancelled, trackProceedsClaimed, trackTradeCompleted, trackOrderViewed, trackOrderExpired } = useEventTracking();
 
   // Contract address for querying events - get based on current chain
   const OTC_CONTRACT_ADDRESS = getContractAddress(chainId) as `0x${string}`;
@@ -846,6 +848,15 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
         newSet.delete(orderId);
       } else {
         newSet.add(orderId);
+
+        // Track order viewed event for achievements
+        // Extract sell token symbol for Token Explorer challenge tracking
+        let tokenSymbol: string | undefined;
+        if (order?.orderDetailsWithID?.orderDetails?.sellTokenIndex !== undefined) {
+          const sellTokenInfo = getTokenInfoByIndex(Number(order.orderDetailsWithID.orderDetails.sellTokenIndex));
+          tokenSymbol = sellTokenInfo?.ticker;
+        }
+        trackOrderViewed(parseInt(orderId), false, tokenSymbol);
 
         // For AON orders, auto-set 100% input when expanding
         if (order?.orderDetailsWithID?.orderDetails?.allOrNothing) {
@@ -1530,7 +1541,53 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
             </a>
           ) : undefined,
         });
+
+        // Track order filled event for each successful fill
+        const sellTokenAddress = order.orderDetailsWithID.orderDetails.sellToken;
+        const sellTokenInfo = getTokenInfo(sellTokenAddress);
+        const sellTokenPrice = getTokenPrice(sellTokenInfo.address, tokenPrices);
+        const buyTokenPrice = getTokenPrice(buyTokenInfo.address, tokenPrices);
+
+        // Calculate USD values
+        const buyAmountNum = parseFloat(formatTokenAmount(buyAmount, buyTokenInfo.decimals));
+        const fillValueUsd = buyAmountNum * (buyTokenPrice || 0);
+
+        // Calculate time since order creation for speed challenges
+        const creationTime = Number(order.orderDetailsWithID.orderDetails.creationTime || 0);
+        const fillTimeSeconds = creationTime > 0 ? Math.floor(Date.now() / 1000) - creationTime : undefined;
+
+        trackOrderFilled({
+          order_id: parseInt(orderId),
+          fill_token: buyTokenInfo.ticker,
+          fill_amount_usd: fillValueUsd,
+          is_full_fill: false, // Partial fill tracking
+          fill_time_seconds: fillTimeSeconds,
+        });
       }
+
+      // Track trade completed event for the overall transaction
+      // Calculate total USD volume for all fills
+      let totalVolumeUsd = 0;
+      for (const { tokenInfo: buyTokenInfo, buyAmount } of tokensToExecute) {
+        const buyTokenPrice = getTokenPrice(buyTokenInfo.address, tokenPrices);
+        const buyAmountNum = parseFloat(formatTokenAmount(buyAmount, buyTokenInfo.decimals));
+        totalVolumeUsd += buyAmountNum * (buyTokenPrice || 0);
+      }
+
+      // Get sell token info for tracking
+      const sellTokenAddress = order.orderDetailsWithID.orderDetails.sellToken;
+      const sellTokenInfo = getTokenInfo(sellTokenAddress);
+
+      // Track trade completed with full token info for challenges
+      trackTradeCompleted({
+        order_id: parseInt(orderId),
+        sell_token: sellTokenInfo.ticker,
+        buy_token: tokensToExecute.map(t => t.tokenInfo.ticker).join(','), // Primary buy token(s)
+        sell_amount: formatTokenAmount(order.orderDetailsWithID.orderDetails.sellAmount, sellTokenInfo.decimals),
+        buy_amount: tokensToExecute.map(t => formatTokenAmount(t.buyAmount, t.tokenInfo.decimals)).join(','),
+        volume_usd: totalVolumeUsd,
+        is_maker: false, // User is filling someone else's order
+      });
 
       // Clear the inputs for this order
       handleClearInputs(order);
@@ -1639,8 +1696,19 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
         ) : undefined,
       });
 
-      // Determine if this is a MAXI deal
+      // Track order cancellation event
       const sellTokenAddress = order.orderDetailsWithID.orderDetails.sellToken;
+      const sellTokenInfo = getTokenInfo(sellTokenAddress);
+      const creationTime = Number(order.orderDetailsWithID.orderDetails.creationTime || 0);
+      const timeSinceCreation = creationTime > 0 ? Math.floor(Date.now() / 1000) - creationTime : undefined;
+
+      trackOrderCancelled({
+        order_id: parseInt(orderId),
+        sell_token: sellTokenInfo.ticker,
+        time_since_creation_seconds: timeSinceCreation,
+      });
+
+      // Determine if this is a MAXI deal
       const isMaxiDeal = maxiTokenAddresses.some(addr =>
         addr.toLowerCase() === sellTokenAddress.toLowerCase()
       ) || order.orderDetailsWithID.orderDetails.buyTokensIndex.some((tokenIndex: bigint) => {
@@ -1742,6 +1810,21 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
           </a>
         ) : undefined,
       });
+
+      // Track proceeds claimed event
+      // Try to calculate USD value if we have the token info
+      let amountUsd: number | undefined;
+      if (buyTokenIndexInOrder !== null && buyTokenIndexInOrder !== undefined) {
+        const buyTokensIndex = order.orderDetailsWithID.orderDetails.buyTokensIndex;
+        const tokenInfo = getTokenInfoByIndex(Number(buyTokensIndex[buyTokenIndexInOrder]));
+        const tokenPrice = getTokenPrice(tokenInfo.address, tokenPrices);
+        const amountCollected = order.orderDetailsWithID.orderDetails.buyAmountsReceived?.[buyTokenIndexInOrder];
+        if (amountCollected && tokenPrice) {
+          const amountNum = parseFloat(formatTokenAmount(amountCollected, tokenInfo.decimals));
+          amountUsd = amountNum * tokenPrice;
+        }
+      }
+      trackProceedsClaimed(parseInt(orderId), amountUsd);
 
       // Clear any previous errors
       setCollectErrors(prev => {
@@ -1880,6 +1963,14 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
             View Tx
           </a>
         ) : undefined,
+      });
+
+      // Track expired orders for Ghost Order challenge
+      expiredOrders.forEach(order => {
+        const sellAmount = Number(order.orderDetailsWithID.orderDetails.sellAmount);
+        const remainingSellAmount = Number(order.orderDetailsWithID.remainingSellAmount);
+        const fillPercentage = sellAmount > 0 ? ((sellAmount - remainingSellAmount) / sellAmount) * 100 : 0;
+        trackOrderExpired(Number(order.orderDetailsWithID.orderID), fillPercentage);
       });
 
       // Navigate to cancelled tab

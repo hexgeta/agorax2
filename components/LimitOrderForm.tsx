@@ -29,6 +29,7 @@ import { useContractWhitelistRead } from '@/hooks/contracts/useContractWhitelist
 import { waitForTransactionWithTimeout, TRANSACTION_TIMEOUTS } from '@/utils/transactionTimeout';
 import useToast from '@/hooks/use-toast';
 import { useLimitOrderPricing } from '@/hooks/useLimitOrderPricing';
+import { useEventTracking } from '@/hooks/useEventTracking';
 
 interface LimitOrderFormProps {
   onTokenChange?: (sellToken: string | undefined, buyTokens: (string | undefined)[]) => void;
@@ -169,6 +170,7 @@ export function LimitOrderForm({
   proStatsContainerRef,
 }: LimitOrderFormProps) {
   const { isConnected, address, chainId } = useAccount();
+  const { trackOrderCreated } = useEventTracking();
 
   // Default tokens: PLS for sell, HEX for buy
   const getDefaultSellToken = (): TokenOption | null => {
@@ -2147,6 +2149,38 @@ export function LimitOrderForm({
             View Tx
           </a>
         ) : undefined,
+      });
+
+      // Track order creation event
+      const sellAmountNum = parseFloat(removeCommas(sellAmount));
+      const sellTokenPrice = prices[sellToken.a]?.price || 0;
+      const sellValueUsd = sellAmountNum * sellTokenPrice;
+
+      // Calculate total buy value in USD
+      let totalBuyValueUsd = 0;
+      buyTokens.forEach((token, i) => {
+        if (token && buyAmounts[i]) {
+          const buyAmountNum = parseFloat(removeCommas(buyAmounts[i]));
+          const buyTokenPrice = prices[token.a]?.price || 0;
+          totalBuyValueUsd += buyAmountNum * buyTokenPrice;
+        }
+      });
+
+      // Calculate price vs market (positive = above market, negative = below)
+      // If sellValueUsd > totalBuyValueUsd, seller is asking less than market value (good deal for buyer)
+      // Formula: ((sellValue - buyValue) / sellValue) * 100 gives the discount/premium
+      const priceVsMarketPercent = sellValueUsd > 0
+        ? ((sellValueUsd - totalBuyValueUsd) / sellValueUsd) * 100
+        : 0;
+
+      trackOrderCreated({
+        sell_token: sellToken.ticker,
+        buy_tokens: buyTokens.filter(Boolean).map(t => t!.ticker),
+        sell_amount_usd: sellValueUsd,
+        buy_amount_usd: totalBuyValueUsd,
+        expiration_days: expirationDays,
+        all_or_nothing: allOrNothing,
+        price_vs_market_percent: priceVsMarketPercent,
       });
 
       // Clear form
