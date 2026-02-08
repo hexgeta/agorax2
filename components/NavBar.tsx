@@ -300,18 +300,19 @@ const NavBar = () => {
       {/* Only render when open to prevent invisible elements from intercepting clicks */}
       {mobileMenuOpen && (
       <div
-        className="fixed inset-0 z-[199] animate-in fade-in duration-150 overflow-hidden touch-none"
+        className="fixed inset-0 z-[199] animate-in fade-in duration-150 overflow-hidden"
         aria-hidden={!mobileMenuOpen}
       >
         {/* Backdrop - fully opaque black */}
         <div
-          className="absolute inset-0 bg-black"
+          className="absolute inset-0 bg-black touch-none"
           onClick={() => setMobileMenuOpen(false)}
         />
 
         {/* Menu Content */}
         <div
-          className="absolute inset-x-0 top-[73px] bottom-0 flex flex-col items-center justify-start pt-12 gap-6 animate-in slide-in-from-top-2 duration-150 overflow-hidden"
+          className="absolute inset-x-0 top-[73px] bottom-0 flex flex-col items-center justify-start pt-12 gap-6 pb-12 animate-in slide-in-from-top-2 duration-150 overflow-y-auto overscroll-contain"
+          style={{ WebkitOverflowScrolling: 'touch' }}
         >
           {/* Navigation Links */}
           <nav className="flex flex-col items-center gap-2 w-full px-8">
