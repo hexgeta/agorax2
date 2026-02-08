@@ -149,6 +149,24 @@ const NavBar = () => {
                 </span>
               </Link>
               <Link
+                href="/discover"
+                className={`transition-colors font-medium text-base px-4 py-2 cursor-pointer group ${pathname === '/discover'
+                  ? 'text-white'
+                  : 'text-white/80 hover:text-white'
+                  }`}
+                onMouseEnter={() => setHoveredPath('/discover')}
+                onMouseLeave={() => setHoveredPath(null)}
+              >
+                <span className="relative inline-block">
+                  Discover
+                  <span className={`absolute bottom-[-4px] left-0 w-full h-0.5 bg-white transition-transform duration-300 ease-out ${pathname === '/discover'
+                    ? (hoveredPath && hoveredPath !== '/discover' ? 'scale-x-0 origin-left' : 'scale-x-100 origin-left')
+                    : 'scale-x-0 group-hover:scale-x-100 origin-left'
+                    }`}
+                  />
+                </span>
+              </Link>
+              <Link
                 href="/stats"
                 className={`transition-colors font-medium text-base px-4 py-2 cursor-pointer group ${pathname === '/stats'
                   ? 'text-white'
@@ -194,7 +212,7 @@ const NavBar = () => {
                 onMouseLeave={() => setHoveredPath(null)}
               >
                 <span className="relative inline-block">
-                  Prestige
+                  Legion
                   <span className={`absolute bottom-[-4px] left-0 w-full h-0.5 bg-white transition-transform duration-300 ease-out ${pathname === '/achievements'
                     ? (hoveredPath && hoveredPath !== '/achievements' ? 'scale-x-0 origin-left' : 'scale-x-100 origin-left')
                     : 'scale-x-0 group-hover:scale-x-100 origin-left'
@@ -333,6 +351,16 @@ const NavBar = () => {
               Marketplace
             </Link>
             <Link
+              href="/discover"
+              onClick={() => setMobileMenuOpen(false)}
+              className={`text-xl font-medium py-3 px-6 rounded-lg transition-colors w-full text-center ${pathname === '/discover'
+                ? 'text-white bg-white/10'
+                : 'text-white/80 hover:text-white hover:bg-white/5'
+                }`}
+            >
+              Discover
+            </Link>
+            <Link
               href="/stats"
               onClick={() => setMobileMenuOpen(false)}
               className={`text-xl font-medium py-3 px-6 rounded-lg transition-colors w-full text-center ${pathname === '/stats'
@@ -363,7 +391,7 @@ const NavBar = () => {
                 : 'text-white/80 hover:text-white hover:bg-white/5'
                 }`}
             >
-              Prestige
+              Legion
             </Link>
             <Link
               href="/leaderboard"
@@ -376,9 +404,6 @@ const NavBar = () => {
               Leaderboard
             </Link>
           </nav>
-
-          {/* Divider */}
-          <div className="w-32 h-px bg-white/20" />
 
           {/* Connect Button */}
           <div className="flex flex-col items-center gap-4 px-8 w-full">

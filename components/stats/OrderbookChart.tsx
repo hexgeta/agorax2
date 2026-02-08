@@ -331,7 +331,8 @@ export default function OrderbookChart({ orders, tokenPrices, whitelist }: Order
       />
 
       {/* Orderbook table */}
-      <div className="font-mono text-xs">
+      <div className="overflow-x-auto pb-2 modern-scrollbar">
+      <div className="min-w-[500px] font-mono text-xs">
         {/* Header */}
         <div className="grid grid-cols-12 gap-2 mb-2 px-2 text-gray-500">
           <span className="col-span-3 text-left">Price</span>
@@ -434,6 +435,7 @@ export default function OrderbookChart({ orders, tokenPrices, whitelist }: Order
             No bids
           </div>
         )}
+      </div>
       </div>
 
       {/* Summary */}

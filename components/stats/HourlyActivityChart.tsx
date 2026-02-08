@@ -108,7 +108,7 @@ export default function HourlyActivityChart({ transactions, orders, contractOrde
       </div>
 
       {/* Stats row */}
-      <div className="flex gap-6 mb-6 text-sm">
+      <div className="flex flex-wrap gap-4 sm:gap-6 mb-6 text-xs sm:text-sm">
         <div>
           <span className="text-gray-400">Peak Day: </span>
           <span className="text-white font-bold">{peakDay}</span>
@@ -124,55 +124,55 @@ export default function HourlyActivityChart({ transactions, orders, contractOrde
       </div>
 
       {/* Heatmap grid */}
-      <div className="overflow-x-auto">
-        <div className="min-w-[600px]">
-          {/* Hour labels */}
-          <div className="flex mb-1">
-            <div className="w-10" /> {/* Spacer for day labels */}
-            {HOURS.filter((_, i) => i % 3 === 0).map(hour => (
+      <div>
+        {/* Hour labels */}
+        <div className="flex mb-1">
+          <div className="w-8 shrink-0" /> {/* Spacer for day labels */}
+          <div className="flex-1 flex">
+            {HOURS.filter((_, i) => i % 6 === 0).map(hour => (
               <div
                 key={hour}
-                className="text-gray-500 text-xs"
-                style={{ width: `${(100 / 24) * 3}%` }}
+                className="text-gray-500 text-[10px] sm:text-xs"
+                style={{ width: `${(100 / 24) * 6}%` }}
               >
                 {hour.toString().padStart(2, '0')}
               </div>
             ))}
           </div>
-
-          {/* Grid rows */}
-          {DAYS.map((day, dayIndex) => (
-            <div key={day} className="flex items-center mb-1">
-              <div className="w-10 text-gray-400 text-xs">{day}</div>
-              <div className="flex-1 flex gap-[2px]">
-                {HOURS.map(hour => {
-                  const value = heatmapData[dayIndex][hour];
-                  return (
-                    <div
-                      key={hour}
-                      className={`flex-1 h-6 rounded-sm ${getColor(value)} transition-colors cursor-default`}
-                      title={`${day} ${hour}:00 UTC - ${value} events`}
-                    />
-                  );
-                })}
-              </div>
-            </div>
-          ))}
         </div>
+
+        {/* Grid rows */}
+        {DAYS.map((day, dayIndex) => (
+          <div key={day} className="flex items-center mb-px sm:mb-1">
+            <div className="w-8 shrink-0 text-gray-400 text-[10px] sm:text-xs">{day}</div>
+            <div className="flex-1 flex gap-px sm:gap-[2px]">
+              {HOURS.map(hour => {
+                const value = heatmapData[dayIndex][hour];
+                return (
+                  <div
+                    key={hour}
+                    className={`flex-1 aspect-square rounded-sm ${getColor(value)} transition-colors cursor-default`}
+                    title={`${day} ${hour}:00 UTC - ${value} events`}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* Legend */}
-      <div className="flex justify-center items-center gap-2 mt-6">
-        <span className="text-gray-500 text-xs">Less</span>
+      <div className="flex justify-center items-center gap-2 mt-4">
+        <span className="text-gray-500 text-[10px] sm:text-xs">Less</span>
         <div className="flex gap-1">
-          <div className="w-4 h-4 bg-white/5 rounded-sm" />
-          <div className="w-4 h-4 bg-white/20 rounded-sm" />
-          <div className="w-4 h-4 bg-white/40 rounded-sm" />
-          <div className="w-4 h-4 bg-white/60 rounded-sm" />
-          <div className="w-4 h-4 bg-white/80 rounded-sm" />
-          <div className="w-4 h-4 bg-white rounded-sm" />
+          <div className="w-3 h-3 sm:w-4 sm:h-4 bg-white/5 rounded-sm" />
+          <div className="w-3 h-3 sm:w-4 sm:h-4 bg-white/20 rounded-sm" />
+          <div className="w-3 h-3 sm:w-4 sm:h-4 bg-white/40 rounded-sm" />
+          <div className="w-3 h-3 sm:w-4 sm:h-4 bg-white/60 rounded-sm" />
+          <div className="w-3 h-3 sm:w-4 sm:h-4 bg-white/80 rounded-sm" />
+          <div className="w-3 h-3 sm:w-4 sm:h-4 bg-white rounded-sm" />
         </div>
-        <span className="text-gray-500 text-xs">More</span>
+        <span className="text-gray-500 text-[10px] sm:text-xs">More</span>
       </div>
     </LiquidGlassCard>
   );
