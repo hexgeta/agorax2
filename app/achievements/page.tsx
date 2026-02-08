@@ -100,6 +100,7 @@ const PRESTIGE_CHALLENGES: Record<number, PrestigeChallenges> = {
       challenges: [
         { name: 'Getting Comfortable', description: 'Create 5 orders', requirement: 'Create 5 orders', xp: 400 },
         { name: 'Active Buyer', description: 'Fill 5 orders', requirement: 'Fill 5 orders', xp: 400 },
+        { name: 'Weekend Warrior', description: 'Trade on both Saturday and Sunday', requirement: 'Sat + Sun trades', xp: 300 },
       ],
     },
     elite: {
@@ -141,6 +142,7 @@ const PRESTIGE_CHALLENGES: Record<number, PrestigeChallenges> = {
       challenges: [
         { name: 'Active Trader', description: 'Complete 10 trades total', requirement: '10 trades', xp: 500 },
         { name: 'Consistent', description: 'Trade 3 days in a row', requirement: '3 day streak', xp: 400 },
+        { name: 'Both Sides', description: 'Create an order AND fill someone else\'s order in the same day', requirement: 'Create + fill same day', xp: 500 },
       ],
     },
     elite: {
@@ -160,6 +162,7 @@ const PRESTIGE_CHALLENGES: Record<number, PrestigeChallenges> = {
       color: 'text-red-400',
       challenges: [
         { name: 'Night Owl', description: 'Complete a trade between 3-5 AM UTC', requirement: 'Trade at 3-5 AM', xp: 200 },
+        { name: 'Deja Vu', description: 'Create the exact same order (same tokens, same amounts) twice', requirement: 'Duplicate order', xp: 100 },
       ],
     },
   },
@@ -184,6 +187,8 @@ const PRESTIGE_CHALLENGES: Record<number, PrestigeChallenges> = {
         { name: 'Order Machine', description: 'Create 25 orders', requirement: '25 orders', xp: 800 },
         { name: 'Fill Expert', description: 'Fill 25 orders', requirement: '25 fills', xp: 800 },
         { name: 'Dedicated', description: 'Trade 7 days in a row', requirement: '7 day streak', xp: 600 },
+        { name: 'The Collector', description: 'Claim proceeds from 10 different orders', requirement: '10 orders claimed', xp: 600 },
+        { name: 'Clean Sweep', description: 'Have 5 of your orders reach 100% fill', requirement: '5 fully filled', xp: 800 },
       ],
     },
     elite: {
@@ -203,6 +208,7 @@ const PRESTIGE_CHALLENGES: Record<number, PrestigeChallenges> = {
       challenges: [
         { name: 'Indecisive', description: 'Cancel 5 orders in one day', requirement: '5 cancels/day', xp: 100 },
         { name: 'Ghost Order', description: 'Have an order expire without any fills', requirement: 'Order expired 0%', xp: 75 },
+        { name: 'Early Bird', description: 'Complete a trade in the first hour of the day (00:00-01:00 UTC)', requirement: 'Trade at midnight UTC', xp: 250 },
       ],
     },
   },
@@ -227,6 +233,8 @@ const PRESTIGE_CHALLENGES: Record<number, PrestigeChallenges> = {
         { name: 'Veteran Trader', description: 'Complete 50 trades total', requirement: '50 trades', xp: 1500 },
         { name: 'Order Veteran', description: 'Create 50 orders', requirement: '50 orders', xp: 1200 },
         { name: 'Two Week Warrior', description: 'Trade 14 days in a row', requirement: '14 day streak', xp: 1000 },
+        { name: 'Arbitrage Artist', description: 'Fill an order and create a new order within 2 minutes', requirement: 'Fill + create < 2min', xp: 1000 },
+        { name: 'Perfect Record', description: 'Complete 10 trades with zero cancellations', requirement: '10 trades, 0 cancels', xp: 1500 },
       ],
     },
     elite: {
@@ -236,6 +244,7 @@ const PRESTIGE_CHALLENGES: Record<number, PrestigeChallenges> = {
       color: 'text-amber-400',
       challenges: [
         { name: 'Volume Veteran', description: 'Trade $10,000 in total volume', requirement: '$10K volume', xp: 2000 },
+        { name: 'Iron Hands', description: 'Hold an open order for 30+ days without cancelling', requirement: 'Order open 30 days', xp: 1500 },
       ],
     },
     humiliation: {
@@ -245,6 +254,7 @@ const PRESTIGE_CHALLENGES: Record<number, PrestigeChallenges> = {
       color: 'text-red-400',
       challenges: [
         { name: 'Speed Runner', description: 'Have your order filled within 30 seconds of creating it', requirement: 'Fill < 30s', xp: 400 },
+        { name: 'Penny Pincher', description: 'Complete 10 trades each worth less than $1', requirement: '10 trades < $1', xp: 200 },
       ],
     },
   },
@@ -269,6 +279,8 @@ const PRESTIGE_CHALLENGES: Record<number, PrestigeChallenges> = {
         { name: 'Century Trader', description: 'Complete 100 trades total', requirement: '100 trades', xp: 3000 },
         { name: 'Order Legend', description: 'Create 100 orders', requirement: '100 orders', xp: 2500 },
         { name: 'Market Maker', description: 'Have 5 active orders at once', requirement: '5 concurrent orders', xp: 1500 },
+        { name: 'AON Champion', description: 'Create and fully complete 3 All-or-Nothing orders', requirement: '3 completed AON', xp: 2500 },
+        { name: 'Claim Machine', description: 'Claim proceeds 50 times', requirement: '50 claims', xp: 2000 },
       ],
     },
     elite: {
@@ -278,6 +290,7 @@ const PRESTIGE_CHALLENGES: Record<number, PrestigeChallenges> = {
       color: 'text-amber-400',
       challenges: [
         { name: 'Whale Alert', description: 'Complete a trade worth $10,000+', requirement: '$10K+ trade', xp: 4000 },
+        { name: 'HEX Baron', description: 'Trade 1,000,000 HEX in total volume', requirement: '1M HEX volume', xp: 3000 },
       ],
     },
     humiliation: {
@@ -288,6 +301,8 @@ const PRESTIGE_CHALLENGES: Record<number, PrestigeChallenges> = {
       challenges: [
         { name: 'Overkill', description: 'Create an order 10x above market price', requirement: '10x overpriced', xp: 150 },
         { name: 'Fire Sale', description: 'Create an order 50% below market price', requirement: '50% underpriced', xp: 150 },
+        { name: 'Order Hoarder', description: 'Have 15 open orders with zero fills', requirement: '15 unfilled orders', xp: 300 },
+        { name: 'Ghost Town', description: 'Have 5 orders expire with zero fills', requirement: '5 ghost orders', xp: 200 },
       ],
     },
   },
@@ -312,6 +327,7 @@ const PRESTIGE_CHALLENGES: Record<number, PrestigeChallenges> = {
         { name: 'Fill Master', description: 'Fill 200 orders', requirement: '200 fills', xp: 5000 },
         { name: 'Marathon Trader', description: 'Trade 30 days in a row', requirement: '30 day streak', xp: 4000 },
         { name: 'Power Maker', description: 'Have 10 active orders at once', requirement: '10 concurrent orders', xp: 2500 },
+        { name: 'Multi-Fill', description: 'Have a single order filled by 5 or more different wallets', requirement: '5 unique fillers', xp: 3000 },
       ],
     },
     elite: {
@@ -321,6 +337,8 @@ const PRESTIGE_CHALLENGES: Record<number, PrestigeChallenges> = {
       color: 'text-amber-400',
       challenges: [
         { name: 'Volume King', description: 'Trade $100,000 in total volume', requirement: '$100K volume', xp: 8000 },
+        { name: 'Diamond Hands', description: 'Hold an open order for 90+ days without cancelling', requirement: 'Order open 90 days', xp: 5000 },
+        { name: 'PLS Baron', description: 'Trade 10,000,000 PLS in total volume', requirement: '10M PLS volume', xp: 3000 },
       ],
     },
     humiliation: {
@@ -330,6 +348,7 @@ const PRESTIGE_CHALLENGES: Record<number, PrestigeChallenges> = {
       color: 'text-red-400',
       challenges: [
         { name: 'The Sniper', description: 'Fill an order within 5 seconds of it being created', requirement: 'Fill < 5s', xp: 800 },
+        { name: 'Fat Finger', description: 'Create an order 100x above market price', requirement: '100x overpriced', xp: 300 },
       ],
     },
   },
@@ -354,6 +373,7 @@ const PRESTIGE_CHALLENGES: Record<number, PrestigeChallenges> = {
         { name: 'Trade Machine', description: 'Complete 500 trades total', requirement: '500 trades', xp: 10000 },
         { name: 'Order God', description: 'Create 500 orders', requirement: '500 orders', xp: 8000 },
         { name: 'Unstoppable', description: 'Trade 60 days in a row', requirement: '60 day streak', xp: 8000 },
+        { name: 'Full House', description: 'Have 3 of your orders with partial fills active simultaneously', requirement: '3 partially filled', xp: 5000 },
       ],
     },
     elite: {
@@ -363,6 +383,8 @@ const PRESTIGE_CHALLENGES: Record<number, PrestigeChallenges> = {
       color: 'text-amber-400',
       challenges: [
         { name: 'Mega Whale', description: 'Complete a trade worth $100,000+', requirement: '$100K+ trade', xp: 20000 },
+        { name: 'Stablecoin Baron', description: 'Trade 100,000 stablecoins in total volume (DAI/USDC/USDT/USDL)', requirement: '100K stablecoin vol', xp: 5000 },
+        { name: 'Profit Master', description: 'Collect proceeds 100 times total', requirement: '100 claims', xp: 12000 },
       ],
     },
     humiliation: {

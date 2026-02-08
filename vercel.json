@@ -2,6 +2,10 @@
   "version": 2,
   "crons": [
     {
+      "path": "/api/cron/sync-blockchain",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/cron/oa-movement-cron/",
       "schedule": "*/5 * * * *"
     },

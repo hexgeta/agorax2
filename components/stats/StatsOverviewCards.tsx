@@ -215,9 +215,81 @@ export default function StatsOverviewCards({ transactions, orders, tokenPrices, 
     return effectiveOrderCount / uniqueTraders;
   }, [effectiveOrderCount, uniqueTraders]);
 
+  // Total filled volume
+  const totalFilledVolume = totalTradingVolume;
+
+  // Total fills count
+  const totalFills = transactions.length;
+
+  // Unique tokens traded
+  const uniqueTokenCount = useMemo(() => {
+    const tokens = new Set<string>();
+    if (contractOrders.length > 0) {
+      contractOrders.forEach(order => {
+        tokens.add(order.orderDetailsWithID.orderDetails.sellToken.toLowerCase());
+        order.orderDetailsWithID.orderDetails.buyTokensIndex.forEach(() => {
+          // buy tokens tracked via whitelist indices - count sell tokens for now
+        });
+      });
+    }
+    transactions.forEach(tx => {
+      if (tx.sellToken) tokens.add(tx.sellToken.toLowerCase());
+      Object.keys(tx.buyTokens).forEach(addr => tokens.add(addr.toLowerCase()));
+    });
+    return tokens.size;
+  }, [contractOrders, transactions]);
+
+  // Largest single order (by USD value)
+  const largestOrder = useMemo(() => {
+    let max = 0;
+    if (contractOrders.length > 0) {
+      contractOrders.forEach(order => {
+        const sellTokenAddr = order.orderDetailsWithID.orderDetails.sellToken;
+        const sellTokenInfo = getTokenInfo(sellTokenAddr);
+        const sellAmount = Number(order.orderDetailsWithID.orderDetails.sellAmount) / Math.pow(10, sellTokenInfo.decimals);
+        const price = getTokenPrice(sellTokenAddr, tokenPrices);
+        const usd = sellAmount * price;
+        if (usd > max) max = usd;
+      });
+    }
+    return max;
+  }, [contractOrders, tokenPrices]);
+
+  // AON orders count and percentage
+  const aonStats = useMemo(() => {
+    if (contractOrders.length === 0) return { count: 0, pct: 0 };
+    const aonCount = contractOrders.filter(o => o.orderDetailsWithID.orderDetails.allOrNothing).length;
+    return {
+      count: aonCount,
+      pct: effectiveOrderCount > 0 ? (aonCount / effectiveOrderCount) * 100 : 0,
+    };
+  }, [contractOrders, effectiveOrderCount]);
+
+  // Protocol age in days
+  const protocolAge = useMemo(() => {
+    let earliest = Infinity;
+    if (contractOrders.length > 0) {
+      contractOrders.forEach(order => {
+        const ts = Number(order.orderDetailsWithID.lastUpdateTime);
+        if (ts > 0 && ts < earliest) earliest = ts;
+      });
+    }
+    orders.forEach(o => {
+      if (o.timestamp && o.timestamp < earliest) earliest = o.timestamp;
+    });
+    if (earliest === Infinity) return 0;
+    return Math.floor((Date.now() / 1000 - earliest) / 86400);
+  }, [contractOrders, orders]);
+
+  // Cancel rate
+  const cancelRate = useMemo(() => {
+    if (effectiveOrderCount === 0) return 0;
+    return (orderCounts.cancelled / effectiveOrderCount) * 100;
+  }, [orderCounts.cancelled, effectiveOrderCount]);
+
   return (
     <div className="space-y-4">
-      {/* Stats Cards - Row 1 */}
+      {/* Stats Cards - Row 1: Volume & Overview */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <StatCard
           label="Total Value Locked"
@@ -225,10 +297,34 @@ export default function StatsOverviewCards({ transactions, orders, tokenPrices, 
           subValue="In active orders"
         />
         <StatCard
+          label="Total Listed Volume"
+          value={formatUSD(totalListedVolume)}
+          subValue="All orders all time"
+        />
+        <StatCard
+          label="Total Filled Volume"
+          value={formatUSD(totalFilledVolume)}
+          subValue={`${totalFills.toLocaleString()} fills`}
+        />
+        <StatCard
           label="Unique Traders"
           value={uniqueTraders.toLocaleString()}
-          subValue="Buyers & Sellers"
+          subValue="Buyers & sellers"
         />
+        <StatCard
+          label="Unique Tokens"
+          value={uniqueTokenCount.toLocaleString()}
+          subValue="Traded on protocol"
+        />
+        <StatCard
+          label="Protocol Age"
+          value={`${protocolAge}d`}
+          subValue="Since first order"
+        />
+      </div>
+
+      {/* Stats Cards - Row 2: Averages & Rates */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <StatCard
           label="Avg Placement Size"
           value={formatUSD(avgOrderSize)}
@@ -240,18 +336,29 @@ export default function StatsOverviewCards({ transactions, orders, tokenPrices, 
           subValue="Per fill"
         />
         <StatCard
+          label="Largest Order"
+          value={formatUSD(largestOrder)}
+          subValue="Single order"
+        />
+        <StatCard
           label="$ Fill %"
           value={`${fillRate.toFixed(1)}%`}
-          subValue="% of $ filled vs listed"
+          subValue="$ filled vs listed"
         />
         <StatCard
           label="Order Fill %"
           value={`${completionRate.toFixed(1)}%`}
-          subValue="% of orders filled vs listed"
+          subValue="Orders completed"
+        />
+        <StatCard
+          label="Cancel Rate"
+          value={`${cancelRate.toFixed(1)}%`}
+          subValue="Orders cancelled"
+          dotColor={cancelRate > 50 ? 'red' : cancelRate > 25 ? 'yellow' : 'green'}
         />
       </div>
 
-      {/* Order Status Cards - Row 2 */}
+      {/* Stats Cards - Row 3: Order Status */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <StatCard
           label="Total Orders"
@@ -263,6 +370,12 @@ export default function StatsOverviewCards({ transactions, orders, tokenPrices, 
           value={orderCounts.active.toLocaleString()}
           subValue="Currently open"
           dotColor="green"
+        />
+        <StatCard
+          label="Completed Orders"
+          value={orderCounts.filled.toLocaleString()}
+          subValue="Fully filled"
+          dotColor="blue"
         />
         <StatCard
           label="Expired Orders"
@@ -277,15 +390,45 @@ export default function StatsOverviewCards({ transactions, orders, tokenPrices, 
           dotColor="red"
         />
         <StatCard
-          label="Completed Orders"
-          value={orderCounts.filled.toLocaleString()}
-          subValue="Fully filled"
-          dotColor="blue"
+          label="AON Orders"
+          value={aonStats.count.toLocaleString()}
+          subValue={`${aonStats.pct.toFixed(1)}% of all orders`}
+        />
+      </div>
+
+      {/* Stats Cards - Row 4: Per-User Averages */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <StatCard
+          label="Avg Orders/Trader"
+          value={avgOrdersPerAddress.toFixed(1)}
+          subValue="Orders per address"
         />
         <StatCard
-          label="Avg Orders/Address"
-          value={Math.round(avgOrdersPerAddress).toString()}
-          subValue="Orders per trader"
+          label="Avg Volume/Trader"
+          value={formatUSD(uniqueTraders > 0 ? totalListedVolume / uniqueTraders : 0)}
+          subValue="Listed per address"
+        />
+        <StatCard
+          label="Avg Fills/Trader"
+          value={uniqueTraders > 0 ? (totalFills / uniqueTraders).toFixed(1) : '0'}
+          subValue="Fills per address"
+        />
+        <StatCard
+          label="Maker/Taker Ratio"
+          value={transactions.length > 0 && effectiveOrderCount > 0
+            ? `${(effectiveOrderCount / transactions.length).toFixed(1)}x`
+            : '-'}
+          subValue="Orders to fills"
+        />
+        <StatCard
+          label="Active TVL Share"
+          value={totalListedVolume > 0 ? `${((totalValueLocked / totalListedVolume) * 100).toFixed(1)}%` : '0%'}
+          subValue="Active vs total listed"
+        />
+        <StatCard
+          label="Daily Avg Volume"
+          value={formatUSD(protocolAge > 0 ? totalFilledVolume / protocolAge : 0)}
+          subValue="Filled per day"
         />
       </div>
     </div>
