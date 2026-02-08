@@ -56,11 +56,6 @@ export const viewport = {
   initialScale: 1,
 }
 
-// ... existing imports ...
-
-// Static layout with revalidation
-// ...
-
 export default async function RootLayout({
   children,
 }: {
