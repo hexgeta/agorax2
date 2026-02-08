@@ -202,7 +202,7 @@ export default function LeaderboardPage() {
                     <tr className="border-b border-white/10">
                       <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Rank</th>
                       <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Trader</th>
-                      <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Level</th>
+                      <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Legion</th>
                       <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">XP</th>
                       <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Volume</th>
                       <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Trades</th>
