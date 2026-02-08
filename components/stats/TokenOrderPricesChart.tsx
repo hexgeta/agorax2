@@ -295,7 +295,7 @@ export default function TokenOrderPricesChart({ orders, tokenPrices, whitelist, 
                 value: `Market: ${formatPriceSigFig(displayToken.marketPrice)}`,
                 position: 'insideLeft',
                 fill: '#00D9FF4D',
-                fontSize: 48,
+                fontSize: 24,
                 fontWeight: 'bold',
                 dy: -20
               }}

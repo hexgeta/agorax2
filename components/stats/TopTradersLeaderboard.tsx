@@ -159,7 +159,8 @@ export default function TopTradersLeaderboard({ transactions, orders, tokenPrice
     >
       <h3 className="text-2xl font-bold text-white mb-6">Top Traders</h3>
 
-      <div className="space-y-3">
+      <div className="overflow-x-auto pb-2 modern-scrollbar">
+        <div className="min-w-[700px] space-y-3">
         {/* Header */}
         <div className="grid grid-cols-12 gap-2 text-gray-400 text-xs font-medium pb-2 border-b border-white/10">
           <div className="col-span-1">#</div>
@@ -243,6 +244,7 @@ export default function TopTradersLeaderboard({ transactions, orders, tokenPrice
             </div>
           );
         })}
+      </div>
       </div>
 
       <p className="text-gray-500 text-xs mt-4 text-center">
