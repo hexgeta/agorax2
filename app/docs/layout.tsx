@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef, useCallback, Suspense } from 'react';
+import { useState, useEffect, useMemo, Suspense } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
@@ -90,19 +90,19 @@ function NavSection({
   pathname: string;
 }) {
   return (
-    <div className="mb-6">
+    <div className="mb-4 md:mb-6">
       {/* Section header - not clickable, just a label */}
-      <h4 className="text-base font-semibold text-white/50 uppercase tracking-wider px-3 mb-2">
+      <h4 className="text-xs md:text-base font-semibold text-white/50 uppercase tracking-wider px-3 mb-1 md:mb-2">
         {item.title}
       </h4>
       {/* Always show children */}
       {item.children && (
-        <div className="space-y-1">
+        <div className="space-y-0.5 md:space-y-1">
           {item.children.map((child) => (
             <Link
               key={child.href}
               href={child.href}
-              className={`block text-lg py-2 px-3 rounded-md transition-colors ${
+              className={`block text-sm md:text-lg py-1.5 md:py-2 px-3 rounded-md transition-colors ${
                 pathname === child.href
                   ? 'text-white bg-white/10 font-medium'
                   : 'text-white hover:bg-white/5'
@@ -231,9 +231,6 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
-  const [scrollTop, setScrollTop] = useState(0);
-  const [scrollBottom, setScrollBottom] = useState(1); // 1 = not at bottom, 0 = at bottom
-  const navRef = useRef<HTMLElement>(null);
 
   // Filter docs based on search query with multiple excerpts
   const searchResults = useMemo(() => {
@@ -388,32 +385,6 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
     };
   }, [sidebarOpen]);
 
-  // Handle scroll position for fade gradients
-  const handleNavScroll = useCallback(() => {
-    const nav = navRef.current;
-    if (!nav) return;
-
-    const { scrollTop: st, scrollHeight, clientHeight } = nav;
-    // Calculate how far from top (0 = at top, 1 = scrolled enough to show full gradient)
-    const topFade = Math.min(st / 50, 1); // Fade in over 50px of scroll
-    // Calculate how far from bottom (0 = at bottom, 1 = not at bottom)
-    const bottomFade = Math.min((scrollHeight - clientHeight - st) / 50, 1);
-
-    setScrollTop(topFade);
-    setScrollBottom(bottomFade);
-  }, []);
-
-  useEffect(() => {
-    const nav = navRef.current;
-    if (!nav) return;
-
-    // Initial check
-    handleNavScroll();
-
-    nav.addEventListener('scroll', handleNavScroll);
-    return () => nav.removeEventListener('scroll', handleNavScroll);
-  }, [handleNavScroll]);
-
   return (
     <div className="min-h-screen relative flex flex-col">
       {/* Search Highlighter (handles URL param highlighting) */}
@@ -428,15 +399,22 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
 
       {/* Mobile Sidebar Toggle - floating button (hidden when sidebar is open) */}
       {!sidebarOpen && (
-        <button
-          className="md:hidden fixed top-[88px] left-4 z-[60] p-2 bg-black/80 border border-white/20 rounded-lg text-white/80 hover:text-white hover:bg-black transition-colors backdrop-blur-sm"
+        <LiquidGlassCard
+          className="md:hidden fixed top-[88px] left-4 z-[60] cursor-pointer"
+          borderRadius="8px"
+          shadowIntensity="none"
+          glowIntensity="sm"
+          blurIntensity="xl"
           onClick={() => setSidebarOpen(true)}
+          role="button"
           aria-label="Open docs sidebar"
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        </button>
+          <div className="p-2 text-white/80 hover:text-white transition-colors">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </div>
+        </LiquidGlassCard>
       )}
 
       {/* Mobile Sidebar Overlay */}
@@ -447,16 +425,14 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
         />
       )}
 
-      {/* Content wrapper with sidebar */}
-      <div className="flex-1 flex relative z-10">
-        {/* Sidebar - fixed position for full height */}
-        <aside
-          className={`fixed top-20 md:top-24 left-0 bottom-0 w-80 md:w-96 z-50 transform transition-transform duration-200 ease-out md:translate-x-0 flex-shrink-0 ${
-            sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
-          }`}
-        >
+      {/* Sidebar - outside z-10 wrapper so it renders above the overlay */}
+      <aside
+        className={`fixed top-20 md:top-24 left-0 bottom-0 w-72 md:w-96 z-50 transform transition-transform duration-200 ease-out md:translate-x-0 flex-shrink-0 ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+        }`}
+      >
         <LiquidGlassCard
-          className="h-full flex flex-col !rounded-none"
+          className="h-full flex flex-col !rounded-none !overflow-y-auto"
           shadowIntensity="none"
           glowIntensity="sm"
           blurIntensity="xl"
@@ -491,7 +467,7 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onFocus={() => setSearchFocused(true)}
                 onBlur={() => setTimeout(() => setSearchFocused(false), 150)}
-                className="w-full bg-white/5 border border-white/10 rounded-lg py-3 pl-11 pr-4 text-base text-white placeholder:text-white/40 focus:outline-none focus:border-white/30 focus:bg-white/10 transition-colors"
+                className="w-full bg-white/5 border border-white/10 rounded-lg py-2 md:py-3 pl-11 pr-4 text-sm md:text-base text-white placeholder:text-white/40 focus:outline-none focus:border-white/30 focus:bg-white/10 transition-colors"
               />
               {searchQuery && (
                 <button
@@ -540,33 +516,21 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
             )}
           </div>
 
-          {/* Scrollable navigation area with fade indicators */}
-          <div className="flex-1 relative overflow-hidden">
-            {/* Top fade gradient - deeper shadow, fades based on scroll position */}
-            <div
-              className="absolute top-0 left-0 right-0 h-12 bg-gradient-to-b from-black via-black/60 to-transparent z-10 pointer-events-none transition-opacity duration-150"
-              style={{ opacity: scrollTop }}
-            />
-
-            {/* Bottom fade gradient - deeper shadow, fades based on scroll position */}
-            <div
-              className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-black via-black/60 to-transparent z-10 pointer-events-none transition-opacity duration-150"
-              style={{ opacity: scrollBottom }}
-            />
-
-            <nav ref={navRef} className="h-full overflow-y-auto px-4 py-2 pb-32 overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
-              {navigation.map((item) => (
-                <NavSection
-                  key={item.href}
-                  item={item}
-                  pathname={pathname}
-                />
-              ))}
-            </nav>
-          </div>
+          {/* Scrollable navigation area */}
+          <nav className="flex-1 overflow-y-auto px-4 py-2 pb-32 overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
+            {navigation.map((item) => (
+              <NavSection
+                key={item.href}
+                item={item}
+                pathname={pathname}
+              />
+            ))}
+          </nav>
         </LiquidGlassCard>
       </aside>
 
+      {/* Content wrapper */}
+      <div className="flex-1 flex relative z-10">
         {/* Main Content - offset by sidebar width on desktop */}
         <main className="flex-1 min-w-0 md:ml-96">
           <div className="max-w-4xl px-4 md:px-8 md:pl-24 md:pr-24 pb-24">
