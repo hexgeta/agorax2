@@ -358,15 +358,33 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
     setSidebarOpen(false);
   }, [pathname]);
 
-  // Prevent body scroll when sidebar is open on mobile
+  // Prevent body scroll when sidebar is open on mobile (iOS-safe)
   useEffect(() => {
     if (sidebarOpen) {
+      const scrollY = window.scrollY;
       document.body.style.overflow = 'hidden';
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.width = '100%';
     } else {
+      const scrollY = document.body.style.top;
       document.body.style.overflow = '';
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
+      if (scrollY) {
+        window.scrollTo(0, parseInt(scrollY || '0') * -1);
+      }
     }
     return () => {
+      const scrollY = document.body.style.top;
       document.body.style.overflow = '';
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
+      if (scrollY) {
+        window.scrollTo(0, parseInt(scrollY || '0') * -1);
+      }
     };
   }, [sidebarOpen]);
 
@@ -408,20 +426,18 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
         <PixelBlastBackground />
       </div>
 
-      {/* Mobile Sidebar Toggle - floating button */}
-      <button
-        className="md:hidden fixed top-[88px] left-4 z-[60] p-2 bg-black/80 border border-white/20 rounded-lg text-white/80 hover:text-white hover:bg-black transition-colors backdrop-blur-sm"
-        onClick={() => setSidebarOpen(!sidebarOpen)}
-        aria-label="Toggle docs sidebar"
-      >
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          {sidebarOpen ? (
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          ) : (
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-          )}
-        </svg>
-      </button>
+      {/* Mobile Sidebar Toggle - floating button (hidden when sidebar is open) */}
+      {!sidebarOpen && (
+        <button
+          className="md:hidden fixed top-[88px] left-4 z-[60] p-2 bg-black/80 border border-white/20 rounded-lg text-white/80 hover:text-white hover:bg-black transition-colors backdrop-blur-sm"
+          onClick={() => setSidebarOpen(true)}
+          aria-label="Open docs sidebar"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+      )}
 
       {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
@@ -445,8 +461,20 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
           glowIntensity="sm"
           blurIntensity="xl"
         >
-          {/* Search Bar - fixed at top */}
-          <div className="pt-6 pb-4 px-4 relative flex-shrink-0">
+          {/* Close button + Search Bar - fixed at top */}
+          <div className="pt-4 pb-4 px-4 relative flex-shrink-0">
+            {/* Mobile close button */}
+            <div className="flex justify-end mb-2 md:hidden">
+              <button
+                onClick={() => setSidebarOpen(false)}
+                className="p-1.5 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+                aria-label="Close sidebar"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
             <div className="relative">
               <svg
                 className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-white/40"
@@ -526,7 +554,7 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
               style={{ opacity: scrollBottom }}
             />
 
-            <nav ref={navRef} className="h-full overflow-y-auto px-4 py-2 pb-32">
+            <nav ref={navRef} className="h-full overflow-y-auto px-4 py-2 pb-32 overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
               {navigation.map((item) => (
                 <NavSection
                   key={item.href}
