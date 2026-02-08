@@ -6,6 +6,7 @@ import { useAccount } from 'wagmi';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 import PixelBlastBackground from '@/components/ui/PixelBlastBackground';
 import { useOpenPositions, CompleteOrderDetails } from '@/hooks/contracts/useOpenPositions';
+import { useLeaderboard } from '@/hooks/useUserAchievements';
 import { PixelSpinner } from '@/components/ui/PixelSpinner';
 
 // Prestige levels for display
@@ -21,13 +22,19 @@ const PRESTIGE_LEVELS = [
   { symbol: 'Ω', name: 'Omega', color: 'text-yellow-400', bgColor: 'bg-yellow-500/20' },
 ];
 
-// Interface for aggregated user stats
-interface UserStats {
+// Interface for merged user stats
+interface MergedUserStats {
   address: string;
   totalOrders: number;
   activeOrders: number;
   completedOrders: number;
   cancelledOrders: number;
+  // From Supabase (optional - may not exist yet)
+  totalXp: number;
+  prestigeLevel: number;
+  totalVolumeUsd: number;
+  totalTrades: number;
+  totalOrdersFilled: number;
 }
 
 function getRankDisplay(rank: number) {
@@ -44,23 +51,49 @@ function formatAddress(address: string): string {
   return address;
 }
 
+function formatVolume(usd: number): string {
+  if (usd >= 1000000) return `$${(usd / 1000000).toFixed(1)}M`;
+  if (usd >= 1000) return `$${(usd / 1000).toFixed(1)}K`;
+  if (usd > 0) return `$${usd.toFixed(0)}`;
+  return '-';
+}
+
+function formatXp(xp: number): string {
+  if (xp >= 1000000) return `${(xp / 1000000).toFixed(1)}M`;
+  if (xp >= 1000) return `${(xp / 1000).toFixed(1)}K`;
+  if (xp > 0) return xp.toLocaleString();
+  return '-';
+}
+
 export default function LeaderboardPage() {
   const { address: connectedAddress } = useAccount();
 
   // Fetch all orders from the contract (fetchAllOrders = true)
-  const { allOrders, isLoading } = useOpenPositions(undefined, true);
+  const { allOrders, isLoading: ordersLoading } = useOpenPositions(undefined, true);
 
-  // Aggregate user stats from all orders
-  const userStats = useMemo(() => {
-    const statsMap = new Map<string, UserStats>();
+  // Fetch Supabase leaderboard data for XP, volume, prestige
+  const { leaderboard, isLoading: leaderboardLoading } = useLeaderboard(500);
+
+  const isLoading = ordersLoading;
+
+  // Merge on-chain data with Supabase leaderboard data
+  const mergedUsers = useMemo(() => {
+    // Build on-chain stats map
+    const onChainMap = new Map<string, {
+      address: string;
+      totalOrders: number;
+      activeOrders: number;
+      completedOrders: number;
+      cancelledOrders: number;
+    }>();
 
     allOrders.forEach((order: CompleteOrderDetails) => {
       const maker = order.userDetails.orderOwner;
       const orderDetails = order.orderDetailsWithID;
-
       const makerLower = maker.toLowerCase();
-      if (!statsMap.has(makerLower)) {
-        statsMap.set(makerLower, {
+
+      if (!onChainMap.has(makerLower)) {
+        onChainMap.set(makerLower, {
           address: maker,
           totalOrders: 0,
           activeOrders: 0,
@@ -68,21 +101,71 @@ export default function LeaderboardPage() {
           cancelledOrders: 0,
         });
       }
-      const stats = statsMap.get(makerLower)!;
+      const stats = onChainMap.get(makerLower)!;
       stats.totalOrders++;
       if (orderDetails.status === 0) stats.activeOrders++;
       if (orderDetails.status === 1) stats.cancelledOrders++;
       if (orderDetails.status === 2) stats.completedOrders++;
     });
 
-    return Array.from(statsMap.values()).sort((a, b) => b.totalOrders - a.totalOrders);
-  }, [allOrders]);
+    // Build Supabase data map
+    const supabaseMap = new Map<string, {
+      totalXp: number;
+      prestigeLevel: number;
+      totalVolumeUsd: number;
+      totalTrades: number;
+      totalOrdersFilled: number;
+    }>();
 
-  // Add rank to user stats
-  const rankedUsers = userStats.map((user, idx) => ({
+    leaderboard.forEach((entry) => {
+      supabaseMap.set(entry.wallet_address.toLowerCase(), {
+        totalXp: entry.total_xp,
+        prestigeLevel: entry.current_prestige,
+        totalVolumeUsd: entry.total_volume_usd,
+        totalTrades: entry.total_trades,
+        totalOrdersFilled: entry.total_orders_filled,
+      });
+    });
+
+    // Collect all unique addresses
+    const allAddresses = new Set<string>();
+    onChainMap.forEach((_, addr) => allAddresses.add(addr));
+    supabaseMap.forEach((_, addr) => allAddresses.add(addr));
+
+    // Merge
+    const merged: MergedUserStats[] = [];
+    allAddresses.forEach((addr) => {
+      const onChain = onChainMap.get(addr);
+      const supabase = supabaseMap.get(addr);
+
+      merged.push({
+        address: onChain?.address || addr,
+        totalOrders: onChain?.totalOrders || 0,
+        activeOrders: onChain?.activeOrders || 0,
+        completedOrders: onChain?.completedOrders || 0,
+        cancelledOrders: onChain?.cancelledOrders || 0,
+        totalXp: supabase?.totalXp || 0,
+        prestigeLevel: supabase?.prestigeLevel ?? (onChain ? Math.min(Math.floor((onChain.completedOrders) / 10), 8) : 0),
+        totalVolumeUsd: supabase?.totalVolumeUsd || 0,
+        totalTrades: supabase?.totalTrades || 0,
+        totalOrdersFilled: supabase?.totalOrdersFilled || 0,
+      });
+    });
+
+    // Sort by XP first, then by total orders as tiebreaker
+    return merged.sort((a, b) => {
+      if (b.totalXp !== a.totalXp) return b.totalXp - a.totalXp;
+      return b.totalOrders - a.totalOrders;
+    });
+  }, [allOrders, leaderboard]);
+
+  // Add rank
+  const rankedUsers = mergedUsers.map((user, idx) => ({
     ...user,
     rank: idx + 1,
-    prestigeLevel: Math.min(Math.floor(user.completedOrders / 10), 8), // Simple prestige calculation based on completed orders
+    fillRate: user.totalOrders > 0
+      ? Math.round((user.completedOrders / user.totalOrders) * 100)
+      : 0,
   }));
 
   return (
@@ -94,7 +177,7 @@ export default function LeaderboardPage() {
 
       {/* Main Content */}
       <div className="w-full px-4 md:px-8 mt-20 mb-12 relative z-10">
-        <div className="max-w-[1200px] mx-auto">
+        <div className="max-w-[1400px] mx-auto">
           {/* Leaderboard Table */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -120,22 +203,27 @@ export default function LeaderboardPage() {
                       <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Rank</th>
                       <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Trader</th>
                       <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm">Level</th>
-                      <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm hidden sm:table-cell">Completed</th>
-                      <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm hidden md:table-cell">Total Orders</th>
-                      <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm hidden lg:table-cell">Active Orders</th>
+                      <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm">XP</th>
+                      <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm hidden sm:table-cell">Volume</th>
+                      <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm hidden sm:table-cell">Trades</th>
+                      <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm hidden md:table-cell">Orders</th>
+                      <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm hidden md:table-cell">Filled</th>
+                      <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm hidden lg:table-cell">Active</th>
+                      <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm hidden lg:table-cell">Cancelled</th>
+                      <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm hidden lg:table-cell">Fill Rate</th>
                     </tr>
                   </thead>
                   <tbody>
                     {rankedUsers.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="py-8 text-center text-gray-500">
+                        <td colSpan={11} className="py-8 text-center text-gray-500">
                           No traders found yet.
                         </td>
                       </tr>
                     ) : (
                       rankedUsers.map((user) => {
                         const isCurrentUser = connectedAddress?.toLowerCase() === user.address.toLowerCase();
-                        const prestige = PRESTIGE_LEVELS[user.prestigeLevel];
+                        const prestige = PRESTIGE_LEVELS[user.prestigeLevel] || PRESTIGE_LEVELS[0];
                         const rankDisplay = getRankDisplay(user.rank);
 
                         return (
@@ -172,9 +260,19 @@ export default function LeaderboardPage() {
                                 </div>
                               </div>
                             </td>
+                            <td className="py-4 px-2 text-right">
+                              <span className={`font-medium ${user.totalXp > 0 ? 'text-amber-400' : 'text-gray-600'}`}>
+                                {formatXp(user.totalXp)}
+                              </span>
+                            </td>
+                            <td className="py-4 px-2 text-right hidden sm:table-cell">
+                              <span className={`text-sm ${user.totalVolumeUsd > 0 ? 'text-green-400' : 'text-gray-600'}`}>
+                                {formatVolume(user.totalVolumeUsd)}
+                              </span>
+                            </td>
                             <td className="py-4 px-2 text-right hidden sm:table-cell">
                               <span className="text-gray-400">
-                                {user.completedOrders}
+                                {user.totalTrades || user.completedOrders || '-'}
                               </span>
                             </td>
                             <td className="py-4 px-2 text-right hidden md:table-cell">
@@ -182,8 +280,28 @@ export default function LeaderboardPage() {
                                 {user.totalOrders}
                               </span>
                             </td>
+                            <td className="py-4 px-2 text-right hidden md:table-cell">
+                              <span className="text-gray-400">
+                                {user.completedOrders}
+                              </span>
+                            </td>
                             <td className="py-4 px-2 text-right hidden lg:table-cell">
                               <span className="text-gray-400">{user.activeOrders}</span>
+                            </td>
+                            <td className="py-4 px-2 text-right hidden lg:table-cell">
+                              <span className={`${user.cancelledOrders > 0 ? 'text-red-400' : 'text-gray-600'}`}>
+                                {user.cancelledOrders || '-'}
+                              </span>
+                            </td>
+                            <td className="py-4 px-2 text-right hidden lg:table-cell">
+                              <span className={`text-sm ${
+                                user.fillRate >= 80 ? 'text-green-400' :
+                                user.fillRate >= 50 ? 'text-yellow-400' :
+                                user.fillRate > 0 ? 'text-orange-400' :
+                                'text-gray-600'
+                              }`}>
+                                {user.fillRate > 0 ? `${user.fillRate}%` : '-'}
+                              </span>
                             </td>
                           </tr>
                         );
@@ -203,7 +321,8 @@ export default function LeaderboardPage() {
             transition={{ duration: 0.5, delay: 0.4 }}
             className="text-center text-gray-500 text-sm mt-8"
           >
-            Leaderboard and orders update in real-time based on on-chain activity.
+            Rankings based on XP earned from achievements. Order data sourced live from PulseChain.
+            {leaderboardLoading && <span className="ml-2 text-gray-600">(Loading XP data...)</span>}
           </motion.p>
         </div>
       </div>
