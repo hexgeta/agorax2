@@ -78,6 +78,10 @@ interface BackfillResult {
   orders_filled: number;
   orders_cancelled: number;
   proceeds_collected: number;
+  orders_table_written: number;
+  fills_table_written: number;
+  cancellations_table_written: number;
+  proceeds_table_written: number;
   errors: string[];
 }
 
@@ -107,13 +111,19 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       orders_filled: 0,
       orders_cancelled: 0,
       proceeds_collected: 0,
+      orders_table_written: 0,
+      fills_table_written: 0,
+      cancellations_table_written: 0,
+      proceeds_table_written: 0,
       errors: [],
     };
+
+    // Import contract ABI for RPC calls
+    const CONTRACT_ABI = (await import('@/config/abis')).CONTRACT_ABI;
 
     // Fetch the whitelist from the contract so we can resolve buyTokenIndex -> address
     let whitelist: string[] = [];
     try {
-      const CONTRACT_ABI = (await import('@/config/abis')).CONTRACT_ABI;
       const whitelistResult = await client.readContract({
         address: CONTRACT_ADDRESS,
         abi: CONTRACT_ABI,
@@ -219,7 +229,91 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const orderMap = new Map<string, OrderMeta>();
 
     // ================================================================
-    // 4. Process OrderPlaced events -> record order_created + wallet_connected
+    // 3b. Batch-fetch full order details from the contract
+    // ================================================================
+    interface OnChainOrderDetails {
+      orderID: bigint;
+      remainingSellAmount: bigint;
+      redeemedSellAmount: bigint;
+      status: number;
+      orderDetails: {
+        sellToken: string;
+        sellAmount: bigint;
+        buyTokensIndex: bigint[];
+        buyAmounts: bigint[];
+        expirationTime: bigint;
+        allOrNothing: boolean;
+      };
+    }
+    const onChainOrderMap = new Map<string, OnChainOrderDetails>();
+
+    // Collect all unique order IDs from all events
+    const allOrderIds = new Set<string>();
+    for (const log of placedLogs) {
+      const oid = log.args.orderID?.toString();
+      if (oid) allOrderIds.add(oid);
+    }
+    for (const log of filledLogs) {
+      const oid = log.args.orderID?.toString();
+      if (oid) allOrderIds.add(oid);
+    }
+    for (const log of cancelledLogs) {
+      const oid = log.args.orderID?.toString();
+      if (oid) allOrderIds.add(oid);
+    }
+    for (const log of proceedsLogs) {
+      const oid = log.args.orderID?.toString();
+      if (oid) allOrderIds.add(oid);
+    }
+
+    // Fetch order details in batches of 10
+    const orderIdArray = Array.from(allOrderIds);
+    for (let i = 0; i < orderIdArray.length; i += 10) {
+      const batch = orderIdArray.slice(i, i + 10);
+      const batchResults = await Promise.all(
+        batch.map((oid) =>
+          client
+            .readContract({
+              address: CONTRACT_ADDRESS,
+              abi: CONTRACT_ABI,
+              functionName: 'getOrderDetails',
+              args: [BigInt(oid)],
+            })
+            .then((res: any) => ({ oid, data: res }))
+            .catch(() => ({ oid, data: null }))
+        )
+      );
+      for (const { oid, data } of batchResults) {
+        if (data) {
+          try {
+            const details = data.orderDetailsWithID || data;
+            onChainOrderMap.set(oid, {
+              orderID: details.orderID ?? BigInt(oid),
+              remainingSellAmount: details.remainingSellAmount ?? 0n,
+              redeemedSellAmount: details.redeemedSellAmount ?? 0n,
+              status: Number(details.status ?? 0),
+              orderDetails: {
+                sellToken: String(details.orderDetails?.sellToken || ''),
+                sellAmount: details.orderDetails?.sellAmount ?? 0n,
+                buyTokensIndex: (details.orderDetails?.buyTokensIndex || []).map((x: any) => BigInt(x)),
+                buyAmounts: (details.orderDetails?.buyAmounts || []).map((x: any) => BigInt(x)),
+                expirationTime: details.orderDetails?.expirationTime ?? 0n,
+                allOrNothing: Boolean(details.orderDetails?.allOrNothing),
+              },
+            });
+          } catch (err) {
+            result.errors.push(`Failed to parse order details for ${oid}: ${err}`);
+          }
+        }
+      }
+      // Small delay between batches
+      if (i + 10 < orderIdArray.length) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    }
+
+    // ================================================================
+    // 4. Process OrderPlaced events -> record order_created + wallet_connected + orders table
     // ================================================================
     const connectedWallets = new Set<string>();
 
@@ -247,7 +341,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         await recordEvent(owner, 'wallet_connected', {}, 0, result);
       }
 
-      // Record order_created
+      // Record order_created event
       const sellDecimals = getTokenDecimals(sellToken);
       await recordEvent(
         owner,
@@ -262,6 +356,63 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         result
       );
       result.orders_placed++;
+
+      // Write to orders table
+      try {
+        const onChain = onChainOrderMap.get(orderId);
+        const buyTokensIndices = onChain?.orderDetails.buyTokensIndex || [];
+        const buyAmounts = onChain?.orderDetails.buyAmounts || [];
+        const buyAddresses = buyTokensIndices.map((idx) => whitelist[Number(idx)] || '');
+        const buyTickers = buyAddresses.map((addr) => (addr ? getTokenTicker(addr) : 'UNKNOWN'));
+        const buyAmountsRaw = buyAmounts.map((a) => a.toString());
+        const buyAmountsFormatted = buyAmounts.map((a, i) => {
+          const addr = buyAddresses[i];
+          const decimals = addr ? getTokenDecimals(addr) : 18;
+          return formatAmount(a, decimals);
+        });
+
+        const orderStatus = onChain ? onChain.status : 0;
+        const fillPct = onChain
+          ? (() => {
+              const total = onChain.orderDetails.sellAmount;
+              const redeemed = onChain.redeemedSellAmount;
+              if (total === 0n) return 0;
+              return Number((redeemed * 10000n) / total) / 100;
+            })()
+          : 0;
+
+        const { error: orderErr } = await supabase.from('orders').upsert(
+          {
+            order_id: Number(orderId),
+            maker_address: owner,
+            sell_token_address: sellToken,
+            sell_token_ticker: getTokenTicker(sellToken),
+            sell_amount_raw: sellAmount.toString(),
+            sell_amount_formatted: formatAmount(sellAmount, sellDecimals),
+            buy_tokens_addresses: buyAddresses,
+            buy_tokens_tickers: buyTickers,
+            buy_amounts_raw: buyAmountsRaw,
+            buy_amounts_formatted: buyAmountsFormatted,
+            status: orderStatus,
+            fill_percentage: fillPct,
+            remaining_sell_amount: onChain?.remainingSellAmount.toString() || sellAmount.toString(),
+            redeemed_sell_amount: onChain?.redeemedSellAmount.toString() || '0',
+            is_all_or_nothing: onChain?.orderDetails.allOrNothing || false,
+            expiration: Number(onChain?.orderDetails.expirationTime || 0n),
+            creation_tx_hash: log.transactionHash,
+            creation_block_number: Number(log.blockNumber),
+            created_at: timestamp ? new Date(timestamp * 1000).toISOString() : new Date().toISOString(),
+          },
+          { onConflict: 'order_id' }
+        );
+        if (!orderErr) {
+          result.orders_table_written++;
+        } else {
+          result.errors.push(`Orders table upsert failed for order ${orderId}: ${orderErr.message}`);
+        }
+      } catch (err) {
+        result.errors.push(`Orders table write failed for order ${orderId}: ${err}`);
+      }
     }
 
     // ================================================================
@@ -346,7 +497,56 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         );
       }
 
+      // Write to order_fills table
+      try {
+        const buyDecimals2 = buyTokenAddress ? getTokenDecimals(buyTokenAddress) : 18;
+        const { error: fillErr } = await supabase.from('order_fills').insert({
+          order_id: Number(orderId),
+          filler_address: buyer,
+          buy_token_index: buyTokenIndex,
+          buy_token_address: buyTokenAddress || '',
+          buy_token_ticker: buyTicker,
+          buy_amount_raw: buyAmount.toString(),
+          buy_amount_formatted: formatAmount(buyAmount, buyDecimals2),
+          volume_usd: 0, // USD values not available from events alone
+          tx_hash: log.transactionHash,
+          block_number: Number(log.blockNumber),
+          filled_at: timestamp ? new Date(timestamp * 1000).toISOString() : new Date().toISOString(),
+        });
+        if (!fillErr) {
+          result.fills_table_written++;
+        } else if (fillErr.code !== '23505') {
+          // Ignore unique constraint violations (duplicates)
+          result.errors.push(`Fills table insert failed for order ${orderId}: ${fillErr.message}`);
+        }
+      } catch (err) {
+        result.errors.push(`Fills table write failed for order ${orderId}: ${err}`);
+      }
+
       result.orders_filled++;
+    }
+
+    // Update order fill counts from the fills we just inserted
+    for (const oid of allOrderIds) {
+      try {
+        const { data: fillCount } = await supabase
+          .from('order_fills')
+          .select('filler_address', { count: 'exact' })
+          .eq('order_id', Number(oid));
+
+        const uniqueFillers = new Set(fillCount?.map((f) => f.filler_address) || []).size;
+
+        await supabase
+          .from('orders')
+          .update({
+            total_fills: fillCount?.length || 0,
+            unique_fillers: uniqueFillers,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('order_id', Number(oid));
+      } catch {
+        // Non-critical - skip
+      }
     }
 
     // ================================================================
@@ -373,6 +573,46 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         EVENT_XP.order_cancelled,
         result
       );
+      // Write to order_cancellations table
+      try {
+        const onChain = onChainOrderMap.get(orderId);
+        const fillPctAtCancel = onChain
+          ? (() => {
+              const total = onChain.orderDetails.sellAmount;
+              const redeemed = onChain.redeemedSellAmount;
+              if (total === 0n) return 0;
+              return Number((redeemed * 10000n) / total) / 100;
+            })()
+          : 0;
+
+        const { error: cancelErr } = await supabase.from('order_cancellations').insert({
+          order_id: Number(orderId),
+          cancelled_by: user,
+          fill_percentage_at_cancel: fillPctAtCancel,
+          time_since_creation_seconds: timeSinceCreation || 0,
+          tx_hash: log.transactionHash,
+          block_number: Number(log.blockNumber),
+          cancelled_at: timestamp ? new Date(timestamp * 1000).toISOString() : new Date().toISOString(),
+        });
+        if (!cancelErr) {
+          result.cancellations_table_written++;
+        } else if (cancelErr.code !== '23505') {
+          result.errors.push(`Cancellations table insert failed for order ${orderId}: ${cancelErr.message}`);
+        }
+      } catch (err) {
+        result.errors.push(`Cancellations table write failed for order ${orderId}: ${err}`);
+      }
+
+      // Update order status in orders table
+      try {
+        await supabase
+          .from('orders')
+          .update({ status: 1, updated_at: new Date().toISOString() })
+          .eq('order_id', Number(orderId));
+      } catch {
+        // Non-critical
+      }
+
       result.orders_cancelled++;
     }
 
@@ -395,6 +635,25 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         EVENT_XP.proceeds_claimed,
         result
       );
+      // Write to order_proceeds table
+      try {
+        const timestamp = blockTimestamps.get(log.blockNumber) || 0;
+        const { error: proceedsErr } = await supabase.from('order_proceeds').insert({
+          order_id: Number(orderId),
+          claimed_by: user,
+          tx_hash: log.transactionHash,
+          block_number: Number(log.blockNumber),
+          claimed_at: timestamp ? new Date(timestamp * 1000).toISOString() : new Date().toISOString(),
+        });
+        if (!proceedsErr) {
+          result.proceeds_table_written++;
+        } else if (proceedsErr.code !== '23505') {
+          result.errors.push(`Proceeds table insert failed for order ${orderId}: ${proceedsErr.message}`);
+        }
+      } catch (err) {
+        result.errors.push(`Proceeds table write failed for order ${orderId}: ${err}`);
+      }
+
       result.proceeds_collected++;
     }
 
@@ -479,10 +738,10 @@ async function recordEvent(
 // Recalculate aggregate stats from event history
 async function recalculateUserStats(walletAddress: string, result: BackfillResult) {
   try {
-    // Count events by type
+    // Count events by type - include event_data for detailed stats
     const { data: eventCounts } = await supabase
       .from('user_events')
-      .select('event_type, xp_awarded')
+      .select('event_type, xp_awarded, event_data, created_at')
       .eq('wallet_address', walletAddress);
 
     if (!eventCounts) return;
@@ -493,11 +752,17 @@ async function recalculateUserStats(walletAddress: string, result: BackfillResul
     let ordersCancelled = 0;
     let totalTrades = 0;
     let totalVolumeUsd = 0;
-
-    const tradeDates = new Set<string>();
+    let totalVolumeAsMaker = 0;
+    let totalVolumeAsTaker = 0;
+    let fillsGiven = 0;
+    let fillsReceived = 0;
+    let proceedsClaims = 0;
+    const uniqueTokens = new Set<string>();
+    let firstTradeDate: string | null = null;
 
     for (const event of eventCounts) {
       totalXp += event.xp_awarded || 0;
+      const data = event.event_data as Record<string, any> | null;
 
       switch (event.event_type) {
         case 'order_created':
@@ -505,12 +770,33 @@ async function recalculateUserStats(walletAddress: string, result: BackfillResul
           break;
         case 'order_filled':
           ordersFilled++;
+          // The filler is giving a fill
+          fillsGiven++;
           break;
         case 'order_cancelled':
           ordersCancelled++;
           break;
-        case 'trade_completed':
+        case 'trade_completed': {
           totalTrades++;
+          const vol = parseFloat(data?.volume_usd || '0') || 0;
+          totalVolumeUsd += vol;
+          if (data?.is_maker) {
+            totalVolumeAsMaker += vol;
+            fillsReceived++;
+          } else {
+            totalVolumeAsTaker += vol;
+          }
+          // Track unique tokens
+          if (data?.sell_token) uniqueTokens.add(data.sell_token.toUpperCase());
+          if (data?.buy_token) uniqueTokens.add(data.buy_token.toUpperCase());
+          // Track first trade date
+          if (!firstTradeDate || event.created_at < firstTradeDate) {
+            firstTradeDate = event.created_at;
+          }
+          break;
+        }
+        case 'proceeds_claimed':
+          proceedsClaims++;
           break;
       }
     }
@@ -523,17 +809,33 @@ async function recalculateUserStats(walletAddress: string, result: BackfillResul
 
     const challengeXpTotal = challengeXp?.reduce((sum, c) => sum + (c.xp_awarded || 0), 0) || 0;
 
+    const updateData: Record<string, any> = {
+      total_xp: totalXp + challengeXpTotal,
+      total_orders_created: ordersCreated,
+      total_orders_filled: ordersFilled,
+      total_orders_cancelled: ordersCancelled,
+      total_trades: totalTrades,
+      total_volume_usd: totalVolumeUsd,
+      total_volume_as_maker_usd: totalVolumeAsMaker,
+      total_volume_as_taker_usd: totalVolumeAsTaker,
+      total_fills_given: fillsGiven,
+      total_fills_received: fillsReceived,
+      total_proceeds_claims: proceedsClaims,
+      total_unique_tokens_traded: uniqueTokens.size,
+      unique_tokens_traded: uniqueTokens.size,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (firstTradeDate) {
+      updateData.first_trade_date = firstTradeDate.split('T')[0]; // DATE type
+    }
+
+    // Count proceeds_claimed for the separate total_proceeds_claimed column
+    updateData.total_proceeds_claimed = proceedsClaims;
+
     await supabase
       .from('users')
-      .update({
-        total_xp: totalXp + challengeXpTotal,
-        total_orders_created: ordersCreated,
-        total_orders_filled: ordersFilled,
-        total_orders_cancelled: ordersCancelled,
-        total_trades: totalTrades,
-        total_volume_usd: totalVolumeUsd,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updateData)
       .eq('wallet_address', walletAddress);
   } catch (err) {
     result.errors.push(`Stats recalc failed for ${walletAddress}: ${err}`);
