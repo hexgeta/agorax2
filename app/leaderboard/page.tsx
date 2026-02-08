@@ -196,21 +196,21 @@ export default function LeaderboardPage() {
                   <span className="ml-3 text-gray-400">Loading leaderboard...</span>
                 </div>
               ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
+              <div className="overflow-x-auto -mx-4 md:-mx-6 px-4 md:px-6">
+                <table className="w-full min-w-[900px]">
                   <thead>
                     <tr className="border-b border-white/10">
-                      <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Rank</th>
-                      <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Trader</th>
-                      <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm">Level</th>
-                      <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm">XP</th>
-                      <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm hidden sm:table-cell">Volume</th>
-                      <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm hidden sm:table-cell">Trades</th>
-                      <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm hidden md:table-cell">Orders</th>
-                      <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm hidden md:table-cell">Filled</th>
-                      <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm hidden lg:table-cell">Active</th>
-                      <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm hidden lg:table-cell">Cancelled</th>
-                      <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm hidden lg:table-cell">Fill Rate</th>
+                      <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Rank</th>
+                      <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Trader</th>
+                      <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Level</th>
+                      <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">XP</th>
+                      <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Volume</th>
+                      <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Trades</th>
+                      <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Orders</th>
+                      <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Filled</th>
+                      <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Active</th>
+                      <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Cancelled</th>
+                      <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Fill Rate</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -265,36 +265,36 @@ export default function LeaderboardPage() {
                                 {formatXp(user.totalXp)}
                               </span>
                             </td>
-                            <td className="py-4 px-2 text-right hidden sm:table-cell">
-                              <span className={`text-sm ${user.totalVolumeUsd > 0 ? 'text-green-400' : 'text-gray-600'}`}>
+                            <td className="py-4 px-2 text-right">
+                              <span className={`text-sm whitespace-nowrap ${user.totalVolumeUsd > 0 ? 'text-green-400' : 'text-gray-600'}`}>
                                 {formatVolume(user.totalVolumeUsd)}
                               </span>
                             </td>
-                            <td className="py-4 px-2 text-right hidden sm:table-cell">
+                            <td className="py-4 px-2 text-right">
                               <span className="text-gray-400">
                                 {user.totalTrades || user.completedOrders || '-'}
                               </span>
                             </td>
-                            <td className="py-4 px-2 text-right hidden md:table-cell">
+                            <td className="py-4 px-2 text-right">
                               <span className="text-gray-400">
                                 {user.totalOrders}
                               </span>
                             </td>
-                            <td className="py-4 px-2 text-right hidden md:table-cell">
+                            <td className="py-4 px-2 text-right">
                               <span className="text-gray-400">
                                 {user.completedOrders}
                               </span>
                             </td>
-                            <td className="py-4 px-2 text-right hidden lg:table-cell">
+                            <td className="py-4 px-2 text-right">
                               <span className="text-gray-400">{user.activeOrders}</span>
                             </td>
-                            <td className="py-4 px-2 text-right hidden lg:table-cell">
+                            <td className="py-4 px-2 text-right">
                               <span className={`${user.cancelledOrders > 0 ? 'text-red-400' : 'text-gray-600'}`}>
                                 {user.cancelledOrders || '-'}
                               </span>
                             </td>
-                            <td className="py-4 px-2 text-right hidden lg:table-cell">
-                              <span className={`text-sm ${
+                            <td className="py-4 px-2 text-right">
+                              <span className={`text-sm whitespace-nowrap ${
                                 user.fillRate >= 80 ? 'text-green-400' :
                                 user.fillRate >= 50 ? 'text-yellow-400' :
                                 user.fillRate > 0 ? 'text-orange-400' :

@@ -648,18 +648,18 @@ export default function StatsPage() {
                         <span className="ml-3 text-gray-400">Loading orders...</span>
                       </div>
                     ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full">
+                    <div className="overflow-x-auto -mx-4 md:-mx-6 px-4 md:px-6">
+                      <table className="w-full min-w-[700px]">
                         <thead>
                           <tr className="border-b border-white/10">
-                            <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">ID</th>
-                            <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Maker</th>
-                            <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Pair</th>
-                            <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm">Sell Amount</th>
-                            <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm hidden sm:table-cell">Buy Amount</th>
-                            <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm hidden md:table-cell">Filled</th>
-                            <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm">Status</th>
-                            <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm hidden lg:table-cell">Date</th>
+                            <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">ID</th>
+                            <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Maker</th>
+                            <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Pair</th>
+                            <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Sell Amount</th>
+                            <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Buy Amount</th>
+                            <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Filled</th>
+                            <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Status</th>
+                            <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Date</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -700,16 +700,16 @@ export default function StatsPage() {
                                     </span>
                                   </td>
                                   <td className="py-4 px-2 text-right">
-                                    <span className="text-gray-300 text-sm">
+                                    <span className="text-gray-300 text-sm whitespace-nowrap">
                                       {formatDisplayAmount(order.sellAmount)} {order.sellToken}
                                     </span>
                                   </td>
-                                  <td className="py-4 px-2 text-right hidden sm:table-cell">
-                                    <span className="text-gray-300 text-sm">
+                                  <td className="py-4 px-2 text-right">
+                                    <span className="text-gray-300 text-sm whitespace-nowrap">
                                       {formatDisplayAmount(order.buyAmount)} {order.buyToken}
                                     </span>
                                   </td>
-                                  <td className="py-4 px-2 text-center hidden md:table-cell">
+                                  <td className="py-4 px-2 text-center">
                                     <span className="text-gray-400 text-sm">{order.filled}%</span>
                                   </td>
                                   <td className="py-4 px-2 text-center">
@@ -717,8 +717,8 @@ export default function StatsPage() {
                                       {order.status}
                                     </span>
                                   </td>
-                                  <td className="py-4 px-2 text-right hidden lg:table-cell">
-                                    <span className="text-gray-500 text-sm">{order.createdAt}</span>
+                                  <td className="py-4 px-2 text-right">
+                                    <span className="text-gray-500 text-sm whitespace-nowrap">{order.createdAt}</span>
                                   </td>
                                 </tr>
                               );
