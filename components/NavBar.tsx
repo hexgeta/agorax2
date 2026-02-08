@@ -405,9 +405,6 @@ const NavBar = () => {
             </Link>
           </nav>
 
-          {/* Divider */}
-          <div className="w-32 h-px bg-white/20" />
-
           {/* Connect Button */}
           <div className="flex flex-col items-center gap-4 px-8 w-full">
             {TESTING_MODE && <ChainSwitcher isCheckingConnection={false} />}

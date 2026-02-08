@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useMemo, useRef, useCallback, Suspense } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 import PixelBlastBackground from '@/components/ui/PixelBlastBackground';
@@ -409,51 +408,20 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
         <PixelBlastBackground />
       </div>
 
-      {/* Top Navigation */}
-      <nav className="fixed top-0 left-0 right-0 z-50">
-        <LiquidGlassCard
-          className="w-full px-4 md:px-8 py-4 !rounded-none"
-          shadowIntensity="none"
-          glowIntensity="sm"
-          blurIntensity="xl"
-        >
-          <div className="max-w-[1400px] mx-auto flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              {/* Mobile menu toggle */}
-              <button
-                className="md:hidden p-2 text-white/80 hover:text-white"
-                onClick={() => setSidebarOpen(!sidebarOpen)}
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-              </button>
-
-              <Link href="/" className="flex items-center gap-2">
-                <Image
-                  src="/logo.svg"
-                  alt="AgoráX"
-                  width={120}
-                  height={32}
-                  className="h-6 md:h-8 w-auto"
-                  priority
-                />
-              </Link>
-              <span className="text-white/40 text-lg hidden md:inline">/</span>
-              <span className="text-white font-medium hidden md:inline">Documentation</span>
-            </div>
-
-            <div className="flex items-center gap-4">
-              <Link
-                href="/trade"
-                className="text-white/80 hover:text-white text-sm font-medium transition-colors"
-              >
-                Launch App
-              </Link>
-            </div>
-          </div>
-        </LiquidGlassCard>
-      </nav>
+      {/* Mobile Sidebar Toggle - floating button */}
+      <button
+        className="md:hidden fixed top-[88px] left-4 z-[60] p-2 bg-black/80 border border-white/20 rounded-lg text-white/80 hover:text-white hover:bg-black transition-colors backdrop-blur-sm"
+        onClick={() => setSidebarOpen(!sidebarOpen)}
+        aria-label="Toggle docs sidebar"
+      >
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          {sidebarOpen ? (
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          ) : (
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+          )}
+        </svg>
+      </button>
 
       {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
@@ -464,11 +432,11 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
       )}
 
       {/* Content wrapper with sidebar */}
-      <div className="flex-1 pt-[73px] flex relative z-10">
+      <div className="flex-1 flex relative z-10">
         {/* Sidebar - fixed position for full height */}
         <aside
-          className={`fixed top-[73px] left-0 bottom-0 w-80 md:w-96 z-40 transform transition-transform duration-200 ease-out md:translate-x-0 flex-shrink-0 ${
-            sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          className={`fixed top-20 md:top-24 left-0 bottom-0 w-80 md:w-96 z-50 transform transition-transform duration-200 ease-out md:translate-x-0 flex-shrink-0 ${
+            sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
           }`}
         >
         <LiquidGlassCard
