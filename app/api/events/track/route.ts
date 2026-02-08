@@ -286,6 +286,57 @@ async function checkAndCompleteChallenges(
 
   if (eventType === 'order_created') {
     const priceVsMarket = (eventData.price_vs_market_percent as number) || 0;
+
+    // Check Both Sides: did user also fill an order today?
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const { count: fillsToday } = await supabase
+      .from('user_events')
+      .select('id', { count: 'exact', head: true })
+      .eq('wallet_address', walletAddress)
+      .eq('event_type', 'order_filled')
+      .gte('created_at', today.toISOString())
+      .lt('created_at', tomorrow.toISOString());
+
+    // Check Arbitrage Artist: did user fill an order within last 2 minutes?
+    const twoMinAgo = new Date(Date.now() - 120000).toISOString();
+    const { count: recentFills } = await supabase
+      .from('user_events')
+      .select('id', { count: 'exact', head: true })
+      .eq('wallet_address', walletAddress)
+      .eq('event_type', 'order_filled')
+      .gte('created_at', twoMinAgo);
+
+    // Check Deja Vu: duplicate order params
+    let hasDuplicateOrder = false;
+    const sellToken = eventData.sell_token as string | undefined;
+    const buyTokens = eventData.buy_tokens as string[] | undefined;
+    const sellAmount = eventData.sell_amount as string | undefined;
+    if (sellToken && buyTokens && sellAmount) {
+      const { data: prevOrders } = await supabase
+        .from('user_events')
+        .select('event_data')
+        .eq('wallet_address', walletAddress)
+        .eq('event_type', 'order_created')
+        .neq('id', 'placeholder'); // exclude current (it's already recorded)
+
+      if (prevOrders) {
+        hasDuplicateOrder = prevOrders.some((prev) => {
+          const d = prev.event_data as { sell_token?: string; buy_tokens?: string[]; sell_amount?: string };
+          return d.sell_token === sellToken &&
+            d.sell_amount === sellAmount &&
+            JSON.stringify(d.buy_tokens) === JSON.stringify(buyTokens);
+        });
+      }
+    }
+
+    // Check Order Hoarder: 15+ active orders with 0 fills (approximate via stats)
+    const activeUnfilled = stats.current_active_orders;
+
+    // Check Fat Finger: 100x above market
     await Promise.all([
       tryComplete(0, 'First Order', 'operations', 250, stats.total_orders_created >= 1),
       tryComplete(1, 'Getting Comfortable', 'operations', 400, stats.total_orders_created >= 5),
@@ -294,14 +345,38 @@ async function checkAndCompleteChallenges(
       tryComplete(5, 'Order Legend', 'operations', 2500, stats.total_orders_created >= 100),
       tryComplete(7, 'Order God', 'operations', 8000, stats.total_orders_created >= 500),
       tryComplete(8, 'Order Immortal', 'operations', 20000, stats.total_orders_created >= 1000),
-      // Overkill / Fire Sale: pricing challenges
+      // Pricing challenges
       tryComplete(5, 'Overkill', 'humiliation', 150, priceVsMarket >= 900),
       tryComplete(5, 'Fire Sale', 'humiliation', 150, priceVsMarket <= -50),
+      tryComplete(6, 'Fat Finger', 'humiliation', 300, priceVsMarket >= 9900),
+      // Both Sides (also checked on order_filled)
+      tryComplete(2, 'Both Sides', 'operations', 500, (fillsToday || 0) >= 1),
+      // Arbitrage Artist
+      tryComplete(4, 'Arbitrage Artist', 'operations', 1000, (recentFills || 0) >= 1),
+      // Deja Vu
+      tryComplete(2, 'Deja Vu', 'humiliation', 100, hasDuplicateOrder),
+      // Order Hoarder
+      tryComplete(5, 'Order Hoarder', 'humiliation', 300, activeUnfilled >= 15),
     ]);
   }
 
   if (eventType === 'order_filled') {
     const fillTimeSeconds = (eventData.fill_time_seconds as number) || Infinity;
+
+    // Check Both Sides: did user also create an order today?
+    const todayFill = new Date();
+    todayFill.setUTCHours(0, 0, 0, 0);
+    const tomorrowFill = new Date(todayFill);
+    tomorrowFill.setDate(tomorrowFill.getDate() + 1);
+
+    const { count: createdToday } = await supabase
+      .from('user_events')
+      .select('id', { count: 'exact', head: true })
+      .eq('wallet_address', walletAddress)
+      .eq('event_type', 'order_created')
+      .gte('created_at', todayFill.toISOString())
+      .lt('created_at', tomorrowFill.toISOString());
+
     await Promise.all([
       tryComplete(0, 'First Fill', 'operations', 250, stats.total_orders_filled >= 1),
       tryComplete(1, 'Active Buyer', 'operations', 400, stats.total_orders_filled >= 5),
@@ -311,6 +386,8 @@ async function checkAndCompleteChallenges(
       tryComplete(4, 'Speed Runner', 'humiliation', 400, fillTimeSeconds <= 30),
       tryComplete(6, 'The Sniper', 'humiliation', 800, fillTimeSeconds <= 5),
       tryComplete(8, 'Instant Legend', 'humiliation', 2000, fillTimeSeconds <= 1),
+      // Both Sides (also checked on order_created)
+      tryComplete(2, 'Both Sides', 'operations', 500, (createdToday || 0) >= 1),
     ]);
   }
 
@@ -341,6 +418,22 @@ async function checkAndCompleteChallenges(
   if (eventType === 'order_expired') {
     const fillPercentage = (eventData.fill_percentage as number) || 0;
     await tryComplete(3, 'Ghost Order', 'humiliation', 75, fillPercentage === 0);
+
+    // Ghost Town: 5+ expired orders with 0 fills
+    if (fillPercentage === 0) {
+      const { data: expiredEvents } = await supabase
+        .from('user_events')
+        .select('event_data')
+        .eq('wallet_address', walletAddress)
+        .eq('event_type', 'order_expired');
+
+      const ghostCount = expiredEvents?.filter((e) => {
+        const d = e.event_data as { fill_percentage?: number };
+        return (d.fill_percentage || 0) === 0;
+      }).length || 0;
+
+      await tryComplete(5, 'Ghost Town', 'humiliation', 200, ghostCount >= 5);
+    }
   }
 
   // ---- order_viewed: single query for both unique orders and unique tokens ----
@@ -365,6 +458,46 @@ async function checkAndCompleteChallenges(
       tryComplete(2, 'Market Scanner', 'bootcamp', 200, uniqueOrdersViewed >= 50),
       tryComplete(3, 'Market Regular', 'bootcamp', 300, uniqueOrdersViewed >= 100),
       tryComplete(1, 'Token Explorer', 'bootcamp', 150, uniqueTokensViewed.size >= 5),
+    ]);
+  }
+
+  // ---- proceeds_claimed: collector, claim machine, profit master, hands ----
+  if (eventType === 'proceeds_claimed') {
+    const { data: claimEvents } = await supabase
+      .from('user_events')
+      .select('event_data')
+      .eq('wallet_address', walletAddress)
+      .eq('event_type', 'proceeds_claimed');
+
+    const totalClaims = claimEvents?.length || 0;
+    const uniqueOrdersClaimed = new Set(
+      claimEvents?.map((e) => String((e.event_data as { order_id?: number }).order_id)).filter(Boolean)
+    ).size;
+
+    // Check Iron Hands / Diamond Hands: order age from creation to now
+    const orderId = eventData.order_id as number | undefined;
+    let orderAgeDays = 0;
+    if (orderId !== undefined) {
+      const { data: orderCreation } = await supabase
+        .from('user_events')
+        .select('created_at')
+        .eq('wallet_address', walletAddress)
+        .eq('event_type', 'order_created')
+        .contains('event_data', { order_id: orderId })
+        .limit(1)
+        .maybeSingle();
+
+      if (orderCreation) {
+        orderAgeDays = Math.floor((Date.now() - new Date(orderCreation.created_at).getTime()) / (1000 * 60 * 60 * 24));
+      }
+    }
+
+    await Promise.all([
+      tryComplete(3, 'The Collector', 'operations', 600, uniqueOrdersClaimed >= 10),
+      tryComplete(5, 'Claim Machine', 'operations', 2000, totalClaims >= 50),
+      tryComplete(7, 'Profit Master', 'elite', 12000, totalClaims >= 100),
+      tryComplete(4, 'Iron Hands', 'elite', 1500, orderAgeDays >= 30),
+      tryComplete(6, 'Diamond Hands', 'elite', 5000, orderAgeDays >= 90),
     ]);
   }
 
@@ -394,9 +527,12 @@ async function checkAndCompleteChallenges(
     const uniqueTokensTraded = new Set<string>();
     let totalHexTraded = 0;
     let totalPlsTraded = 0;
+    let totalStableTraded = 0;
     let tradedMaxiToken = false;
     let tradedWeToken = false;
+    let pennyTradeCount = 0;
     const tokenCategories = new Set<string>();
+    const stableTokens = new Set(['DAI', 'USDC', 'USDT', 'USDL', 'WEDAI', 'WEUSDC', 'WEUSDT', 'PXDC', 'HEXDC']);
     const categoryMap: Record<string, string> = {
       'HEX': 'hex', 'WHEX': 'hex', 'WEHEX': 'hex',
       'PLS': 'pls', 'WPLS': 'pls',
@@ -410,6 +546,16 @@ async function checkAndCompleteChallenges(
 
     // For All-Nighter check
     const hoursWithTrades = new Set<number>();
+    // For Weekend Warrior check
+    const tradeDays = new Set<number>(); // day of week (0=Sun, 6=Sat)
+    // For Clean Sweep: track completed maker orders
+    const completedMakerOrders = new Set<string>();
+    // For AON Champion: track completed AON maker orders
+    const completedAonOrders = new Set<string>();
+    // For Multi-Fill: track unique fillers per order
+    const orderFillers = new Map<string, Set<string>>();
+    // For Full House: track partially filled active maker orders
+    const partiallyFilledMakerOrders = new Set<string>();
 
     tradeEvents?.forEach((event) => {
       const data = event.event_data as {
@@ -417,11 +563,45 @@ async function checkAndCompleteChallenges(
         buy_token?: string;
         sell_amount?: number;
         buy_amount?: number;
+        volume_usd?: number;
+        is_maker?: boolean;
+        order_id?: number;
+        is_all_or_nothing?: boolean;
+        order_completed?: boolean;
+        filler_wallet?: string;
       };
 
       // Track hours for All-Nighter
       const tradeTime = new Date(event.created_at);
       hoursWithTrades.add(Math.floor(tradeTime.getTime() / (60 * 60 * 1000)));
+
+      // Track day of week for Weekend Warrior
+      tradeDays.add(tradeTime.getUTCDay());
+
+      // Track penny trades
+      if (data.volume_usd !== undefined && data.volume_usd > 0 && data.volume_usd < 1) {
+        pennyTradeCount++;
+      }
+
+      // Track completed maker orders for Clean Sweep
+      if (data.is_maker && data.order_completed && data.order_id !== undefined) {
+        completedMakerOrders.add(String(data.order_id));
+        if (data.is_all_or_nothing) {
+          completedAonOrders.add(String(data.order_id));
+        }
+      }
+
+      // Track partially filled maker orders for Full House
+      if (data.is_maker && !data.order_completed && data.order_id !== undefined) {
+        partiallyFilledMakerOrders.add(String(data.order_id));
+      }
+
+      // Track unique fillers per order for Multi-Fill
+      if (data.is_maker && data.order_id !== undefined && data.filler_wallet) {
+        const oid = String(data.order_id);
+        if (!orderFillers.has(oid)) orderFillers.set(oid, new Set());
+        orderFillers.get(oid)!.add(data.filler_wallet.toLowerCase());
+      }
 
       // Process both sell and buy tokens
       for (const [token, amount] of [
@@ -434,6 +614,7 @@ async function checkAndCompleteChallenges(
 
         if (upper === 'HEX') totalHexTraded += amount || 0;
         if (upper === 'PLS' || upper === 'WPLS') totalPlsTraded += amount || 0;
+        if (stableTokens.has(upper)) totalStableTraded += amount || 0;
         if (upper.includes('MAXI')) tradedMaxiToken = true;
         if (upper.startsWith('WE')) tradedWeToken = true;
 
@@ -446,6 +627,12 @@ async function checkAndCompleteChallenges(
     const tokensTraded = uniqueTokensTraded.size;
     const now = new Date();
     const utcHour = now.getUTCHours();
+
+    // Check max unique fillers on any single order
+    let maxFillers = 0;
+    for (const fillers of orderFillers.values()) {
+      maxFillers = Math.max(maxFillers, fillers.size);
+    }
 
     // All-Nighter: check for 24 consecutive hours
     let maxConsecutiveHours = 0;
@@ -516,7 +703,32 @@ async function checkAndCompleteChallenges(
 
       // Time-based challenges
       tryComplete(2, 'Night Owl', 'humiliation', 200, utcHour >= 3 && utcHour < 5),
+      tryComplete(3, 'Early Bird', 'humiliation', 250, utcHour === 0),
       tryComplete(1, 'Micro Trader', 'humiliation', 75, volumeUsd > 0 && volumeUsd < 1),
+      tryComplete(4, 'Penny Pincher', 'humiliation', 200, pennyTradeCount >= 10),
+
+      // Weekend Warrior: traded on both Saturday (6) and Sunday (0)
+      tryComplete(1, 'Weekend Warrior', 'operations', 300, tradeDays.has(0) && tradeDays.has(6)),
+
+      // Perfect Record: 10+ trades with 0 cancellations
+      tryComplete(4, 'Perfect Record', 'operations', 1500, stats.total_trades >= 10 && (stats as any).total_orders_cancelled === 0),
+
+      // Clean Sweep: 5 fully completed maker orders
+      tryComplete(3, 'Clean Sweep', 'operations', 800, completedMakerOrders.size >= 5),
+
+      // AON Champion: 3 completed AON orders
+      tryComplete(5, 'AON Champion', 'operations', 2500, completedAonOrders.size >= 3),
+
+      // Multi-Fill: single order filled by 5+ different wallets
+      tryComplete(6, 'Multi-Fill', 'operations', 3000, maxFillers >= 5),
+
+      // Full House: 3 partially filled active maker orders simultaneously
+      tryComplete(7, 'Full House', 'operations', 5000, partiallyFilledMakerOrders.size >= 3),
+
+      // Token volume barons
+      tryComplete(5, 'HEX Baron', 'elite', 3000, totalHexTraded >= 1000000),
+      tryComplete(6, 'PLS Baron', 'elite', 3000, totalPlsTraded >= 10000000),
+      tryComplete(7, 'Stablecoin Baron', 'elite', 5000, totalStableTraded >= 100000),
 
       // Full Spectrum
       tryComplete(8, 'Full Spectrum', 'bootcamp', 4000, tokenCategories.size >= 7),

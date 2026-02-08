@@ -315,10 +315,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             order_id: Number(orderId),
             sell_token: orderMeta.sellTicker,
             buy_token: buyTicker,
-            sell_amount: '0', // Filler receives sell tokens, but we don't know exact portion
+            sell_amount: '0',
             buy_amount: formatAmount(buyAmount, buyDecimals).toString(),
-            volume_usd: 0, // Can't reliably get historical USD price in backfill
+            volume_usd: 0,
             is_maker: false,
+            filler_wallet: buyer,
           },
           EVENT_XP.trade_completed,
           result
@@ -338,6 +339,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             buy_amount: formatAmount(buyAmount, buyDecimals).toString(),
             volume_usd: 0,
             is_maker: true,
+            filler_wallet: buyer,
           },
           EVENT_XP.trade_completed,
           result
@@ -627,10 +629,10 @@ async function evaluateChallengesForUser(walletAddress: string, result: Backfill
       tryComplete(8, 'Volume God', 'elite', 50000, stats.total_volume_usd >= 1000000),
     ]);
 
-    // Token diversity challenges - check from trade events
+    // Token diversity challenges + new challenges - check from trade events
     const { data: tradeEvents } = await supabase
       .from('user_events')
-      .select('event_data')
+      .select('event_data, created_at')
       .eq('wallet_address', walletAddress)
       .eq('event_type', 'trade_completed');
 
@@ -638,7 +640,12 @@ async function evaluateChallengesForUser(walletAddress: string, result: Backfill
       const uniqueTokens = new Set<string>();
       let tradedMaxi = false;
       let tradedWe = false;
+      let totalHexTraded = 0;
+      let totalPlsTraded = 0;
+      let totalStableTraded = 0;
+      let pennyTradeCount = 0;
       const tokenCategories = new Set<string>();
+      const stableTokens = new Set(['DAI', 'USDC', 'USDT', 'USDL', 'WEDAI', 'WEUSDC', 'WEUSDT', 'PXDC', 'HEXDC']);
       const categoryMap: Record<string, string> = {
         'HEX': 'hex', 'WHEX': 'hex', 'WEHEX': 'hex',
         'PLS': 'pls', 'WPLS': 'pls',
@@ -646,12 +653,54 @@ async function evaluateChallengesForUser(walletAddress: string, result: Backfill
         'DAI': 'stablecoin', 'USDC': 'stablecoin', 'USDT': 'stablecoin', 'USDL': 'stablecoin',
       };
 
+      // Weekend Warrior tracking
+      const tradeDays = new Set<number>();
+      // Multi-Fill tracking
+      const orderFillers = new Map<string, Set<string>>();
+      // Clean Sweep / AON Champion tracking
+      const completedMakerOrders = new Set<string>();
+      const completedAonOrders = new Set<string>();
+      // Full House tracking
+      const partiallyFilledMakerOrders = new Set<string>();
+
       tradeEvents.forEach((event) => {
-        const data = event.event_data as { sell_token?: string; buy_token?: string };
+        const data = event.event_data as {
+          sell_token?: string; buy_token?: string;
+          sell_amount?: number; buy_amount?: number;
+          volume_usd?: number; is_maker?: boolean;
+          order_id?: number; is_all_or_nothing?: boolean;
+          order_completed?: boolean; filler_wallet?: string;
+        };
+
+        // Track day of week for Weekend Warrior
+        const tradeTime = new Date(event.created_at);
+        tradeDays.add(tradeTime.getUTCDay());
+
+        // Penny trades
+        if (data.volume_usd !== undefined && data.volume_usd > 0 && data.volume_usd < 1) pennyTradeCount++;
+
+        // Clean Sweep / AON / Full House / Multi-Fill
+        if (data.is_maker && data.order_id !== undefined) {
+          if (data.order_completed) {
+            completedMakerOrders.add(String(data.order_id));
+            if (data.is_all_or_nothing) completedAonOrders.add(String(data.order_id));
+          } else {
+            partiallyFilledMakerOrders.add(String(data.order_id));
+          }
+          if (data.filler_wallet) {
+            const oid = String(data.order_id);
+            if (!orderFillers.has(oid)) orderFillers.set(oid, new Set());
+            orderFillers.get(oid)!.add(data.filler_wallet.toLowerCase());
+          }
+        }
+
         for (const token of [data.sell_token, data.buy_token]) {
           if (!token) continue;
           const upper = token.toUpperCase();
           uniqueTokens.add(upper);
+          if (upper === 'HEX') totalHexTraded += data.sell_amount || data.buy_amount || 0;
+          if (upper === 'PLS' || upper === 'WPLS') totalPlsTraded += data.sell_amount || data.buy_amount || 0;
+          if (stableTokens.has(upper)) totalStableTraded += data.sell_amount || data.buy_amount || 0;
           if (upper.includes('MAXI')) tradedMaxi = true;
           if (upper.startsWith('WE')) tradedWe = true;
           const cat = categoryMap[upper];
@@ -660,8 +709,14 @@ async function evaluateChallengesForUser(walletAddress: string, result: Backfill
         }
       });
 
+      let maxFillers = 0;
+      for (const fillers of orderFillers.values()) {
+        maxFillers = Math.max(maxFillers, fillers.size);
+      }
+
       const count = uniqueTokens.size;
       await Promise.all([
+        // Token diversity
         tryComplete(2, 'Multi-Token Beginner', 'bootcamp', 300, count >= 5),
         tryComplete(3, 'Token Diversity', 'bootcamp', 500, count >= 10),
         tryComplete(4, 'Token Collector', 'bootcamp', 800, count >= 20),
@@ -672,7 +727,91 @@ async function evaluateChallengesForUser(walletAddress: string, result: Backfill
         tryComplete(7, 'MAXI Supporter', 'bootcamp', 2000, tradedMaxi),
         tryComplete(6, 'Multi-Chain Explorer', 'bootcamp', 1500, tradedWe),
         tryComplete(8, 'Full Spectrum', 'bootcamp', 4000, tokenCategories.size >= 7),
+
+        // Token volume barons
+        tryComplete(5, 'HEX Baron', 'elite', 3000, totalHexTraded >= 1000000),
+        tryComplete(6, 'PLS Baron', 'elite', 3000, totalPlsTraded >= 10000000),
+        tryComplete(7, 'Stablecoin Baron', 'elite', 5000, totalStableTraded >= 100000),
+
+        // Weekend Warrior
+        tryComplete(1, 'Weekend Warrior', 'operations', 300, tradeDays.has(0) && tradeDays.has(6)),
+
+        // Perfect Record
+        tryComplete(4, 'Perfect Record', 'operations', 1500, stats.total_trades >= 10 && (stats as any).total_orders_cancelled === 0),
+
+        // Clean Sweep
+        tryComplete(3, 'Clean Sweep', 'operations', 800, completedMakerOrders.size >= 5),
+
+        // AON Champion
+        tryComplete(5, 'AON Champion', 'operations', 2500, completedAonOrders.size >= 3),
+
+        // Multi-Fill
+        tryComplete(6, 'Multi-Fill', 'operations', 3000, maxFillers >= 5),
+
+        // Full House
+        tryComplete(7, 'Full House', 'operations', 5000, partiallyFilledMakerOrders.size >= 3),
+
+        // Penny Pincher
+        tryComplete(4, 'Penny Pincher', 'humiliation', 200, pennyTradeCount >= 10),
       ]);
+    }
+
+    // Proceeds claimed challenges
+    const { data: claimEvents } = await supabase
+      .from('user_events')
+      .select('event_data, created_at')
+      .eq('wallet_address', walletAddress)
+      .eq('event_type', 'proceeds_claimed');
+
+    if (claimEvents && claimEvents.length > 0) {
+      const totalClaims = claimEvents.length;
+      const uniqueOrdersClaimed = new Set(
+        claimEvents.map((e) => String((e.event_data as { order_id?: number }).order_id)).filter(Boolean)
+      ).size;
+
+      // Iron Hands / Diamond Hands: check order age for each claimed order
+      let maxOrderAgeDays = 0;
+      for (const claim of claimEvents) {
+        const oid = (claim.event_data as { order_id?: number }).order_id;
+        if (oid === undefined) continue;
+        const { data: orderCreation } = await supabase
+          .from('user_events')
+          .select('created_at')
+          .eq('wallet_address', walletAddress)
+          .eq('event_type', 'order_created')
+          .contains('event_data', { order_id: oid })
+          .limit(1)
+          .maybeSingle();
+        if (orderCreation) {
+          const ageDays = Math.floor(
+            (new Date(claim.created_at).getTime() - new Date(orderCreation.created_at).getTime()) / (1000 * 60 * 60 * 24)
+          );
+          maxOrderAgeDays = Math.max(maxOrderAgeDays, ageDays);
+        }
+      }
+
+      await Promise.all([
+        tryComplete(3, 'The Collector', 'operations', 600, uniqueOrdersClaimed >= 10),
+        tryComplete(5, 'Claim Machine', 'operations', 2000, totalClaims >= 50),
+        tryComplete(7, 'Profit Master', 'elite', 12000, totalClaims >= 100),
+        tryComplete(4, 'Iron Hands', 'elite', 1500, maxOrderAgeDays >= 30),
+        tryComplete(6, 'Diamond Hands', 'elite', 5000, maxOrderAgeDays >= 90),
+      ]);
+    }
+
+    // Ghost Town: count expired orders with 0 fills
+    const { data: expiredEvents } = await supabase
+      .from('user_events')
+      .select('event_data')
+      .eq('wallet_address', walletAddress)
+      .eq('event_type', 'order_expired');
+
+    if (expiredEvents) {
+      const ghostCount = expiredEvents.filter((e) => {
+        const d = e.event_data as { fill_percentage?: number };
+        return (d.fill_percentage || 0) === 0;
+      }).length;
+      await tryComplete(5, 'Ghost Town', 'humiliation', 200, ghostCount >= 5);
     }
 
     // Recalculate total XP after all challenges are evaluated
