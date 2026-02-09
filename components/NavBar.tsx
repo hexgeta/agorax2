@@ -374,15 +374,12 @@ const NavBar = () => {
             <Link
               href="/docs"
               onClick={() => setMobileMenuOpen(false)}
-              className={`text-xl font-medium py-3 px-6 rounded-lg transition-colors w-full text-center flex items-center justify-center gap-2 ${pathname.startsWith('/docs')
+              className={`text-xl font-medium py-3 px-6 rounded-lg transition-colors w-full text-center ${pathname.startsWith('/docs')
                 ? 'text-white bg-white/10'
                 : 'text-white/80 hover:text-white hover:bg-white/5'
                 }`}
             >
               Docs
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-              </svg>
             </Link>
             <Link
               href="/achievements"
