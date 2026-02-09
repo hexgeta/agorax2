@@ -92,7 +92,7 @@ function NavSection({
   return (
     <div className="mb-4 md:mb-6">
       {/* Section header - not clickable, just a label */}
-      <h4 className="text-xs md:text-base font-semibold text-white/50 uppercase tracking-wider px-3 mb-1 md:mb-2">
+      <h4 className="text-xs md:text-base font-semibold text-white/30 uppercase tracking-wider px-3 mb-1 md:mb-2">
         {item.title}
       </h4>
       {/* Always show children */}
@@ -350,9 +350,10 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
     router.push(`${href}?highlight=${encodeURIComponent(query)}`);
   };
 
-  // Close sidebar on route change
+  // Close sidebar and scroll to top on route change
   useEffect(() => {
     setSidebarOpen(false);
+    window.scrollTo(0, 0);
   }, [pathname]);
 
   // Prevent body scroll when sidebar is open on mobile (iOS-safe)
@@ -400,7 +401,7 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
       {/* Mobile Sidebar Toggle - floating button (hidden when sidebar is open) */}
       {!sidebarOpen && (
         <LiquidGlassCard
-          className="md:hidden fixed top-[88px] left-4 z-[60] cursor-pointer"
+          className="md:hidden fixed top-[88px] left-4 z-[60] cursor-pointer !bg-black/40"
           borderRadius="8px"
           shadowIntensity="none"
           glowIntensity="sm"
