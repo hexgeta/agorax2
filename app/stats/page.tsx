@@ -640,7 +640,7 @@ export default function StatsPage() {
                     shadowIntensity="sm"
                     glowIntensity="sm"
                     blurIntensity="xl"
-                    className="p-4 md:p-6"
+                    className="p-4 md:p-6 !overflow-x-auto"
                   >
                     {ordersLoading ? (
                       <div className="flex items-center justify-center py-12">
