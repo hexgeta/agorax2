@@ -450,18 +450,21 @@ const EMPTY_USER = {
   completedChallenges: {} as Record<number, string[]>,
 };
 
-// Helper to check if all challenges for a prestige are complete
+// Helper to check if all REQUIRED challenges for a prestige are complete
+// Humiliation challenges are bonus and not required to advance
 function isPrestigeComplete(prestigeIndex: number, completedChallenges: Record<number, string[]>): boolean {
   const prestigeChallenges = PRESTIGE_CHALLENGES[prestigeIndex];
   if (!prestigeChallenges) return false;
 
-  const allChallengeNames: string[] = [];
+  const requiredNames: string[] = [];
   (Object.keys(prestigeChallenges) as ChallengeCategory[]).forEach((category) => {
-    prestigeChallenges[category].challenges.forEach((c) => allChallengeNames.push(c.name));
+    if (category !== 'humiliation') {
+      prestigeChallenges[category].challenges.forEach((c) => requiredNames.push(c.name));
+    }
   });
 
   const completed = completedChallenges[prestigeIndex] || [];
-  return allChallengeNames.every((name) => completed.includes(name));
+  return requiredNames.every((name) => completed.includes(name));
 }
 
 // Helper to get total XP for a prestige level
@@ -495,19 +498,24 @@ function getPrestigeEarnedXp(prestigeIndex: number, completedChallenges: Record<
   return total;
 }
 
-function ChallengeTable({
+function AllChallengesTable({
   prestigeIndex,
-  category,
   completedChallenges,
 }: {
   prestigeIndex: number;
-  category: ChallengeCategory;
   completedChallenges: string[];
 }) {
   const prestigeChallenges = PRESTIGE_CHALLENGES[prestigeIndex];
   if (!prestigeChallenges) return null;
 
-  const data = prestigeChallenges[category];
+  // Flatten all challenges into one list: required first, then bonus (humiliation)
+  const allChallenges: { challenge: Challenge; isBonus: boolean }[] = [];
+  (Object.keys(prestigeChallenges) as ChallengeCategory[]).forEach((category) => {
+    if (category !== 'humiliation') {
+      prestigeChallenges[category].challenges.forEach((c) => allChallenges.push({ challenge: c, isBonus: false }));
+    }
+  });
+  prestigeChallenges.humiliation.challenges.forEach((c) => allChallenges.push({ challenge: c, isBonus: true }));
 
   return (
     <div className="overflow-x-auto">
@@ -520,7 +528,7 @@ function ChallengeTable({
           </tr>
         </thead>
         <tbody>
-          {data.challenges.map((challenge) => {
+          {allChallenges.map(({ challenge, isBonus }) => {
             const isCompleted = completedChallenges.includes(challenge.name);
             return (
               <tr
@@ -536,11 +544,18 @@ function ChallengeTable({
                         </svg>
                       </div>
                     ) : (
-                      <div className="w-5 h-5 rounded-full border border-white/20 flex-shrink-0" />
+                      <div className={`w-5 h-5 rounded-full border flex-shrink-0 ${isBonus ? 'border-red-500/30' : 'border-white/20'}`} />
                     )}
                     <div>
-                      <div className={`font-medium ${isCompleted ? 'text-gray-400 line-through' : 'text-white'}`}>
-                        {challenge.name}
+                      <div className="flex items-center gap-2">
+                        <span className={`font-medium ${isCompleted ? 'text-gray-400 line-through' : 'text-white'}`}>
+                          {challenge.name}
+                        </span>
+                        {isBonus && (
+                          <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 leading-none">
+                            Bonus
+                          </span>
+                        )}
                       </div>
                       <div className="text-gray-500 text-sm">{challenge.description}</div>
                       <div className="text-gray-500 text-xs sm:hidden mt-1">{challenge.requirement}</div>
@@ -549,7 +564,7 @@ function ChallengeTable({
                 </td>
                 <td className="py-3 px-4 text-gray-400 text-sm hidden sm:table-cell">{challenge.requirement}</td>
                 <td className="py-3 px-4 text-right">
-                  <span className={`font-mono font-medium ${isCompleted ? 'text-gray-500' : 'text-amber-400'}`}>
+                  <span className={`font-mono font-medium ${isCompleted ? 'text-gray-500' : isBonus ? 'text-red-400' : 'text-amber-400'}`}>
                     +{challenge.xp.toLocaleString()}
                   </span>
                 </td>
@@ -572,7 +587,6 @@ function getInitialActivePrestige(completedChallenges: Record<number, string[]>)
 
 export default function RanksPage() {
   const [selectedPrestige, setSelectedPrestige] = useState<number>(0);
-  const [activeCategory, setActiveCategory] = useState<ChallengeCategory>('bootcamp');
 
   // Fetch real user data from Supabase
   const { stats, completedChallenges: rawCompletedChallenges, isLoading, isConnected } = useUserAchievements();
@@ -609,14 +623,20 @@ export default function RanksPage() {
     (_, idx) => !isPrestigeComplete(idx, userData.completedChallenges)
   );
 
-  // Calculate challenges completed for selected prestige
+  // Calculate required challenges completed for selected prestige
   const selectedPrestigeChallenges = PRESTIGE_CHALLENGES[selectedPrestige];
   const completedInPrestige = userData.completedChallenges[selectedPrestige] || [];
-  const totalInPrestige = selectedPrestigeChallenges
-    ? (Object.keys(selectedPrestigeChallenges) as ChallengeCategory[]).reduce(
-        (acc, cat) => acc + selectedPrestigeChallenges[cat].challenges.length,
-        0
-      )
+  const requiredInPrestige = selectedPrestigeChallenges
+    ? (Object.keys(selectedPrestigeChallenges) as ChallengeCategory[])
+        .filter((cat) => cat !== 'humiliation')
+        .reduce((acc, cat) => acc + selectedPrestigeChallenges[cat].challenges.length, 0)
+    : 0;
+  const requiredCompleted = selectedPrestigeChallenges
+    ? (Object.keys(selectedPrestigeChallenges) as ChallengeCategory[])
+        .filter((cat) => cat !== 'humiliation')
+        .reduce((acc, cat) => {
+          return acc + selectedPrestigeChallenges[cat].challenges.filter((c) => completedInPrestige.includes(c.name)).length;
+        }, 0)
     : 0;
 
   return (
@@ -709,7 +729,7 @@ export default function RanksPage() {
                 <div>
                   <h2 className={`text-xl font-bold ${currentPrestige.color}`}>{currentPrestige.name} Challenges</h2>
                   <p className="text-gray-400 text-sm">
-                    {completedInPrestige.length}/{totalInPrestige} completed
+                    {requiredCompleted}/{requiredInPrestige} required
                     {isViewingCompleted && <span className="text-yellow-400 ml-2">★ Complete!</span>}
                   </p>
                 </div>
@@ -722,52 +742,11 @@ export default function RanksPage() {
               </div>
             </div>
 
-            {/* Category Tabs */}
-            <div className="flex flex-wrap gap-2 mb-4">
-              {selectedPrestigeChallenges &&
-                (Object.keys(selectedPrestigeChallenges) as ChallengeCategory[]).map((category) => {
-                  const data = selectedPrestigeChallenges[category];
-                  const isActive = activeCategory === category;
-                  const completedInCategory = data.challenges.filter((c) =>
-                    completedInPrestige.includes(c.name)
-                  ).length;
-
-                  return (
-                    <button
-                      key={category}
-                      onClick={() => setActiveCategory(category)}
-                      className={`px-4 py-2 rounded-lg font-medium transition-all flex items-center gap-2
-                        ${
-                          isActive
-                            ? `${currentPrestige.bgColor} ${currentPrestige.color} border border-current/20`
-                            : 'bg-white/5 text-gray-400 border border-transparent hover:bg-white/10 hover:text-white'
-                        }`}
-                    >
-                      <span>{data.icon}</span>
-                      <span className="hidden sm:inline">{data.title}</span>
-                      <span className="text-xs opacity-60">
-                        {completedInCategory}/{data.challenges.length}
-                      </span>
-                    </button>
-                  );
-                })}
-            </div>
-
-            {/* Active Category Content */}
+            {/* All Challenges */}
             {selectedPrestigeChallenges && (
               <LiquidGlassCard shadowIntensity="sm" glowIntensity="sm" blurIntensity="xl" className="p-4 md:p-6">
-                <div className="flex items-center gap-3 mb-4">
-                  <span className="text-2xl">{selectedPrestigeChallenges[activeCategory].icon}</span>
-                  <div>
-                    <h3 className={`text-xl font-semibold ${currentPrestige.color}`}>
-                      {selectedPrestigeChallenges[activeCategory].title}
-                    </h3>
-                    <p className="text-gray-400 text-sm">{selectedPrestigeChallenges[activeCategory].description}</p>
-                  </div>
-                </div>
-                <ChallengeTable
+                <AllChallengesTable
                   prestigeIndex={selectedPrestige}
-                  category={activeCategory}
                   completedChallenges={completedInPrestige}
                 />
               </LiquidGlassCard>
