@@ -9,17 +9,18 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 // XP values for different events (base values, challenges give additional XP)
+// Only transaction-based events give XP - view events are tracked but give 0 XP
 const EVENT_XP: Partial<Record<EventType, number>> = {
-  wallet_connected: 0, // Tracked but no XP
-  order_created: 10,
-  order_filled: 10,
+  wallet_connected: 0,
+  order_created: 0, // XP comes from challenges only
+  order_filled: 0, // XP comes from challenges only
   order_cancelled: 0,
   order_expired: 0,
-  proceeds_claimed: 5,
-  order_viewed: 1,
-  chart_viewed: 1,
-  marketplace_visited: 1,
-  trade_completed: 25,
+  proceeds_claimed: 0, // XP comes from challenges only
+  order_viewed: 0, // No incremental XP for views
+  chart_viewed: 0, // No incremental XP for views
+  marketplace_visited: 0, // No incremental XP for views
+  trade_completed: 0, // XP comes from challenges only
   streak_updated: 0,
   prestige_unlocked: 0,
 };
@@ -336,7 +337,13 @@ async function checkAndCompleteChallenges(
     // Check Order Hoarder: 15+ active orders with 0 fills (approximate via stats)
     const activeUnfilled = stats.current_active_orders;
 
-    // Check Fat Finger: 100x above market
+    // Check for token-specific challenges (HTT, COM, pDAI)
+    const sellTokenUpper = sellToken?.toUpperCase() || '';
+    const buyTokensUpper = buyTokens?.map(t => t.toUpperCase()) || [];
+    const hasHTT = sellTokenUpper === 'HTT' || buyTokensUpper.includes('HTT');
+    const hasCOM = sellTokenUpper === 'COM' || buyTokensUpper.includes('COM');
+    const hasPDAI = sellTokenUpper === 'PDAI' || sellTokenUpper === 'DAI' || buyTokensUpper.includes('PDAI') || buyTokensUpper.includes('DAI');
+
     await Promise.all([
       tryComplete(0, 'First Order', 'operations', 250, stats.total_orders_created >= 1),
       tryComplete(1, 'Getting Comfortable', 'operations', 400, stats.total_orders_created >= 5),
@@ -346,9 +353,8 @@ async function checkAndCompleteChallenges(
       tryComplete(7, 'Order God', 'operations', 8000, stats.total_orders_created >= 500),
       tryComplete(8, 'Order Immortal', 'operations', 20000, stats.total_orders_created >= 1000),
       // Pricing challenges
-      tryComplete(5, 'Overkill', 'humiliation', 150, priceVsMarket >= 900),
-      tryComplete(5, 'Fire Sale', 'humiliation', 150, priceVsMarket <= -50),
-      tryComplete(6, 'Fat Finger', 'humiliation', 300, priceVsMarket >= 9900),
+      tryComplete(5, 'Fatfinger', 'humiliation', 150, priceVsMarket > 0),
+      tryComplete(5, 'Dip Catcher', 'humiliation', 150, priceVsMarket <= -50),
       // Both Sides (also checked on order_filled)
       tryComplete(2, 'Both Sides', 'operations', 500, (fillsToday || 0) >= 1),
       // Arbitrage Artist
@@ -357,6 +363,10 @@ async function checkAndCompleteChallenges(
       tryComplete(2, 'Deja Vu', 'humiliation', 100, hasDuplicateOrder),
       // Order Hoarder
       tryComplete(5, 'Order Hoarder', 'humiliation', 300, activeUnfilled >= 15),
+      // Token-specific challenges
+      tryComplete(7, 'Bond Trader', 'bootcamp', 2000, hasHTT),
+      tryComplete(7, 'Coupon Clipper', 'bootcamp', 2000, hasCOM),
+      tryComplete(7, '$1 Inevitable', 'bootcamp', 2000, hasPDAI),
     ]);
   }
 
@@ -384,8 +394,7 @@ async function checkAndCompleteChallenges(
       tryComplete(6, 'Fill Master', 'operations', 5000, stats.total_orders_filled >= 200),
       // Speed challenges
       tryComplete(4, 'Speed Runner', 'humiliation', 400, fillTimeSeconds <= 30),
-      tryComplete(6, 'The Sniper', 'humiliation', 800, fillTimeSeconds <= 5),
-      tryComplete(8, 'Instant Legend', 'humiliation', 2000, fillTimeSeconds <= 1),
+      tryComplete(8, 'Sniper', 'humiliation', 2000, fillTimeSeconds <= 60),
       // Both Sides (also checked on order_created)
       tryComplete(2, 'Both Sides', 'operations', 500, (createdToday || 0) >= 1),
     ]);
@@ -531,21 +540,8 @@ async function checkAndCompleteChallenges(
     let tradedMaxiToken = false;
     let tradedWeToken = false;
     let pennyTradeCount = 0;
-    const tokenCategories = new Set<string>();
     const stableTokens = new Set(['DAI', 'USDC', 'USDT', 'USDL', 'WEDAI', 'WEUSDC', 'WEUSDT', 'PXDC', 'HEXDC']);
-    const categoryMap: Record<string, string> = {
-      'HEX': 'hex', 'WHEX': 'hex', 'WEHEX': 'hex',
-      'PLS': 'pls', 'WPLS': 'pls',
-      'PLSX': 'plsx',
-      'INC': 'inc',
-      'HDRN': 'hdrn',
-      'ICSA': 'icsa',
-      'LOAN': 'loan',
-      'DAI': 'stablecoin', 'USDC': 'stablecoin', 'USDT': 'stablecoin', 'USDL': 'stablecoin',
-    };
 
-    // For All-Nighter check
-    const hoursWithTrades = new Set<number>();
     // For Weekend Warrior check
     const tradeDays = new Set<number>(); // day of week (0=Sun, 6=Sat)
     // For Clean Sweep: track completed maker orders
@@ -571,11 +567,8 @@ async function checkAndCompleteChallenges(
         filler_wallet?: string;
       };
 
-      // Track hours for All-Nighter
-      const tradeTime = new Date(event.created_at);
-      hoursWithTrades.add(Math.floor(tradeTime.getTime() / (60 * 60 * 1000)));
-
       // Track day of week for Weekend Warrior
+      const tradeTime = new Date(event.created_at);
       tradeDays.add(tradeTime.getUTCDay());
 
       // Track penny trades
@@ -617,10 +610,6 @@ async function checkAndCompleteChallenges(
         if (stableTokens.has(upper)) totalStableTraded += amount || 0;
         if (upper.includes('MAXI')) tradedMaxiToken = true;
         if (upper.startsWith('WE')) tradedWeToken = true;
-
-        const category = categoryMap[upper];
-        if (category) tokenCategories.add(category);
-        if (upper.includes('MAXI')) tokenCategories.add('maxi');
       }
     });
 
@@ -632,21 +621,6 @@ async function checkAndCompleteChallenges(
     let maxFillers = 0;
     for (const fillers of orderFillers.values()) {
       maxFillers = Math.max(maxFillers, fillers.size);
-    }
-
-    // All-Nighter: check for 24 consecutive hours
-    let maxConsecutiveHours = 0;
-    if (hoursWithTrades.size >= 24) {
-      const sortedHours = Array.from(hoursWithTrades).sort((a, b) => a - b);
-      let currentConsecutive = 1;
-      for (let i = 1; i < sortedHours.length; i++) {
-        if (sortedHours[i] === sortedHours[i - 1] + 1) {
-          currentConsecutive++;
-          maxConsecutiveHours = Math.max(maxConsecutiveHours, currentConsecutive);
-        } else {
-          currentConsecutive = 1;
-        }
-      }
     }
 
     // Fire all trade_completed challenges in parallel
@@ -676,15 +650,12 @@ async function checkAndCompleteChallenges(
       // Concurrent orders challenges
       tryComplete(5, 'Market Maker', 'operations', 1500, stats.current_active_orders >= 5),
       tryComplete(6, 'Power Maker', 'operations', 2500, stats.current_active_orders >= 10),
-      tryComplete(8, 'Market Dominator', 'operations', 5000, stats.current_active_orders >= 20),
+      tryComplete(8, 'Domination', 'operations', 5000, stats.current_active_orders >= 20),
 
       // Streak challenges
       tryComplete(2, 'Consistent', 'operations', 400, stats.current_streak_days >= 3),
       tryComplete(3, 'Dedicated', 'operations', 600, stats.current_streak_days >= 7),
       tryComplete(4, 'Two Week Warrior', 'operations', 1000, stats.current_streak_days >= 14),
-      tryComplete(6, 'Marathon Trader', 'operations', 4000, stats.current_streak_days >= 30),
-      tryComplete(7, 'Unstoppable', 'operations', 8000, stats.current_streak_days >= 60),
-      tryComplete(8, 'Year Warrior', 'operations', 15000, stats.current_streak_days >= 100),
 
       // Token diversity challenges
       tryComplete(2, 'Multi-Token Beginner', 'bootcamp', 300, tokensTraded >= 5),
@@ -698,8 +669,8 @@ async function checkAndCompleteChallenges(
       // Token-specific challenges
       tryComplete(4, 'HEX Enthusiast', 'bootcamp', 600, totalHexTraded >= 100000),
       tryComplete(5, 'PLS Stacker', 'bootcamp', 1000, totalPlsTraded >= 1000000),
-      tryComplete(7, 'MAXI Supporter', 'bootcamp', 2000, tradedMaxiToken),
-      tryComplete(6, 'Multi-Chain Explorer', 'bootcamp', 1500, tradedWeToken),
+      tryComplete(7, 'MAXI Maxi', 'bootcamp', 2000, tradedMaxiToken),
+      tryComplete(6, 'Ethereum Maxi', 'bootcamp', 1500, tradedWeToken),
 
       // Time-based challenges
       tryComplete(2, 'Night Owl', 'humiliation', 200, utcHour >= 3 && utcHour < 5),
@@ -729,12 +700,6 @@ async function checkAndCompleteChallenges(
       tryComplete(5, 'HEX Baron', 'elite', 3000, totalHexTraded >= 1000000),
       tryComplete(6, 'PLS Baron', 'elite', 3000, totalPlsTraded >= 10000000),
       tryComplete(7, 'Stablecoin Baron', 'elite', 5000, totalStableTraded >= 100000),
-
-      // Full Spectrum
-      tryComplete(8, 'Full Spectrum', 'bootcamp', 4000, tokenCategories.size >= 7),
-
-      // All-Nighter
-      tryComplete(8, 'All-Nighter', 'humiliation', 3000, maxConsecutiveHours >= 24),
     ]);
   }
 

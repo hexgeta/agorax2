@@ -408,38 +408,225 @@ curl http://localhost:3000/api/v1/leaderboard?limit=20
 
 ---
 
-## 8. Backfill Details
+## 8. Backfill API Reference
 
-The `/api/events/backfill` endpoint now writes to **all** tables:
+### POST `/api/events/backfill`
 
-| Event | Tables Written |
+Scans all historical blockchain events from the AgoraX contract and populates the database with user stats, events, orders, and achievements.
+
+**Authentication Required:** Bearer token with `BACKFILL_SECRET`
+
+**Request Body (JSON):**
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `from_block` | number | `21266815` (deployment block) | Starting block number |
+| `to_block` | number | `latest` | Ending block number |
+
+**Example Request:**
+```bash
+# Full backfill from deployment
+curl -X POST https://your-domain.com/api/events/backfill \
+  -H "Authorization: Bearer YOUR_BACKFILL_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+
+# Backfill specific block range
+curl -X POST https://your-domain.com/api/events/backfill \
+  -H "Authorization: Bearer YOUR_BACKFILL_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{"from_block": 21300000, "to_block": 21400000}'
+
+# Local development
+curl -X POST http://localhost:3000/api/events/backfill \
+  -H "Authorization: Bearer YOUR_BACKFILL_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "users_created": 156,
+    "events_recorded": 4520,
+    "orders_placed": 320,
+    "orders_filled": 580,
+    "orders_cancelled": 45,
+    "proceeds_collected": 210,
+    "orders_table_written": 320,
+    "fills_table_written": 580,
+    "cancellations_table_written": 45,
+    "proceeds_table_written": 210,
+    "errors": []
+  },
+  "summary": {
+    "wallets_found": 156,
+    "blocks_scanned": "21266815 to latest",
+    "total_events": 1155
+  }
+}
+```
+
+### Tables Written
+
+| Blockchain Event | Supabase Tables |
 |---|---|
 | `OrderPlaced` | `users`, `user_events`, `orders` |
 | `OrderFilled` | `users`, `user_events`, `order_fills` |
-| `OrderCancelled` | `users`, `user_events`, `order_cancellations`, `orders` (status update) |
+| `OrderCancelled` | `users`, `user_events`, `order_cancellations`, `orders` (status) |
 | `OrderProceedsCollected` | `users`, `user_events`, `order_proceeds` |
 
-The backfill also:
-- Fetches the token whitelist via `viewWhitelisted` to resolve buy token indices to addresses/tickers
-- Batch-fetches full order details via `getOrderDetails` (buy amounts, AON flag, expiration, fill %)
-- Calculates `fill_percentage` from `remainingSellAmount` and `redeemedSellAmount`
-- Updates order status from the contract's `status` field (0=active, 1=cancelled, 2=completed)
-- Recalculates all aggregate user stats (XP, volumes, fill counts, unique tokens, proceeds claims)
-- Evaluates all achievement challenges based on historical data
+### What the Backfill Does
 
-**Authentication:** Send the `BACKFILL_SECRET` as a Bearer token:
-```bash
-curl -X POST http://localhost:3000/api/events/backfill \
-  -H "Authorization: Bearer your-BACKFILL_SECRET-value" \
-  -H "Content-Type: application/json" \
-  -d '{"from_block": 21266815}'
-```
+1. **Fetches on-chain events** - Reads all `OrderPlaced`, `OrderFilled`, `OrderCancelled`, `OrderProceedsCollected` events from the contract
+2. **Resolves token info** - Fetches whitelist via `viewWhitelisted` to map buy token indices to addresses/tickers
+3. **Fetches order details** - Batch calls `getOrderDetails` for each order (buy amounts, AON flag, expiration, fill %)
+4. **Creates user records** - Upserts every wallet that interacted with the contract
+5. **Records events** - Writes to `user_events` with proper event data (tx_hash for deduplication)
+6. **Populates mirror tables** - Writes full order data to `orders`, fills to `order_fills`, etc.
+7. **Recalculates stats** - Updates all aggregate user stats (volumes, fill counts, unique tokens)
+8. **Evaluates challenges** - Runs challenge evaluation logic for each user based on their history
+9. **Updates XP** - Calculates total XP from completed challenges (events give 0 XP)
 
-**Note:** Requires runtime access to a PulseChain RPC node and Supabase credentials.
+### XP System
+
+**Important:** All event-based XP is 0. XP only comes from completing challenges:
+- `wallet_connected`: 0 XP (but triggers "First Steps" challenge = 50 XP)
+- `order_created`: 0 XP (but triggers order creation challenges)
+- `order_filled`: 0 XP (but triggers fill challenges)
+- `trade_completed`: 0 XP (but triggers volume/trade challenges)
+- `proceeds_claimed`: 0 XP (but triggers collector challenges)
+
+### Requirements
+
+- **Environment variables:**
+  - `SUPABASE_URL` - Your Supabase project URL
+  - `SUPABASE_SERVICE_ROLE_KEY` - Service role key for database writes
+  - `BACKFILL_SECRET` - Secret to authenticate backfill requests
+- **Network access:** PulseChain RPC (`https://rpc.pulsechain.com`)
+- **Database:** All migrations must be run first (see Section 2)
+
+### Notes
+
+- The backfill is **idempotent** - it skips events already recorded (based on `tx_hash` + `event_type` + `wallet`)
+- For large block ranges, the backfill may take several minutes
+- Progress is logged to server console
+- If interrupted, simply re-run - it will skip already-processed events
 
 ---
 
-## 9. Existing Endpoints (Pre-v1)
+## 9. Challenge System
+
+The XP and achievement system consists of challenges organized by prestige level (Legion). XP only comes from completing challenges - individual events award 0 XP.
+
+### Prestige Levels (Legions)
+
+| Level | Name | Symbol | Color |
+|---|---|---|---|
+| 0 | Alpha | α | Rose |
+| 1 | Beta | β | Orange |
+| 2 | Gamma | γ | Lime |
+| 3 | Delta | δ | Emerald |
+| 4 | Epsilon | ε | Cyan |
+| 5 | Zeta | ζ | Blue |
+| 6 | Eta | η | Violet |
+| 7 | Theta | θ | Fuchsia |
+| 8 | Omega | Ω | Yellow |
+
+### Challenge Summary (84 Total)
+
+**By Level:**
+- Alpha (0): 6 challenges
+- Beta (1): 7 challenges
+- Gamma (2): 9 challenges
+- Delta (3): 11 challenges
+- Epsilon (4): 11 challenges
+- Zeta (5): 12 challenges
+- Eta (6): 9 challenges
+- Theta (7): 11 challenges
+- Omega (8): 8 challenges
+
+### Key Challenges by Event Type
+
+**order_created:**
+- First Order, Getting Comfortable, Order Machine, Order Veteran, Order Legend, Order God, Order Immortal
+- Fatfinger (order above market price)
+- Dip Catcher (order 50% below market price)
+- Bond Trader (order with HTT token)
+- Coupon Clipper (order with COM token)
+- $1 Inevitable (order with pDAI/DAI token)
+- Deja Vu (duplicate order parameters)
+- Order Hoarder (15+ active unfilled orders)
+
+**order_filled:**
+- First Fill, Active Buyer, Fill Expert, Fill Master
+- Speed Runner (fill within 30 seconds)
+- Sniper (fill within 1 minute)
+
+**trade_completed:**
+- Trade volume milestones (Small Fish $100 → Leviathan $500K)
+- Total volume milestones (Volume Starter $500 → Volume God $1M)
+- Trade count milestones (Active Trader 10 → Trade Legend 1000)
+- Token diversity (Multi-Token Beginner 5 → Token God 75 tokens)
+- Token-specific: HEX Enthusiast, HEX Baron, PLS Stacker, PLS Baron, Stablecoin Baron
+- MAXI Maxi (trade any MAXI token)
+- Ethereum Maxi (trade wrapped ETH tokens like weHEX)
+- Streak challenges (Consistent 3 days → Two Week Warrior 14 days)
+- Time-based: Night Owl (3-5AM UTC), Early Bird (midnight UTC)
+- Weekend Warrior (trade both Saturday and Sunday)
+
+**proceeds_claimed:**
+- The Collector (10 unique orders), Claim Machine (50 claims), Profit Master (100 claims)
+- Iron Hands (order open 30+ days), Diamond Hands (order open 90+ days)
+
+**order_cancelled:**
+- Paper Hands (cancel within 1 minute)
+- Indecisive (5 cancels in one day), Total Chaos (20 cancels in one day)
+
+**order_expired:**
+- Ghost Order (0% filled), Ghost Town (5 expired with 0% filled)
+
+### Recent Challenge Updates
+
+The following changes were made to the challenge system:
+
+**Renamed:**
+- MAXI Supporter → MAXI Maxi
+- Market Dominator → Domination
+- Instant Legend → Sniper (threshold changed to 60 seconds)
+- Multi-Chain Explorer → Ethereum Maxi
+- Fire Sale → Dip Catcher
+- Overkill → Fatfinger (now triggers on any order above market price)
+
+**Removed:**
+- All-Nighter (24 consecutive hours of trading)
+- Year Warrior (100 day streak)
+- Full Spectrum (trade all token categories)
+- Unstoppable (60 day streak)
+- Marathon Trader (30 day streak)
+- The Sniper (5 second fill - replaced by Sniper at 60 seconds)
+- Fat Finger (100x above market - consolidated into Fatfinger)
+
+**Added:**
+- Bond Trader (Theta/Level 7) - Make an order with HTT token - 2000 XP
+- Coupon Clipper (Theta/Level 7) - Make an order with COM token - 2000 XP
+- $1 Inevitable (Theta/Level 7) - Make an order with pDAI - 2000 XP
+
+### Challenge Evaluation
+
+Challenges are evaluated:
+1. **Real-time** via `/api/events/track` when events are recorded
+2. **Batch** via `/api/events/backfill` for historical data
+
+The evaluation checks conditions and calls the `complete_challenge` database function which:
+- Awards XP to the user
+- Records completion in `completed_challenges` table
+- Prevents duplicate completions (idempotent)
+
+---
+
+## 10. Existing Endpoints (Pre-v1)
 
 These endpoints still work and are used by the frontend:
 

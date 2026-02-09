@@ -589,14 +589,12 @@ export default function StatsPage() {
                   selectedToken={selectedTokenFilter?.address}
                 />
 
-                {/* Top Traders Leaderboard */}
+                {/* Leaderboard */}
                 <TopTradersLeaderboard
                   transactions={transactions}
                   orders={orders}
                   tokenPrices={tokenPrices}
                   contractOrders={contractOrders}
-                  onTraderSelect={handleTraderFilterSelect}
-                  selectedTrader={selectedTraderFilter ?? undefined}
                 />
 
                 {/* Order Book */}
@@ -648,7 +646,7 @@ export default function StatsPage() {
                         <span className="ml-3 text-gray-400">Loading orders...</span>
                       </div>
                     ) : (
-                    <div className="overflow-x-auto -mx-4 md:-mx-6 px-4 md:px-6">
+                    <div className="overflow-x-auto -mx-4 md:-mx-6 px-4 md:px-6 pb-2 modern-scrollbar">
                       <table className="w-full min-w-[700px]">
                         <thead>
                           <tr className="border-b border-white/10">

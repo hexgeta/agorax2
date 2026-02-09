@@ -668,19 +668,19 @@ const CHALLENGE_DOCS: ChallengeDoc[] = [
     status: 'implemented',
   },
   {
-    name: 'Overkill',
+    name: 'Fatfinger',
     level: 5,
     levelName: 'Zeta',
     category: 'humiliation',
     xp: 150,
-    description: 'Create an order 10x above market price',
+    description: 'Create an order above market price',
     eventType: 'order_created',
-    trackingLogic: 'Checked if price_vs_market_percent >= 900 (900% above market = 10x)',
+    trackingLogic: 'Checked if price_vs_market_percent > 0 (any amount above market)',
     eventData: ['price_vs_market_percent'],
     status: 'implemented',
   },
   {
-    name: 'Fire Sale',
+    name: 'Dip Catcher',
     level: 5,
     levelName: 'Zeta',
     category: 'humiliation',
@@ -730,7 +730,7 @@ const CHALLENGE_DOCS: ChallengeDoc[] = [
     status: 'implemented',
   },
   {
-    name: 'Multi-Chain Explorer',
+    name: 'Ethereum Maxi',
     level: 6,
     levelName: 'Eta',
     category: 'bootcamp',
@@ -750,18 +750,6 @@ const CHALLENGE_DOCS: ChallengeDoc[] = [
     description: 'Fill 200 orders',
     eventType: 'order_filled',
     trackingLogic: 'Checked against users.total_orders_filled >= 200',
-    eventData: [],
-    status: 'implemented',
-  },
-  {
-    name: 'Marathon Trader',
-    level: 6,
-    levelName: 'Eta',
-    category: 'operations',
-    xp: 4000,
-    description: 'Trade 30 days in a row',
-    eventType: 'trade_completed',
-    trackingLogic: 'Checked against users.current_streak_days >= 30',
     eventData: [],
     status: 'implemented',
   },
@@ -825,30 +813,6 @@ const CHALLENGE_DOCS: ChallengeDoc[] = [
     eventData: ['sell_token', 'buy_token', 'sell_amount', 'buy_amount'],
     status: 'implemented',
   },
-  {
-    name: 'The Sniper',
-    level: 6,
-    levelName: 'Eta',
-    category: 'humiliation',
-    xp: 800,
-    description: 'Fill an order within 5 seconds of it being created',
-    eventType: 'order_filled',
-    trackingLogic: 'Checked if event_data.fill_time_seconds <= 5',
-    eventData: ['fill_time_seconds'],
-    status: 'implemented',
-  },
-  {
-    name: 'Fat Finger',
-    level: 6,
-    levelName: 'Eta',
-    category: 'humiliation',
-    xp: 300,
-    description: 'Create an order 100x above market price',
-    eventType: 'order_created',
-    trackingLogic: 'Checked if price_vs_market_percent >= 9900 (9900% above market = 100x)',
-    eventData: ['price_vs_market_percent'],
-    status: 'implemented',
-  },
 
   // Theta (Level 7)
   {
@@ -864,7 +828,7 @@ const CHALLENGE_DOCS: ChallengeDoc[] = [
     status: 'implemented',
   },
   {
-    name: 'MAXI Supporter',
+    name: 'MAXI Maxi',
     level: 7,
     levelName: 'Theta',
     category: 'bootcamp',
@@ -873,6 +837,42 @@ const CHALLENGE_DOCS: ChallengeDoc[] = [
     eventType: 'trade_completed',
     trackingLogic: 'Checked if any traded token contains "MAXI"',
     eventData: ['sell_token', 'buy_token'],
+    status: 'implemented',
+  },
+  {
+    name: 'Bond Trader',
+    level: 7,
+    levelName: 'Theta',
+    category: 'bootcamp',
+    xp: 2000,
+    description: 'Make an order with HTT (Hedron T-Share Token)',
+    eventType: 'order_created',
+    trackingLogic: 'Checked if sell_token or any buy_token is HTT',
+    eventData: ['sell_token', 'buy_tokens'],
+    status: 'implemented',
+  },
+  {
+    name: 'Coupon Clipper',
+    level: 7,
+    levelName: 'Theta',
+    category: 'bootcamp',
+    xp: 2000,
+    description: 'Make an order with COM (Community Token)',
+    eventType: 'order_created',
+    trackingLogic: 'Checked if sell_token or any buy_token is COM',
+    eventData: ['sell_token', 'buy_tokens'],
+    status: 'implemented',
+  },
+  {
+    name: '$1 Inevitable',
+    level: 7,
+    levelName: 'Theta',
+    category: 'bootcamp',
+    xp: 2000,
+    description: 'Make an order with pDAI',
+    eventType: 'order_created',
+    trackingLogic: 'Checked if sell_token or any buy_token is pDAI (Pulsechain DAI)',
+    eventData: ['sell_token', 'buy_tokens'],
     status: 'implemented',
   },
   {
@@ -896,18 +896,6 @@ const CHALLENGE_DOCS: ChallengeDoc[] = [
     description: 'Create 500 orders',
     eventType: 'order_created',
     trackingLogic: 'Checked against users.total_orders_created >= 500',
-    eventData: [],
-    status: 'implemented',
-  },
-  {
-    name: 'Unstoppable',
-    level: 7,
-    levelName: 'Theta',
-    category: 'operations',
-    xp: 8000,
-    description: 'Trade 60 days in a row',
-    eventType: 'trade_completed',
-    trackingLogic: 'Checked against users.current_streak_days >= 60',
     eventData: [],
     status: 'implemented',
   },
@@ -986,18 +974,6 @@ const CHALLENGE_DOCS: ChallengeDoc[] = [
     status: 'implemented',
   },
   {
-    name: 'Full Spectrum',
-    level: 8,
-    levelName: 'Omega',
-    category: 'bootcamp',
-    xp: 4000,
-    description: 'Trade every whitelisted token category',
-    eventType: 'trade_completed',
-    trackingLogic: 'Check if user has traded tokens from >= 7 categories (hex, pls, plsx, inc, stablecoin, maxi, etc.)',
-    eventData: ['sell_token', 'buy_token'],
-    status: 'implemented',
-  },
-  {
     name: 'Trade Legend',
     level: 8,
     levelName: 'Omega',
@@ -1022,19 +998,7 @@ const CHALLENGE_DOCS: ChallengeDoc[] = [
     status: 'implemented',
   },
   {
-    name: 'Year Warrior',
-    level: 8,
-    levelName: 'Omega',
-    category: 'operations',
-    xp: 15000,
-    description: 'Trade 100 days in a row',
-    eventType: 'trade_completed',
-    trackingLogic: 'Checked against users.current_streak_days >= 100',
-    eventData: [],
-    status: 'implemented',
-  },
-  {
-    name: 'Market Dominator',
+    name: 'Domination',
     level: 8,
     levelName: 'Omega',
     category: 'operations',
@@ -1070,27 +1034,15 @@ const CHALLENGE_DOCS: ChallengeDoc[] = [
     status: 'implemented',
   },
   {
-    name: 'Instant Legend',
+    name: 'Sniper',
     level: 8,
     levelName: 'Omega',
     category: 'humiliation',
     xp: 2000,
-    description: 'Fill an order the exact second it was created',
+    description: 'Fill an order within 1 minute of it being created',
     eventType: 'order_filled',
-    trackingLogic: 'Checked if event_data.fill_time_seconds <= 1',
+    trackingLogic: 'Checked if event_data.fill_time_seconds <= 60',
     eventData: ['fill_time_seconds'],
-    status: 'implemented',
-  },
-  {
-    name: 'All-Nighter',
-    level: 8,
-    levelName: 'Omega',
-    category: 'humiliation',
-    xp: 3000,
-    description: 'Make trades every hour for 24 hours straight',
-    eventType: 'trade_completed',
-    trackingLogic: 'Check for 24 consecutive hours with at least one trade in each hour',
-    eventData: [],
     status: 'implemented',
   },
 ];
@@ -1107,13 +1059,6 @@ const LEVEL_COLORS: Record<string, string> = {
   'Omega': 'text-yellow-400 bg-yellow-500/20',
 };
 
-const CATEGORY_ICONS: Record<string, string> = {
-  'bootcamp': '🎯',
-  'operations': '⚔️',
-  'elite': '👑',
-  'humiliation': '💀',
-};
-
 const STATUS_COLORS: Record<string, string> = {
   'implemented': 'bg-green-500/20 text-green-400 border-green-500/30',
   'partial': 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
@@ -1122,13 +1067,11 @@ const STATUS_COLORS: Record<string, string> = {
 
 export default function ChallengeAdminPage() {
   const [filterLevel, setFilterLevel] = useState<number | null>(null);
-  const [filterCategory, setFilterCategory] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
   const filteredChallenges = CHALLENGE_DOCS.filter(challenge => {
     if (filterLevel !== null && challenge.level !== filterLevel) return false;
-    if (filterCategory && challenge.category !== filterCategory) return false;
     if (filterStatus && challenge.status !== filterStatus) return false;
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
@@ -1143,7 +1086,6 @@ export default function ChallengeAdminPage() {
   });
 
   const levels = [...new Set(CHALLENGE_DOCS.map(c => c.level))].sort((a, b) => a - b);
-  const categories = [...new Set(CHALLENGE_DOCS.map(c => c.category))];
 
   // Stats
   const totalChallenges = CHALLENGE_DOCS.length;
@@ -1234,20 +1176,6 @@ export default function ChallengeAdminPage() {
                   ))}
                 </select>
 
-                {/* Category Filter */}
-                <select
-                  value={filterCategory ?? ''}
-                  onChange={(e) => setFilterCategory(e.target.value || null)}
-                  className="px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-white/30"
-                >
-                  <option value="">All Categories</option>
-                  {categories.map(cat => (
-                    <option key={cat} value={cat}>
-                      {CATEGORY_ICONS[cat]} {cat.charAt(0).toUpperCase() + cat.slice(1)}
-                    </option>
-                  ))}
-                </select>
-
                 {/* Status Filter */}
                 <select
                   value={filterStatus ?? ''}
@@ -1261,11 +1189,10 @@ export default function ChallengeAdminPage() {
                 </select>
 
                 {/* Clear Filters */}
-                {(filterLevel !== null || filterCategory || filterStatus || searchQuery) && (
+                {(filterLevel !== null || filterStatus || searchQuery) && (
                   <button
                     onClick={() => {
                       setFilterLevel(null);
-                      setFilterCategory(null);
                       setFilterStatus(null);
                       setSearchQuery('');
                     }}
@@ -1300,7 +1227,6 @@ export default function ChallengeAdminPage() {
                         <span className={`px-2 py-0.5 rounded text-xs font-medium ${LEVEL_COLORS[challenge.levelName]}`}>
                           {challenge.levelName}
                         </span>
-                        <span className="text-lg">{CATEGORY_ICONS[challenge.category]}</span>
                         <span className={`px-2 py-0.5 rounded text-xs border ${STATUS_COLORS[challenge.status]}`}>
                           {challenge.status}
                         </span>

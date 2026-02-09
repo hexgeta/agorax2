@@ -2563,7 +2563,12 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
           break;
       }
 
-      return sortDirection === 'asc' ? comparison : -comparison;
+      // For expired orders sorted by date, reverse the default direction so most recent expired appear first
+      const effectiveDirection = (statusFilter === 'expired' && sortField === 'date')
+        ? (sortDirection === 'asc' ? 'desc' : 'asc')
+        : sortDirection;
+
+      return effectiveDirection === 'asc' ? comparison : -comparison;
     });
 
     return sortedOrders;

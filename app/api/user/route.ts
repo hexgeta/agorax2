@@ -1,11 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import type { UserAchievements, UserStats, LeaderboardEntry } from '@/types/events';
 
 const supabaseUrl = process.env.SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+// Order-related event types for activity history
+const ORDER_EVENT_TYPES = [
+  'order_created',
+  'order_filled',
+  'order_cancelled',
+  'order_expired',
+  'proceeds_claimed',
+  'trade_completed',
+];
 
 // Validate wallet address format
 function isValidWalletAddress(address: string): boolean {
@@ -41,7 +50,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       .single();
 
     if (userError && userError.code !== 'PGRST116') {
-      // PGRST116 = no rows returned
       console.error('Error fetching user:', userError);
       return NextResponse.json(
         { success: false, error: 'Failed to fetch user data' },
@@ -49,53 +57,47 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    // Fetch completed challenges
-    const { data: challengesData, error: challengesError } = await supabase
-      .from('completed_challenges')
-      .select('prestige_level, challenge_name, category, xp_awarded, completed_at')
+    // Fetch order activity history
+    const { data: activityData, error: activityError } = await supabase
+      .from('user_events')
+      .select('id, event_type, event_data, xp_awarded, created_at')
       .eq('wallet_address', normalizedWallet)
-      .order('completed_at', { ascending: false });
+      .in('event_type', ORDER_EVENT_TYPES)
+      .order('created_at', { ascending: false })
+      .limit(100);
 
-    if (challengesError) {
-      console.error('Error fetching challenges:', challengesError);
+    if (activityError) {
+      console.error('Error fetching activity:', activityError);
     }
 
-    // If user doesn't exist yet, return empty/default data
-    if (!userData) {
-      return NextResponse.json({
-        success: true,
-        data: {
-          stats: {
-            wallet_address: normalizedWallet,
-            total_xp: 0,
-            current_prestige: 0,
-            total_orders_created: 0,
-            total_orders_filled: 0,
-            total_orders_cancelled: 0,
-            total_volume_usd: 0,
-            total_trades: 0,
-            unique_tokens_traded: 0,
-            current_active_orders: 0,
-            longest_streak_days: 0,
-            current_streak_days: 0,
-            last_trade_date: null,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          } as UserStats,
-          completed_challenges: [],
-        } as UserAchievements,
-      });
-    }
+    // Default stats for new users
+    const defaultStats = {
+      wallet_address: normalizedWallet,
+      total_xp: 0,
+      current_prestige: 0,
+      total_orders_created: 0,
+      total_orders_filled: 0,
+      total_orders_cancelled: 0,
+      total_volume_usd: 0,
+      total_trades: 0,
+      unique_tokens_traded: 0,
+      current_active_orders: 0,
+      longest_streak_days: 0,
+      current_streak_days: 0,
+      last_trade_date: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
 
     return NextResponse.json({
       success: true,
       data: {
-        stats: userData as UserStats,
-        completed_challenges: challengesData || [],
-      } as UserAchievements,
+        stats: userData || defaultStats,
+        activity: activityData || [],
+      },
     });
   } catch (error) {
-    console.error('Error in achievements API:', error);
+    console.error('Error in user API:', error);
     return NextResponse.json(
       { success: false, error: 'Internal server error' },
       { status: 500 }

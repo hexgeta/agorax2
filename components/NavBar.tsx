@@ -9,13 +9,37 @@ import { ChainSwitcher } from './ChainSwitcher';
 import { TESTING_MODE } from '@/config/testing';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 import { useClaimableOrdersCount } from '@/hooks/useClaimableOrdersCount';
+import { useUserAchievements } from '@/hooks/useUserAchievements';
 // import { NotificationBell } from './NotificationBell';
+
+// Prestige levels for Legion icon display
+const PRESTIGE_LEVELS = [
+  { symbol: 'α', name: 'Alpha', color: 'text-rose-400', bgColor: 'bg-rose-500/20' },
+  { symbol: 'β', name: 'Beta', color: 'text-orange-400', bgColor: 'bg-orange-500/20' },
+  { symbol: 'γ', name: 'Gamma', color: 'text-lime-400', bgColor: 'bg-lime-500/20' },
+  { symbol: 'δ', name: 'Delta', color: 'text-emerald-400', bgColor: 'bg-emerald-500/20' },
+  { symbol: 'ε', name: 'Epsilon', color: 'text-cyan-400', bgColor: 'bg-cyan-500/20' },
+  { symbol: 'ζ', name: 'Zeta', color: 'text-blue-400', bgColor: 'bg-blue-500/20' },
+  { symbol: 'η', name: 'Eta', color: 'text-violet-400', bgColor: 'bg-violet-500/20' },
+  { symbol: 'θ', name: 'Theta', color: 'text-fuchsia-400', bgColor: 'bg-fuchsia-500/20' },
+  { symbol: 'Ω', name: 'Omega', color: 'text-yellow-400', bgColor: 'bg-yellow-500/20' },
+];
 
 const NavBar = () => {
   const pathname = usePathname();
   const [hoveredPath, setHoveredPath] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { claimableCount } = useClaimableOrdersCount();
+  const { stats, isConnected } = useUserAchievements();
+
+  // Prestige level logic:
+  // - If prestige is 0, show grey Alpha icon (not yet completed first legion)
+  // - If prestige >= 1, show the colored icon of the previous (completed) level
+  const prestigeLevel = stats?.current_prestige ?? 0;
+  const hasCompletedFirstLegion = prestigeLevel >= 1;
+  // Show the previous (completed) level's icon, or Alpha if still on level 0
+  const displayLevel = hasCompletedFirstLegion ? prestigeLevel - 1 : 0;
+  const prestige = PRESTIGE_LEVELS[displayLevel] || PRESTIGE_LEVELS[0];
 
   // Close mobile menu when route changes
   useEffect(() => {
@@ -184,43 +208,25 @@ const NavBar = () => {
                   />
                 </span>
               </Link>
-              <Link
-                href="/achievements"
-                className={`transition-colors font-medium text-base px-4 py-2 cursor-pointer group ${pathname === '/achievements'
-                  ? 'text-white'
-                  : 'text-white/80 hover:text-white'
-                  }`}
-                onMouseEnter={() => setHoveredPath('/achievements')}
-                onMouseLeave={() => setHoveredPath(null)}
-              >
-                <span className="relative inline-block">
-                  Legion
-                  <span className={`absolute bottom-[-4px] left-0 w-full h-0.5 bg-white transition-transform duration-300 ease-out ${pathname === '/achievements'
-                    ? (hoveredPath && hoveredPath !== '/achievements' ? 'scale-x-0 origin-left' : 'scale-x-100 origin-left')
-                    : 'scale-x-0 group-hover:scale-x-100 origin-left'
-                    }`}
-                  />
-                </span>
-              </Link>
-              <Link
-                href="/leaderboard"
-                className={`transition-colors font-medium text-base px-4 py-2 cursor-pointer group ${pathname === '/leaderboard'
-                  ? 'text-white'
-                  : 'text-white/80 hover:text-white'
-                  }`}
-                onMouseEnter={() => setHoveredPath('/leaderboard')}
-                onMouseLeave={() => setHoveredPath(null)}
-              >
-                <span className="relative inline-block">
-                  Leaderboard
-                  <span className={`absolute bottom-[-4px] left-0 w-full h-0.5 bg-white transition-transform duration-300 ease-out ${pathname === '/leaderboard'
-                    ? (hoveredPath && hoveredPath !== '/leaderboard' ? 'scale-x-0 origin-left' : 'scale-x-100 origin-left')
-                    : 'scale-x-0 group-hover:scale-x-100 origin-left'
-                    }`}
-                  />
-                </span>
-              </Link>
-
+              {isConnected && (
+                <Link
+                  href="/achievements"
+                  className="transition-transform hover:text-white"
+                  title={hasCompletedFirstLegion ? `${prestige.name} Legion` : 'Legion'}
+                >
+                  <div
+                    className={`w-9 h-9 rounded-full flex items-center justify-center ${
+                      hasCompletedFirstLegion ? prestige.bgColor : 'bg-gray-500/20'
+                    } ${pathname === '/achievements' ? 'ring-2 ring-white/50' : ''}`}
+                  >
+                    <span className={`text-base font-bold ${
+                      hasCompletedFirstLegion ? prestige.color : 'text-gray-500'
+                    }`}>
+                      {prestige.symbol}
+                    </span>
+                  </div>
+                </Link>
+              )}
               {TESTING_MODE && <ChainSwitcher isCheckingConnection={false} />}
               <ConnectButton />
             </div>
@@ -353,26 +359,29 @@ const NavBar = () => {
             >
               Docs
             </Link>
-            <Link
-              href="/achievements"
-              onClick={() => setMobileMenuOpen(false)}
-              className={`text-xl font-medium py-3 px-6 rounded-lg transition-colors w-full text-center ${pathname === '/achievements'
-                ? 'text-white bg-white/10'
-                : 'text-white/80 hover:text-white hover:bg-white/5'
-                }`}
-            >
-              Legion
-            </Link>
-            <Link
-              href="/leaderboard"
-              onClick={() => setMobileMenuOpen(false)}
-              className={`text-xl font-medium py-3 px-6 rounded-lg transition-colors w-full text-center ${pathname === '/leaderboard'
-                ? 'text-white bg-white/10'
-                : 'text-white/80 hover:text-white hover:bg-white/5'
-                }`}
-            >
-              Leaderboard
-            </Link>
+            {isConnected && (
+              <Link
+                href="/achievements"
+                onClick={() => setMobileMenuOpen(false)}
+                className={`flex items-center justify-center gap-3 py-3 px-6 rounded-lg transition-colors w-full ${pathname === '/achievements'
+                  ? 'bg-white/10'
+                  : 'hover:bg-white/5'
+                  }`}
+              >
+                <div
+                  className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                    hasCompletedFirstLegion ? prestige.bgColor : 'bg-gray-500/20'
+                  }`}
+                >
+                  <span className={`text-lg font-bold ${
+                    hasCompletedFirstLegion ? prestige.color : 'text-gray-500'
+                  }`}>
+                    {prestige.symbol}
+                  </span>
+                </div>
+                <span className="text-xl font-medium text-white">Legion</span>
+              </Link>
+            )}
           </nav>
 
           {/* Connect Button */}

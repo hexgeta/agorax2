@@ -45,9 +45,9 @@ function formatAmount(amount: bigint, decimals: number): number {
   return parseFloat(`${intPart}.${decPart}`);
 }
 
-// Event ABIs
+// Event ABIs (must match contract's actual event signatures)
 const ORDER_PLACED_EVENT = parseAbiItem(
-  'event OrderPlaced(address indexed user, uint256 indexed orderID, address indexed sellToken, uint256 sellAmount)'
+  'event OrderPlaced(address indexed user, uint256 indexed orderID, address indexed sellToken, uint256 sellAmount, uint256[] buyTokensIndex, uint256[] buyAmounts, uint64 expirationTime, bool allOrNothing)'
 );
 const ORDER_FILLED_EVENT = parseAbiItem(
   'event OrderFilled(address indexed buyer, uint256 indexed orderID, uint256 indexed buyTokenIndex, uint256 buyAmount)'
@@ -566,6 +566,16 @@ async function recalculateUserStats(wallet: string) {
 
     const challengeXpTotal = challengeXp?.reduce((sum, c) => sum + (c.xp_awarded || 0), 0) || 0;
 
+    // Query orders table for accurate current_active_orders count
+    // Only count orders that are status 0 (active) AND not expired (expiration 0 means no expiry, or expiration > now)
+    const nowUnix = Math.floor(Date.now() / 1000);
+    const { count: activeOrdersCount } = await supabase
+      .from('orders')
+      .select('*', { count: 'exact', head: true })
+      .eq('maker_address', wallet)
+      .eq('status', 0)
+      .or(`expiration.eq.0,expiration.gt.${nowUnix}`);
+
     const updateData: Record<string, any> = {
       total_xp: totalXp + challengeXpTotal,
       total_orders_created: ordersCreated,
@@ -580,6 +590,7 @@ async function recalculateUserStats(wallet: string) {
       total_proceeds_claims: proceedsClaims,
       total_unique_tokens_traded: uniqueTokens.size,
       total_proceeds_claimed: proceedsClaims,
+      current_active_orders: activeOrdersCount || 0,
       updated_at: new Date().toISOString(),
     };
 

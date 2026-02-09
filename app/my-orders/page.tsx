@@ -10,6 +10,7 @@ import PixelBlastBackground from '@/components/ui/PixelBlastBackground';
 import { motion } from 'framer-motion';
 import { ConnectButton } from '@/components/ConnectButton';
 import { OpenPositionsTable } from '@/components/OpenPositionsTable';
+import { OrderHistoryLog } from '@/components/OrderHistoryLog';
 import Link from 'next/link';
 
 export default function MyOrdersPage() {
@@ -193,6 +194,9 @@ export default function MyOrdersPage() {
                     initialPositionRange={initialPositionRange}
                     onFiltersChange={handleFiltersChange}
                   />
+
+                  {/* Order History Log */}
+                  <OrderHistoryLog />
                 </div>
               </motion.div>
             )}

@@ -51,7 +51,7 @@ Several new challenges require specific fields in `trade_completed` events. **Th
 
 ---
 
-## All Challenges (68 total)
+## All Challenges (84 total)
 
 ### Alpha (Prestige 0) — Getting Started
 
@@ -72,7 +72,7 @@ Several new challenges require specific fields in `trade_completed` events. **Th
 | Token Explorer | bootcamp | 150 | View 5 token orders | `order_viewed` unique token_symbols >= 5 |
 | Getting Comfortable | operations | 400 | Create 5 orders | `total_orders_created >= 5` |
 | Active Buyer | operations | 400 | Fill 5 orders | `total_orders_filled >= 5` |
-| **Weekend Warrior** | operations | 300 | Trade on Sat + Sun | `trade_completed` on day 0 (Sun) + day 6 (Sat) |
+| Weekend Warrior | operations | 300 | Trade on Sat + Sun | `trade_completed` on day 0 (Sun) + day 6 (Sat) |
 | Volume Starter | elite | 500 | $500 total volume | `total_volume_usd >= 500` |
 | Micro Trader | humiliation | 75 | Trade < $1 | `trade_completed` volume_usd < 1 |
 
@@ -84,11 +84,11 @@ Several new challenges require specific fields in `trade_completed` events. **Th
 | Market Scanner | bootcamp | 200 | View 50 orders | `order_viewed` unique order_ids >= 50 |
 | Active Trader | operations | 500 | 10 total trades | `total_trades >= 10` |
 | Consistent | operations | 400 | 3-day streak | `current_streak_days >= 3` |
-| **Both Sides** | operations | 500 | Create + fill same day | `order_created` + `order_filled` same UTC day |
+| Both Sides | operations | 500 | Create + fill same day | `order_created` + `order_filled` same UTC day |
 | Volume Builder | elite | 750 | $1K total volume | `total_volume_usd >= 1000` |
 | Rising Star | elite | 600 | $500+ single trade | `trade_completed` volume_usd >= 500 |
 | Night Owl | humiliation | 200 | Trade 3-5 AM UTC | `trade_completed` UTC hour 3-4 |
-| **Deja Vu** | humiliation | 100 | Duplicate order | `order_created` same sell_token + buy_tokens + sell_amount |
+| Deja Vu | humiliation | 100 | Duplicate order | `order_created` same sell_token + buy_tokens + sell_amount |
 
 ### Delta (Prestige 3) — Dedicated Trader
 
@@ -99,12 +99,12 @@ Several new challenges require specific fields in `trade_completed` events. **Th
 | Order Machine | operations | 800 | Create 25 orders | `total_orders_created >= 25` |
 | Fill Expert | operations | 800 | Fill 25 orders | `total_orders_filled >= 25` |
 | Dedicated | operations | 600 | 7-day streak | `current_streak_days >= 7` |
-| **The Collector** | operations | 600 | Claim 10 orders | `proceeds_claimed` unique order_ids >= 10 |
-| **Clean Sweep** | operations | 800 | 5 orders fully filled | `trade_completed` is_maker + order_completed count >= 5 |
+| The Collector | operations | 600 | Claim 10 orders | `proceeds_claimed` unique order_ids >= 10 |
+| Clean Sweep | operations | 800 | 5 orders fully filled | `trade_completed` is_maker + order_completed count >= 5 |
 | Big Spender | elite | 1200 | $1K+ single trade | volume_usd >= 1000 |
 | Indecisive | humiliation | 100 | 5 cancels in 1 day | `order_cancelled` same UTC day >= 5 |
 | Ghost Order | humiliation | 75 | Order expires 0% filled | `order_expired` fill_percentage = 0 |
-| **Early Bird** | humiliation | 250 | Trade midnight UTC | `trade_completed` UTC hour = 0 |
+| Early Bird | humiliation | 250 | Trade midnight UTC | `trade_completed` UTC hour = 0 |
 
 ### Epsilon (Prestige 4) — Experienced Trader
 
@@ -115,12 +115,12 @@ Several new challenges require specific fields in `trade_completed` events. **Th
 | Veteran Trader | operations | 1500 | 50 total trades | `total_trades >= 50` |
 | Order Veteran | operations | 1200 | Create 50 orders | `total_orders_created >= 50` |
 | Two Week Warrior | operations | 1000 | 14-day streak | `current_streak_days >= 14` |
-| **Arbitrage Artist** | operations | 1000 | Fill then create < 2min | `order_created` with `order_filled` in last 120s |
-| **Perfect Record** | operations | 1500 | 10 trades, 0 cancels | `total_trades >= 10 && total_orders_cancelled == 0` |
+| Arbitrage Artist | operations | 1000 | Fill then create < 2min | `order_created` with `order_filled` in last 120s |
+| Perfect Record | operations | 1500 | 10 trades, 0 cancels | `total_trades >= 10 && total_orders_cancelled == 0` |
 | Volume Veteran | elite | 2000 | $10K total volume | `total_volume_usd >= 10000` |
-| **Iron Hands** | elite | 1500 | Order open 30+ days | `proceeds_claimed` order age >= 30 days |
+| Iron Hands | elite | 1500 | Order open 30+ days | `proceeds_claimed` order age >= 30 days |
 | Speed Runner | humiliation | 400 | Fill < 30s | `order_filled` fill_time_seconds <= 30 |
-| **Penny Pincher** | humiliation | 200 | 10 trades < $1 | `trade_completed` volume_usd < 1, count >= 10 |
+| Penny Pincher | humiliation | 200 | 10 trades < $1 | `trade_completed` volume_usd < 1, count >= 10 |
 
 ### Zeta (Prestige 5) — Professional Trader
 
@@ -131,44 +131,43 @@ Several new challenges require specific fields in `trade_completed` events. **Th
 | Century Trader | operations | 3000 | 100 total trades | `total_trades >= 100` |
 | Order Legend | operations | 2500 | Create 100 orders | `total_orders_created >= 100` |
 | Market Maker | operations | 1500 | 5 concurrent orders | `current_active_orders >= 5` |
-| **AON Champion** | operations | 2500 | 3 completed AON orders | `trade_completed` is_maker + order_completed + is_all_or_nothing >= 3 |
-| **Claim Machine** | operations | 2000 | 50 total claims | `proceeds_claimed` count >= 50 |
+| AON Champion | operations | 2500 | 3 completed AON orders | `trade_completed` is_maker + order_completed + is_all_or_nothing >= 3 |
+| Claim Machine | operations | 2000 | 50 total claims | `proceeds_claimed` count >= 50 |
 | Whale Alert | elite | 4000 | $10K+ single trade | volume_usd >= 10000 |
-| **HEX Baron** | elite | 3000 | 1M HEX total volume | total HEX traded >= 1,000,000 |
-| Overkill | humiliation | 150 | 10x above market | price_vs_market_percent >= 900 |
-| Fire Sale | humiliation | 150 | 50% below market | price_vs_market_percent <= -50 |
-| **Order Hoarder** | humiliation | 300 | 15 open unfilled orders | `current_active_orders >= 15` |
-| **Ghost Town** | humiliation | 200 | 5 expired 0-fill orders | `order_expired` fill_percentage = 0, count >= 5 |
+| HEX Baron | elite | 3000 | 1M HEX total volume | total HEX traded >= 1,000,000 |
+| Fatfinger | humiliation | 150 | Order above market price | `order_created` price_vs_market_percent > 0 |
+| Dip Catcher | humiliation | 150 | 50% below market | `order_created` price_vs_market_percent <= -50 |
+| Order Hoarder | humiliation | 300 | 15 open unfilled orders | `current_active_orders >= 15` |
+| Ghost Town | humiliation | 200 | 5 expired 0-fill orders | `order_expired` fill_percentage = 0, count >= 5 |
 
 ### Eta (Prestige 6) — Elite Trader
 
 | Challenge | Category | XP | Requirement | Detection |
 |-----------|----------|-----|-------------|-----------|
 | Token Master | bootcamp | 2000 | Trade 40 tokens | unique tokens >= 40 |
-| Multi-Chain Explorer | bootcamp | 1500 | Trade we* tokens | any token starting with "we" |
+| Ethereum Maxi | bootcamp | 1500 | Trade wrapped ETH tokens | any token starting with "WE" (weHEX, etc.) |
 | Fill Master | operations | 5000 | Fill 200 orders | `total_orders_filled >= 200` |
-| Marathon Trader | operations | 4000 | 30-day streak | `current_streak_days >= 30` |
 | Power Maker | operations | 2500 | 10 concurrent orders | `current_active_orders >= 10` |
-| **Multi-Fill** | operations | 3000 | 5 unique fillers on 1 order | `trade_completed` unique filler_wallets per order_id >= 5 |
+| Multi-Fill | operations | 3000 | 5 unique fillers on 1 order | `trade_completed` unique filler_wallets per order_id >= 5 |
 | Volume King | elite | 8000 | $100K total volume | `total_volume_usd >= 100000` |
-| **Diamond Hands** | elite | 5000 | Order open 90+ days | `proceeds_claimed` order age >= 90 days |
-| **PLS Baron** | elite | 3000 | 10M PLS total volume | total PLS traded >= 10,000,000 |
-| The Sniper | humiliation | 800 | Fill < 5s | fill_time_seconds <= 5 |
-| **Fat Finger** | humiliation | 300 | 100x above market | price_vs_market_percent >= 9900 |
+| Diamond Hands | elite | 5000 | Order open 90+ days | `proceeds_claimed` order age >= 90 days |
+| PLS Baron | elite | 3000 | 10M PLS total volume | total PLS traded >= 10,000,000 |
 
 ### Theta (Prestige 7) — Master Trader
 
 | Challenge | Category | XP | Requirement | Detection |
 |-----------|----------|-----|-------------|-----------|
 | Token Legend | bootcamp | 3000 | Trade 50 tokens | unique tokens >= 50 |
-| MAXI Supporter | bootcamp | 2000 | Trade any MAXI | any token containing "MAXI" |
+| MAXI Maxi | bootcamp | 2000 | Trade any MAXI token | any token containing "MAXI" |
+| Bond Trader | bootcamp | 2000 | Order with HTT token | `order_created` with HTT (Hedron T-Share Token) |
+| Coupon Clipper | bootcamp | 2000 | Order with COM token | `order_created` with COM (Community Token) |
+| $1 Inevitable | bootcamp | 2000 | Order with pDAI | `order_created` with pDAI/DAI |
 | Trade Machine | operations | 10000 | 500 total trades | `total_trades >= 500` |
 | Order God | operations | 8000 | Create 500 orders | `total_orders_created >= 500` |
-| Unstoppable | operations | 8000 | 60-day streak | `current_streak_days >= 60` |
-| **Full House** | operations | 5000 | 3 partially filled orders | `trade_completed` partially filled active maker orders >= 3 |
+| Full House | operations | 5000 | 3 partially filled orders | `trade_completed` partially filled active maker orders >= 3 |
 | Mega Whale | elite | 20000 | $100K+ single trade | volume_usd >= 100000 |
-| **Stablecoin Baron** | elite | 5000 | 100K stablecoin volume | total DAI+USDC+USDT+USDL traded >= 100,000 |
-| **Profit Master** | elite | 12000 | 100 total claims | `proceeds_claimed` count >= 100 |
+| Stablecoin Baron | elite | 5000 | 100K stablecoin volume | total DAI+USDC+USDT+USDL traded >= 100,000 |
+| Profit Master | elite | 12000 | 100 total claims | `proceeds_claimed` count >= 100 |
 | Total Chaos | humiliation | 500 | 20 cancels in 1 day | `order_cancelled` same UTC day >= 20 |
 
 ### Omega (Prestige 8) — God Mode
@@ -176,15 +175,38 @@ Several new challenges require specific fields in `trade_completed` events. **Th
 | Challenge | Category | XP | Requirement | Detection |
 |-----------|----------|-----|-------------|-----------|
 | Token God | bootcamp | 5000 | Trade 75 tokens | unique tokens >= 75 |
-| Full Spectrum | bootcamp | 4000 | All token categories | 7+ categories (hex, pls, plsx, inc, hdrn, icsa, loan, stablecoin, maxi) |
 | Trade Legend | operations | 25000 | 1000 total trades | `total_trades >= 1000` |
 | Order Immortal | operations | 20000 | Create 1000 orders | `total_orders_created >= 1000` |
-| Year Warrior | operations | 15000 | 100-day streak | `current_streak_days >= 100` |
-| Market Dominator | operations | 5000 | 20 concurrent orders | `current_active_orders >= 20` |
+| Domination | operations | 5000 | 20 concurrent orders | `current_active_orders >= 20` |
 | Volume God | elite | 50000 | $1M total volume | `total_volume_usd >= 1000000` |
 | Leviathan | elite | 75000 | $500K+ single trade | volume_usd >= 500000 |
-| Instant Legend | humiliation | 2000 | Fill < 1s | fill_time_seconds <= 1 |
-| All-Nighter | humiliation | 3000 | Trades every hour 24h | 24 consecutive unique hours with trades |
+| Sniper | humiliation | 2000 | Fill within 1 minute | `order_filled` fill_time_seconds <= 60 |
+
+---
+
+## Recent Challenge Updates
+
+**Renamed:**
+- MAXI Supporter → MAXI Maxi
+- Market Dominator → Domination
+- Instant Legend → Sniper (threshold changed to 60 seconds)
+- Multi-Chain Explorer → Ethereum Maxi
+- Fire Sale → Dip Catcher
+- Overkill → Fatfinger (now triggers on any order above market price)
+
+**Removed:**
+- All-Nighter (24 consecutive hours of trading)
+- Year Warrior (100 day streak)
+- Full Spectrum (trade all token categories)
+- Unstoppable (60 day streak)
+- Marathon Trader (30 day streak)
+- The Sniper (5 second fill - replaced by Sniper at 60 seconds)
+- Fat Finger (100x above market - consolidated into Fatfinger)
+
+**Added:**
+- Bond Trader (Theta/Level 7) - Make an order with HTT token - 2000 XP
+- Coupon Clipper (Theta/Level 7) - Make an order with COM token - 2000 XP
+- $1 Inevitable (Theta/Level 7) - Make an order with pDAI - 2000 XP
 
 ---
 

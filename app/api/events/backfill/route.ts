@@ -47,9 +47,9 @@ function formatAmount(amount: bigint, decimals: number): number {
   return parseFloat(`${intPart}.${decPart}`);
 }
 
-// Event ABIs matching what the stats page uses
+// Event ABIs matching what the contract actually emits
 const ORDER_PLACED_EVENT = parseAbiItem(
-  'event OrderPlaced(address indexed user, uint256 indexed orderID, address indexed sellToken, uint256 sellAmount)'
+  'event OrderPlaced(address indexed user, uint256 indexed orderID, address indexed sellToken, uint256 sellAmount, uint256[] buyTokensIndex, uint256[] buyAmounts, uint64 expirationTime, bool allOrNothing)'
 );
 const ORDER_FILLED_EVENT = parseAbiItem(
   'event OrderFilled(address indexed buyer, uint256 indexed orderID, uint256 indexed buyTokenIndex, uint256 buyAmount)'
@@ -61,13 +61,13 @@ const ORDER_PROCEEDS_COLLECTED_EVENT = parseAbiItem(
   'event OrderProceedsCollected(address indexed user, uint256 indexed orderID)'
 );
 
-// XP values (same as track/route.ts)
+// XP values (same as track/route.ts) - all 0 since XP only comes from challenges
 const EVENT_XP: Record<string, number> = {
-  order_created: 10,
-  order_filled: 10,
+  order_created: 0,
+  order_filled: 0,
   order_cancelled: 0,
-  proceeds_claimed: 5,
-  trade_completed: 25,
+  proceeds_claimed: 0,
+  trade_completed: 0,
   wallet_connected: 0,
 };
 
@@ -809,6 +809,16 @@ async function recalculateUserStats(walletAddress: string, result: BackfillResul
 
     const challengeXpTotal = challengeXp?.reduce((sum, c) => sum + (c.xp_awarded || 0), 0) || 0;
 
+    // Query orders table for accurate current_active_orders count
+    // Only count orders that are status 0 (active) AND not expired (expiration 0 means no expiry, or expiration > now)
+    const nowUnix = Math.floor(Date.now() / 1000);
+    const { count: activeOrdersCount } = await supabase
+      .from('orders')
+      .select('*', { count: 'exact', head: true })
+      .eq('maker_address', walletAddress)
+      .eq('status', 0)
+      .or(`expiration.eq.0,expiration.gt.${nowUnix}`);
+
     const updateData: Record<string, any> = {
       total_xp: totalXp + challengeXpTotal,
       total_orders_created: ordersCreated,
@@ -823,6 +833,7 @@ async function recalculateUserStats(walletAddress: string, result: BackfillResul
       total_proceeds_claims: proceedsClaims,
       total_unique_tokens_traded: uniqueTokens.size,
       unique_tokens_traded: uniqueTokens.size,
+      current_active_orders: activeOrdersCount || 0,
       updated_at: new Date().toISOString(),
     };
 
@@ -946,14 +957,7 @@ async function evaluateChallengesForUser(walletAddress: string, result: Backfill
       let totalPlsTraded = 0;
       let totalStableTraded = 0;
       let pennyTradeCount = 0;
-      const tokenCategories = new Set<string>();
       const stableTokens = new Set(['DAI', 'USDC', 'USDT', 'USDL', 'WEDAI', 'WEUSDC', 'WEUSDT', 'PXDC', 'HEXDC']);
-      const categoryMap: Record<string, string> = {
-        'HEX': 'hex', 'WHEX': 'hex', 'WEHEX': 'hex',
-        'PLS': 'pls', 'WPLS': 'pls',
-        'PLSX': 'plsx', 'INC': 'inc', 'HDRN': 'hdrn', 'ICSA': 'icsa', 'LOAN': 'loan',
-        'DAI': 'stablecoin', 'USDC': 'stablecoin', 'USDT': 'stablecoin', 'USDL': 'stablecoin',
-      };
 
       // Weekend Warrior tracking
       const tradeDays = new Set<number>();
@@ -1005,9 +1009,6 @@ async function evaluateChallengesForUser(walletAddress: string, result: Backfill
           if (stableTokens.has(upper)) totalStableTraded += data.sell_amount || data.buy_amount || 0;
           if (upper.includes('MAXI')) tradedMaxi = true;
           if (upper.startsWith('WE')) tradedWe = true;
-          const cat = categoryMap[upper];
-          if (cat) tokenCategories.add(cat);
-          if (upper.includes('MAXI')) tokenCategories.add('maxi');
         }
       });
 
@@ -1026,9 +1027,8 @@ async function evaluateChallengesForUser(walletAddress: string, result: Backfill
         tryComplete(6, 'Token Master', 'bootcamp', 2000, count >= 40),
         tryComplete(7, 'Token Legend', 'bootcamp', 3000, count >= 50),
         tryComplete(8, 'Token God', 'bootcamp', 5000, count >= 75),
-        tryComplete(7, 'MAXI Supporter', 'bootcamp', 2000, tradedMaxi),
-        tryComplete(6, 'Multi-Chain Explorer', 'bootcamp', 1500, tradedWe),
-        tryComplete(8, 'Full Spectrum', 'bootcamp', 4000, tokenCategories.size >= 7),
+        tryComplete(7, 'MAXI Maxi', 'bootcamp', 2000, tradedMaxi),
+        tryComplete(6, 'Ethereum Maxi', 'bootcamp', 1500, tradedWe),
 
         // Token volume barons
         tryComplete(5, 'HEX Baron', 'elite', 3000, totalHexTraded >= 1000000),
@@ -1055,6 +1055,47 @@ async function evaluateChallengesForUser(walletAddress: string, result: Backfill
 
         // Penny Pincher
         tryComplete(4, 'Penny Pincher', 'humiliation', 200, pennyTradeCount >= 10),
+      ]);
+    }
+
+    // Order-based token-specific challenges (HTT, COM, pDAI)
+    const { data: orderEvents } = await supabase
+      .from('user_events')
+      .select('event_data')
+      .eq('wallet_address', walletAddress)
+      .eq('event_type', 'order_created');
+
+    if (orderEvents && orderEvents.length > 0) {
+      let hasHTT = false;
+      let hasCOM = false;
+      let hasPDAI = false;
+      let hasAboveMarketOrder = false;
+      let hasBelowMarketOrder = false;
+
+      orderEvents.forEach((event) => {
+        const data = event.event_data as {
+          sell_token?: string;
+          buy_tokens?: string[];
+          price_vs_market_percent?: number;
+        };
+
+        const sellToken = data.sell_token?.toUpperCase() || '';
+        const buyTokens = data.buy_tokens?.map(t => t.toUpperCase()) || [];
+        const priceVsMarket = data.price_vs_market_percent || 0;
+
+        if (sellToken === 'HTT' || buyTokens.includes('HTT')) hasHTT = true;
+        if (sellToken === 'COM' || buyTokens.includes('COM')) hasCOM = true;
+        if (sellToken === 'PDAI' || sellToken === 'DAI' || buyTokens.includes('PDAI') || buyTokens.includes('DAI')) hasPDAI = true;
+        if (priceVsMarket > 0) hasAboveMarketOrder = true;
+        if (priceVsMarket <= -50) hasBelowMarketOrder = true;
+      });
+
+      await Promise.all([
+        tryComplete(7, 'Bond Trader', 'bootcamp', 2000, hasHTT),
+        tryComplete(7, 'Coupon Clipper', 'bootcamp', 2000, hasCOM),
+        tryComplete(7, '$1 Inevitable', 'bootcamp', 2000, hasPDAI),
+        tryComplete(5, 'Fatfinger', 'humiliation', 150, hasAboveMarketOrder),
+        tryComplete(5, 'Dip Catcher', 'humiliation', 150, hasBelowMarketOrder),
       ]);
     }
 
