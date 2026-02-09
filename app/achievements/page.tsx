@@ -647,26 +647,24 @@ export default function RanksPage() {
       </div>
 
       {/* Main Content */}
-      <div className="w-full px-4 md:px-8 mt-20 mb-12 relative z-10">
-        <div className="max-w-[1200px] mx-auto">
+      <div className="w-full px-2 md:px-8 mt-2 pb-12 relative z-10">
+        <div className="max-w-[1200px] mx-auto space-y-6">
           {/* Prestige Icons - Clickable */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.2 }}
-            className="mb-8"
           >
             <LiquidGlassCard
               shadowIntensity="sm"
               glowIntensity="sm"
               blurIntensity="xl"
-              className="p-6"
+              className="p-4 md:p-6"
             >
-              <h3 className="text-lg font-semibold text-white mb-2 text-center">Your Legion</h3>
-              <p className="text-gray-400 text-sm mb-6 text-center">
-                Complete all challenges in each legion to earn it's badge and unlock the next set of challenges.
+              <p className="text-gray-400 text-sm mb-4 text-center">
+                Complete all required challenges to unlock the next legion.
               </p>
-              <div className="flex items-center justify-center gap-3 md:gap-4 flex-wrap">
+              <div className="flex items-center justify-center gap-2 md:gap-3 flex-wrap">
                 {PRESTIGE_LEVELS.map((prestige, index) => {
                   const isComplete = isPrestigeComplete(index, userData.completedChallenges);
                   const isSelected = selectedPrestige === index;
@@ -677,17 +675,17 @@ export default function RanksPage() {
                     <button
                       key={prestige.symbol}
                       onClick={() => setSelectedPrestige(index)}
-                      className="flex flex-col items-center gap-2 group"
+                      className="flex flex-col items-center gap-1 group"
                     >
                       <div
-                        className={`w-14 h-14 md:w-16 md:h-16 rounded-full flex items-center justify-center transition-all
+                        className={`w-11 h-11 md:w-14 md:h-14 rounded-full flex items-center justify-center transition-all
                           ${isSelected ? 'ring-2 ring-white ring-offset-2 ring-offset-black' : ''}
                           ${isComplete ? prestige.bgColor : isCurrent ? 'bg-gray-500/30' : isLocked ? 'bg-gray-800/30' : prestige.bgColor}
                           ${isCurrent && !isSelected ? 'ring-1 ring-gray-400/50' : ''}
                         `}
                       >
                         <span
-                          className={`text-2xl md:text-3xl font-bold ${
+                          className={`text-xl md:text-2xl font-bold ${
                             isComplete ? prestige.color : isCurrent ? 'text-gray-300' : isLocked ? 'text-gray-600' : prestige.color
                           }`}
                         >
@@ -695,7 +693,7 @@ export default function RanksPage() {
                         </span>
                       </div>
                       <span
-                        className={`text-xs ${
+                        className={`text-[10px] md:text-xs ${
                           isSelected ? 'text-white font-medium' : isCurrent ? 'text-gray-300' : isLocked ? 'text-gray-600' : 'text-gray-500'
                         }`}
                       >
