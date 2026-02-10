@@ -387,15 +387,6 @@ async function checkAndCompleteChallenges(
       .gte('created_at', today.toISOString())
       .lt('created_at', tomorrow.toISOString());
 
-    // Check Arbitrage Artist: did user fill an order within last 2 minutes?
-    const twoMinAgo = new Date(Date.now() - 120000).toISOString();
-    const { count: recentFills } = await supabase
-      .from('user_events')
-      .select('id', { count: 'exact', head: true })
-      .eq('wallet_address', walletAddress)
-      .eq('event_type', 'order_filled')
-      .gte('created_at', twoMinAgo);
-
     // Check Deja Vu: duplicate order params
     let hasDuplicateOrder = false;
     const sellToken = eventData.sell_token as string | undefined;
@@ -450,16 +441,14 @@ async function checkAndCompleteChallenges(
       tryComplete(5, 'Dip Catcher', 'wildcard', 150, priceVsMarket <= -50),
       // Playing Both Sides (also checked on order_filled)
       tryComplete(2, 'Playing Both Sides', 'operations', 500, (fillsToday || 0) >= 1),
-      // Arbitrage Artist
-      tryComplete(4, 'Arbitrage Artist', 'operations', 1000, (recentFills || 0) >= 1),
       // Deja Vu
       tryComplete(2, 'Deja Vu', 'wildcard', 100, hasDuplicateOrder),
       // Order Hoarder
       tryComplete(5, 'Order Hoarder', 'wildcard', 300, activeUnfilled >= 15),
       // Token-specific challenges
-      tryComplete(7, 'Bond Trader', 'bootcamp', 2000, hasHTT),
-      tryComplete(7, 'Coupon Clipper', 'bootcamp', 2000, hasCOM),
-      tryComplete(7, '$1 Inevitable', 'bootcamp', 2000, hasPDAI),
+      tryComplete(7, 'Bond Trader', 'wildcard', 2000, hasHTT),
+      tryComplete(7, 'Coupon Clipper', 'wildcard', 2000, hasCOM),
+      tryComplete(7, '$1 Inevitable', 'wildcard', 2000, hasPDAI),
       // DEX Degen wildcard
       tryComplete(1, 'DEX Degen', 'wildcard', 150, hasDexToken),
       // Weekend Warrior
@@ -577,8 +566,8 @@ async function checkAndCompleteChallenges(
       tryComplete(3, 'The Collector', 'operations', 600, uniqueOrdersClaimed >= 10),
       tryComplete(5, 'Claim Machine', 'operations', 2000, totalClaims >= 50),
       tryComplete(7, 'Profit Master', 'elite', 12000, totalClaims >= 100),
-      tryComplete(4, 'Iron Hands', 'elite', 1500, orderAgeDays >= 30),
-      tryComplete(6, 'Diamond Hands', 'elite', 5000, orderAgeDays >= 90),
+      tryComplete(4, 'Iron Hands', 'wildcard', 1500, orderAgeDays >= 30),
+      tryComplete(6, 'Diamond Hands', 'wildcard', 5000, orderAgeDays >= 90),
     ]);
   }
 
@@ -722,9 +711,9 @@ async function checkAndCompleteChallenges(
       tryComplete(8, 'Token God', 'bootcamp', 5000, tokensTraded >= 75),
 
       // Token-specific challenges
-      tryComplete(4, 'HEX Enthusiast', 'bootcamp', 600, totalHexTraded >= 100000),
+      tryComplete(4, 'Hexican', 'bootcamp', 600, totalHexTraded >= 100000),
       tryComplete(5, 'PLS Stacker', 'bootcamp', 1000, totalPlsTraded >= 1000000),
-      tryComplete(7, 'MAXI Maxi', 'bootcamp', 2000, tradedMaxiToken),
+      tryComplete(7, 'MAXI Maxi', 'wildcard', 2000, tradedMaxiToken),
       tryComplete(6, 'Ethereum Maxi', 'bootcamp', 1500, tradedWeToken),
 
       // Time-based challenges
@@ -743,10 +732,10 @@ async function checkAndCompleteChallenges(
       tryComplete(5, 'AON Champion', 'operations', 2500, completedAonOrders.size >= 3),
 
       // Multi-Fill: single order filled by 5+ different wallets
-      tryComplete(6, 'Multi-Fill', 'operations', 3000, maxFillers >= 5),
+      tryComplete(6, 'Multi-Fill', 'wildcard', 3000, maxFillers >= 5),
 
       // Full House: 3 partially filled active maker orders simultaneously
-      tryComplete(7, 'Full House', 'operations', 5000, partiallyFilledMakerOrders.size >= 3),
+      tryComplete(7, 'Full House', 'wildcard', 5000, partiallyFilledMakerOrders.size >= 3),
 
       // Token volume barons
       tryComplete(5, 'HEX Baron', 'elite', 3000, totalHexTraded >= 1000000),

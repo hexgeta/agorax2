@@ -1034,7 +1034,7 @@ async function evaluateChallengesForUser(walletAddress: string, result: Backfill
         tryComplete(6, 'Token Master', 'bootcamp', 2000, count >= 40),
         tryComplete(7, 'Token Legend', 'bootcamp', 3000, count >= 50),
         tryComplete(8, 'Token God', 'bootcamp', 5000, count >= 75),
-        tryComplete(7, 'MAXI Maxi', 'bootcamp', 2000, tradedMaxi),
+        tryComplete(7, 'MAXI Maxi', 'wildcard', 2000, tradedMaxi),
         tryComplete(6, 'Ethereum Maxi', 'bootcamp', 1500, tradedWe),
 
         // Token volume barons
@@ -1052,10 +1052,10 @@ async function evaluateChallengesForUser(walletAddress: string, result: Backfill
         tryComplete(5, 'AON Champion', 'operations', 2500, completedAonOrders.size >= 3),
 
         // Multi-Fill
-        tryComplete(6, 'Multi-Fill', 'operations', 3000, maxFillers >= 5),
+        tryComplete(6, 'Multi-Fill', 'wildcard', 3000, maxFillers >= 5),
 
         // Full House
-        tryComplete(7, 'Full House', 'operations', 5000, partiallyFilledMakerOrders.size >= 3),
+        tryComplete(7, 'Full House', 'wildcard', 5000, partiallyFilledMakerOrders.size >= 3),
 
         // Penny Pincher
         tryComplete(4, 'Penny Pincher', 'wildcard', 200, pennyTradeCount >= 10),
@@ -1103,9 +1103,9 @@ async function evaluateChallengesForUser(walletAddress: string, result: Backfill
       });
 
       await Promise.all([
-        tryComplete(7, 'Bond Trader', 'bootcamp', 2000, hasHTT),
-        tryComplete(7, 'Coupon Clipper', 'bootcamp', 2000, hasCOM),
-        tryComplete(7, '$1 Inevitable', 'bootcamp', 2000, hasPDAI),
+        tryComplete(7, 'Bond Trader', 'wildcard', 2000, hasHTT),
+        tryComplete(7, 'Coupon Clipper', 'wildcard', 2000, hasCOM),
+        tryComplete(7, '$1 Inevitable', 'wildcard', 2000, hasPDAI),
         tryComplete(5, 'Fatfinger', 'wildcard', 150, hasAboveMarketOrder),
         tryComplete(5, 'Dip Catcher', 'wildcard', 150, hasBelowMarketOrder),
         tryComplete(1, 'DEX Degen', 'wildcard', 150, hasDexToken),
@@ -1151,8 +1151,8 @@ async function evaluateChallengesForUser(walletAddress: string, result: Backfill
         tryComplete(3, 'The Collector', 'operations', 600, uniqueOrdersClaimed >= 10),
         tryComplete(5, 'Claim Machine', 'operations', 2000, totalClaims >= 50),
         tryComplete(7, 'Profit Master', 'elite', 12000, totalClaims >= 100),
-        tryComplete(4, 'Iron Hands', 'elite', 1500, maxOrderAgeDays >= 30),
-        tryComplete(6, 'Diamond Hands', 'elite', 5000, maxOrderAgeDays >= 90),
+        tryComplete(4, 'Iron Hands', 'wildcard', 1500, maxOrderAgeDays >= 30),
+        tryComplete(6, 'Diamond Hands', 'wildcard', 5000, maxOrderAgeDays >= 90),
       ]);
     }
 

@@ -106,14 +106,13 @@ Several new challenges require specific fields in `trade_completed` events. **Th
 | Challenge | Category | XP | Requirement | Detection |
 |-----------|----------|-----|-------------|-----------|
 | Token Collector | bootcamp | 800 | Trade 20 tokens | unique tokens >= 20 |
-| HEX Enthusiast | bootcamp | 600 | Trade 100K HEX | total HEX volume >= 100,000 |
+| Hexican | wildcard | 600 | Trade 100K HEX | total HEX volume >= 100,000 |
 | Veteran Trader | operations | 1500 | 50 total trades | `total_trades >= 50` |
 | Order Veteran | operations | 1200 | Create 50 orders | `total_orders_created >= 50` |
 | Two Week Warrior | operations | 1000 | 14-day streak | `current_streak_days >= 14` |
-| Arbitrage Artist | operations | 1000 | Fill then create < 2min | `order_created` with `order_filled` in last 120s |
 | Perfect Record | operations | 1500 | 10 trades, 0 cancels | `total_trades >= 10 && total_orders_cancelled == 0` |
 | Volume Veteran | elite | 2000 | $10K total volume | `total_volume_usd >= 10000` |
-| Iron Hands | elite | 1500 | Order open 30+ days | `proceeds_claimed` order age >= 30 days |
+| Iron Hands | wildcard | 1500 | Order open 30+ days | `proceeds_claimed` order age >= 30 days |
 | Speed Runner | humiliation | 400 | Fill < 30s | `order_filled` fill_time_seconds <= 30 |
 | Penny Pincher | humiliation | 200 | 10 trades < $1 | `trade_completed` volume_usd < 1, count >= 10 |
 
@@ -143,9 +142,9 @@ Several new challenges require specific fields in `trade_completed` events. **Th
 | Ethereum Maxi | bootcamp | 1500 | Trade wrapped ETH tokens | any token starting with "WE" (weHEX, etc.) |
 | Fill Master | operations | 5000 | Fill 200 orders | `total_orders_filled >= 200` |
 | Power Maker | operations | 2500 | 10 concurrent orders | `current_active_orders >= 10` |
-| Multi-Fill | operations | 3000 | 5 unique fillers on 1 order | `trade_completed` unique filler_wallets per order_id >= 5 |
+| Multi-Fill | wildcard | 3000 | 5 unique fillers on 1 order | `trade_completed` unique filler_wallets per order_id >= 5 |
 | Volume King | elite | 8000 | $100K total volume | `total_volume_usd >= 100000` |
-| Diamond Hands | elite | 5000 | Order open 90+ days | `proceeds_claimed` order age >= 90 days |
+| Diamond Hands | wildcard | 5000 | Order open 90+ days | `proceeds_claimed` order age >= 90 days |
 | PLS Baron | elite | 3000 | 10M PLS total volume | total PLS traded >= 10,000,000 |
 
 ### Theta (Prestige 7) — Master Trader
@@ -153,13 +152,13 @@ Several new challenges require specific fields in `trade_completed` events. **Th
 | Challenge | Category | XP | Requirement | Detection |
 |-----------|----------|-----|-------------|-----------|
 | Token Legend | bootcamp | 3000 | Trade 50 tokens | unique tokens >= 50 |
-| MAXI Maxi | bootcamp | 2000 | Trade any MAXI token | any token containing "MAXI" |
-| Bond Trader | bootcamp | 2000 | Order with HTT token | `order_created` with HTT (Hedron T-Share Token) |
-| Coupon Clipper | bootcamp | 2000 | Order with COM token | `order_created` with COM (Community Token) |
-| $1 Inevitable | bootcamp | 2000 | Order with pDAI | `order_created` with pDAI/DAI |
+| MAXI Maxi | wildcard | 2000 | Trade any MAXI token | any token containing "MAXI" |
+| Bond Trader | wildcard | 2000 | Order with HTT token | `order_created` with HTT (Hedron T-Share Token) |
+| Coupon Clipper | wildcard | 2000 | Order with COM token | `order_created` with COM (Community Token) |
+| $1 Inevitable | wildcard | 2000 | Order with pDAI | `order_created` with pDAI/DAI |
 | Trade Machine | operations | 10000 | 500 total trades | `total_trades >= 500` |
 | Order God | operations | 8000 | Create 500 orders | `total_orders_created >= 500` |
-| Full House | operations | 5000 | 3 partially filled orders | `trade_completed` partially filled active maker orders >= 3 |
+| Full House | wildcard | 5000 | 3 partially filled orders | `trade_completed` partially filled active maker orders >= 3 |
 | Mega Whale | elite | 20000 | $100K+ single trade | volume_usd >= 100000 |
 | Stablecoin Baron | elite | 5000 | 100K stablecoin volume | total DAI+USDC+USDT+USDL traded >= 100,000 |
 | Profit Master | elite | 12000 | 100 total claims | `proceeds_claimed` count >= 100 |
@@ -202,6 +201,22 @@ Several new challenges require specific fields in `trade_completed` events. **Th
 - Bond Trader (Theta/Level 7) - Make an order with HTT token - 2000 XP
 - Coupon Clipper (Theta/Level 7) - Make an order with COM token - 2000 XP
 - $1 Inevitable (Theta/Level 7) - Make an order with pDAI - 2000 XP
+- DEX Degen (Beta/Level 1) - Order with DEX token (PLSX, 9MM, 9INCH, PHUX, TIDE, UNI) - 150 XP
+
+**Renamed:**
+- Small Fish → Small Fry
+- Both Sides → Playing Both Sides
+- HEX Enthusiast → Hexican
+
+**Removed:**
+- Price Watcher (chart_viewed challenge)
+- Window Shopper, Token Explorer, Market Scanner, Market Regular (order_viewed challenges)
+- Arbitrage Artist (fill then create within 2 minutes)
+
+**Changed:**
+- Weekend Warrior: now triggers on order_created on Sat/Sun (was trade on both Sat AND Sun)
+- Categories removed: bootcamp/operations/elite no longer used. Challenges are either required or wildcard
+- Moved to wildcard: Iron Hands, Multi-Fill, Diamond Hands, MAXI Maxi, Bond Trader, Coupon Clipper, $1 Inevitable, Full House, Hexican
 
 ---
 

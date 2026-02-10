@@ -61,11 +61,10 @@ const CHALLENGES_BY_LEVEL: Record<string, Challenge[]> = {
   ],
   'Epsilon': [
     { name: 'Token Collector', xp: 800, requirement: 'Trade 20 different tokens' },
-    { name: 'HEX Enthusiast', xp: 600, requirement: 'Trade 100K HEX total' },
+    { name: 'Hexican', xp: 600, requirement: 'Trade 100K HEX total' },
     { name: 'Veteran Trader', xp: 1500, requirement: 'Complete 50 trades' },
     { name: 'Order Veteran', xp: 1200, requirement: 'Create 50 orders' },
     { name: 'Two Week Warrior', xp: 1000, requirement: '14-day trading streak' },
-    { name: 'Arbitrage Artist', xp: 1000, requirement: 'Fill then create an order within 2 minutes' },
     { name: 'Perfect Record', xp: 1500, requirement: '10 trades with 0 cancellations' },
     { name: 'Volume Veteran', xp: 2000, requirement: '$10K total volume' },
     { name: 'Iron Hands', xp: 1500, requirement: 'Keep an order open for 30+ days' },
