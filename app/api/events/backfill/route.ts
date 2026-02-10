@@ -1067,7 +1067,7 @@ async function evaluateChallengesForUser(walletAddress: string, result: Backfill
         tryComplete(7, 'Full House', 'operations', 5000, partiallyFilledMakerOrders.size >= 3),
 
         // Penny Pincher
-        tryComplete(4, 'Penny Pincher', 'humiliation', 200, pennyTradeCount >= 10),
+        tryComplete(4, 'Penny Pincher', 'wildcard', 200, pennyTradeCount >= 10),
       ]);
     }
 
@@ -1107,8 +1107,8 @@ async function evaluateChallengesForUser(walletAddress: string, result: Backfill
         tryComplete(7, 'Bond Trader', 'bootcamp', 2000, hasHTT),
         tryComplete(7, 'Coupon Clipper', 'bootcamp', 2000, hasCOM),
         tryComplete(7, '$1 Inevitable', 'bootcamp', 2000, hasPDAI),
-        tryComplete(5, 'Fatfinger', 'humiliation', 150, hasAboveMarketOrder),
-        tryComplete(5, 'Dip Catcher', 'humiliation', 150, hasBelowMarketOrder),
+        tryComplete(5, 'Fatfinger', 'wildcard', 150, hasAboveMarketOrder),
+        tryComplete(5, 'Dip Catcher', 'wildcard', 150, hasBelowMarketOrder),
       ]);
     }
 
@@ -1167,7 +1167,7 @@ async function evaluateChallengesForUser(walletAddress: string, result: Backfill
         const d = e.event_data as { fill_percentage?: number };
         return (d.fill_percentage || 0) === 0;
       }).length;
-      await tryComplete(5, 'Ghost Town', 'humiliation', 200, ghostCount >= 5);
+      await tryComplete(5, 'Ghost Town', 'wildcard', 200, ghostCount >= 5);
     }
 
     // Recalculate total XP after all challenges are evaluated

@@ -1070,7 +1070,7 @@ export default function ChallengeAdminPage() {
   const [filterStatus, setFilterStatus] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const filteredChallenges = CHALLENGE_DOCS.filter(challenge => {
+  const applyFilters = (challenge: ChallengeDoc) => {
     if (filterLevel !== null && challenge.level !== filterLevel) return false;
     if (filterStatus && challenge.status !== filterStatus) return false;
     if (searchQuery) {
@@ -1083,15 +1083,20 @@ export default function ChallengeAdminPage() {
       );
     }
     return true;
-  });
+  };
+
+  const filteredChallenges = CHALLENGE_DOCS.filter(c => c.category !== 'wildcard' && applyFilters(c));
+  const wildcardChallenges = CHALLENGE_DOCS.filter(c => c.category === 'wildcard' && applyFilters(c));
 
   const levels = [...new Set(CHALLENGE_DOCS.map(c => c.level))].sort((a, b) => a - b);
 
-  // Stats
-  const totalChallenges = CHALLENGE_DOCS.length;
-  const implementedCount = CHALLENGE_DOCS.filter(c => c.status === 'implemented').length;
-  const partialCount = CHALLENGE_DOCS.filter(c => c.status === 'partial').length;
-  const needsWorkCount = CHALLENGE_DOCS.filter(c => c.status === 'needs-work').length;
+  // Stats (exclude wildcards from main count)
+  const mainChallenges = CHALLENGE_DOCS.filter(c => c.category !== 'wildcard');
+  const totalChallenges = mainChallenges.length;
+  const implementedCount = mainChallenges.filter(c => c.status === 'implemented').length;
+  const partialCount = mainChallenges.filter(c => c.status === 'partial').length;
+  const needsWorkCount = mainChallenges.filter(c => c.status === 'needs-work').length;
+  const wildcardCount = CHALLENGE_DOCS.filter(c => c.category === 'wildcard').length;
 
   return (
     <main className="flex min-h-screen flex-col items-center relative overflow-hidden">
@@ -1123,10 +1128,10 @@ export default function ChallengeAdminPage() {
             className="mb-8"
           >
             <LiquidGlassCard shadowIntensity="sm" glowIntensity="sm" blurIntensity="xl" className="p-6">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                 <div>
                   <div className="text-3xl font-bold text-white">{totalChallenges}</div>
-                  <div className="text-gray-400 text-sm">Total Challenges</div>
+                  <div className="text-gray-400 text-sm">Required Challenges</div>
                 </div>
                 <div>
                   <div className="text-3xl font-bold text-green-400">{implementedCount}</div>
@@ -1139,6 +1144,10 @@ export default function ChallengeAdminPage() {
                 <div>
                   <div className="text-3xl font-bold text-red-400">{needsWorkCount}</div>
                   <div className="text-gray-400 text-sm">Needs Work</div>
+                </div>
+                <div>
+                  <div className="text-3xl font-bold text-amber-400">{wildcardCount}</div>
+                  <div className="text-gray-400 text-sm">Wildcards</div>
                 </div>
               </div>
             </LiquidGlassCard>
@@ -1193,7 +1202,7 @@ export default function ChallengeAdminPage() {
             <LiquidGlassCard shadowIntensity="sm" glowIntensity="sm" blurIntensity="xl" className="p-6">
               <h2 className="text-xl font-semibold text-white mb-4">Legion Progression Requirements</h2>
               <p className="text-gray-400 text-sm mb-4">
-                To advance to the next legion, you need <span className="text-white">BOTH</span>: complete all challenges in your current level <span className="text-white">AND</span> reach the XP threshold.
+                To advance to the next legion, you need <span className="text-white">BOTH</span>: complete all required challenges in your current level <span className="text-white">AND</span> reach the XP threshold. <span className="text-amber-400">Wildcard challenges are not required</span> for progression but still award XP.
               </p>
 
               <div className="overflow-x-auto">
@@ -1460,6 +1469,73 @@ export default function ChallengeAdminPage() {
               </div>
             )}
           </motion.div>
+
+          {/* Wildcard Challenges */}
+          {wildcardChallenges.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.35 }}
+              className="mt-12"
+            >
+              <div className="mb-4">
+                <h2 className="text-2xl font-bold text-white mb-1">Wildcard Challenges</h2>
+                <p className="text-gray-400 text-sm">
+                  Bonus challenges that are <span className="text-amber-400">not required</span> for legion progression. They still award XP and will be hidden until unlocked.
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                {wildcardChallenges.map((challenge) => (
+                  <LiquidGlassCard
+                    key={`${challenge.level}-${challenge.name}`}
+                    shadowIntensity="sm"
+                    glowIntensity="sm"
+                    blurIntensity="xl"
+                    className="p-4 border border-amber-500/10"
+                  >
+                    <div className="flex flex-wrap gap-4 items-start">
+                      <div className="flex-1 min-w-[300px]">
+                        <div className="flex items-center gap-3 mb-2">
+                          <span className={`px-2 py-0.5 rounded text-xs font-medium ${LEVEL_COLORS[challenge.levelName]}`}>
+                            {challenge.levelName}
+                          </span>
+                          <span className="px-2 py-0.5 rounded text-xs border bg-amber-500/20 text-amber-400 border-amber-500/30">
+                            wildcard
+                          </span>
+                          <span className="text-amber-400 font-mono text-sm">+{challenge.xp.toLocaleString()} XP</span>
+                        </div>
+                        <h3 className="text-lg font-semibold text-white mb-1">{challenge.name}</h3>
+                        <p className="text-gray-400 text-sm">{challenge.description}</p>
+                      </div>
+                      <div className="flex-1 min-w-[400px]">
+                        <div className="mb-3">
+                          <span className="text-gray-500 text-xs uppercase tracking-wide">Event Type</span>
+                          <div className="text-cyan-400 font-mono text-sm mt-1">{challenge.eventType}</div>
+                        </div>
+                        <div className="mb-3">
+                          <span className="text-gray-500 text-xs uppercase tracking-wide">Tracking Logic</span>
+                          <div className="text-gray-300 text-sm mt-1">{challenge.trackingLogic}</div>
+                        </div>
+                        {challenge.eventData.length > 0 && (
+                          <div>
+                            <span className="text-gray-500 text-xs uppercase tracking-wide">Required Event Data</span>
+                            <div className="flex flex-wrap gap-2 mt-1">
+                              {challenge.eventData.map((data, i) => (
+                                <span key={i} className="px-2 py-0.5 bg-white/5 rounded text-xs text-gray-300 font-mono">
+                                  {data}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </LiquidGlassCard>
+                ))}
+              </div>
+            </motion.div>
+          )}
 
           {/* Event Types Reference */}
           <motion.div

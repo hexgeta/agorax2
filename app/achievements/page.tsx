@@ -28,7 +28,7 @@ const PRESTIGE_LEVELS = [
 ];
 
 // Challenge categories
-type ChallengeCategory = 'bootcamp' | 'operations' | 'elite' | 'humiliation';
+type ChallengeCategory = 'bootcamp' | 'operations' | 'elite' | 'wildcard';
 
 interface Challenge {
   name: string;
@@ -41,7 +41,7 @@ interface PrestigeChallenges {
   bootcamp: { title: string; description: string; icon: string; color: string; challenges: Challenge[] };
   operations: { title: string; description: string; icon: string; color: string; challenges: Challenge[] };
   elite: { title: string; description: string; icon: string; color: string; challenges: Challenge[] };
-  humiliation: { title: string; description: string; icon: string; color: string; challenges: Challenge[] };
+  wildcard: { title: string; description: string; icon: string; color: string; challenges: Challenge[] };
 }
 
 // Each prestige level has unique challenges split into 4 categories
@@ -77,8 +77,8 @@ const PRESTIGE_CHALLENGES: Record<number, PrestigeChallenges> = {
         { name: 'Small Fish', description: 'Complete a trade worth $100+', requirement: '$100+ trade', xp: 300 },
       ],
     },
-    humiliation: {
-      title: 'Humiliation',
+    wildcard: {
+      title: 'Wildcard',
       description: 'Funny achievements',
       icon: '💀',
       color: 'text-red-400',
@@ -119,8 +119,8 @@ const PRESTIGE_CHALLENGES: Record<number, PrestigeChallenges> = {
         { name: 'Volume Starter', description: 'Trade $500 in total volume', requirement: '$500 volume', xp: 500 },
       ],
     },
-    humiliation: {
-      title: 'Humiliation',
+    wildcard: {
+      title: 'Wildcard',
       description: 'Questionable decisions',
       icon: '💀',
       color: 'text-red-400',
@@ -162,8 +162,8 @@ const PRESTIGE_CHALLENGES: Record<number, PrestigeChallenges> = {
         { name: 'Rising Star', description: 'Complete a trade worth $500+', requirement: '$500+ trade', xp: 600 },
       ],
     },
-    humiliation: {
-      title: 'Humiliation',
+    wildcard: {
+      title: 'Wildcard',
       description: 'Odd timing',
       icon: '💀',
       color: 'text-red-400',
@@ -207,8 +207,8 @@ const PRESTIGE_CHALLENGES: Record<number, PrestigeChallenges> = {
         { name: 'Big Spender', description: 'Complete a trade worth $1,000+', requirement: '$1K+ trade', xp: 1200 },
       ],
     },
-    humiliation: {
-      title: 'Humiliation',
+    wildcard: {
+      title: 'Wildcard',
       description: 'Changed your mind?',
       icon: '💀',
       color: 'text-red-400',
@@ -254,8 +254,8 @@ const PRESTIGE_CHALLENGES: Record<number, PrestigeChallenges> = {
         { name: 'Iron Hands', description: 'Hold an open order for 30+ days without cancelling', requirement: 'Order open 30 days', xp: 1500 },
       ],
     },
-    humiliation: {
-      title: 'Humiliation',
+    wildcard: {
+      title: 'Wildcard',
       description: 'Speed demons',
       icon: '💀',
       color: 'text-red-400',
@@ -300,8 +300,8 @@ const PRESTIGE_CHALLENGES: Record<number, PrestigeChallenges> = {
         { name: 'HEX Baron', description: 'Trade 1,000,000 HEX in total volume', requirement: '1M HEX volume', xp: 3000 },
       ],
     },
-    humiliation: {
-      title: 'Humiliation',
+    wildcard: {
+      title: 'Wildcard',
       description: 'Questionable pricing',
       icon: '💀',
       color: 'text-red-400',
@@ -348,8 +348,8 @@ const PRESTIGE_CHALLENGES: Record<number, PrestigeChallenges> = {
         { name: 'PLS Baron', description: 'Trade 10,000,000 PLS in total volume', requirement: '10M PLS volume', xp: 3000 },
       ],
     },
-    humiliation: {
-      title: 'Humiliation',
+    wildcard: {
+      title: 'Wildcard',
       description: 'Lightning fast',
       icon: '💀',
       color: 'text-red-400',
@@ -394,8 +394,8 @@ const PRESTIGE_CHALLENGES: Record<number, PrestigeChallenges> = {
         { name: 'Profit Master', description: 'Collect proceeds 100 times total', requirement: '100 claims', xp: 12000 },
       ],
     },
-    humiliation: {
-      title: 'Humiliation',
+    wildcard: {
+      title: 'Wildcard',
       description: 'Mass cancellation',
       icon: '💀',
       color: 'text-red-400',
@@ -438,8 +438,8 @@ const PRESTIGE_CHALLENGES: Record<number, PrestigeChallenges> = {
         { name: 'Leviathan', description: 'Complete a trade worth $500,000+', requirement: '$500K+ trade', xp: 75000 },
       ],
     },
-    humiliation: {
-      title: 'Humiliation',
+    wildcard: {
+      title: 'Wildcard',
       description: 'The ultimate',
       icon: '💀',
       color: 'text-red-400',
@@ -465,7 +465,7 @@ function isPrestigeComplete(prestigeIndex: number, completedChallenges: Record<n
 
   const requiredNames: string[] = [];
   (Object.keys(prestigeChallenges) as ChallengeCategory[]).forEach((category) => {
-    if (category !== 'humiliation') {
+    if (category !== 'wildcard') {
       prestigeChallenges[category].challenges.forEach((c) => requiredNames.push(c.name));
     }
   });
@@ -515,16 +515,16 @@ function AllChallengesTable({
   const prestigeChallenges = PRESTIGE_CHALLENGES[prestigeIndex];
   if (!prestigeChallenges) return null;
 
-  // Get required challenges (non-humiliation)
+  // Get required challenges (non-wildcard)
   const requiredChallenges: Challenge[] = [];
   (Object.keys(prestigeChallenges) as ChallengeCategory[]).forEach((category) => {
-    if (category !== 'humiliation') {
+    if (category !== 'wildcard') {
       prestigeChallenges[category].challenges.forEach((c) => requiredChallenges.push(c));
     }
   });
 
-  // Get wildcard challenges (humiliation category)
-  const wildcardChallenges = prestigeChallenges.humiliation.challenges;
+  // Get wildcard challenges
+  const wildcardChallenges = prestigeChallenges.wildcard.challenges;
 
   return (
     <div className="space-y-6">
@@ -693,12 +693,12 @@ export default function RanksPage() {
   const completedInPrestige = userData.completedChallenges[selectedPrestige] || [];
   const requiredInPrestige = selectedPrestigeChallenges
     ? (Object.keys(selectedPrestigeChallenges) as ChallengeCategory[])
-        .filter((cat) => cat !== 'humiliation')
+        .filter((cat) => cat !== 'wildcard')
         .reduce((acc, cat) => acc + selectedPrestigeChallenges[cat].challenges.length, 0)
     : 0;
   const requiredCompleted = selectedPrestigeChallenges
     ? (Object.keys(selectedPrestigeChallenges) as ChallengeCategory[])
-        .filter((cat) => cat !== 'humiliation')
+        .filter((cat) => cat !== 'wildcard')
         .reduce((acc, cat) => {
           return acc + selectedPrestigeChallenges[cat].challenges.filter((c) => completedInPrestige.includes(c.name)).length;
         }, 0)
@@ -710,12 +710,12 @@ export default function RanksPage() {
   const completedInActivePrestige = userData.completedChallenges[activeLegionIndex] || [];
   const requiredInActivePrestige = activePrestigeChallenges
     ? (Object.keys(activePrestigeChallenges) as ChallengeCategory[])
-        .filter((cat) => cat !== 'humiliation')
+        .filter((cat) => cat !== 'wildcard')
         .reduce((acc, cat) => acc + activePrestigeChallenges[cat].challenges.length, 0)
     : 0;
   const requiredCompletedInActive = activePrestigeChallenges
     ? (Object.keys(activePrestigeChallenges) as ChallengeCategory[])
-        .filter((cat) => cat !== 'humiliation')
+        .filter((cat) => cat !== 'wildcard')
         .reduce((acc, cat) => {
           return acc + activePrestigeChallenges[cat].challenges.filter((c) => completedInActivePrestige.includes(c.name)).length;
         }, 0)

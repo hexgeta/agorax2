@@ -439,16 +439,16 @@ async function checkAndCompleteChallenges(
       tryComplete(7, 'Order God', 'operations', 8000, stats.total_orders_created >= 500),
       tryComplete(8, 'Order Immortal', 'operations', 20000, stats.total_orders_created >= 1000),
       // Pricing challenges
-      tryComplete(5, 'Fatfinger', 'humiliation', 150, priceVsMarket > 0),
-      tryComplete(5, 'Dip Catcher', 'humiliation', 150, priceVsMarket <= -50),
+      tryComplete(5, 'Fatfinger', 'wildcard', 150, priceVsMarket > 0),
+      tryComplete(5, 'Dip Catcher', 'wildcard', 150, priceVsMarket <= -50),
       // Both Sides (also checked on order_filled)
       tryComplete(2, 'Both Sides', 'operations', 500, (fillsToday || 0) >= 1),
       // Arbitrage Artist
       tryComplete(4, 'Arbitrage Artist', 'operations', 1000, (recentFills || 0) >= 1),
       // Deja Vu
-      tryComplete(2, 'Deja Vu', 'humiliation', 100, hasDuplicateOrder),
+      tryComplete(2, 'Deja Vu', 'wildcard', 100, hasDuplicateOrder),
       // Order Hoarder
-      tryComplete(5, 'Order Hoarder', 'humiliation', 300, activeUnfilled >= 15),
+      tryComplete(5, 'Order Hoarder', 'wildcard', 300, activeUnfilled >= 15),
       // Token-specific challenges
       tryComplete(7, 'Bond Trader', 'bootcamp', 2000, hasHTT),
       tryComplete(7, 'Coupon Clipper', 'bootcamp', 2000, hasCOM),
@@ -479,8 +479,8 @@ async function checkAndCompleteChallenges(
       tryComplete(3, 'Fill Expert', 'operations', 800, stats.total_orders_filled >= 25),
       tryComplete(6, 'Fill Master', 'operations', 5000, stats.total_orders_filled >= 200),
       // Speed challenges
-      tryComplete(4, 'Speed Runner', 'humiliation', 400, fillTimeSeconds <= 30),
-      tryComplete(8, 'Sniper', 'humiliation', 2000, fillTimeSeconds <= 60),
+      tryComplete(4, 'Speed Runner', 'wildcard', 400, fillTimeSeconds <= 30),
+      tryComplete(8, 'Sniper', 'wildcard', 2000, fillTimeSeconds <= 60),
       // Both Sides (also checked on order_created)
       tryComplete(2, 'Both Sides', 'operations', 500, (createdToday || 0) >= 1),
     ]);
@@ -488,7 +488,7 @@ async function checkAndCompleteChallenges(
 
   if (eventType === 'order_cancelled') {
     const timeSinceCreation = (eventData.time_since_creation_seconds as number) || Infinity;
-    await tryComplete(0, 'Paper Hands', 'humiliation', 50, timeSinceCreation < 60);
+    await tryComplete(0, 'Paper Hands', 'wildcard', 50, timeSinceCreation < 60);
 
     // Indecisive/Total Chaos: multiple cancels in one day
     const today = new Date();
@@ -505,14 +505,14 @@ async function checkAndCompleteChallenges(
       .lt('created_at', tomorrow.toISOString());
 
     await Promise.all([
-      tryComplete(3, 'Indecisive', 'humiliation', 100, (cancelsToday || 0) >= 5),
-      tryComplete(7, 'Total Chaos', 'humiliation', 500, (cancelsToday || 0) >= 20),
+      tryComplete(3, 'Indecisive', 'wildcard', 100, (cancelsToday || 0) >= 5),
+      tryComplete(7, 'Total Chaos', 'wildcard', 500, (cancelsToday || 0) >= 20),
     ]);
   }
 
   if (eventType === 'order_expired') {
     const fillPercentage = (eventData.fill_percentage as number) || 0;
-    await tryComplete(3, 'Ghost Order', 'humiliation', 75, fillPercentage === 0);
+    await tryComplete(3, 'Ghost Order', 'wildcard', 75, fillPercentage === 0);
 
     // Ghost Town: 5+ expired orders with 0 fills
     if (fillPercentage === 0) {
@@ -527,7 +527,7 @@ async function checkAndCompleteChallenges(
         return (d.fill_percentage || 0) === 0;
       }).length || 0;
 
-      await tryComplete(5, 'Ghost Town', 'humiliation', 200, ghostCount >= 5);
+      await tryComplete(5, 'Ghost Town', 'wildcard', 200, ghostCount >= 5);
     }
   }
 
@@ -759,10 +759,10 @@ async function checkAndCompleteChallenges(
       tryComplete(6, 'Ethereum Maxi', 'bootcamp', 1500, tradedWeToken),
 
       // Time-based challenges
-      tryComplete(2, 'Night Owl', 'humiliation', 200, utcHour >= 3 && utcHour < 5),
-      tryComplete(3, 'Early Bird', 'humiliation', 250, utcHour === 0),
-      tryComplete(1, 'Micro Trader', 'humiliation', 75, volumeUsd > 0 && volumeUsd < 1),
-      tryComplete(4, 'Penny Pincher', 'humiliation', 200, pennyTradeCount >= 10),
+      tryComplete(2, 'Night Owl', 'wildcard', 200, utcHour >= 3 && utcHour < 5),
+      tryComplete(3, 'Early Bird', 'wildcard', 250, utcHour === 0),
+      tryComplete(1, 'Micro Trader', 'wildcard', 75, volumeUsd > 0 && volumeUsd < 1),
+      tryComplete(4, 'Penny Pincher', 'wildcard', 200, pennyTradeCount >= 10),
 
       // Weekend Warrior: traded on both Saturday (6) and Sunday (0)
       tryComplete(1, 'Weekend Warrior', 'operations', 300, tradeDays.has(0) && tradeDays.has(6)),
