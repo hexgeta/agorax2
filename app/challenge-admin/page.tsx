@@ -34,18 +34,6 @@ const CHALLENGE_DOCS: ChallengeDoc[] = [
     status: 'implemented',
   },
   {
-    name: 'Window Shopper',
-    level: 0,
-    levelName: 'Alpha',
-    category: 'bootcamp',
-    xp: 100,
-    description: 'View 10 different orders in the marketplace',
-    eventType: 'order_viewed',
-    trackingLogic: 'Counted by extracting unique order_id values from all order_viewed events for the user.',
-    eventData: ['order_id: number', 'token_symbol: string'],
-    status: 'implemented',
-  },
-  {
     name: 'First Order',
     level: 0,
     levelName: 'Alpha',
@@ -105,18 +93,6 @@ const CHALLENGE_DOCS: ChallengeDoc[] = [
     eventType: 'chart_viewed',
     trackingLogic: 'Count of chart_viewed events for user >= 10',
     eventData: ['token_pair'],
-    status: 'implemented',
-  },
-  {
-    name: 'Token Explorer',
-    level: 1,
-    levelName: 'Beta',
-    category: 'bootcamp',
-    xp: 150,
-    description: 'View orders for 5 different tokens',
-    eventType: 'order_viewed',
-    trackingLogic: 'Extract unique token_symbol values from order_viewed events, count >= 5',
-    eventData: ['order_id', 'token_symbol'],
     status: 'implemented',
   },
   {
@@ -191,18 +167,6 @@ const CHALLENGE_DOCS: ChallengeDoc[] = [
     eventType: 'trade_completed',
     trackingLogic: 'Extract unique sell_token and buy_token from all trade_completed events, count >= 5',
     eventData: ['sell_token', 'buy_token'],
-    status: 'implemented',
-  },
-  {
-    name: 'Market Scanner',
-    level: 2,
-    levelName: 'Gamma',
-    category: 'bootcamp',
-    xp: 200,
-    description: 'View 50 different orders',
-    eventType: 'order_viewed',
-    trackingLogic: 'Count unique order_id from order_viewed events >= 50',
-    eventData: ['order_id'],
     status: 'implemented',
   },
   {
@@ -301,18 +265,6 @@ const CHALLENGE_DOCS: ChallengeDoc[] = [
     eventType: 'trade_completed',
     trackingLogic: 'Count unique tokens from trade_completed events >= 10',
     eventData: ['sell_token', 'buy_token'],
-    status: 'implemented',
-  },
-  {
-    name: 'Market Regular',
-    level: 3,
-    levelName: 'Delta',
-    category: 'bootcamp',
-    xp: 300,
-    description: 'View 100 different orders',
-    eventType: 'order_viewed',
-    trackingLogic: 'Count unique order_id from order_viewed events >= 100',
-    eventData: ['order_id'],
     status: 'implemented',
   },
   {
@@ -1562,7 +1514,6 @@ export default function ChallengeAdminPage() {
                 <div>
                   <h3 className="text-lg font-semibold text-white mb-3">View Events</h3>
                   <ul className="space-y-2 text-sm">
-                    <li><code className="text-cyan-400">order_viewed</code> - Expanded an order in marketplace</li>
                     <li><code className="text-cyan-400">chart_viewed</code> - Viewed price chart</li>
                     <li><code className="text-cyan-400">marketplace_visited</code> - Visited marketplace (deduplicated)</li>
                   </ul>

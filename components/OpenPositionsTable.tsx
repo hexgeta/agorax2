@@ -360,7 +360,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
   const { open: openWalletModal } = useAppKit();
-  const { trackOrderFilled, trackOrderCancelled, trackProceedsClaimed, trackTradeCompleted, trackOrderViewed, trackOrderExpired } = useEventTracking();
+  const { trackOrderFilled, trackOrderCancelled, trackProceedsClaimed, trackTradeCompleted, trackOrderExpired } = useEventTracking();
 
   // Contract address for querying events - get based on current chain
   const OTC_CONTRACT_ADDRESS = getContractAddress(chainId) as `0x${string}`;
@@ -848,15 +848,6 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
         newSet.delete(orderId);
       } else {
         newSet.add(orderId);
-
-        // Track order viewed event for achievements
-        // Extract sell token symbol for Token Explorer challenge tracking
-        let tokenSymbol: string | undefined;
-        if (order?.orderDetailsWithID?.orderDetails?.sellTokenIndex !== undefined) {
-          const sellTokenInfo = getTokenInfoByIndex(Number(order.orderDetailsWithID.orderDetails.sellTokenIndex));
-          tokenSymbol = sellTokenInfo?.ticker;
-        }
-        trackOrderViewed(parseInt(orderId), false, tokenSymbol);
 
         // For AON orders, auto-set 100% input when expanding
         if (order?.orderDetailsWithID?.orderDetails?.allOrNothing) {

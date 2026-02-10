@@ -79,7 +79,6 @@ The smart contract at `0xc8a47F14b1833310E2aC72e4C397b5b14a9FEf8B` (PulseChain) 
 
 ### Data Not Available On-Chain (Client-Side Only)
 These events can only be tracked from the frontend, not from blockchain logs:
-- `order_viewed` - User expanded an order in the marketplace
 - `chart_viewed` - User viewed the price chart
 - `marketplace_visited` - User visited the marketplace page
 - `streak_updated` - Calculated server-side from trade dates

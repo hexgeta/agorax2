@@ -121,7 +121,6 @@ export async function POST(request: NextRequest): Promise<NextResponse<TrackEven
     const UNVERIFIED_EVENTS: EventType[] = [
       'wallet_connected',
       'marketplace_visited',
-      'order_viewed',
       'chart_viewed',
     ];
 
@@ -529,31 +528,6 @@ async function checkAndCompleteChallenges(
 
       await tryComplete(5, 'Ghost Town', 'wildcard', 200, ghostCount >= 5);
     }
-  }
-
-  // ---- order_viewed: single query for both unique orders and unique tokens ----
-  if (eventType === 'order_viewed') {
-    const { data: viewedEvents } = await supabase
-      .from('user_events')
-      .select('event_data')
-      .eq('wallet_address', walletAddress)
-      .eq('event_type', 'order_viewed');
-
-    const uniqueOrderIds = new Set<string>();
-    const uniqueTokensViewed = new Set<string>();
-    viewedEvents?.forEach((event) => {
-      const data = event.event_data as { order_id?: number; token_symbol?: string };
-      if (data.order_id !== undefined) uniqueOrderIds.add(String(data.order_id));
-      if (data.token_symbol) uniqueTokensViewed.add(data.token_symbol.toUpperCase());
-    });
-
-    const uniqueOrdersViewed = uniqueOrderIds.size;
-    await Promise.all([
-      tryComplete(0, 'Window Shopper', 'bootcamp', 100, uniqueOrdersViewed >= 10),
-      tryComplete(2, 'Market Scanner', 'bootcamp', 200, uniqueOrdersViewed >= 50),
-      tryComplete(3, 'Market Regular', 'bootcamp', 300, uniqueOrdersViewed >= 100),
-      tryComplete(1, 'Token Explorer', 'bootcamp', 150, uniqueTokensViewed.size >= 5),
-    ]);
   }
 
   // ---- proceeds_claimed: collector, claim machine, profit master, hands ----

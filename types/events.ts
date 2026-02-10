@@ -12,7 +12,6 @@ export type EventType =
   | 'proceeds_claimed'
 
   // View/Interaction Events
-  | 'order_viewed'
   | 'chart_viewed'
   | 'marketplace_visited'
 
@@ -62,12 +61,6 @@ export interface TradeCompletedEventData {
   trade_hour_utc?: number; // 0-23, for time-based challenges
 }
 
-export interface OrderViewedEventData {
-  order_id: number;
-  unique_order?: boolean; // true if first time viewing this order
-  token_symbol?: string; // sell token symbol for Token Explorer challenge
-}
-
 export interface ChartViewedEventData {
   token_pair?: string;
 }
@@ -82,7 +75,6 @@ export type EventData =
   | OrderFilledEventData
   | OrderCancelledEventData
   | TradeCompletedEventData
-  | OrderViewedEventData
   | ChartViewedEventData
   | PrestigeUnlockedEventData
   | Record<string, unknown>;

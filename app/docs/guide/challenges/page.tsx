@@ -24,7 +24,6 @@ interface Challenge {
 const CHALLENGES_BY_LEVEL: Record<string, Challenge[]> = {
   'Alpha': [
     { name: 'First Steps', xp: 50, requirement: 'Connect your wallet' },
-    { name: 'Window Shopper', xp: 100, requirement: 'View 10 orders' },
     { name: 'First Order', xp: 250, requirement: 'Create your first order' },
     { name: 'First Fill', xp: 250, requirement: 'Fill your first order' },
     { name: 'Small Fish', xp: 300, requirement: '$100+ single trade' },
@@ -32,7 +31,6 @@ const CHALLENGES_BY_LEVEL: Record<string, Challenge[]> = {
   ],
   'Beta': [
     { name: 'Price Watcher', xp: 100, requirement: 'View price charts 10 times' },
-    { name: 'Token Explorer', xp: 150, requirement: 'View orders for 5 different tokens' },
     { name: 'Getting Comfortable', xp: 400, requirement: 'Create 5 orders' },
     { name: 'Active Buyer', xp: 400, requirement: 'Fill 5 orders' },
     { name: 'Weekend Warrior', xp: 300, requirement: 'Trade on both Saturday and Sunday' },
@@ -41,7 +39,6 @@ const CHALLENGES_BY_LEVEL: Record<string, Challenge[]> = {
   ],
   'Gamma': [
     { name: 'Multi-Token Beginner', xp: 300, requirement: 'Trade 5 different tokens' },
-    { name: 'Market Scanner', xp: 200, requirement: 'View 50 orders' },
     { name: 'Active Trader', xp: 500, requirement: 'Complete 10 trades' },
     { name: 'Consistent', xp: 400, requirement: '3-day trading streak' },
     { name: 'Both Sides', xp: 500, requirement: 'Create and fill an order on the same day' },
@@ -52,7 +49,6 @@ const CHALLENGES_BY_LEVEL: Record<string, Challenge[]> = {
   ],
   'Delta': [
     { name: 'Token Diversity', xp: 500, requirement: 'Trade 10 different tokens' },
-    { name: 'Market Regular', xp: 300, requirement: 'View 100 orders' },
     { name: 'Order Machine', xp: 800, requirement: 'Create 25 orders' },
     { name: 'Fill Expert', xp: 800, requirement: 'Fill 25 orders' },
     { name: 'Dedicated', xp: 600, requirement: '7-day trading streak' },

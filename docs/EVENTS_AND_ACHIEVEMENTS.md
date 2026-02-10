@@ -24,7 +24,6 @@ The achievement system tracks on-chain and UI events to award XP and complete ch
 
 | Event | XP | Trigger | Key `event_data` fields |
 |-------|----|---------|------------------------|
-| `order_viewed` | 1 | User views an order detail | `order_id`, `token_symbol?`, `unique_order?` |
 | `chart_viewed` | 1 | User views a price chart | — |
 | `marketplace_visited` | 1 | First marketplace page visit (one-off) | — |
 
@@ -58,7 +57,6 @@ Several new challenges require specific fields in `trade_completed` events. **Th
 | Challenge | Category | XP | Requirement | Detection |
 |-----------|----------|-----|-------------|-----------|
 | First Steps | bootcamp | 50 | Connect wallet | `wallet_connected` event |
-| Window Shopper | bootcamp | 100 | View 10 orders | `order_viewed` unique order_ids >= 10 |
 | First Order | operations | 250 | Create 1 order | `total_orders_created >= 1` |
 | First Fill | operations | 250 | Fill 1 order | `total_orders_filled >= 1` |
 | Small Fish | elite | 300 | $100+ single trade | `trade_completed` volume_usd >= 100 |
@@ -69,7 +67,6 @@ Several new challenges require specific fields in `trade_completed` events. **Th
 | Challenge | Category | XP | Requirement | Detection |
 |-----------|----------|-----|-------------|-----------|
 | Price Watcher | bootcamp | 100 | View chart 10x | `chart_viewed` count >= 10 |
-| Token Explorer | bootcamp | 150 | View 5 token orders | `order_viewed` unique token_symbols >= 5 |
 | Getting Comfortable | operations | 400 | Create 5 orders | `total_orders_created >= 5` |
 | Active Buyer | operations | 400 | Fill 5 orders | `total_orders_filled >= 5` |
 | Weekend Warrior | operations | 300 | Trade on Sat + Sun | `trade_completed` on day 0 (Sun) + day 6 (Sat) |
@@ -81,7 +78,6 @@ Several new challenges require specific fields in `trade_completed` events. **Th
 | Challenge | Category | XP | Requirement | Detection |
 |-----------|----------|-----|-------------|-----------|
 | Multi-Token Beginner | bootcamp | 300 | Trade 5 tokens | unique tokens in `trade_completed` >= 5 |
-| Market Scanner | bootcamp | 200 | View 50 orders | `order_viewed` unique order_ids >= 50 |
 | Active Trader | operations | 500 | 10 total trades | `total_trades >= 10` |
 | Consistent | operations | 400 | 3-day streak | `current_streak_days >= 3` |
 | Both Sides | operations | 500 | Create + fill same day | `order_created` + `order_filled` same UTC day |
@@ -95,7 +91,6 @@ Several new challenges require specific fields in `trade_completed` events. **Th
 | Challenge | Category | XP | Requirement | Detection |
 |-----------|----------|-----|-------------|-----------|
 | Token Diversity | bootcamp | 500 | Trade 10 tokens | unique tokens >= 10 |
-| Market Regular | bootcamp | 300 | View 100 orders | unique order_ids viewed >= 100 |
 | Order Machine | operations | 800 | Create 25 orders | `total_orders_created >= 25` |
 | Fill Expert | operations | 800 | Fill 25 orders | `total_orders_filled >= 25` |
 | Dedicated | operations | 600 | 7-day streak | `current_streak_days >= 7` |

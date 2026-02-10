@@ -55,7 +55,6 @@ const PRESTIGE_CHALLENGES: Record<number, PrestigeChallenges> = {
       color: 'text-green-400',
       challenges: [
         { name: 'First Steps', description: 'Connect your wallet for the first time', requirement: 'Connect wallet', xp: 50 },
-        { name: 'Window Shopper', description: 'View 10 different orders in the marketplace', requirement: 'View 10 orders', xp: 100 },
       ],
     },
     operations: {
@@ -96,7 +95,6 @@ const PRESTIGE_CHALLENGES: Record<number, PrestigeChallenges> = {
       color: 'text-green-400',
       challenges: [
         { name: 'Price Watcher', description: 'Check the price chart 10 times', requirement: 'View chart 10x', xp: 100 },
-        { name: 'Token Explorer', description: 'View orders for 5 different tokens', requirement: 'Explore 5 tokens', xp: 150 },
       ],
     },
     operations: {
@@ -138,7 +136,6 @@ const PRESTIGE_CHALLENGES: Record<number, PrestigeChallenges> = {
       color: 'text-green-400',
       challenges: [
         { name: 'Multi-Token Beginner', description: 'Trade 5 different tokens', requirement: '5 tokens traded', xp: 300 },
-        { name: 'Market Scanner', description: 'View 50 different orders', requirement: 'View 50 orders', xp: 200 },
       ],
     },
     operations: {
@@ -182,7 +179,6 @@ const PRESTIGE_CHALLENGES: Record<number, PrestigeChallenges> = {
       color: 'text-green-400',
       challenges: [
         { name: 'Token Diversity', description: 'Trade 10 different tokens', requirement: '10 tokens traded', xp: 500 },
-        { name: 'Market Regular', description: 'View 100 different orders', requirement: 'View 100 orders', xp: 300 },
       ],
     },
     operations: {
