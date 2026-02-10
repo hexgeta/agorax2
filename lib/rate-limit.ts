@@ -17,14 +17,17 @@ interface RateLimitInfo {
   reset: number; // unix seconds
 }
 
-// ── Upstash Redis setup ────────────────────────────────────────────────────────
+// ── Vercel KV (Redis) setup ────────────────────────────────────────────────────
+// Vercel KV auto-sets KV_REST_API_URL and KV_REST_API_TOKEN when you create a
+// KV store in the Vercel dashboard. The @upstash/redis client works directly
+// with these since Vercel KV is Upstash Redis under the hood.
 
 let redis: Redis | null = null;
 
 function getRedis(): Redis | null {
   if (redis) return redis;
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  const url = process.env.KV_REST_API_URL;
+  const token = process.env.KV_REST_API_TOKEN;
   if (!url || !token) return null;
   redis = new Redis({ url, token });
   return redis;
