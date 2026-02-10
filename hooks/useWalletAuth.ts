@@ -56,10 +56,10 @@ export function useWalletAuth() {
     }
   }, [address]);
 
-  // Clear session when wallet disconnects
+  // Reset in-memory state when wallet disconnects, but keep localStorage
+  // so reconnecting the same wallet doesn't require re-signing.
   useEffect(() => {
     if (!isConnected) {
-      clearSession();
       setSessionToken(null);
       verifyAttempted.current = null;
     }
