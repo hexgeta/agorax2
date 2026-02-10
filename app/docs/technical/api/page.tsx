@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
+import { CodeBlock } from '@/components/ui/CodeBlock';
 
 export default function ApiReferencePage() {
   return (
@@ -18,9 +19,133 @@ export default function ApiReferencePage() {
       {/* Base URL */}
       <LiquidGlassCard className="p-6">
         <h2 className="text-xl font-semibold text-white mb-3">Base URL</h2>
-        <code className="block bg-white/5 px-4 py-3 rounded-lg text-green-400 font-mono text-sm">
-          https://agorax.app/api
-        </code>
+        <CodeBlock>https://agorax.app/api</CodeBlock>
+      </LiquidGlassCard>
+
+      {/* GET /user */}
+      <LiquidGlassCard className="p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs font-bold rounded">GET</span>
+          <code className="text-white font-mono">/user</code>
+        </div>
+        <p className="text-white/70 mb-4">
+          Fetch a user&apos;s stats and order activity history.
+        </p>
+
+        <h3 className="text-white font-medium mb-2">Query Parameters</h3>
+        <div className="overflow-x-auto mb-4">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-white/10">
+                <th className="text-left py-2 text-white/60">Parameter</th>
+                <th className="text-left py-2 text-white/60">Type</th>
+                <th className="text-left py-2 text-white/60">Description</th>
+              </tr>
+            </thead>
+            <tbody className="text-white/70">
+              <tr>
+                <td className="py-2 font-mono text-cyan-400">wallet</td>
+                <td className="py-2">string</td>
+                <td className="py-2">Wallet address (required)</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 className="text-white font-medium mb-2">Example Request</h3>
+        <div className="flex items-center gap-3 mb-4">
+          <pre className="bg-white/5 p-4 rounded-lg overflow-x-auto text-sm flex-1">
+            <code className="text-white/80">GET /api/user?wallet=0x1F12DAE5450522b445Fe1882C4F8D2Cf67B38a43</code>
+          </pre>
+          <a
+            href="/api/user?wallet=0x1F12DAE5450522b445Fe1882C4F8D2Cf67B38a43"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 text-sm font-medium rounded-lg transition-colors whitespace-nowrap"
+          >
+            Try it
+          </a>
+        </div>
+
+        <h3 className="text-white font-medium mb-2">Response</h3>
+        <CodeBlock>{`{
+  "success": true,
+  "data": {
+    "stats": {
+      "wallet_address": "0x1f12...",
+      "total_xp": 0,
+      "total_orders_created": 12,
+      "total_orders_filled": 5,
+      "total_orders_cancelled": 3,
+      "total_trades": 10,
+      "total_volume_usd": 0,
+      "current_active_orders": 2
+    },
+    "activity": [
+      {
+        "id": "uuid",
+        "event_type": "order_created",
+        "event_data": {
+          "order_id": 12,
+          "sell_token": "HEX",
+          "sell_amount": "20000",
+          "tx_hash": "0x..."
+        },
+        "xp_awarded": 0,
+        "created_at": "2026-01-19T12:36:35+00:00"
+      },
+      {
+        "id": "uuid",
+        "event_type": "trade_completed",
+        "event_data": {
+          "order_id": 9,
+          "sell_token": "HEX",
+          "buy_token": "PLS",
+          "buy_amount": "93.27645",
+          "is_maker": true,
+          "filler_wallet": "0xdb85...",
+          "tx_hash": "0x..."
+        },
+        "xp_awarded": 0,
+        "created_at": "2026-01-18T22:20:35+00:00"
+      }
+    ]
+  }
+}`}</CodeBlock>
+
+        <h3 className="text-white font-medium mt-4 mb-2">Activity Event Types</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-white/10">
+                <th className="text-left py-2 text-white/60">Event Type</th>
+                <th className="text-left py-2 text-white/60">Description</th>
+              </tr>
+            </thead>
+            <tbody className="text-white/70">
+              <tr className="border-b border-white/5">
+                <td className="py-2 font-mono text-green-400">order_created</td>
+                <td className="py-2">User created a new order</td>
+              </tr>
+              <tr className="border-b border-white/5">
+                <td className="py-2 font-mono text-blue-400">order_filled</td>
+                <td className="py-2">User filled someone else&apos;s order</td>
+              </tr>
+              <tr className="border-b border-white/5">
+                <td className="py-2 font-mono text-cyan-400">trade_completed</td>
+                <td className="py-2">A trade was completed (for both maker and taker)</td>
+              </tr>
+              <tr className="border-b border-white/5">
+                <td className="py-2 font-mono text-red-400">order_cancelled</td>
+                <td className="py-2">User cancelled their order</td>
+              </tr>
+              <tr className="border-b border-white/5">
+                <td className="py-2 font-mono text-purple-400">proceeds_claimed</td>
+                <td className="py-2">User claimed proceeds from a filled order</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </LiquidGlassCard>
 
       {/* GET /user/achievements */}
@@ -69,8 +194,7 @@ export default function ApiReferencePage() {
         </div>
 
         <h3 className="text-white font-medium mb-2">Response</h3>
-        <pre className="bg-white/5 p-4 rounded-lg overflow-x-auto text-sm">
-          <code className="text-white/80">{`{
+        <CodeBlock>{`{
   "wallet_address": "0x1234...abcd",
   "total_xp": 5250,
   "prestige_level": 2,
@@ -89,8 +213,7 @@ export default function ApiReferencePage() {
     },
     ...
   ]
-}`}</code>
-        </pre>
+}`}</CodeBlock>
       </LiquidGlassCard>
 
       {/* GET /leaderboard */}
@@ -139,8 +262,7 @@ export default function ApiReferencePage() {
         </div>
 
         <h3 className="text-white font-medium mb-2">Response</h3>
-        <pre className="bg-white/5 p-4 rounded-lg overflow-x-auto text-sm">
-          <code className="text-white/80">{`{
+        <CodeBlock>{`{
   "leaderboard": [
     {
       "rank": 1,
@@ -160,8 +282,7 @@ export default function ApiReferencePage() {
     },
     ...
   ]
-}`}</code>
-        </pre>
+}`}</CodeBlock>
       </LiquidGlassCard>
 
       {/* Event Data Fields */}
@@ -174,8 +295,7 @@ export default function ApiReferencePage() {
         <div className="space-y-4">
           <div>
             <h3 className="text-white font-medium mb-2">order_created</h3>
-            <pre className="bg-white/5 p-4 rounded-lg overflow-x-auto text-sm">
-              <code className="text-white/80">{`{
+            <CodeBlock>{`{
   "order_id": number,
   "sell_token": string,
   "sell_amount": number,
@@ -185,28 +305,24 @@ export default function ApiReferencePage() {
   "is_all_or_nothing": boolean,
   "expiration": string (ISO date),
   "price_vs_market_percent": number
-}`}</code>
-            </pre>
+}`}</CodeBlock>
           </div>
 
           <div>
             <h3 className="text-white font-medium mb-2">order_filled</h3>
-            <pre className="bg-white/5 p-4 rounded-lg overflow-x-auto text-sm">
-              <code className="text-white/80">{`{
+            <CodeBlock>{`{
   "order_id": number,
   "fill_amount": number,
   "fill_percentage": number,
   "buy_token_used": string,
   "volume_usd": number,
   "fill_time_seconds": number
-}`}</code>
-            </pre>
+}`}</CodeBlock>
           </div>
 
           <div>
             <h3 className="text-white font-medium mb-2">trade_completed</h3>
-            <pre className="bg-white/5 p-4 rounded-lg overflow-x-auto text-sm">
-              <code className="text-white/80">{`{
+            <CodeBlock>{`{
   "order_id": number,
   "sell_token": string,
   "buy_token": string,
@@ -217,30 +333,25 @@ export default function ApiReferencePage() {
   "filler_wallet": string,
   "order_completed": boolean,
   "is_all_or_nothing": boolean
-}`}</code>
-            </pre>
+}`}</CodeBlock>
           </div>
 
           <div>
             <h3 className="text-white font-medium mb-2">proceeds_claimed</h3>
-            <pre className="bg-white/5 p-4 rounded-lg overflow-x-auto text-sm">
-              <code className="text-white/80">{`{
+            <CodeBlock>{`{
   "order_id": number,
   "amount_claimed": number,
   "token": string
-}`}</code>
-            </pre>
+}`}</CodeBlock>
           </div>
 
           <div>
             <h3 className="text-white font-medium mb-2">order_cancelled</h3>
-            <pre className="bg-white/5 p-4 rounded-lg overflow-x-auto text-sm">
-              <code className="text-white/80">{`{
+            <CodeBlock>{`{
   "order_id": number,
   "time_since_creation_seconds": number,
   "fill_percentage_at_cancel": number
-}`}</code>
-            </pre>
+}`}</CodeBlock>
           </div>
         </div>
       </LiquidGlassCard>
@@ -251,12 +362,10 @@ export default function ApiReferencePage() {
         <p className="text-white/70 mb-4">
           All endpoints return errors in a consistent format:
         </p>
-        <pre className="bg-white/5 p-4 rounded-lg overflow-x-auto text-sm">
-          <code className="text-white/80">{`{
+        <CodeBlock>{`{
   "success": false,
   "error": "Error message here"
-}`}</code>
-        </pre>
+}`}</CodeBlock>
 
         <h3 className="text-white font-medium mt-4 mb-2">Common Status Codes</h3>
         <div className="overflow-x-auto">

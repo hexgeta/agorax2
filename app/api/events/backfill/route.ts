@@ -98,6 +98,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const body = await request.json().catch(() => ({}));
     const fromBlock = body.from_block ? BigInt(body.from_block) : DEPLOYMENT_BLOCK;
     const toBlock = body.to_block ? BigInt(body.to_block) : undefined; // undefined = latest
+    const resetEvents = body.reset === true;
+
+    // If reset flag is set, delete all existing user_events first
+    if (resetEvents) {
+      await supabase.from('user_events').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      console.log('Cleared all user_events for fresh backfill');
+    }
 
     const client = createPublicClient({
       chain: pulsechain,
@@ -338,7 +345,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       // Record wallet_connected (first time we see this wallet)
       if (!connectedWallets.has(owner)) {
         connectedWallets.add(owner);
-        await recordEvent(owner, 'wallet_connected', {}, 0, result);
+        await recordEvent(owner, 'wallet_connected', {}, 0, result, timestamp);
       }
 
       // Record order_created event
@@ -353,7 +360,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           tx_hash: log.transactionHash,
         },
         EVENT_XP.order_created,
-        result
+        result,
+        timestamp
       );
       result.orders_placed++;
 
@@ -430,7 +438,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       // Record wallet_connected for filler too
       if (!connectedWallets.has(buyer)) {
         connectedWallets.add(buyer);
-        await recordEvent(buyer, 'wallet_connected', {}, 0, result);
+        await recordEvent(buyer, 'wallet_connected', {}, 0, result, timestamp);
       }
 
       // Resolve buy token
@@ -454,7 +462,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           tx_hash: log.transactionHash,
         },
         EVENT_XP.order_filled,
-        result
+        result,
+        timestamp
       );
 
       // Record trade_completed for the filler (they are the buyer)
@@ -471,9 +480,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             volume_usd: 0,
             is_maker: false,
             filler_wallet: buyer,
+            tx_hash: log.transactionHash,
           },
           EVENT_XP.trade_completed,
-          result
+          result,
+          timestamp
         );
       }
 
@@ -491,9 +502,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             volume_usd: 0,
             is_maker: true,
             filler_wallet: buyer,
+            tx_hash: log.transactionHash,
           },
           EVENT_XP.trade_completed,
-          result
+          result,
+          timestamp
         );
       }
 
@@ -571,7 +584,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           tx_hash: log.transactionHash,
         },
         EVENT_XP.order_cancelled,
-        result
+        result,
+        timestamp
       );
       // Write to order_cancellations table
       try {
@@ -622,6 +636,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     for (const log of proceedsLogs) {
       const user = (log.args.user as string).toLowerCase();
       const orderId = log.args.orderID?.toString();
+      const timestamp = blockTimestamps.get(log.blockNumber) || 0;
 
       if (!orderId) continue;
 
@@ -633,11 +648,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           tx_hash: log.transactionHash,
         },
         EVENT_XP.proceeds_claimed,
-        result
+        result,
+        timestamp
       );
       // Write to order_proceeds table
       try {
-        const timestamp = blockTimestamps.get(log.blockNumber) || 0;
         const { error: proceedsErr } = await supabase.from('order_proceeds').insert({
           order_id: Number(orderId),
           claimed_by: user,
@@ -695,7 +710,8 @@ async function recordEvent(
   eventType: string,
   eventData: Record<string, unknown>,
   xpAwarded: number,
-  result: BackfillResult
+  result: BackfillResult,
+  blockTimestamp?: number
 ) {
   try {
     // Skip duplicate events based on tx_hash + event_type + wallet (best effort dedup)
@@ -712,22 +728,19 @@ async function recordEvent(
       if (existing) return; // Already recorded
     }
 
-    const { error } = await supabase.rpc('record_user_event', {
-      p_wallet_address: walletAddress,
-      p_event_type: eventType,
-      p_event_data: eventData,
-      p_xp_awarded: xpAwarded,
-    });
+    // Use block timestamp if provided, otherwise current time
+    const createdAt = blockTimestamp
+      ? new Date(blockTimestamp * 1000).toISOString()
+      : new Date().toISOString();
 
-    if (error) {
-      // Fallback: direct insert
-      await supabase.from('user_events').insert({
-        wallet_address: walletAddress,
-        event_type: eventType,
-        event_data: eventData,
-        xp_awarded: xpAwarded,
-      });
-    }
+    // Insert directly with the correct timestamp
+    await supabase.from('user_events').insert({
+      wallet_address: walletAddress,
+      event_type: eventType,
+      event_data: eventData,
+      xp_awarded: xpAwarded,
+      created_at: createdAt,
+    });
 
     result.events_recorded++;
   } catch (err) {

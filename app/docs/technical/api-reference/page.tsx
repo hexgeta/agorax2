@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
+import { CodeBlock } from '@/components/ui/CodeBlock';
 
 export default function ApiReferencePage() {
   return (
@@ -33,16 +34,14 @@ export default function ApiReferencePage() {
             <p className="text-white/70 text-sm mb-4">
               Main hook for contract write operations.
             </p>
-            <div className="bg-white/5 p-4 rounded-lg font-mono text-sm">
-              <pre className="text-white/80 overflow-x-auto">{`import { useContractWhitelist } from '@/hooks/contracts/useContractWhitelist';
+            <CodeBlock>{`import { useContractWhitelist } from '@/hooks/contracts/useContractWhitelist';
 
 const {
   placeOrder,
   fillOrder,
   cancelOrder,
   collectProceeds
-} = useContractWhitelist();`}</pre>
-            </div>
+} = useContractWhitelist();`}</CodeBlock>
           </LiquidGlassCard>
 
           <LiquidGlassCard className="p-6">
@@ -50,11 +49,9 @@ const {
             <p className="text-white/70 text-sm mb-4">
               Hook for reading whitelist data from the contract.
             </p>
-            <div className="bg-white/5 p-4 rounded-lg font-mono text-sm">
-              <pre className="text-white/80 overflow-x-auto">{`import { useContractWhitelistRead } from '@/hooks/contracts/useContractWhitelistRead';
+            <CodeBlock>{`import { useContractWhitelistRead } from '@/hooks/contracts/useContractWhitelistRead';
 
-const { activeTokens, isLoading } = useContractWhitelistRead();`}</pre>
-            </div>
+const { activeTokens, isLoading } = useContractWhitelistRead();`}</CodeBlock>
           </LiquidGlassCard>
 
           <LiquidGlassCard className="p-6">
@@ -62,15 +59,13 @@ const { activeTokens, isLoading } = useContractWhitelistRead();`}</pre>
             <p className="text-white/70 text-sm mb-4">
               Hook for fetching user's orders and marketplace data.
             </p>
-            <div className="bg-white/5 p-4 rounded-lg font-mono text-sm">
-              <pre className="text-white/80 overflow-x-auto">{`import { useOpenPositions } from '@/hooks/contracts/useOpenPositions';
+            <CodeBlock>{`import { useOpenPositions } from '@/hooks/contracts/useOpenPositions';
 
 // User's own orders
 const { openOrders, expiredOrders, isLoading } = useOpenPositions(address);
 
 // All marketplace orders
-const { allOrders } = useOpenPositions(undefined, true);`}</pre>
-            </div>
+const { allOrders } = useOpenPositions(undefined, true);`}</CodeBlock>
           </LiquidGlassCard>
         </div>
       </div>
@@ -100,8 +95,7 @@ const { allOrders } = useOpenPositions(undefined, true);`}</pre>
             <p className="text-white/70 text-sm mb-4">
               Centralized pricing logic for the limit order form.
             </p>
-            <div className="bg-white/5 p-4 rounded-lg font-mono text-sm">
-              <pre className="text-white/80 overflow-x-auto">{`import { useLimitOrderPricing } from '@/hooks/useLimitOrderPricing';
+            <CodeBlock>{`import { useLimitOrderPricing } from '@/hooks/useLimitOrderPricing';
 
 const pricing = useLimitOrderPricing({
   sellToken,
@@ -112,8 +106,7 @@ const pricing = useLimitOrderPricing({
 // Returns handlers and calculated values
 pricing.handlePercentageClick(5); // +5%
 pricing.handleLimitPriceChange(1.5);
-pricing.handleSellAmountChange("1000");`}</pre>
-            </div>
+pricing.handleSellAmountChange("1000");`}</CodeBlock>
           </LiquidGlassCard>
 
           <LiquidGlassCard className="p-6">
@@ -121,11 +114,9 @@ pricing.handleSellAmountChange("1000");`}</pre>
             <p className="text-white/70 text-sm mb-4">
               Count orders with unclaimed proceeds (used for NavBar badge).
             </p>
-            <div className="bg-white/5 p-4 rounded-lg font-mono text-sm">
-              <pre className="text-white/80 overflow-x-auto">{`import { useClaimableOrdersCount } from '@/hooks/useClaimableOrdersCount';
+            <CodeBlock>{`import { useClaimableOrdersCount } from '@/hooks/useClaimableOrdersCount';
 
-const { claimableCount, isLoading } = useClaimableOrdersCount();`}</pre>
-            </div>
+const { claimableCount, isLoading } = useClaimableOrdersCount();`}</CodeBlock>
           </LiquidGlassCard>
         </div>
       </div>
@@ -140,13 +131,11 @@ const { claimableCount, isLoading } = useClaimableOrdersCount();`}</pre>
             <p className="text-white/70 text-sm mb-4">
               Get the correct contract address for a given chain ID.
             </p>
-            <div className="bg-white/5 p-4 rounded-lg font-mono text-sm">
-              <pre className="text-white/80 overflow-x-auto">{`import { getContractAddress } from '@/config/testing';
+            <CodeBlock>{`import { getContractAddress } from '@/config/testing';
 
 const address = getContractAddress(chainId);
 // 369 -> mainnet address
-// 943 -> testnet address`}</pre>
-            </div>
+// 943 -> testnet address`}</CodeBlock>
           </LiquidGlassCard>
 
           <LiquidGlassCard className="p-6">
@@ -154,13 +143,11 @@ const address = getContractAddress(chainId);
             <p className="text-white/70 text-sm mb-4">
               Generate block explorer URLs for transactions.
             </p>
-            <div className="bg-white/5 p-4 rounded-lg font-mono text-sm">
-              <pre className="text-white/80 overflow-x-auto">{`import { getBlockExplorerTxUrl } from '@/utils/blockExplorer';
+            <CodeBlock>{`import { getBlockExplorerTxUrl } from '@/utils/blockExplorer';
 
 const url = getBlockExplorerTxUrl(chainId, txHash);
 // 369 -> otter.pulsechain.com
-// 943 -> scan.v4.testnet.pulsechain.com`}</pre>
-            </div>
+// 943 -> scan.v4.testnet.pulsechain.com`}</CodeBlock>
           </LiquidGlassCard>
         </div>
       </div>
@@ -202,8 +189,7 @@ const url = getBlockExplorerTxUrl(chainId, txHash);
       <div>
         <h2 className="text-2xl font-semibold text-white mb-4">Token Constants</h2>
         <LiquidGlassCard className="p-6">
-          <div className="bg-white/5 p-4 rounded-lg font-mono text-sm">
-            <pre className="text-white/80 overflow-x-auto">{`import { TOKEN_CONSTANTS } from '@/constants/crypto';
+          <CodeBlock>{`import { TOKEN_CONSTANTS } from '@/constants/crypto';
 
 // Each token has:
 interface TokenConstant {
@@ -222,8 +208,7 @@ const whitelistedSet = new Set(
 
 const tradableTokens = TOKEN_CONSTANTS.filter(t =>
   whitelistedSet.has(t.a?.toLowerCase() ?? '')
-);`}</pre>
-          </div>
+);`}</CodeBlock>
         </LiquidGlassCard>
       </div>
 

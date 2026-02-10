@@ -153,6 +153,158 @@ export default function ChallengesPage() {
         </div>
       </LiquidGlassCard>
 
+      {/* Game Theory / Leveling Explainer */}
+      <LiquidGlassCard className="p-6">
+        <h2 className="text-xl font-semibold text-white mb-4">Leveling Up & Progression</h2>
+
+        {/* XP System */}
+        <div className="mb-6">
+          <h3 className="text-lg font-medium text-white mb-3 flex items-center gap-2">
+            <span className="w-6 h-6 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-400 text-sm">1</span>
+            XP System
+          </h3>
+          <div className="space-y-2 text-white/70 pl-8">
+            <p>
+              <span className="text-white font-medium">XP (Experience Points)</span> are your progression currency.
+              Unlike typical gamification where every action gives points, AgoraX rewards <span className="text-amber-400">milestone achievements</span> only.
+            </p>
+            <p>
+              This means you need to strategically complete specific challenges rather than grinding repetitive actions.
+              Each challenge can only be completed <span className="text-white">once per prestige level</span>.
+            </p>
+          </div>
+        </div>
+
+        {/* Legion Progression */}
+        <div className="mb-6">
+          <h3 className="text-lg font-medium text-white mb-3 flex items-center gap-2">
+            <span className="w-6 h-6 rounded-full bg-cyan-500/20 flex items-center justify-center text-cyan-400 text-sm">2</span>
+            Legion Progression
+          </h3>
+          <div className="space-y-2 text-white/70 pl-8">
+            <p>
+              You start at <span className="text-rose-400 font-medium">Alpha (α)</span> Legion. To advance to the next Legion,
+              you must complete <span className="text-white">ALL challenges</span> in your current level.
+            </p>
+            <div className="flex items-center gap-2 py-2 flex-wrap">
+              {PRESTIGE_LEVELS.map((level, i) => (
+                <div key={level.level} className="flex items-center gap-1">
+                  <span className={`${level.color} font-bold`}>{level.symbol}</span>
+                  {i < PRESTIGE_LEVELS.length - 1 && <span className="text-white/30">→</span>}
+                </div>
+              ))}
+            </div>
+            <p>
+              Higher Legions unlock <span className="text-white">harder challenges</span> with <span className="text-amber-400">bigger XP rewards</span>.
+              Alpha challenges give 50-300 XP, while Omega challenges can reward up to 75,000 XP each.
+            </p>
+          </div>
+        </div>
+
+        {/* Challenge Categories */}
+        <div className="mb-6">
+          <h3 className="text-lg font-medium text-white mb-3 flex items-center gap-2">
+            <span className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400 text-sm">3</span>
+            Challenge Types
+          </h3>
+          <div className="grid gap-3 md:grid-cols-2 pl-8">
+            <div className="p-3 rounded-lg bg-white/5">
+              <p className="text-white font-medium mb-1">Volume-Based</p>
+              <p className="text-white/50 text-sm">Trade certain USD values ($100, $1K, $10K, etc.)</p>
+            </div>
+            <div className="p-3 rounded-lg bg-white/5">
+              <p className="text-white font-medium mb-1">Activity-Based</p>
+              <p className="text-white/50 text-sm">Create/fill X orders, maintain streaks</p>
+            </div>
+            <div className="p-3 rounded-lg bg-white/5">
+              <p className="text-white font-medium mb-1">Token-Based</p>
+              <p className="text-white/50 text-sm">Trade specific tokens (HEX, PLS, MAXI, etc.)</p>
+            </div>
+            <div className="p-3 rounded-lg bg-white/5">
+              <p className="text-white font-medium mb-1">Timing-Based</p>
+              <p className="text-white/50 text-sm">Trade at specific times, maintain order duration</p>
+            </div>
+            <div className="p-3 rounded-lg bg-white/5">
+              <p className="text-white font-medium mb-1">Fun Challenges</p>
+              <p className="text-white/50 text-sm">&quot;Paper Hands&quot;, &quot;Fatfinger&quot;, &quot;Ghost Order&quot; - quirky achievements</p>
+            </div>
+            <div className="p-3 rounded-lg bg-white/5">
+              <p className="text-white font-medium mb-1">Whale Challenges</p>
+              <p className="text-white/50 text-sm">Large single trades ($10K+, $100K+, $500K+)</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Strategy Tips */}
+        <div className="mb-6">
+          <h3 className="text-lg font-medium text-white mb-3 flex items-center gap-2">
+            <span className="w-6 h-6 rounded-full bg-violet-500/20 flex items-center justify-center text-violet-400 text-sm">4</span>
+            Progression Strategy
+          </h3>
+          <div className="space-y-3 text-white/70 pl-8">
+            <div className="flex gap-3">
+              <span className="text-violet-400 font-bold shrink-0">Tip 1:</span>
+              <p>Start with <span className="text-white">low-hanging fruit</span> - challenges like &quot;First Order&quot; and &quot;First Fill&quot; are easy XP while you learn the platform.</p>
+            </div>
+            <div className="flex gap-3">
+              <span className="text-violet-400 font-bold shrink-0">Tip 2:</span>
+              <p>Build <span className="text-white">trading streaks</span> early. The streak challenges get harder (3 days → 7 days → 14 days), so start building the habit.</p>
+            </div>
+            <div className="flex gap-3">
+              <span className="text-violet-400 font-bold shrink-0">Tip 3:</span>
+              <p>Diversify your token trading. Many challenges reward <span className="text-white">trading multiple tokens</span>, and you&apos;ll naturally progress through several levels.</p>
+            </div>
+            <div className="flex gap-3">
+              <span className="text-violet-400 font-bold shrink-0">Tip 4:</span>
+              <p>Don&apos;t ignore the <span className="text-white">&quot;fun&quot; challenges</span> - they&apos;re required to level up and are often easier than they sound.</p>
+            </div>
+          </div>
+        </div>
+
+        {/* XP Totals */}
+        <div>
+          <h3 className="text-lg font-medium text-white mb-3 flex items-center gap-2">
+            <span className="w-6 h-6 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-400 text-sm">5</span>
+            XP by Legion
+          </h3>
+          <div className="overflow-x-auto pl-8">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-white/10">
+                  <th className="text-left py-2 text-white/60">Legion</th>
+                  <th className="text-right py-2 text-white/60">Challenges</th>
+                  <th className="text-right py-2 text-white/60">Total XP</th>
+                  <th className="text-right py-2 text-white/60">Avg per Challenge</th>
+                </tr>
+              </thead>
+              <tbody className="text-white/70">
+                {PRESTIGE_LEVELS.map((level) => {
+                  const challenges = CHALLENGES_BY_LEVEL[level.name] || [];
+                  const totalXp = challenges.reduce((sum, c) => sum + c.xp, 0);
+                  const avgXp = challenges.length > 0 ? Math.round(totalXp / challenges.length) : 0;
+                  return (
+                    <tr key={level.level} className="border-b border-white/5">
+                      <td className={`py-2 ${level.color} font-medium`}>{level.symbol} {level.name}</td>
+                      <td className="py-2 text-right">{challenges.length}</td>
+                      <td className="py-2 text-right text-amber-400">{totalXp.toLocaleString()}</td>
+                      <td className="py-2 text-right text-white/50">~{avgXp.toLocaleString()}</td>
+                    </tr>
+                  );
+                })}
+                <tr className="font-medium">
+                  <td className="py-2 text-white">Total</td>
+                  <td className="py-2 text-right text-white">84</td>
+                  <td className="py-2 text-right text-amber-400">
+                    {Object.values(CHALLENGES_BY_LEVEL).flat().reduce((sum, c) => sum + c.xp, 0).toLocaleString()}
+                  </td>
+                  <td className="py-2 text-right text-white/50">-</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </LiquidGlassCard>
+
       {/* Prestige Levels */}
       <LiquidGlassCard className="p-6">
         <h2 className="text-xl font-semibold text-white mb-4">Prestige Levels (Legions)</h2>

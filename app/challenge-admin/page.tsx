@@ -1144,6 +1144,196 @@ export default function ChallengeAdminPage() {
             </LiquidGlassCard>
           </motion.div>
 
+          {/* XP & Progression System */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+            className="mb-8 space-y-6"
+          >
+            {/* Action XP Rewards */}
+            <LiquidGlassCard shadowIntensity="sm" glowIntensity="sm" blurIntensity="xl" className="p-6">
+              <h2 className="text-xl font-semibold text-white mb-4">Action XP Rewards</h2>
+              <p className="text-gray-400 text-sm mb-4">
+                Every action earns XP. Combined with challenge completions, you need to reach the XP threshold to advance.
+              </p>
+
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <div className="p-4 bg-white/5 rounded-lg">
+                  <div className="text-2xl font-bold text-green-400 mb-1">+20 XP</div>
+                  <div className="text-white font-medium">Create Order</div>
+                  <div className="text-gray-500 text-xs mt-1">Each order you create</div>
+                </div>
+                <div className="p-4 bg-white/5 rounded-lg">
+                  <div className="text-2xl font-bold text-blue-400 mb-1">+25 XP</div>
+                  <div className="text-white font-medium">Fill Order</div>
+                  <div className="text-gray-500 text-xs mt-1">Each order you fill</div>
+                </div>
+                <div className="p-4 bg-white/5 rounded-lg">
+                  <div className="text-2xl font-bold text-cyan-400 mb-1">+30 XP</div>
+                  <div className="text-white font-medium">Order Filled (Maker)</div>
+                  <div className="text-gray-500 text-xs mt-1">When someone fills your order</div>
+                </div>
+                <div className="p-4 bg-white/5 rounded-lg">
+                  <div className="text-2xl font-bold text-purple-400 mb-1">+10 XP</div>
+                  <div className="text-white font-medium">Claim Proceeds</div>
+                  <div className="text-gray-500 text-xs mt-1">Each time you claim</div>
+                </div>
+              </div>
+
+              <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                <div className="text-amber-400 font-medium text-sm">Volume Bonus</div>
+                <div className="text-gray-400 text-xs mt-1">
+                  +1 XP per $10 USD traded (capped at +100 XP per trade). A $500 trade = +50 bonus XP.
+                </div>
+              </div>
+            </LiquidGlassCard>
+
+            {/* Legion Requirements */}
+            <LiquidGlassCard shadowIntensity="sm" glowIntensity="sm" blurIntensity="xl" className="p-6">
+              <h2 className="text-xl font-semibold text-white mb-4">Legion Progression Requirements</h2>
+              <p className="text-gray-400 text-sm mb-4">
+                To advance to the next legion, you need <span className="text-white">BOTH</span>: complete all challenges in your current level <span className="text-white">AND</span> reach the XP threshold.
+              </p>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-white/10">
+                      <th className="text-left py-3 text-white/60">From → To</th>
+                      <th className="text-right py-3 text-white/60">XP Required</th>
+                      <th className="text-right py-3 text-white/60">Challenges</th>
+                      <th className="text-right py-3 text-white/60">Challenge XP</th>
+                      <th className="text-right py-3 text-white/60">Gap to Fill</th>
+                      <th className="text-left py-3 pl-4 text-white/60">Rough Estimate to Fill Gap</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-white/70">
+                    <tr className="border-b border-white/5">
+                      <td className="py-3"><span className="text-rose-400">α Alpha</span> → <span className="text-orange-400">β Beta</span></td>
+                      <td className="py-3 text-right text-amber-400 font-mono">1,500</td>
+                      <td className="py-3 text-right">6</td>
+                      <td className="py-3 text-right font-mono">1,000</td>
+                      <td className="py-3 text-right text-cyan-400 font-mono">500</td>
+                      <td className="py-3 pl-4 text-gray-400 text-xs">~10 orders created + 8 fills</td>
+                    </tr>
+                    <tr className="border-b border-white/5">
+                      <td className="py-3"><span className="text-orange-400">β Beta</span> → <span className="text-lime-400">γ Gamma</span></td>
+                      <td className="py-3 text-right text-amber-400 font-mono">4,000</td>
+                      <td className="py-3 text-right">7</td>
+                      <td className="py-3 text-right font-mono">1,925</td>
+                      <td className="py-3 text-right text-cyan-400 font-mono">2,075</td>
+                      <td className="py-3 pl-4 text-gray-400 text-xs">~30 orders + 30 fills + $500 volume</td>
+                    </tr>
+                    <tr className="border-b border-white/5">
+                      <td className="py-3"><span className="text-lime-400">γ Gamma</span> → <span className="text-emerald-400">δ Delta</span></td>
+                      <td className="py-3 text-right text-amber-400 font-mono">10,000</td>
+                      <td className="py-3 text-right">9</td>
+                      <td className="py-3 text-right font-mono">3,650</td>
+                      <td className="py-3 text-right text-cyan-400 font-mono">6,350</td>
+                      <td className="py-3 pl-4 text-gray-400 text-xs">~80 orders + 80 fills + $2K volume</td>
+                    </tr>
+                    <tr className="border-b border-white/5">
+                      <td className="py-3"><span className="text-emerald-400">δ Delta</span> → <span className="text-cyan-400">ε Epsilon</span></td>
+                      <td className="py-3 text-right text-amber-400 font-mono">25,000</td>
+                      <td className="py-3 text-right">11</td>
+                      <td className="py-3 text-right font-mono">6,475</td>
+                      <td className="py-3 text-right text-cyan-400 font-mono">18,525</td>
+                      <td className="py-3 pl-4 text-gray-400 text-xs">~200 orders + 200 fills + $10K volume</td>
+                    </tr>
+                    <tr className="border-b border-white/5">
+                      <td className="py-3"><span className="text-cyan-400">ε Epsilon</span> → <span className="text-blue-400">ζ Zeta</span></td>
+                      <td className="py-3 text-right text-amber-400 font-mono">60,000</td>
+                      <td className="py-3 text-right">12</td>
+                      <td className="py-3 text-right font-mono">11,500</td>
+                      <td className="py-3 text-right text-cyan-400 font-mono">48,500</td>
+                      <td className="py-3 pl-4 text-gray-400 text-xs">~500 orders + 500 fills + $50K volume</td>
+                    </tr>
+                    <tr className="border-b border-white/5">
+                      <td className="py-3"><span className="text-blue-400">ζ Zeta</span> → <span className="text-violet-400">η Eta</span></td>
+                      <td className="py-3 text-right text-amber-400 font-mono">150,000</td>
+                      <td className="py-3 text-right">14</td>
+                      <td className="py-3 text-right font-mono">23,900</td>
+                      <td className="py-3 text-right text-cyan-400 font-mono">126,100</td>
+                      <td className="py-3 pl-4 text-gray-400 text-xs">~1K orders + 1K fills + $200K volume</td>
+                    </tr>
+                    <tr className="border-b border-white/5">
+                      <td className="py-3"><span className="text-violet-400">η Eta</span> → <span className="text-fuchsia-400">θ Theta</span></td>
+                      <td className="py-3 text-right text-amber-400 font-mono">400,000</td>
+                      <td className="py-3 text-right">8</td>
+                      <td className="py-3 text-right font-mono">27,000</td>
+                      <td className="py-3 text-right text-cyan-400 font-mono">373,000</td>
+                      <td className="py-3 pl-4 text-gray-400 text-xs">~2K orders + 2K fills + $500K volume</td>
+                    </tr>
+                    <tr className="border-b border-white/5">
+                      <td className="py-3"><span className="text-fuchsia-400">θ Theta</span> → <span className="text-yellow-400">Ω Omega</span></td>
+                      <td className="py-3 text-right text-amber-400 font-mono">1,000,000</td>
+                      <td className="py-3 text-right">13</td>
+                      <td className="py-3 text-right font-mono">73,000</td>
+                      <td className="py-3 text-right text-cyan-400 font-mono">927,000</td>
+                      <td className="py-3 pl-4 text-gray-400 text-xs">~5K orders + 5K fills + $2M volume</td>
+                    </tr>
+                    <tr className="font-medium bg-yellow-500/5">
+                      <td className="py-3"><span className="text-yellow-400">Ω Omega</span> (Final)</td>
+                      <td className="py-3 text-right text-yellow-400 font-mono">∞</td>
+                      <td className="py-3 text-right">7</td>
+                      <td className="py-3 text-right font-mono">182,000</td>
+                      <td className="py-3 text-right text-gray-500">—</td>
+                      <td className="py-3 pl-4 text-gray-400 text-xs">Complete all challenges for prestige</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
+                  <div className="text-emerald-400 font-medium text-sm">XP Calculation Example</div>
+                  <div className="text-gray-400 text-xs mt-1">
+                    Create 50 orders (50×20=1000) + Fill 40 orders (40×25=1000) + Get 30 fills (30×30=900) + $3K volume bonus (300) = <span className="text-white">3,200 XP</span>
+                  </div>
+                </div>
+                <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                  <div className="text-blue-400 font-medium text-sm">Progression Philosophy</div>
+                  <div className="text-gray-400 text-xs mt-1">
+                    Early levels (Alpha-Delta) are achievable in days/weeks. Mid levels (Epsilon-Eta) take weeks/months. Top levels (Theta-Omega) are for dedicated traders.
+                  </div>
+                </div>
+              </div>
+            </LiquidGlassCard>
+
+            {/* Progress Bar Preview */}
+            <LiquidGlassCard shadowIntensity="sm" glowIntensity="sm" blurIntensity="xl" className="p-6">
+              <h2 className="text-xl font-semibold text-white mb-4">Progress Bar UI Preview</h2>
+              <p className="text-gray-400 text-sm mb-4">
+                How the progress bar will look for a user in Beta with 2,800 XP (need 4,000 for Gamma):
+              </p>
+
+              <div className="max-w-md">
+                <div className="flex justify-between items-center mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-orange-400 font-bold">β</span>
+                    <span className="text-white font-medium">Beta Legion</span>
+                  </div>
+                  <span className="text-gray-400 text-sm">2,800 / 4,000 XP</span>
+                </div>
+                <div className="h-3 bg-white/10 rounded-full overflow-hidden">
+                  <div className="h-full bg-gradient-to-r from-orange-500 to-lime-500 rounded-full" style={{ width: '70%' }} />
+                </div>
+                <div className="flex justify-between mt-2 text-xs">
+                  <span className="text-gray-500">5/7 Challenges Complete</span>
+                  <span className="text-lime-400">→ Gamma</span>
+                </div>
+              </div>
+
+              <div className="mt-6 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                <div className="text-red-400 font-medium text-sm">Blocked State</div>
+                <div className="text-gray-400 text-xs mt-1">
+                  If user has enough XP but hasn&apos;t completed all challenges, show: &quot;Complete 2 more challenges to advance&quot;
+                </div>
+              </div>
+            </LiquidGlassCard>
+          </motion.div>
+
           {/* Filters */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}

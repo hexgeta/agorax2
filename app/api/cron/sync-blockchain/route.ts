@@ -247,7 +247,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         sell_token: getTokenTicker(sellToken),
         sell_amount: formatAmount(sellAmount, sellDecimals).toString(),
         tx_hash: log.transactionHash,
-      }, EVENT_XP.order_created);
+      }, EVENT_XP.order_created, timestamp);
 
       // Write to orders table
       try {
@@ -317,7 +317,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         buy_token_used: buyTicker,
         fill_amount: formatAmount(buyAmount, buyDecimals).toString(),
         tx_hash: log.transactionHash,
-      }, EVENT_XP.order_filled);
+      }, EVENT_XP.order_filled, timestamp);
 
       // Record trade_completed for filler (taker)
       if (orderMeta) {
@@ -330,7 +330,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           volume_usd: 0,
           is_maker: false,
           filler_wallet: buyer,
-        }, EVENT_XP.trade_completed);
+          tx_hash: log.transactionHash,
+        }, EVENT_XP.trade_completed, timestamp);
 
         // Record trade_completed for maker
         await recordEvent(orderMeta.owner, 'trade_completed', {
@@ -342,7 +343,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           volume_usd: 0,
           is_maker: true,
           filler_wallet: buyer,
-        }, EVENT_XP.trade_completed);
+          tx_hash: log.transactionHash,
+        }, EVENT_XP.trade_completed, timestamp);
       }
 
       // Write to order_fills table
@@ -382,7 +384,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         order_id: Number(orderId),
         time_since_creation_seconds: timeSinceCreation,
         tx_hash: log.transactionHash,
-      }, EVENT_XP.order_cancelled);
+      }, EVENT_XP.order_cancelled, timestamp);
 
       // Write to order_cancellations table
       try {
@@ -421,7 +423,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       await recordEvent(user, 'proceeds_claimed', {
         order_id: Number(orderId),
         tx_hash: log.transactionHash,
-      }, EVENT_XP.proceeds_claimed);
+      }, EVENT_XP.proceeds_claimed, timestamp);
 
       // Write to order_proceeds table
       try {
@@ -476,7 +478,8 @@ async function recordEvent(
   wallet: string,
   eventType: string,
   eventData: Record<string, unknown>,
-  xp: number
+  xp: number,
+  blockTimestamp?: number
 ) {
   try {
     // Dedup by tx_hash + event_type + wallet
@@ -492,21 +495,19 @@ async function recordEvent(
       if (existing) return;
     }
 
-    const { error } = await supabase.rpc('record_user_event', {
-      p_wallet_address: wallet,
-      p_event_type: eventType,
-      p_event_data: eventData,
-      p_xp_awarded: xp,
-    });
+    // Use block timestamp if provided, otherwise current time
+    const createdAt = blockTimestamp
+      ? new Date(blockTimestamp * 1000).toISOString()
+      : new Date().toISOString();
 
-    if (error) {
-      await supabase.from('user_events').insert({
-        wallet_address: wallet,
-        event_type: eventType,
-        event_data: eventData,
-        xp_awarded: xp,
-      });
-    }
+    // Insert directly with the correct timestamp
+    await supabase.from('user_events').insert({
+      wallet_address: wallet,
+      event_type: eventType,
+      event_data: eventData,
+      xp_awarded: xp,
+      created_at: createdAt,
+    });
   } catch {
     // Non-critical - continue processing
   }

@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
+import { CodeBlock } from '@/components/ui/CodeBlock';
 
 export default function DataStructuresPage() {
   return (
@@ -29,13 +30,11 @@ export default function DataStructuresPage() {
         <p className="text-white/70 text-sm mb-4">
           Represents the current state of an order.
         </p>
-        <div className="bg-white/5 p-4 rounded-lg font-mono text-sm">
-          <pre className="text-white/80">{`enum OrderStatus {
+        <CodeBlock>{`enum OrderStatus {
   Active = 0,     // Order is live and fillable
   Cancelled = 1,  // Order was cancelled by owner
   Completed = 2   // Order was fully filled
-}`}</pre>
-        </div>
+}`}</CodeBlock>
         <div className="mt-4 grid md:grid-cols-3 gap-3">
           <div className="flex items-center gap-2 p-3 bg-green-500/10 rounded-lg">
             <div className="w-3 h-3 rounded-full bg-green-500" />
@@ -58,16 +57,14 @@ export default function DataStructuresPage() {
         <p className="text-white/70 text-sm mb-4">
           Core structure for storing order information on-chain.
         </p>
-        <div className="bg-white/5 p-4 rounded-lg font-mono text-sm overflow-x-auto">
-          <pre className="text-white/80">{`struct OrderDetails {
+        <CodeBlock>{`struct OrderDetails {
     address sellToken;        // Token being sold
     uint256 sellAmount;       // Total amount to sell
     uint256[] buyTokensIndex; // Indices into whitelist
     uint256[] buyAmounts;     // Required amounts per buy token
     uint64 expirationTime;    // Unix timestamp
     bool allOrNothing;        // Must fill 100% at once
-}`}</pre>
-        </div>
+}`}</CodeBlock>
       </LiquidGlassCard>
 
       {/* OrderDetailsWithID Struct */}
@@ -76,8 +73,7 @@ export default function DataStructuresPage() {
         <p className="text-white/70 text-sm mb-4">
           Extended order information returned by view functions.
         </p>
-        <div className="bg-white/5 p-4 rounded-lg font-mono text-sm overflow-x-auto">
-          <pre className="text-white/80">{`struct OrderDetailsWithID {
+        <CodeBlock>{`struct OrderDetailsWithID {
     uint256 orderID;             // Unique order identifier
     address owner;               // Order creator
     OrderDetails orderDetails;   // Core order data
@@ -85,8 +81,7 @@ export default function DataStructuresPage() {
     uint256 remainingSellAmount; // Unfilled sell tokens
     uint256 redeemedSellAmount;  // Proceeds already claimed
     uint256 cooldownExpiry;      // When actions are unlocked
-}`}</pre>
-        </div>
+}`}</CodeBlock>
       </LiquidGlassCard>
 
       {/* Frontend Types */}
@@ -99,8 +94,7 @@ export default function DataStructuresPage() {
             <p className="text-white/70 text-sm mb-4">
               Full order data as used in the React frontend.
             </p>
-            <div className="bg-white/5 p-4 rounded-lg font-mono text-sm overflow-x-auto">
-              <pre className="text-white/80">{`interface CompleteOrderDetails {
+            <CodeBlock>{`interface CompleteOrderDetails {
   orderDetailsWithID: {
     orderID: bigint;
     owner: \`0x\${string}\`;
@@ -118,8 +112,7 @@ export default function DataStructuresPage() {
     };
   };
   buyTokenAddresses: readonly \`0x\${string}\`[];
-}`}</pre>
-            </div>
+}`}</CodeBlock>
           </LiquidGlassCard>
 
 
@@ -128,16 +121,14 @@ export default function DataStructuresPage() {
             <p className="text-white/70 text-sm mb-4">
               Token configuration from the constants file.
             </p>
-            <div className="bg-white/5 p-4 rounded-lg font-mono text-sm overflow-x-auto">
-              <pre className="text-white/80">{`interface TokenConstant {
+            <CodeBlock>{`interface TokenConstant {
   t: string;          // Full name (e.g., "PulseChain")
   ticker: string;     // Symbol (e.g., "PLS")
   a?: string;         // Contract address (undefined for native)
   d: number;          // Decimals (usually 18)
   dexs?: string[];    // DEX pair addresses for pricing
   logoFormat?: string;// "svg" | "png" | "webp"
-}`}</pre>
-            </div>
+}`}</CodeBlock>
           </LiquidGlassCard>
         </div>
       </div>
@@ -148,13 +139,11 @@ export default function DataStructuresPage() {
         <p className="text-white/70 text-sm mb-4">
           Token data returned from the contract whitelist.
         </p>
-        <div className="bg-white/5 p-4 rounded-lg font-mono text-sm overflow-x-auto">
-          <pre className="text-white/80">{`interface WhitelistToken {
+        <CodeBlock>{`interface WhitelistToken {
   tokenAddress: \`0x\${string}\`;
   isActive: boolean;
   whitelistIndex: bigint;
-}`}</pre>
-        </div>
+}`}</CodeBlock>
       </LiquidGlassCard>
 
       {/* Filter State */}
@@ -163,8 +152,7 @@ export default function DataStructuresPage() {
         <p className="text-white/70 text-sm mb-4">
           Filter configuration stored in URL query parameters.
         </p>
-        <div className="bg-white/5 p-4 rounded-lg font-mono text-sm overflow-x-auto">
-          <pre className="text-white/80">{`interface FilterState {
+        <CodeBlock>{`interface FilterState {
   searchQuery: string;   // order-id | seller | ticker
   status: 'active' | 'expired' | 'completed' | 'cancelled';
   dateFilter: '1h' | '12h' | '24h' | '7d' | '30d' | '90d' | '180d' | 'custom' | null;
@@ -175,8 +163,7 @@ export default function DataStructuresPage() {
   claimableFilter: boolean;        // Has claimable proceeds
   fillRange: [number, number];     // 0-100 % filled
   positionRange: [number, number]; // -100 to +100 limit position
-}`}</pre>
-        </div>
+}`}</CodeBlock>
       </LiquidGlassCard>
 
       {/* Navigation */}
