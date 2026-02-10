@@ -155,24 +155,51 @@ export async function POST(request: NextRequest): Promise<NextResponse<TrackEven
       }
     }
 
-    // One-off events: check if already recorded for this user
+    // Dedup: skip if an identical event already exists.
+    // - One-off events (wallet_connected, marketplace_visited): one per wallet ever.
+    // - Events with tx_hash: one per wallet + event_type + tx_hash (matches cron dedup).
+    // - Events with order_id: one per wallet + event_type + order_id.
     const ONE_OFF_EVENTS: EventType[] = ['wallet_connected', 'marketplace_visited'];
+    const txHash = event_data.tx_hash as string | undefined;
+    const orderId = event_data.order_id as string | number | undefined;
+
     if (ONE_OFF_EVENTS.includes(event_type)) {
-      const { data: existingEvent } = await supabase
+      const { data: existing } = await supabase
         .from('user_events')
         .select('id')
         .eq('wallet_address', normalizedWallet)
         .eq('event_type', event_type)
         .limit(1)
-        .single();
+        .maybeSingle();
 
-      if (existingEvent) {
-        // Already tracked, return success but don't record again
-        return NextResponse.json({
-          success: true,
-          xp_awarded: 0,
-          challenges_completed: [],
-        });
+      if (existing) {
+        return NextResponse.json({ success: true, xp_awarded: 0, challenges_completed: [] });
+      }
+    } else if (txHash) {
+      const { data: existing } = await supabase
+        .from('user_events')
+        .select('id')
+        .eq('wallet_address', normalizedWallet)
+        .eq('event_type', event_type)
+        .contains('event_data', { tx_hash: txHash })
+        .limit(1)
+        .maybeSingle();
+
+      if (existing) {
+        return NextResponse.json({ success: true, xp_awarded: 0, challenges_completed: [] });
+      }
+    } else if (orderId !== undefined) {
+      const { data: existing } = await supabase
+        .from('user_events')
+        .select('id')
+        .eq('wallet_address', normalizedWallet)
+        .eq('event_type', event_type)
+        .contains('event_data', { order_id: orderId })
+        .limit(1)
+        .maybeSingle();
+
+      if (existing) {
+        return NextResponse.json({ success: true, xp_awarded: 0, challenges_completed: [] });
       }
     }
 
