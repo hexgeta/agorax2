@@ -58,7 +58,7 @@ const CHALLENGE_DOCS: ChallengeDoc[] = [
     status: 'implemented',
   },
   {
-    name: 'Small Fish',
+    name: 'Small Fry',
     level: 0,
     levelName: 'Alpha',
     category: 'elite',
@@ -83,18 +83,6 @@ const CHALLENGE_DOCS: ChallengeDoc[] = [
   },
 
   // Beta (Level 1)
-  {
-    name: 'Price Watcher',
-    level: 1,
-    levelName: 'Beta',
-    category: 'bootcamp',
-    xp: 100,
-    description: 'Check the price chart 10 times',
-    eventType: 'chart_viewed',
-    trackingLogic: 'Count of chart_viewed events for user >= 10',
-    eventData: ['token_pair'],
-    status: 'implemented',
-  },
   {
     name: 'Getting Comfortable',
     level: 1,
@@ -125,9 +113,9 @@ const CHALLENGE_DOCS: ChallengeDoc[] = [
     levelName: 'Beta',
     category: 'operations',
     xp: 300,
-    description: 'Complete trades on both Saturday and Sunday',
-    eventType: 'trade_completed',
-    trackingLogic: 'Checks all trade_completed events for user. Needs at least one trade on a Saturday (day 6) AND one on a Sunday (day 0) using UTC getDay().',
+    description: 'Create an order on a Saturday or Sunday',
+    eventType: 'order_created',
+    trackingLogic: 'Checked when order_created event fires. If current UTC day is Saturday (6) or Sunday (0), challenge completes.',
     eventData: [],
     status: 'implemented',
   },
@@ -141,6 +129,18 @@ const CHALLENGE_DOCS: ChallengeDoc[] = [
     eventType: 'trade_completed',
     trackingLogic: 'Checked against users.total_volume_usd >= 500',
     eventData: ['volume_usd'],
+    status: 'implemented',
+  },
+  {
+    name: 'DEX Degen',
+    level: 1,
+    levelName: 'Beta',
+    category: 'wildcard',
+    xp: 150,
+    description: 'Create an order with a PulseChain DEX token (PLSX, 9MM, 9INCH, PHUX, TIDE, or UNI)',
+    eventType: 'order_created',
+    trackingLogic: 'On order_created: checks if sell_token or any buy_token is PLSX, 9MM, 9INCH, PHUX, TIDE, or UNI (case-insensitive).',
+    eventData: ['sell_token', 'buy_tokens'],
     status: 'implemented',
   },
   {
@@ -194,7 +194,7 @@ const CHALLENGE_DOCS: ChallengeDoc[] = [
     status: 'implemented',
   },
   {
-    name: 'Both Sides',
+    name: 'Playing Both Sides',
     level: 2,
     levelName: 'Gamma',
     category: 'operations',

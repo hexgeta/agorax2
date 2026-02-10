@@ -59,17 +59,17 @@ Several new challenges require specific fields in `trade_completed` events. **Th
 | First Steps | bootcamp | 50 | Connect wallet | `wallet_connected` event |
 | First Order | operations | 250 | Create 1 order | `total_orders_created >= 1` |
 | First Fill | operations | 250 | Fill 1 order | `total_orders_filled >= 1` |
-| Small Fish | elite | 300 | $100+ single trade | `trade_completed` volume_usd >= 100 |
+| Small Fry | elite | 300 | $100+ single trade | `trade_completed` volume_usd >= 100 |
 | Paper Hands | humiliation | 50 | Cancel < 1 min | `order_cancelled` time_since_creation < 60 |
 
 ### Beta (Prestige 1) — Building Momentum
 
 | Challenge | Category | XP | Requirement | Detection |
 |-----------|----------|-----|-------------|-----------|
-| Price Watcher | bootcamp | 100 | View chart 10x | `chart_viewed` count >= 10 |
 | Getting Comfortable | operations | 400 | Create 5 orders | `total_orders_created >= 5` |
 | Active Buyer | operations | 400 | Fill 5 orders | `total_orders_filled >= 5` |
-| Weekend Warrior | operations | 300 | Trade on Sat + Sun | `trade_completed` on day 0 (Sun) + day 6 (Sat) |
+| Weekend Warrior | operations | 300 | Create order on Sat/Sun | `order_created` UTC day = 0 (Sun) or 6 (Sat) |
+| DEX Degen | wildcard | 150 | Order with DEX token | `order_created` sell/buy token in PLSX, 9MM, 9INCH, PHUX, TIDE, UNI |
 | Volume Starter | elite | 500 | $500 total volume | `total_volume_usd >= 500` |
 | Micro Trader | humiliation | 75 | Trade < $1 | `trade_completed` volume_usd < 1 |
 
@@ -80,7 +80,7 @@ Several new challenges require specific fields in `trade_completed` events. **Th
 | Multi-Token Beginner | bootcamp | 300 | Trade 5 tokens | unique tokens in `trade_completed` >= 5 |
 | Active Trader | operations | 500 | 10 total trades | `total_trades >= 10` |
 | Consistent | operations | 400 | 3-day streak | `current_streak_days >= 3` |
-| Both Sides | operations | 500 | Create + fill same day | `order_created` + `order_filled` same UTC day |
+| Playing Both Sides | operations | 500 | Create + fill same day | `order_created` + `order_filled` same UTC day |
 | Volume Builder | elite | 750 | $1K total volume | `total_volume_usd >= 1000` |
 | Rising Star | elite | 600 | $500+ single trade | `trade_completed` volume_usd >= 500 |
 | Night Owl | humiliation | 200 | Trade 3-5 AM UTC | `trade_completed` UTC hour 3-4 |
@@ -237,7 +237,7 @@ Response:
   "event_id": "uuid",
   "xp_awarded": 75,
   "challenges_completed": [
-    { "prestige_level": 0, "challenge_name": "Small Fish", "category": "elite", "xp_awarded": 300 }
+    { "prestige_level": 0, "challenge_name": "Small Fry", "category": "elite", "xp_awarded": 300 }
   ]
 }
 ```

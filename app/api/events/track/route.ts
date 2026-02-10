@@ -373,7 +373,7 @@ async function checkAndCompleteChallenges(
   if (eventType === 'order_created') {
     const priceVsMarket = (eventData.price_vs_market_percent as number) || 0;
 
-    // Check Both Sides: did user also fill an order today?
+    // Check Playing Both Sides: did user also fill an order today?
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
@@ -422,12 +422,20 @@ async function checkAndCompleteChallenges(
     // Check Order Hoarder: 15+ active orders with 0 fills (approximate via stats)
     const activeUnfilled = stats.current_active_orders;
 
-    // Check for token-specific challenges (HTT, COM, pDAI)
+    // Check for token-specific challenges (HTT, COM, pDAI, DEX tokens)
     const sellTokenUpper = sellToken?.toUpperCase() || '';
     const buyTokensUpper = buyTokens?.map(t => t.toUpperCase()) || [];
     const hasHTT = sellTokenUpper === 'HTT' || buyTokensUpper.includes('HTT');
     const hasCOM = sellTokenUpper === 'COM' || buyTokensUpper.includes('COM');
     const hasPDAI = sellTokenUpper === 'PDAI' || sellTokenUpper === 'DAI' || buyTokensUpper.includes('PDAI') || buyTokensUpper.includes('DAI');
+
+    // DEX Degen: order with PulseChain DEX tokens
+    const dexTokens = new Set(['PLSX', '9MM', '9INCH', 'PHUX', 'TIDE', 'UNI']);
+    const hasDexToken = dexTokens.has(sellTokenUpper) || buyTokensUpper.some(t => dexTokens.has(t));
+
+    // Weekend Warrior: create order on Saturday or Sunday
+    const orderDay = new Date().getUTCDay();
+    const isWeekend = orderDay === 0 || orderDay === 6;
 
     await Promise.all([
       tryComplete(0, 'First Order', 'operations', 250, stats.total_orders_created >= 1),
@@ -440,8 +448,8 @@ async function checkAndCompleteChallenges(
       // Pricing challenges
       tryComplete(5, 'Fatfinger', 'wildcard', 150, priceVsMarket > 0),
       tryComplete(5, 'Dip Catcher', 'wildcard', 150, priceVsMarket <= -50),
-      // Both Sides (also checked on order_filled)
-      tryComplete(2, 'Both Sides', 'operations', 500, (fillsToday || 0) >= 1),
+      // Playing Both Sides (also checked on order_filled)
+      tryComplete(2, 'Playing Both Sides', 'operations', 500, (fillsToday || 0) >= 1),
       // Arbitrage Artist
       tryComplete(4, 'Arbitrage Artist', 'operations', 1000, (recentFills || 0) >= 1),
       // Deja Vu
@@ -452,13 +460,17 @@ async function checkAndCompleteChallenges(
       tryComplete(7, 'Bond Trader', 'bootcamp', 2000, hasHTT),
       tryComplete(7, 'Coupon Clipper', 'bootcamp', 2000, hasCOM),
       tryComplete(7, '$1 Inevitable', 'bootcamp', 2000, hasPDAI),
+      // DEX Degen wildcard
+      tryComplete(1, 'DEX Degen', 'wildcard', 150, hasDexToken),
+      // Weekend Warrior
+      tryComplete(1, 'Weekend Warrior', 'operations', 300, isWeekend),
     ]);
   }
 
   if (eventType === 'order_filled') {
     const fillTimeSeconds = (eventData.fill_time_seconds as number) || Infinity;
 
-    // Check Both Sides: did user also create an order today?
+    // Check Playing Both Sides: did user also create an order today?
     const todayFill = new Date();
     todayFill.setUTCHours(0, 0, 0, 0);
     const tomorrowFill = new Date(todayFill);
@@ -480,8 +492,8 @@ async function checkAndCompleteChallenges(
       // Speed challenges
       tryComplete(4, 'Speed Runner', 'wildcard', 400, fillTimeSeconds <= 30),
       tryComplete(8, 'Sniper', 'wildcard', 2000, fillTimeSeconds <= 60),
-      // Both Sides (also checked on order_created)
-      tryComplete(2, 'Both Sides', 'operations', 500, (createdToday || 0) >= 1),
+      // Playing Both Sides (also checked on order_created)
+      tryComplete(2, 'Playing Both Sides', 'operations', 500, (createdToday || 0) >= 1),
     ]);
   }
 
@@ -570,17 +582,6 @@ async function checkAndCompleteChallenges(
     ]);
   }
 
-  // Price Watcher: Check chart views (10 times)
-  if (eventType === 'chart_viewed') {
-    const { count: chartViews } = await supabase
-      .from('user_events')
-      .select('id', { count: 'exact', head: true })
-      .eq('wallet_address', walletAddress)
-      .eq('event_type', 'chart_viewed');
-
-    await tryComplete(1, 'Price Watcher', 'bootcamp', 100, (chartViews || 0) >= 10);
-  }
-
   // ---- trade_completed: single consolidated query for all trade-based challenges ----
   if (eventType === 'trade_completed') {
     const volumeUsd = (eventData.volume_usd as number) || 0;
@@ -602,8 +603,6 @@ async function checkAndCompleteChallenges(
     let pennyTradeCount = 0;
     const stableTokens = new Set(['DAI', 'USDC', 'USDT', 'USDL', 'WEDAI', 'WEUSDC', 'WEUSDT', 'PXDC', 'HEXDC']);
 
-    // For Weekend Warrior check
-    const tradeDays = new Set<number>(); // day of week (0=Sun, 6=Sat)
     // For Clean Sweep: track completed maker orders
     const completedMakerOrders = new Set<string>();
     // For AON Champion: track completed AON maker orders
@@ -626,10 +625,6 @@ async function checkAndCompleteChallenges(
         order_completed?: boolean;
         filler_wallet?: string;
       };
-
-      // Track day of week for Weekend Warrior
-      const tradeTime = new Date(event.created_at);
-      tradeDays.add(tradeTime.getUTCDay());
 
       // Track penny trades
       if (data.volume_usd !== undefined && data.volume_usd > 0 && data.volume_usd < 1) {
@@ -686,7 +681,7 @@ async function checkAndCompleteChallenges(
     // Fire all trade_completed challenges in parallel
     await Promise.all([
       // Single trade value challenges
-      tryComplete(0, 'Small Fish', 'elite', 300, volumeUsd >= 100),
+      tryComplete(0, 'Small Fry', 'elite', 300, volumeUsd >= 100),
       tryComplete(2, 'Rising Star', 'elite', 600, volumeUsd >= 500),
       tryComplete(3, 'Big Spender', 'elite', 1200, volumeUsd >= 1000),
       tryComplete(5, 'Whale Alert', 'elite', 4000, volumeUsd >= 10000),
@@ -737,9 +732,6 @@ async function checkAndCompleteChallenges(
       tryComplete(3, 'Early Bird', 'wildcard', 250, utcHour === 0),
       tryComplete(1, 'Micro Trader', 'wildcard', 75, volumeUsd > 0 && volumeUsd < 1),
       tryComplete(4, 'Penny Pincher', 'wildcard', 200, pennyTradeCount >= 10),
-
-      // Weekend Warrior: traded on both Saturday (6) and Sunday (0)
-      tryComplete(1, 'Weekend Warrior', 'operations', 300, tradeDays.has(0) && tradeDays.has(6)),
 
       // Perfect Record: 10+ trades with 0 cancellations
       tryComplete(4, 'Perfect Record', 'operations', 1500, stats.total_trades >= 10 && (stats as any).total_orders_cancelled === 0),

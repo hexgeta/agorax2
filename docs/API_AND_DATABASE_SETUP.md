@@ -564,7 +564,7 @@ The XP and achievement system consists of challenges organized by prestige level
 - Sniper (fill within 1 minute)
 
 **trade_completed:**
-- Trade volume milestones (Small Fish $100 → Leviathan $500K)
+- Trade volume milestones (Small Fry $100 → Leviathan $500K)
 - Total volume milestones (Volume Starter $500 → Volume God $1M)
 - Trade count milestones (Active Trader 10 → Trade Legend 1000)
 - Token diversity (Multi-Token Beginner 5 → Token God 75 tokens)

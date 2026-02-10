@@ -73,7 +73,7 @@ const PRESTIGE_CHALLENGES: Record<number, PrestigeChallenges> = {
       icon: '👑',
       color: 'text-amber-400',
       challenges: [
-        { name: 'Small Fish', description: 'Complete a trade worth $100+', requirement: '$100+ trade', xp: 300 },
+        { name: 'Small Fry', description: 'Complete a trade worth $100+', requirement: '$100+ trade', xp: 300 },
       ],
     },
     wildcard: {
@@ -94,7 +94,6 @@ const PRESTIGE_CHALLENGES: Record<number, PrestigeChallenges> = {
       icon: '🎯',
       color: 'text-green-400',
       challenges: [
-        { name: 'Price Watcher', description: 'Check the price chart 10 times', requirement: 'View chart 10x', xp: 100 },
       ],
     },
     operations: {
@@ -105,7 +104,7 @@ const PRESTIGE_CHALLENGES: Record<number, PrestigeChallenges> = {
       challenges: [
         { name: 'Getting Comfortable', description: 'Create 5 orders', requirement: 'Create 5 orders', xp: 400 },
         { name: 'Active Buyer', description: 'Fill 5 orders', requirement: 'Fill 5 orders', xp: 400 },
-        { name: 'Weekend Warrior', description: 'Trade on both Saturday and Sunday', requirement: 'Sat + Sun trades', xp: 300 },
+        { name: 'Weekend Warrior', description: 'Create an order on a Saturday or Sunday', requirement: 'Order on Sat/Sun', xp: 300 },
       ],
     },
     elite: {
@@ -123,6 +122,7 @@ const PRESTIGE_CHALLENGES: Record<number, PrestigeChallenges> = {
       icon: '💀',
       color: 'text-red-400',
       challenges: [
+        { name: 'DEX Degen', description: 'Create an order with a PulseChain DEX token (PLSX, 9MM, 9INCH, PHUX, TIDE, or UNI)', requirement: 'DEX token order', xp: 150 },
         { name: 'Micro Trader', description: 'Complete a trade worth less than $1', requirement: '< $1 trade', xp: 75 },
       ],
     },
@@ -146,7 +146,7 @@ const PRESTIGE_CHALLENGES: Record<number, PrestigeChallenges> = {
       challenges: [
         { name: 'Active Trader', description: 'Complete 10 trades total', requirement: '10 trades', xp: 500 },
         { name: 'Consistent', description: 'Trade 3 days in a row', requirement: '3 day streak', xp: 400 },
-        { name: 'Both Sides', description: 'Create an order AND fill someone else\'s order in the same day', requirement: 'Create + fill same day', xp: 500 },
+        { name: 'Playing Both Sides', description: 'Create an order AND fill someone else\'s order in the same day', requirement: 'Create + fill same day', xp: 500 },
       ],
     },
     elite: {
