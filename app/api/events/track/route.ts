@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import type { TrackEventRequest, TrackEventResponse, CompletedChallenge, EventType } from '@/types/events';
+import { verifySessionToken } from '@/lib/auth';
+import { ACTION_XP, calculateTradeXp } from '@/constants/xp';
 
 // Use service role for server-side operations
 const supabaseUrl = process.env.SUPABASE_URL!;
@@ -8,22 +10,26 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-// XP values for different events (base values, challenges give additional XP)
-// Only transaction-based events give XP - view events are tracked but give 0 XP
-const EVENT_XP: Partial<Record<EventType, number>> = {
-  wallet_connected: 0,
-  order_created: 0, // XP comes from challenges only
-  order_filled: 0, // XP comes from challenges only
-  order_cancelled: 0,
-  order_expired: 0,
-  proceeds_claimed: 0, // XP comes from challenges only
-  order_viewed: 0, // No incremental XP for views
-  chart_viewed: 0, // No incremental XP for views
-  marketplace_visited: 0, // No incremental XP for views
-  trade_completed: 0, // XP comes from challenges only
-  streak_updated: 0,
-  prestige_unlocked: 0,
-};
+// Compute base XP for an event. On-chain actions earn XP per constants/xp.ts;
+// view events and housekeeping events earn nothing.
+function getEventXp(eventType: EventType, eventData: Record<string, unknown>): number {
+  switch (eventType) {
+    case 'order_created':
+      return ACTION_XP.ORDER_CREATED;       // 20 XP
+    case 'order_filled':
+      return ACTION_XP.ORDER_FILLED;        // 25 XP
+    case 'proceeds_claimed':
+      return ACTION_XP.PROCEEDS_CLAIMED;    // 10 XP
+    case 'trade_completed': {
+      // 25 XP (taker) or 30 XP (maker) + volume bonus (1 XP per $10 USD, capped at 100)
+      const isMaker = (eventData.is_maker as boolean) || false;
+      const volumeUsd = (eventData.volume_usd as number) || 0;
+      return calculateTradeXp(isMaker, volumeUsd);
+    }
+    default:
+      return 0;
+  }
+}
 
 // Rate limiting: max events per wallet per minute
 const RATE_LIMIT_WINDOW_MS = 60000; // 1 minute
@@ -94,26 +100,106 @@ export async function POST(request: NextRequest): Promise<NextResponse<TrackEven
     }
 
     const normalizedWallet = wallet_address.toLowerCase();
-    const baseXp = EVENT_XP[event_type] || 0;
 
-    // One-off events: check if already recorded for this user
+    // Reject blacklisted wallets immediately
+    const { data: userRow } = await supabase
+      .from('users')
+      .select('is_blacklisted')
+      .eq('wallet_address', normalizedWallet)
+      .maybeSingle();
+
+    if (userRow?.is_blacklisted) {
+      return NextResponse.json(
+        { success: false, error: 'Account suspended' },
+        { status: 403 },
+      );
+    }
+
+    const baseXp = getEventXp(event_type, event_data);
+
+    // Events that don't require authentication (harmless view events)
+    const UNVERIFIED_EVENTS: EventType[] = [
+      'wallet_connected',
+      'marketplace_visited',
+      'order_viewed',
+      'chart_viewed',
+    ];
+
+    // For challenge-triggering events, require a valid signed session token.
+    // This proves the caller owns the wallet (they signed a message with it).
+    if (!UNVERIFIED_EVENTS.includes(event_type)) {
+      const authHeader = request.headers.get('authorization');
+      const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+
+      if (!token) {
+        return NextResponse.json(
+          { success: false, error: 'Authentication required. Please verify wallet ownership.' },
+          { status: 401 },
+        );
+      }
+
+      const tokenWallet = verifySessionToken(token);
+      if (!tokenWallet) {
+        return NextResponse.json(
+          { success: false, error: 'Session expired or invalid. Please re-verify wallet.' },
+          { status: 401 },
+        );
+      }
+
+      // Ensure the token's wallet matches the request's wallet
+      if (tokenWallet !== normalizedWallet) {
+        return NextResponse.json(
+          { success: false, error: 'Token wallet mismatch' },
+          { status: 403 },
+        );
+      }
+    }
+
+    // Dedup: skip if an identical event already exists.
+    // - One-off events (wallet_connected, marketplace_visited): one per wallet ever.
+    // - Events with tx_hash: one per wallet + event_type + tx_hash (matches cron dedup).
+    // - Events with order_id: one per wallet + event_type + order_id.
     const ONE_OFF_EVENTS: EventType[] = ['wallet_connected', 'marketplace_visited'];
+    const txHash = event_data.tx_hash as string | undefined;
+    const orderId = event_data.order_id as string | number | undefined;
+
     if (ONE_OFF_EVENTS.includes(event_type)) {
-      const { data: existingEvent } = await supabase
+      const { data: existing } = await supabase
         .from('user_events')
         .select('id')
         .eq('wallet_address', normalizedWallet)
         .eq('event_type', event_type)
         .limit(1)
-        .single();
+        .maybeSingle();
 
-      if (existingEvent) {
-        // Already tracked, return success but don't record again
-        return NextResponse.json({
-          success: true,
-          xp_awarded: 0,
-          challenges_completed: [],
-        });
+      if (existing) {
+        return NextResponse.json({ success: true, xp_awarded: 0, challenges_completed: [] });
+      }
+    } else if (txHash) {
+      const { data: existing } = await supabase
+        .from('user_events')
+        .select('id')
+        .eq('wallet_address', normalizedWallet)
+        .eq('event_type', event_type)
+        .contains('event_data', { tx_hash: txHash })
+        .limit(1)
+        .maybeSingle();
+
+      if (existing) {
+        return NextResponse.json({ success: true, xp_awarded: 0, challenges_completed: [] });
+      }
+    } else if (orderId !== undefined) {
+      const { data: existing } = await supabase
+        .from('user_events')
+        .select('id')
+        .eq('wallet_address', normalizedWallet)
+        .eq('event_type', event_type)
+        .contains('event_data', { order_id: orderId })
+        .limit(1)
+        .maybeSingle();
+
+      if (existing) {
+        return NextResponse.json({ success: true, xp_awarded: 0, challenges_completed: [] });
       }
     }
 

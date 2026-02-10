@@ -1,69 +1,187 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Ratelimit } from '@upstash/ratelimit';
+import { Redis } from '@upstash/redis';
 
-interface RateLimitEntry {
-  count: number;
-  resetAt: number;
-}
+// ── Types ──────────────────────────────────────────────────────────────────────
 
-interface RateLimitConfig {
+export interface RateLimitConfig {
   /** Max requests per window */
   limit: number;
   /** Window duration in seconds */
   windowSeconds: number;
 }
 
-// In-memory store keyed by "ip:path"
-const store = new Map<string, RateLimitEntry>();
-let lastCleanup = Date.now();
-const CLEANUP_INTERVAL = 60_000; // 1 minute
+interface RateLimitInfo {
+  limit: number;
+  remaining: number;
+  reset: number; // unix seconds
+}
 
-function cleanup() {
+// ── Vercel KV (Redis) setup ────────────────────────────────────────────────────
+// Vercel KV auto-sets KV_REST_API_URL and KV_REST_API_TOKEN when you create a
+// KV store in the Vercel dashboard. The @upstash/redis client works directly
+// with these since Vercel KV is Upstash Redis under the hood.
+
+let redis: Redis | null = null;
+
+function getRedis(): Redis | null {
+  if (redis) return redis;
+  const url = process.env.KV_REST_API_URL;
+  const token = process.env.KV_REST_API_TOKEN;
+  if (!url || !token) return null;
+  redis = new Redis({ url, token });
+  return redis;
+}
+
+// Cache Ratelimit instances by config key so we don't re-create them
+const limiters = new Map<string, Ratelimit>();
+
+function getLimiter(config: RateLimitConfig): Ratelimit | null {
+  const r = getRedis();
+  if (!r) return null;
+
+  const key = `${config.limit}:${config.windowSeconds}`;
+  let limiter = limiters.get(key);
+  if (!limiter) {
+    limiter = new Ratelimit({
+      redis: r,
+      limiter: Ratelimit.slidingWindow(config.limit, `${config.windowSeconds} s`),
+      prefix: 'agorax-rl',
+    });
+    limiters.set(key, limiter);
+  }
+  return limiter;
+}
+
+// ── In-memory fallback (local dev / missing env vars) ──────────────────────────
+
+interface MemoryEntry {
+  count: number;
+  resetAt: number;
+}
+
+const memoryStore = new Map<string, MemoryEntry>();
+let lastCleanup = Date.now();
+const CLEANUP_INTERVAL = 60_000;
+
+function memoryCleanup() {
   const now = Date.now();
   if (now - lastCleanup < CLEANUP_INTERVAL) return;
   lastCleanup = now;
-  for (const [key, entry] of store) {
-    if (now > entry.resetAt) store.delete(key);
+  for (const [key, entry] of memoryStore) {
+    if (now > entry.resetAt) memoryStore.delete(key);
   }
 }
 
+function memoryRateLimit(
+  identifier: string,
+  config: RateLimitConfig,
+): RateLimitInfo & { blocked: boolean } {
+  memoryCleanup();
+  const now = Date.now();
+  const entry = memoryStore.get(identifier);
+
+  if (!entry || now > entry.resetAt) {
+    memoryStore.set(identifier, {
+      count: 1,
+      resetAt: now + config.windowSeconds * 1000,
+    });
+    return {
+      blocked: false,
+      limit: config.limit,
+      remaining: config.limit - 1,
+      reset: Math.ceil((now + config.windowSeconds * 1000) / 1000),
+    };
+  }
+
+  entry.count++;
+  const remaining = Math.max(0, config.limit - entry.count);
+  const reset = Math.ceil(entry.resetAt / 1000);
+
+  return {
+    blocked: entry.count > config.limit,
+    limit: config.limit,
+    remaining,
+    reset,
+  };
+}
+
+// ── IP extraction ──────────────────────────────────────────────────────────────
+
 function getClientIp(request: NextRequest): string {
   return (
+    request.headers.get('cf-connecting-ip') ||
     request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
     request.headers.get('x-real-ip') ||
     'unknown'
   );
 }
 
+// Store per-request rate limit info so apiSuccess can set headers without
+// another round-trip to Redis.
+const requestRateLimitInfo = new WeakMap<NextRequest, RateLimitInfo>();
+
+// ── Public API ─────────────────────────────────────────────────────────────────
+
 /**
  * Check rate limit for a request.
- * Returns null if allowed, or a NextResponse 429 if blocked.
+ * Uses Upstash Redis when configured, falls back to in-memory otherwise.
+ * Returns null if allowed, or a 429 NextResponse if blocked.
  */
-export function checkRateLimit(
+export async function checkRateLimit(
   request: NextRequest,
-  config: RateLimitConfig = { limit: 60, windowSeconds: 60 }
-): NextResponse | null {
-  cleanup();
-
+  config: RateLimitConfig = { limit: 60, windowSeconds: 60 },
+): Promise<NextResponse | null> {
   const ip = getClientIp(request);
   const path = new URL(request.url).pathname;
-  const key = `${ip}:${path}`;
-  const now = Date.now();
+  const identifier = `${ip}:${path}`;
 
-  const entry = store.get(key);
+  const upstashLimiter = getLimiter(config);
 
-  if (!entry || now > entry.resetAt) {
-    // New window
-    store.set(key, {
-      count: 1,
-      resetAt: now + config.windowSeconds * 1000,
+  if (upstashLimiter) {
+    // ── Upstash path ──
+    const result = await upstashLimiter.limit(identifier);
+
+    requestRateLimitInfo.set(request, {
+      limit: result.limit,
+      remaining: result.remaining,
+      reset: result.reset,
     });
+
+    if (!result.success) {
+      const retryAfter = Math.ceil((result.reset - Date.now()) / 1000);
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Rate limit exceeded',
+          retry_after_seconds: Math.max(retryAfter, 1),
+        },
+        {
+          status: 429,
+          headers: {
+            'Retry-After': String(Math.max(retryAfter, 1)),
+            'X-RateLimit-Limit': String(result.limit),
+            'X-RateLimit-Remaining': '0',
+            'X-RateLimit-Reset': String(Math.ceil(result.reset / 1000)),
+          },
+        },
+      );
+    }
+
     return null;
   }
 
-  entry.count++;
+  // ── In-memory fallback ──
+  const result = memoryRateLimit(identifier, config);
 
-  if (entry.count > config.limit) {
-    const retryAfter = Math.ceil((entry.resetAt - now) / 1000);
+  requestRateLimitInfo.set(request, {
+    limit: result.limit,
+    remaining: result.remaining,
+    reset: result.reset,
+  });
+
+  if (result.blocked) {
+    const retryAfter = Math.max(result.reset - Math.ceil(Date.now() / 1000), 1);
     return NextResponse.json(
       {
         success: false,
@@ -76,9 +194,9 @@ export function checkRateLimit(
           'Retry-After': String(retryAfter),
           'X-RateLimit-Limit': String(config.limit),
           'X-RateLimit-Remaining': '0',
-          'X-RateLimit-Reset': String(Math.ceil(entry.resetAt / 1000)),
+          'X-RateLimit-Reset': String(result.reset),
         },
-      }
+      },
     );
   }
 
@@ -86,32 +204,22 @@ export function checkRateLimit(
 }
 
 /**
- * Add rate limit headers to a successful response.
+ * Add rate-limit headers to a successful response.
  */
 export function addRateLimitHeaders(
   response: NextResponse,
   request: NextRequest,
-  config: RateLimitConfig = { limit: 60, windowSeconds: 60 }
 ): NextResponse {
-  const ip = getClientIp(request);
-  const path = new URL(request.url).pathname;
-  const key = `${ip}:${path}`;
-  const entry = store.get(key);
-
-  if (entry) {
-    response.headers.set('X-RateLimit-Limit', String(config.limit));
-    response.headers.set(
-      'X-RateLimit-Remaining',
-      String(Math.max(0, config.limit - entry.count))
-    );
-    response.headers.set(
-      'X-RateLimit-Reset',
-      String(Math.ceil(entry.resetAt / 1000))
-    );
+  const info = requestRateLimitInfo.get(request);
+  if (info) {
+    response.headers.set('X-RateLimit-Limit', String(info.limit));
+    response.headers.set('X-RateLimit-Remaining', String(info.remaining));
+    response.headers.set('X-RateLimit-Reset', String(info.reset));
   }
-
   return response;
 }
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
 
 /** Validate Ethereum address format */
 export function isValidAddress(address: string): boolean {
@@ -122,20 +230,19 @@ export function isValidAddress(address: string): boolean {
 export function apiSuccess(
   data: unknown,
   request: NextRequest,
-  rateLimitConfig?: RateLimitConfig
 ): NextResponse {
   const response = NextResponse.json({
     success: true,
     data,
     timestamp: new Date().toISOString(),
   });
-  return addRateLimitHeaders(response, request, rateLimitConfig);
+  return addRateLimitHeaders(response, request);
 }
 
 /** Standard JSON error response */
 export function apiError(
   message: string,
-  status: number = 400
+  status: number = 400,
 ): NextResponse {
   return NextResponse.json(
     {
@@ -143,6 +250,17 @@ export function apiError(
       error: message,
       timestamp: new Date().toISOString(),
     },
-    { status }
+    { status },
   );
 }
+
+// ── Preset configs (replaces utils/rateLimit.ts RATE_LIMITS) ───────────────────
+
+export const RATE_LIMITS = {
+  /** Strict limit for validation endpoints */
+  validation: { limit: 20, windowSeconds: 60 } satisfies RateLimitConfig,
+  /** More relaxed for data fetching */
+  data: { limit: 60, windowSeconds: 60 } satisfies RateLimitConfig,
+  /** Very strict for write operations */
+  write: { limit: 10, windowSeconds: 60 } satisfies RateLimitConfig,
+} as const;

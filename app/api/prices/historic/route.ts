@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { rateLimit, RATE_LIMITS } from '@/utils/rateLimit';
+import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 
 // We need dynamic for query params
 export const dynamic = 'force-dynamic';
@@ -12,7 +12,7 @@ const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 export async function GET(request: NextRequest) {
   // Apply rate limiting
-  const rateLimitResponse = rateLimit(request, RATE_LIMITS.data);
+  const rateLimitResponse = await checkRateLimit(request, RATE_LIMITS.data);
   if (rateLimitResponse) {
     return rateLimitResponse;
   }

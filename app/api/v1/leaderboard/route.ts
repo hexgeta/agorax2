@@ -27,7 +27,7 @@ const PRESTIGE_NAMES = [
  *   min_trades=0          Minimum trades threshold
  */
 export async function GET(request: NextRequest): Promise<Response> {
-  const rateLimited = checkRateLimit(request, RATE_LIMIT);
+  const rateLimited = await checkRateLimit(request, RATE_LIMIT);
   if (rateLimited) return rateLimited;
 
   const url = new URL(request.url);
@@ -103,7 +103,6 @@ export async function GET(request: NextRequest): Promise<Response> {
         },
       },
       request,
-      RATE_LIMIT
     );
   } catch (error) {
     console.error('Leaderboard API error:', error);

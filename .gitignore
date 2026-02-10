@@ -55,6 +55,7 @@ config/whitelisted-emails.private.ts
 
 # Misc project files
 order_query.json
+BLACKLIST.md
 
 # Test files
 /test
