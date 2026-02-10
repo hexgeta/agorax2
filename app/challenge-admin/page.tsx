@@ -34,18 +34,6 @@ const CHALLENGE_DOCS: ChallengeDoc[] = [
     status: 'implemented',
   },
   {
-    name: 'Window Shopper',
-    level: 0,
-    levelName: 'Alpha',
-    category: 'bootcamp',
-    xp: 100,
-    description: 'View 10 different orders in the marketplace',
-    eventType: 'order_viewed',
-    trackingLogic: 'Counted by extracting unique order_id values from all order_viewed events for the user.',
-    eventData: ['order_id: number', 'token_symbol: string'],
-    status: 'implemented',
-  },
-  {
     name: 'First Order',
     level: 0,
     levelName: 'Alpha',
@@ -70,7 +58,7 @@ const CHALLENGE_DOCS: ChallengeDoc[] = [
     status: 'implemented',
   },
   {
-    name: 'Small Fish',
+    name: 'Small Fry',
     level: 0,
     levelName: 'Alpha',
     category: 'elite',
@@ -95,30 +83,6 @@ const CHALLENGE_DOCS: ChallengeDoc[] = [
   },
 
   // Beta (Level 1)
-  {
-    name: 'Price Watcher',
-    level: 1,
-    levelName: 'Beta',
-    category: 'bootcamp',
-    xp: 100,
-    description: 'Check the price chart 10 times',
-    eventType: 'chart_viewed',
-    trackingLogic: 'Count of chart_viewed events for user >= 10',
-    eventData: ['token_pair'],
-    status: 'implemented',
-  },
-  {
-    name: 'Token Explorer',
-    level: 1,
-    levelName: 'Beta',
-    category: 'bootcamp',
-    xp: 150,
-    description: 'View orders for 5 different tokens',
-    eventType: 'order_viewed',
-    trackingLogic: 'Extract unique token_symbol values from order_viewed events, count >= 5',
-    eventData: ['order_id', 'token_symbol'],
-    status: 'implemented',
-  },
   {
     name: 'Getting Comfortable',
     level: 1,
@@ -149,9 +113,9 @@ const CHALLENGE_DOCS: ChallengeDoc[] = [
     levelName: 'Beta',
     category: 'operations',
     xp: 300,
-    description: 'Complete trades on both Saturday and Sunday',
-    eventType: 'trade_completed',
-    trackingLogic: 'Checks all trade_completed events for user. Needs at least one trade on a Saturday (day 6) AND one on a Sunday (day 0) using UTC getDay().',
+    description: 'Create an order on a Saturday or Sunday',
+    eventType: 'order_created',
+    trackingLogic: 'Checked when order_created event fires. If current UTC day is Saturday (6) or Sunday (0), challenge completes.',
     eventData: [],
     status: 'implemented',
   },
@@ -165,6 +129,18 @@ const CHALLENGE_DOCS: ChallengeDoc[] = [
     eventType: 'trade_completed',
     trackingLogic: 'Checked against users.total_volume_usd >= 500',
     eventData: ['volume_usd'],
+    status: 'implemented',
+  },
+  {
+    name: 'DEX Degen',
+    level: 1,
+    levelName: 'Beta',
+    category: 'wildcard',
+    xp: 150,
+    description: 'Create an order with a PulseChain DEX token (PLSX, 9MM, 9INCH, PHUX, TIDE, or UNI)',
+    eventType: 'order_created',
+    trackingLogic: 'On order_created: checks if sell_token or any buy_token is PLSX, 9MM, 9INCH, PHUX, TIDE, or UNI (case-insensitive).',
+    eventData: ['sell_token', 'buy_tokens'],
     status: 'implemented',
   },
   {
@@ -194,18 +170,6 @@ const CHALLENGE_DOCS: ChallengeDoc[] = [
     status: 'implemented',
   },
   {
-    name: 'Market Scanner',
-    level: 2,
-    levelName: 'Gamma',
-    category: 'bootcamp',
-    xp: 200,
-    description: 'View 50 different orders',
-    eventType: 'order_viewed',
-    trackingLogic: 'Count unique order_id from order_viewed events >= 50',
-    eventData: ['order_id'],
-    status: 'implemented',
-  },
-  {
     name: 'Active Trader',
     level: 2,
     levelName: 'Gamma',
@@ -230,7 +194,7 @@ const CHALLENGE_DOCS: ChallengeDoc[] = [
     status: 'implemented',
   },
   {
-    name: 'Both Sides',
+    name: 'Playing Both Sides',
     level: 2,
     levelName: 'Gamma',
     category: 'operations',
@@ -301,18 +265,6 @@ const CHALLENGE_DOCS: ChallengeDoc[] = [
     eventType: 'trade_completed',
     trackingLogic: 'Count unique tokens from trade_completed events >= 10',
     eventData: ['sell_token', 'buy_token'],
-    status: 'implemented',
-  },
-  {
-    name: 'Market Regular',
-    level: 3,
-    levelName: 'Delta',
-    category: 'bootcamp',
-    xp: 300,
-    description: 'View 100 different orders',
-    eventType: 'order_viewed',
-    trackingLogic: 'Count unique order_id from order_viewed events >= 100',
-    eventData: ['order_id'],
     status: 'implemented',
   },
   {
@@ -438,10 +390,10 @@ const CHALLENGE_DOCS: ChallengeDoc[] = [
     status: 'implemented',
   },
   {
-    name: 'HEX Enthusiast',
+    name: 'Hexican',
     level: 4,
     levelName: 'Epsilon',
-    category: 'bootcamp',
+    category: 'wildcard',
     xp: 600,
     description: 'Trade 100,000 HEX total',
     eventType: 'trade_completed',
@@ -486,18 +438,6 @@ const CHALLENGE_DOCS: ChallengeDoc[] = [
     status: 'implemented',
   },
   {
-    name: 'Arbitrage Artist',
-    level: 4,
-    levelName: 'Epsilon',
-    category: 'operations',
-    xp: 1000,
-    description: 'Fill an order then create your own within 2 minutes',
-    eventType: 'order_created',
-    trackingLogic: 'On order_created: queries order_filled events for the user within the last 120 seconds. If any exist, challenge is completed.',
-    eventData: [],
-    status: 'implemented',
-  },
-  {
     name: 'Perfect Record',
     level: 4,
     levelName: 'Epsilon',
@@ -525,7 +465,7 @@ const CHALLENGE_DOCS: ChallengeDoc[] = [
     name: 'Iron Hands',
     level: 4,
     levelName: 'Epsilon',
-    category: 'elite',
+    category: 'wildcard',
     xp: 1500,
     description: 'Claim proceeds from an order that was open for 30+ days',
     eventType: 'proceeds_claimed',
@@ -769,7 +709,7 @@ const CHALLENGE_DOCS: ChallengeDoc[] = [
     name: 'Multi-Fill',
     level: 6,
     levelName: 'Eta',
-    category: 'operations',
+    category: 'wildcard',
     xp: 3000,
     description: 'Have a single order filled by 5 different wallets',
     eventType: 'trade_completed',
@@ -793,7 +733,7 @@ const CHALLENGE_DOCS: ChallengeDoc[] = [
     name: 'Diamond Hands',
     level: 6,
     levelName: 'Eta',
-    category: 'elite',
+    category: 'wildcard',
     xp: 5000,
     description: 'Claim proceeds from an order that was open for 90+ days',
     eventType: 'proceeds_claimed',
@@ -831,7 +771,7 @@ const CHALLENGE_DOCS: ChallengeDoc[] = [
     name: 'MAXI Maxi',
     level: 7,
     levelName: 'Theta',
-    category: 'bootcamp',
+    category: 'wildcard',
     xp: 2000,
     description: 'Trade any MAXI token',
     eventType: 'trade_completed',
@@ -843,7 +783,7 @@ const CHALLENGE_DOCS: ChallengeDoc[] = [
     name: 'Bond Trader',
     level: 7,
     levelName: 'Theta',
-    category: 'bootcamp',
+    category: 'wildcard',
     xp: 2000,
     description: 'Make an order with HTT (Hedron T-Share Token)',
     eventType: 'order_created',
@@ -855,7 +795,7 @@ const CHALLENGE_DOCS: ChallengeDoc[] = [
     name: 'Coupon Clipper',
     level: 7,
     levelName: 'Theta',
-    category: 'bootcamp',
+    category: 'wildcard',
     xp: 2000,
     description: 'Make an order with COM (Community Token)',
     eventType: 'order_created',
@@ -867,7 +807,7 @@ const CHALLENGE_DOCS: ChallengeDoc[] = [
     name: '$1 Inevitable',
     level: 7,
     levelName: 'Theta',
-    category: 'bootcamp',
+    category: 'wildcard',
     xp: 2000,
     description: 'Make an order with pDAI',
     eventType: 'order_created',
@@ -903,7 +843,7 @@ const CHALLENGE_DOCS: ChallengeDoc[] = [
     name: 'Full House',
     level: 7,
     levelName: 'Theta',
-    category: 'operations',
+    category: 'wildcard',
     xp: 5000,
     description: 'Have 3 partially filled orders still active',
     eventType: 'trade_completed',
@@ -1070,7 +1010,7 @@ export default function ChallengeAdminPage() {
   const [filterStatus, setFilterStatus] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const filteredChallenges = CHALLENGE_DOCS.filter(challenge => {
+  const applyFilters = (challenge: ChallengeDoc) => {
     if (filterLevel !== null && challenge.level !== filterLevel) return false;
     if (filterStatus && challenge.status !== filterStatus) return false;
     if (searchQuery) {
@@ -1083,15 +1023,20 @@ export default function ChallengeAdminPage() {
       );
     }
     return true;
-  });
+  };
+
+  const filteredChallenges = CHALLENGE_DOCS.filter(c => c.category !== 'wildcard' && applyFilters(c));
+  const wildcardChallenges = CHALLENGE_DOCS.filter(c => c.category === 'wildcard' && applyFilters(c));
 
   const levels = [...new Set(CHALLENGE_DOCS.map(c => c.level))].sort((a, b) => a - b);
 
-  // Stats
-  const totalChallenges = CHALLENGE_DOCS.length;
-  const implementedCount = CHALLENGE_DOCS.filter(c => c.status === 'implemented').length;
-  const partialCount = CHALLENGE_DOCS.filter(c => c.status === 'partial').length;
-  const needsWorkCount = CHALLENGE_DOCS.filter(c => c.status === 'needs-work').length;
+  // Stats (exclude wildcards from main count)
+  const mainChallenges = CHALLENGE_DOCS.filter(c => c.category !== 'wildcard');
+  const totalChallenges = mainChallenges.length;
+  const implementedCount = mainChallenges.filter(c => c.status === 'implemented').length;
+  const partialCount = mainChallenges.filter(c => c.status === 'partial').length;
+  const needsWorkCount = mainChallenges.filter(c => c.status === 'needs-work').length;
+  const wildcardCount = CHALLENGE_DOCS.filter(c => c.category === 'wildcard').length;
 
   return (
     <main className="flex min-h-screen flex-col items-center relative overflow-hidden">
@@ -1123,10 +1068,10 @@ export default function ChallengeAdminPage() {
             className="mb-8"
           >
             <LiquidGlassCard shadowIntensity="sm" glowIntensity="sm" blurIntensity="xl" className="p-6">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                 <div>
                   <div className="text-3xl font-bold text-white">{totalChallenges}</div>
-                  <div className="text-gray-400 text-sm">Total Challenges</div>
+                  <div className="text-gray-400 text-sm">Required Challenges</div>
                 </div>
                 <div>
                   <div className="text-3xl font-bold text-green-400">{implementedCount}</div>
@@ -1139,6 +1084,10 @@ export default function ChallengeAdminPage() {
                 <div>
                   <div className="text-3xl font-bold text-red-400">{needsWorkCount}</div>
                   <div className="text-gray-400 text-sm">Needs Work</div>
+                </div>
+                <div>
+                  <div className="text-3xl font-bold text-amber-400">{wildcardCount}</div>
+                  <div className="text-gray-400 text-sm">Wildcards</div>
                 </div>
               </div>
             </LiquidGlassCard>
@@ -1193,7 +1142,7 @@ export default function ChallengeAdminPage() {
             <LiquidGlassCard shadowIntensity="sm" glowIntensity="sm" blurIntensity="xl" className="p-6">
               <h2 className="text-xl font-semibold text-white mb-4">Legion Progression Requirements</h2>
               <p className="text-gray-400 text-sm mb-4">
-                To advance to the next legion, you need <span className="text-white">BOTH</span>: complete all challenges in your current level <span className="text-white">AND</span> reach the XP threshold.
+                To advance to the next legion, you need <span className="text-white">BOTH</span>: complete all required challenges in your current level <span className="text-white">AND</span> reach the XP threshold. <span className="text-amber-400">Wildcard challenges are not required</span> for progression but still award XP.
               </p>
 
               <div className="overflow-x-auto">
@@ -1461,6 +1410,73 @@ export default function ChallengeAdminPage() {
             )}
           </motion.div>
 
+          {/* Wildcard Challenges */}
+          {wildcardChallenges.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.35 }}
+              className="mt-12"
+            >
+              <div className="mb-4">
+                <h2 className="text-2xl font-bold text-white mb-1">Wildcard Challenges</h2>
+                <p className="text-gray-400 text-sm">
+                  Bonus challenges that are <span className="text-amber-400">not required</span> for legion progression. They still award XP and will be hidden until unlocked.
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                {wildcardChallenges.map((challenge) => (
+                  <LiquidGlassCard
+                    key={`${challenge.level}-${challenge.name}`}
+                    shadowIntensity="sm"
+                    glowIntensity="sm"
+                    blurIntensity="xl"
+                    className="p-4 border border-amber-500/10"
+                  >
+                    <div className="flex flex-wrap gap-4 items-start">
+                      <div className="flex-1 min-w-[300px]">
+                        <div className="flex items-center gap-3 mb-2">
+                          <span className={`px-2 py-0.5 rounded text-xs font-medium ${LEVEL_COLORS[challenge.levelName]}`}>
+                            {challenge.levelName}
+                          </span>
+                          <span className="px-2 py-0.5 rounded text-xs border bg-amber-500/20 text-amber-400 border-amber-500/30">
+                            wildcard
+                          </span>
+                          <span className="text-amber-400 font-mono text-sm">+{challenge.xp.toLocaleString()} XP</span>
+                        </div>
+                        <h3 className="text-lg font-semibold text-white mb-1">{challenge.name}</h3>
+                        <p className="text-gray-400 text-sm">{challenge.description}</p>
+                      </div>
+                      <div className="flex-1 min-w-[400px]">
+                        <div className="mb-3">
+                          <span className="text-gray-500 text-xs uppercase tracking-wide">Event Type</span>
+                          <div className="text-cyan-400 font-mono text-sm mt-1">{challenge.eventType}</div>
+                        </div>
+                        <div className="mb-3">
+                          <span className="text-gray-500 text-xs uppercase tracking-wide">Tracking Logic</span>
+                          <div className="text-gray-300 text-sm mt-1">{challenge.trackingLogic}</div>
+                        </div>
+                        {challenge.eventData.length > 0 && (
+                          <div>
+                            <span className="text-gray-500 text-xs uppercase tracking-wide">Required Event Data</span>
+                            <div className="flex flex-wrap gap-2 mt-1">
+                              {challenge.eventData.map((data, i) => (
+                                <span key={i} className="px-2 py-0.5 bg-white/5 rounded text-xs text-gray-300 font-mono">
+                                  {data}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </LiquidGlassCard>
+                ))}
+              </div>
+            </motion.div>
+          )}
+
           {/* Event Types Reference */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -1486,7 +1502,6 @@ export default function ChallengeAdminPage() {
                 <div>
                   <h3 className="text-lg font-semibold text-white mb-3">View Events</h3>
                   <ul className="space-y-2 text-sm">
-                    <li><code className="text-cyan-400">order_viewed</code> - Expanded an order in marketplace</li>
                     <li><code className="text-cyan-400">chart_viewed</code> - Viewed price chart</li>
                     <li><code className="text-cyan-400">marketplace_visited</code> - Visited marketplace (deduplicated)</li>
                   </ul>

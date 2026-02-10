@@ -972,8 +972,6 @@ async function evaluateChallengesForUser(walletAddress: string, result: Backfill
       let pennyTradeCount = 0;
       const stableTokens = new Set(['DAI', 'USDC', 'USDT', 'USDL', 'WEDAI', 'WEUSDC', 'WEUSDT', 'PXDC', 'HEXDC']);
 
-      // Weekend Warrior tracking
-      const tradeDays = new Set<number>();
       // Multi-Fill tracking
       const orderFillers = new Map<string, Set<string>>();
       // Clean Sweep / AON Champion tracking
@@ -990,10 +988,6 @@ async function evaluateChallengesForUser(walletAddress: string, result: Backfill
           order_id?: number; is_all_or_nothing?: boolean;
           order_completed?: boolean; filler_wallet?: string;
         };
-
-        // Track day of week for Weekend Warrior
-        const tradeTime = new Date(event.created_at);
-        tradeDays.add(tradeTime.getUTCDay());
 
         // Penny trades
         if (data.volume_usd !== undefined && data.volume_usd > 0 && data.volume_usd < 1) pennyTradeCount++;
@@ -1040,16 +1034,13 @@ async function evaluateChallengesForUser(walletAddress: string, result: Backfill
         tryComplete(6, 'Token Master', 'bootcamp', 2000, count >= 40),
         tryComplete(7, 'Token Legend', 'bootcamp', 3000, count >= 50),
         tryComplete(8, 'Token God', 'bootcamp', 5000, count >= 75),
-        tryComplete(7, 'MAXI Maxi', 'bootcamp', 2000, tradedMaxi),
+        tryComplete(7, 'MAXI Maxi', 'wildcard', 2000, tradedMaxi),
         tryComplete(6, 'Ethereum Maxi', 'bootcamp', 1500, tradedWe),
 
         // Token volume barons
         tryComplete(5, 'HEX Baron', 'elite', 3000, totalHexTraded >= 1000000),
         tryComplete(6, 'PLS Baron', 'elite', 3000, totalPlsTraded >= 10000000),
         tryComplete(7, 'Stablecoin Baron', 'elite', 5000, totalStableTraded >= 100000),
-
-        // Weekend Warrior
-        tryComplete(1, 'Weekend Warrior', 'operations', 300, tradeDays.has(0) && tradeDays.has(6)),
 
         // Perfect Record
         tryComplete(4, 'Perfect Record', 'operations', 1500, stats.total_trades >= 10 && (stats as any).total_orders_cancelled === 0),
@@ -1061,20 +1052,20 @@ async function evaluateChallengesForUser(walletAddress: string, result: Backfill
         tryComplete(5, 'AON Champion', 'operations', 2500, completedAonOrders.size >= 3),
 
         // Multi-Fill
-        tryComplete(6, 'Multi-Fill', 'operations', 3000, maxFillers >= 5),
+        tryComplete(6, 'Multi-Fill', 'wildcard', 3000, maxFillers >= 5),
 
         // Full House
-        tryComplete(7, 'Full House', 'operations', 5000, partiallyFilledMakerOrders.size >= 3),
+        tryComplete(7, 'Full House', 'wildcard', 5000, partiallyFilledMakerOrders.size >= 3),
 
         // Penny Pincher
-        tryComplete(4, 'Penny Pincher', 'humiliation', 200, pennyTradeCount >= 10),
+        tryComplete(4, 'Penny Pincher', 'wildcard', 200, pennyTradeCount >= 10),
       ]);
     }
 
     // Order-based token-specific challenges (HTT, COM, pDAI)
     const { data: orderEvents } = await supabase
       .from('user_events')
-      .select('event_data')
+      .select('event_data, created_at')
       .eq('wallet_address', walletAddress)
       .eq('event_type', 'order_created');
 
@@ -1084,6 +1075,9 @@ async function evaluateChallengesForUser(walletAddress: string, result: Backfill
       let hasPDAI = false;
       let hasAboveMarketOrder = false;
       let hasBelowMarketOrder = false;
+      let hasDexToken = false;
+      let hasWeekendOrder = false;
+      const dexTokens = new Set(['PLSX', '9MM', '9INCH', 'PHUX', 'TIDE', 'UNI']);
 
       orderEvents.forEach((event) => {
         const data = event.event_data as {
@@ -1101,14 +1095,21 @@ async function evaluateChallengesForUser(walletAddress: string, result: Backfill
         if (sellToken === 'PDAI' || sellToken === 'DAI' || buyTokens.includes('PDAI') || buyTokens.includes('DAI')) hasPDAI = true;
         if (priceVsMarket > 0) hasAboveMarketOrder = true;
         if (priceVsMarket <= -50) hasBelowMarketOrder = true;
+        if (dexTokens.has(sellToken) || buyTokens.some(t => dexTokens.has(t))) hasDexToken = true;
+
+        // Weekend Warrior: order created on Saturday or Sunday
+        const orderDay = new Date(event.created_at).getUTCDay();
+        if (orderDay === 0 || orderDay === 6) hasWeekendOrder = true;
       });
 
       await Promise.all([
-        tryComplete(7, 'Bond Trader', 'bootcamp', 2000, hasHTT),
-        tryComplete(7, 'Coupon Clipper', 'bootcamp', 2000, hasCOM),
-        tryComplete(7, '$1 Inevitable', 'bootcamp', 2000, hasPDAI),
-        tryComplete(5, 'Fatfinger', 'humiliation', 150, hasAboveMarketOrder),
-        tryComplete(5, 'Dip Catcher', 'humiliation', 150, hasBelowMarketOrder),
+        tryComplete(7, 'Bond Trader', 'wildcard', 2000, hasHTT),
+        tryComplete(7, 'Coupon Clipper', 'wildcard', 2000, hasCOM),
+        tryComplete(7, '$1 Inevitable', 'wildcard', 2000, hasPDAI),
+        tryComplete(5, 'Fatfinger', 'wildcard', 150, hasAboveMarketOrder),
+        tryComplete(5, 'Dip Catcher', 'wildcard', 150, hasBelowMarketOrder),
+        tryComplete(1, 'DEX Degen', 'wildcard', 150, hasDexToken),
+        tryComplete(1, 'Weekend Warrior', 'operations', 300, hasWeekendOrder),
       ]);
     }
 
@@ -1150,8 +1151,8 @@ async function evaluateChallengesForUser(walletAddress: string, result: Backfill
         tryComplete(3, 'The Collector', 'operations', 600, uniqueOrdersClaimed >= 10),
         tryComplete(5, 'Claim Machine', 'operations', 2000, totalClaims >= 50),
         tryComplete(7, 'Profit Master', 'elite', 12000, totalClaims >= 100),
-        tryComplete(4, 'Iron Hands', 'elite', 1500, maxOrderAgeDays >= 30),
-        tryComplete(6, 'Diamond Hands', 'elite', 5000, maxOrderAgeDays >= 90),
+        tryComplete(4, 'Iron Hands', 'wildcard', 1500, maxOrderAgeDays >= 30),
+        tryComplete(6, 'Diamond Hands', 'wildcard', 5000, maxOrderAgeDays >= 90),
       ]);
     }
 
@@ -1167,7 +1168,7 @@ async function evaluateChallengesForUser(walletAddress: string, result: Backfill
         const d = e.event_data as { fill_percentage?: number };
         return (d.fill_percentage || 0) === 0;
       }).length;
-      await tryComplete(5, 'Ghost Town', 'humiliation', 200, ghostCount >= 5);
+      await tryComplete(5, 'Ghost Town', 'wildcard', 200, ghostCount >= 5);
     }
 
     // Recalculate total XP after all challenges are evaluated

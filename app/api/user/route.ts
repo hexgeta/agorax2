@@ -116,7 +116,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       .select('*', { count: 'exact', head: true })
       .eq('wallet_address', normalizedWallet)
       .eq('prestige_level', currentLegion)
-      .neq('category', 'humiliation');
+      .neq('category', 'wildcard');
 
     return NextResponse.json({
       success: true,

@@ -76,7 +76,7 @@ export function useEventTracking() {
     [address]
   );
 
-  // Debounced view event (for things like order_viewed, chart_viewed)
+  // Debounced view event (for things like chart_viewed)
   const trackViewEvent = useCallback(
     async (eventType: EventType, eventData?: EventData) => {
       const key = `${eventType}-${JSON.stringify(eventData || {})}`;
@@ -141,13 +141,6 @@ export function useEventTracking() {
     [trackEvent]
   );
 
-  const trackOrderViewed = useCallback(
-    (orderId: number, isUnique = false, tokenSymbol?: string) => {
-      return trackViewEvent('order_viewed', { order_id: orderId, unique_order: isUnique, token_symbol: tokenSymbol });
-    },
-    [trackViewEvent]
-  );
-
   const trackChartViewed = useCallback(
     (tokenPair?: string) => {
       return trackViewEvent('chart_viewed', { token_pair: tokenPair });
@@ -172,7 +165,6 @@ export function useEventTracking() {
     trackTradeCompleted,
     trackProceedsClaimed,
     trackOrderExpired,
-    trackOrderViewed,
     trackChartViewed,
     trackMarketplaceVisited,
 

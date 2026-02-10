@@ -121,7 +121,6 @@ export async function POST(request: NextRequest): Promise<NextResponse<TrackEven
     const UNVERIFIED_EVENTS: EventType[] = [
       'wallet_connected',
       'marketplace_visited',
-      'order_viewed',
       'chart_viewed',
     ];
 
@@ -374,7 +373,7 @@ async function checkAndCompleteChallenges(
   if (eventType === 'order_created') {
     const priceVsMarket = (eventData.price_vs_market_percent as number) || 0;
 
-    // Check Both Sides: did user also fill an order today?
+    // Check Playing Both Sides: did user also fill an order today?
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
@@ -387,15 +386,6 @@ async function checkAndCompleteChallenges(
       .eq('event_type', 'order_filled')
       .gte('created_at', today.toISOString())
       .lt('created_at', tomorrow.toISOString());
-
-    // Check Arbitrage Artist: did user fill an order within last 2 minutes?
-    const twoMinAgo = new Date(Date.now() - 120000).toISOString();
-    const { count: recentFills } = await supabase
-      .from('user_events')
-      .select('id', { count: 'exact', head: true })
-      .eq('wallet_address', walletAddress)
-      .eq('event_type', 'order_filled')
-      .gte('created_at', twoMinAgo);
 
     // Check Deja Vu: duplicate order params
     let hasDuplicateOrder = false;
@@ -423,12 +413,20 @@ async function checkAndCompleteChallenges(
     // Check Order Hoarder: 15+ active orders with 0 fills (approximate via stats)
     const activeUnfilled = stats.current_active_orders;
 
-    // Check for token-specific challenges (HTT, COM, pDAI)
+    // Check for token-specific challenges (HTT, COM, pDAI, DEX tokens)
     const sellTokenUpper = sellToken?.toUpperCase() || '';
     const buyTokensUpper = buyTokens?.map(t => t.toUpperCase()) || [];
     const hasHTT = sellTokenUpper === 'HTT' || buyTokensUpper.includes('HTT');
     const hasCOM = sellTokenUpper === 'COM' || buyTokensUpper.includes('COM');
     const hasPDAI = sellTokenUpper === 'PDAI' || sellTokenUpper === 'DAI' || buyTokensUpper.includes('PDAI') || buyTokensUpper.includes('DAI');
+
+    // DEX Degen: order with PulseChain DEX tokens
+    const dexTokens = new Set(['PLSX', '9MM', '9INCH', 'PHUX', 'TIDE', 'UNI']);
+    const hasDexToken = dexTokens.has(sellTokenUpper) || buyTokensUpper.some(t => dexTokens.has(t));
+
+    // Weekend Warrior: create order on Saturday or Sunday
+    const orderDay = new Date().getUTCDay();
+    const isWeekend = orderDay === 0 || orderDay === 6;
 
     await Promise.all([
       tryComplete(0, 'First Order', 'operations', 250, stats.total_orders_created >= 1),
@@ -439,27 +437,29 @@ async function checkAndCompleteChallenges(
       tryComplete(7, 'Order God', 'operations', 8000, stats.total_orders_created >= 500),
       tryComplete(8, 'Order Immortal', 'operations', 20000, stats.total_orders_created >= 1000),
       // Pricing challenges
-      tryComplete(5, 'Fatfinger', 'humiliation', 150, priceVsMarket > 0),
-      tryComplete(5, 'Dip Catcher', 'humiliation', 150, priceVsMarket <= -50),
-      // Both Sides (also checked on order_filled)
-      tryComplete(2, 'Both Sides', 'operations', 500, (fillsToday || 0) >= 1),
-      // Arbitrage Artist
-      tryComplete(4, 'Arbitrage Artist', 'operations', 1000, (recentFills || 0) >= 1),
+      tryComplete(5, 'Fatfinger', 'wildcard', 150, priceVsMarket > 0),
+      tryComplete(5, 'Dip Catcher', 'wildcard', 150, priceVsMarket <= -50),
+      // Playing Both Sides (also checked on order_filled)
+      tryComplete(2, 'Playing Both Sides', 'operations', 500, (fillsToday || 0) >= 1),
       // Deja Vu
-      tryComplete(2, 'Deja Vu', 'humiliation', 100, hasDuplicateOrder),
+      tryComplete(2, 'Deja Vu', 'wildcard', 100, hasDuplicateOrder),
       // Order Hoarder
-      tryComplete(5, 'Order Hoarder', 'humiliation', 300, activeUnfilled >= 15),
+      tryComplete(5, 'Order Hoarder', 'wildcard', 300, activeUnfilled >= 15),
       // Token-specific challenges
-      tryComplete(7, 'Bond Trader', 'bootcamp', 2000, hasHTT),
-      tryComplete(7, 'Coupon Clipper', 'bootcamp', 2000, hasCOM),
-      tryComplete(7, '$1 Inevitable', 'bootcamp', 2000, hasPDAI),
+      tryComplete(7, 'Bond Trader', 'wildcard', 2000, hasHTT),
+      tryComplete(7, 'Coupon Clipper', 'wildcard', 2000, hasCOM),
+      tryComplete(7, '$1 Inevitable', 'wildcard', 2000, hasPDAI),
+      // DEX Degen wildcard
+      tryComplete(1, 'DEX Degen', 'wildcard', 150, hasDexToken),
+      // Weekend Warrior
+      tryComplete(1, 'Weekend Warrior', 'operations', 300, isWeekend),
     ]);
   }
 
   if (eventType === 'order_filled') {
     const fillTimeSeconds = (eventData.fill_time_seconds as number) || Infinity;
 
-    // Check Both Sides: did user also create an order today?
+    // Check Playing Both Sides: did user also create an order today?
     const todayFill = new Date();
     todayFill.setUTCHours(0, 0, 0, 0);
     const tomorrowFill = new Date(todayFill);
@@ -479,16 +479,16 @@ async function checkAndCompleteChallenges(
       tryComplete(3, 'Fill Expert', 'operations', 800, stats.total_orders_filled >= 25),
       tryComplete(6, 'Fill Master', 'operations', 5000, stats.total_orders_filled >= 200),
       // Speed challenges
-      tryComplete(4, 'Speed Runner', 'humiliation', 400, fillTimeSeconds <= 30),
-      tryComplete(8, 'Sniper', 'humiliation', 2000, fillTimeSeconds <= 60),
-      // Both Sides (also checked on order_created)
-      tryComplete(2, 'Both Sides', 'operations', 500, (createdToday || 0) >= 1),
+      tryComplete(4, 'Speed Runner', 'wildcard', 400, fillTimeSeconds <= 30),
+      tryComplete(8, 'Sniper', 'wildcard', 2000, fillTimeSeconds <= 60),
+      // Playing Both Sides (also checked on order_created)
+      tryComplete(2, 'Playing Both Sides', 'operations', 500, (createdToday || 0) >= 1),
     ]);
   }
 
   if (eventType === 'order_cancelled') {
     const timeSinceCreation = (eventData.time_since_creation_seconds as number) || Infinity;
-    await tryComplete(0, 'Paper Hands', 'humiliation', 50, timeSinceCreation < 60);
+    await tryComplete(0, 'Paper Hands', 'wildcard', 50, timeSinceCreation < 60);
 
     // Indecisive/Total Chaos: multiple cancels in one day
     const today = new Date();
@@ -505,14 +505,14 @@ async function checkAndCompleteChallenges(
       .lt('created_at', tomorrow.toISOString());
 
     await Promise.all([
-      tryComplete(3, 'Indecisive', 'humiliation', 100, (cancelsToday || 0) >= 5),
-      tryComplete(7, 'Total Chaos', 'humiliation', 500, (cancelsToday || 0) >= 20),
+      tryComplete(3, 'Indecisive', 'wildcard', 100, (cancelsToday || 0) >= 5),
+      tryComplete(7, 'Total Chaos', 'wildcard', 500, (cancelsToday || 0) >= 20),
     ]);
   }
 
   if (eventType === 'order_expired') {
     const fillPercentage = (eventData.fill_percentage as number) || 0;
-    await tryComplete(3, 'Ghost Order', 'humiliation', 75, fillPercentage === 0);
+    await tryComplete(3, 'Ghost Order', 'wildcard', 75, fillPercentage === 0);
 
     // Ghost Town: 5+ expired orders with 0 fills
     if (fillPercentage === 0) {
@@ -527,33 +527,8 @@ async function checkAndCompleteChallenges(
         return (d.fill_percentage || 0) === 0;
       }).length || 0;
 
-      await tryComplete(5, 'Ghost Town', 'humiliation', 200, ghostCount >= 5);
+      await tryComplete(5, 'Ghost Town', 'wildcard', 200, ghostCount >= 5);
     }
-  }
-
-  // ---- order_viewed: single query for both unique orders and unique tokens ----
-  if (eventType === 'order_viewed') {
-    const { data: viewedEvents } = await supabase
-      .from('user_events')
-      .select('event_data')
-      .eq('wallet_address', walletAddress)
-      .eq('event_type', 'order_viewed');
-
-    const uniqueOrderIds = new Set<string>();
-    const uniqueTokensViewed = new Set<string>();
-    viewedEvents?.forEach((event) => {
-      const data = event.event_data as { order_id?: number; token_symbol?: string };
-      if (data.order_id !== undefined) uniqueOrderIds.add(String(data.order_id));
-      if (data.token_symbol) uniqueTokensViewed.add(data.token_symbol.toUpperCase());
-    });
-
-    const uniqueOrdersViewed = uniqueOrderIds.size;
-    await Promise.all([
-      tryComplete(0, 'Window Shopper', 'bootcamp', 100, uniqueOrdersViewed >= 10),
-      tryComplete(2, 'Market Scanner', 'bootcamp', 200, uniqueOrdersViewed >= 50),
-      tryComplete(3, 'Market Regular', 'bootcamp', 300, uniqueOrdersViewed >= 100),
-      tryComplete(1, 'Token Explorer', 'bootcamp', 150, uniqueTokensViewed.size >= 5),
-    ]);
   }
 
   // ---- proceeds_claimed: collector, claim machine, profit master, hands ----
@@ -591,20 +566,9 @@ async function checkAndCompleteChallenges(
       tryComplete(3, 'The Collector', 'operations', 600, uniqueOrdersClaimed >= 10),
       tryComplete(5, 'Claim Machine', 'operations', 2000, totalClaims >= 50),
       tryComplete(7, 'Profit Master', 'elite', 12000, totalClaims >= 100),
-      tryComplete(4, 'Iron Hands', 'elite', 1500, orderAgeDays >= 30),
-      tryComplete(6, 'Diamond Hands', 'elite', 5000, orderAgeDays >= 90),
+      tryComplete(4, 'Iron Hands', 'wildcard', 1500, orderAgeDays >= 30),
+      tryComplete(6, 'Diamond Hands', 'wildcard', 5000, orderAgeDays >= 90),
     ]);
-  }
-
-  // Price Watcher: Check chart views (10 times)
-  if (eventType === 'chart_viewed') {
-    const { count: chartViews } = await supabase
-      .from('user_events')
-      .select('id', { count: 'exact', head: true })
-      .eq('wallet_address', walletAddress)
-      .eq('event_type', 'chart_viewed');
-
-    await tryComplete(1, 'Price Watcher', 'bootcamp', 100, (chartViews || 0) >= 10);
   }
 
   // ---- trade_completed: single consolidated query for all trade-based challenges ----
@@ -628,8 +592,6 @@ async function checkAndCompleteChallenges(
     let pennyTradeCount = 0;
     const stableTokens = new Set(['DAI', 'USDC', 'USDT', 'USDL', 'WEDAI', 'WEUSDC', 'WEUSDT', 'PXDC', 'HEXDC']);
 
-    // For Weekend Warrior check
-    const tradeDays = new Set<number>(); // day of week (0=Sun, 6=Sat)
     // For Clean Sweep: track completed maker orders
     const completedMakerOrders = new Set<string>();
     // For AON Champion: track completed AON maker orders
@@ -652,10 +614,6 @@ async function checkAndCompleteChallenges(
         order_completed?: boolean;
         filler_wallet?: string;
       };
-
-      // Track day of week for Weekend Warrior
-      const tradeTime = new Date(event.created_at);
-      tradeDays.add(tradeTime.getUTCDay());
 
       // Track penny trades
       if (data.volume_usd !== undefined && data.volume_usd > 0 && data.volume_usd < 1) {
@@ -712,7 +670,7 @@ async function checkAndCompleteChallenges(
     // Fire all trade_completed challenges in parallel
     await Promise.all([
       // Single trade value challenges
-      tryComplete(0, 'Small Fish', 'elite', 300, volumeUsd >= 100),
+      tryComplete(0, 'Small Fry', 'elite', 300, volumeUsd >= 100),
       tryComplete(2, 'Rising Star', 'elite', 600, volumeUsd >= 500),
       tryComplete(3, 'Big Spender', 'elite', 1200, volumeUsd >= 1000),
       tryComplete(5, 'Whale Alert', 'elite', 4000, volumeUsd >= 10000),
@@ -753,19 +711,16 @@ async function checkAndCompleteChallenges(
       tryComplete(8, 'Token God', 'bootcamp', 5000, tokensTraded >= 75),
 
       // Token-specific challenges
-      tryComplete(4, 'HEX Enthusiast', 'bootcamp', 600, totalHexTraded >= 100000),
+      tryComplete(4, 'Hexican', 'bootcamp', 600, totalHexTraded >= 100000),
       tryComplete(5, 'PLS Stacker', 'bootcamp', 1000, totalPlsTraded >= 1000000),
-      tryComplete(7, 'MAXI Maxi', 'bootcamp', 2000, tradedMaxiToken),
+      tryComplete(7, 'MAXI Maxi', 'wildcard', 2000, tradedMaxiToken),
       tryComplete(6, 'Ethereum Maxi', 'bootcamp', 1500, tradedWeToken),
 
       // Time-based challenges
-      tryComplete(2, 'Night Owl', 'humiliation', 200, utcHour >= 3 && utcHour < 5),
-      tryComplete(3, 'Early Bird', 'humiliation', 250, utcHour === 0),
-      tryComplete(1, 'Micro Trader', 'humiliation', 75, volumeUsd > 0 && volumeUsd < 1),
-      tryComplete(4, 'Penny Pincher', 'humiliation', 200, pennyTradeCount >= 10),
-
-      // Weekend Warrior: traded on both Saturday (6) and Sunday (0)
-      tryComplete(1, 'Weekend Warrior', 'operations', 300, tradeDays.has(0) && tradeDays.has(6)),
+      tryComplete(2, 'Night Owl', 'wildcard', 200, utcHour >= 3 && utcHour < 5),
+      tryComplete(3, 'Early Bird', 'wildcard', 250, utcHour === 0),
+      tryComplete(1, 'Micro Trader', 'wildcard', 75, volumeUsd > 0 && volumeUsd < 1),
+      tryComplete(4, 'Penny Pincher', 'wildcard', 200, pennyTradeCount >= 10),
 
       // Perfect Record: 10+ trades with 0 cancellations
       tryComplete(4, 'Perfect Record', 'operations', 1500, stats.total_trades >= 10 && (stats as any).total_orders_cancelled === 0),
@@ -777,10 +732,10 @@ async function checkAndCompleteChallenges(
       tryComplete(5, 'AON Champion', 'operations', 2500, completedAonOrders.size >= 3),
 
       // Multi-Fill: single order filled by 5+ different wallets
-      tryComplete(6, 'Multi-Fill', 'operations', 3000, maxFillers >= 5),
+      tryComplete(6, 'Multi-Fill', 'wildcard', 3000, maxFillers >= 5),
 
       // Full House: 3 partially filled active maker orders simultaneously
-      tryComplete(7, 'Full House', 'operations', 5000, partiallyFilledMakerOrders.size >= 3),
+      tryComplete(7, 'Full House', 'wildcard', 5000, partiallyFilledMakerOrders.size >= 3),
 
       // Token volume barons
       tryComplete(5, 'HEX Baron', 'elite', 3000, totalHexTraded >= 1000000),
