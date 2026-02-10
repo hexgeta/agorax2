@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import type { TrackEventRequest, TrackEventResponse, CompletedChallenge, EventType } from '@/types/events';
 import { verifySessionToken } from '@/lib/auth';
+import { ACTION_XP, calculateTradeXp } from '@/constants/xp';
 
 // Use service role for server-side operations
 const supabaseUrl = process.env.SUPABASE_URL!;
@@ -9,22 +10,26 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-// XP values for different events (base values, challenges give additional XP)
-// Only transaction-based events give XP - view events are tracked but give 0 XP
-const EVENT_XP: Partial<Record<EventType, number>> = {
-  wallet_connected: 0,
-  order_created: 0, // XP comes from challenges only
-  order_filled: 0, // XP comes from challenges only
-  order_cancelled: 0,
-  order_expired: 0,
-  proceeds_claimed: 0, // XP comes from challenges only
-  order_viewed: 0, // No incremental XP for views
-  chart_viewed: 0, // No incremental XP for views
-  marketplace_visited: 0, // No incremental XP for views
-  trade_completed: 0, // XP comes from challenges only
-  streak_updated: 0,
-  prestige_unlocked: 0,
-};
+// Compute base XP for an event. On-chain actions earn XP per constants/xp.ts;
+// view events and housekeeping events earn nothing.
+function getEventXp(eventType: EventType, eventData: Record<string, unknown>): number {
+  switch (eventType) {
+    case 'order_created':
+      return ACTION_XP.ORDER_CREATED;       // 20 XP
+    case 'order_filled':
+      return ACTION_XP.ORDER_FILLED;        // 25 XP
+    case 'proceeds_claimed':
+      return ACTION_XP.PROCEEDS_CLAIMED;    // 10 XP
+    case 'trade_completed': {
+      // 25 XP (taker) or 30 XP (maker) + volume bonus (1 XP per $10 USD, capped at 100)
+      const isMaker = (eventData.is_maker as boolean) || false;
+      const volumeUsd = (eventData.volume_usd as number) || 0;
+      return calculateTradeXp(isMaker, volumeUsd);
+    }
+    default:
+      return 0;
+  }
+}
 
 // Rate limiting: max events per wallet per minute
 const RATE_LIMIT_WINDOW_MS = 60000; // 1 minute
@@ -95,7 +100,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<TrackEven
     }
 
     const normalizedWallet = wallet_address.toLowerCase();
-    const baseXp = EVENT_XP[event_type] || 0;
+    const baseXp = getEventXp(event_type, event_data);
 
     // Events that don't require authentication (harmless view events)
     const UNVERIFIED_EVENTS: EventType[] = [
