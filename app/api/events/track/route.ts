@@ -96,6 +96,39 @@ export async function POST(request: NextRequest): Promise<NextResponse<TrackEven
     const normalizedWallet = wallet_address.toLowerCase();
     const baseXp = EVENT_XP[event_type] || 0;
 
+    // Events that don't require on-chain verification (no XP, no meaningful challenges)
+    const UNVERIFIED_EVENTS: EventType[] = [
+      'wallet_connected',
+      'marketplace_visited',
+      'order_viewed',
+      'chart_viewed',
+    ];
+
+    // Verify wallet has on-chain activity before accepting challenge-triggering events.
+    // A wallet must have created at least one order or filled at least one order on the
+    // smart contract. This data comes from the blockchain sync cron, so it's trustworthy.
+    if (!UNVERIFIED_EVENTS.includes(event_type)) {
+      const [{ count: orderCount }, { count: fillCount }] = await Promise.all([
+        supabase
+          .from('orders')
+          .select('order_id', { count: 'exact', head: true })
+          .eq('maker_address', normalizedWallet)
+          .limit(1),
+        supabase
+          .from('order_fills')
+          .select('id', { count: 'exact', head: true })
+          .eq('filler_address', normalizedWallet)
+          .limit(1),
+      ]);
+
+      if (!orderCount && !fillCount) {
+        return NextResponse.json(
+          { success: false, error: 'Wallet has no on-chain activity' },
+          { status: 403 },
+        );
+      }
+    }
+
     // One-off events: check if already recorded for this user
     const ONE_OFF_EVENTS: EventType[] = ['wallet_connected', 'marketplace_visited'];
     if (ONE_OFF_EVENTS.includes(event_type)) {
