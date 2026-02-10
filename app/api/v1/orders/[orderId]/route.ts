@@ -26,7 +26,7 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ orderId: string }> }
 ): Promise<Response> {
-  const rateLimited = checkRateLimit(request, RATE_LIMIT);
+  const rateLimited = await checkRateLimit(request, RATE_LIMIT);
   if (rateLimited) return rateLimited;
 
   const { orderId: orderIdStr } = await params;
@@ -173,7 +173,7 @@ export async function GET(
 
     await Promise.all(promises);
 
-    return apiSuccess(result, request, RATE_LIMIT);
+    return apiSuccess(result, request);
   } catch (error) {
     console.error('Order detail API error:', error);
     return apiError('Internal server error', 500);

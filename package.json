@@ -37,6 +37,8 @@
     "@shadergradient/react": "^2.4.20",
     "@supabase/supabase-js": "^2.39.0",
     "@tanstack/react-query": "^5.59.20",
+    "@upstash/ratelimit": "^2.0.8",
+    "@upstash/redis": "^1.36.2",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
     "framer-motion": "^10.18.0",

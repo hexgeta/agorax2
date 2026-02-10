@@ -7,7 +7,7 @@ import {
   REQUIRED_PARTY_TOKENS, 
   REQUIRED_TEAM_TOKENS 
 } from '@/config/paywall';
-import { rateLimit, RATE_LIMITS } from '@/utils/rateLimit';
+import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 
 // Create a public client for blockchain reads
 const publicClient = createPublicClient({
@@ -28,7 +28,7 @@ const ERC20_BALANCE_ABI = [
 
 export async function POST(request: NextRequest) {
   // Apply rate limiting
-  const rateLimitResponse = rateLimit(request, RATE_LIMITS.validation);
+  const rateLimitResponse = await checkRateLimit(request, RATE_LIMITS.validation);
   if (rateLimitResponse) {
     return rateLimitResponse;
   }

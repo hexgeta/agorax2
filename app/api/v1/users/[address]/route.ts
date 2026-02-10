@@ -29,7 +29,7 @@ export async function GET(
   { params }: { params: Promise<{ address: string }> }
 ): Promise<Response> {
   // Rate limit
-  const rateLimited = checkRateLimit(request, RATE_LIMIT);
+  const rateLimited = await checkRateLimit(request, RATE_LIMIT);
   if (rateLimited) return rateLimited;
 
   const { address } = await params;
@@ -181,7 +181,7 @@ export async function GET(
 
     await Promise.all(promises);
 
-    return apiSuccess(result, request, RATE_LIMIT);
+    return apiSuccess(result, request);
   } catch (error) {
     console.error('User API error:', error);
     return apiError('Internal server error', 500);

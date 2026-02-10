@@ -14,7 +14,7 @@ const RATE_LIMIT = { limit: 20, windowSeconds: 60 };
  * Returns protocol-wide aggregate statistics.
  */
 export async function GET(request: NextRequest): Promise<Response> {
-  const rateLimited = checkRateLimit(request, RATE_LIMIT);
+  const rateLimited = await checkRateLimit(request, RATE_LIMIT);
   if (rateLimited) return rateLimited;
 
   try {
@@ -113,7 +113,6 @@ export async function GET(request: NextRequest): Promise<Response> {
         },
       },
       request,
-      RATE_LIMIT
     );
   } catch (error) {
     console.error('Stats API error:', error);
