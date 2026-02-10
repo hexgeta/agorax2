@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import {
+  LEGION_XP_THRESHOLDS,
+  LEGIONS,
+  calculateLegionProgress,
+  getXpForNextLevel,
+  getXpFloor,
+} from '@/constants/xp';
 
 const supabaseUrl = process.env.SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -74,6 +81,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const defaultStats = {
       wallet_address: normalizedWallet,
       total_xp: 0,
+      action_xp: 0,
       current_prestige: 0,
       total_orders_created: 0,
       total_orders_filled: 0,
@@ -89,11 +97,44 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       updated_at: new Date().toISOString(),
     };
 
+    const stats = userData || defaultStats;
+    const currentLegion = stats.current_prestige || 0;
+
+    // Calculate XP progression data
+    const xpFloor = getXpFloor(currentLegion);
+    const xpCeiling = getXpForNextLevel(currentLegion);
+    const xpProgress = calculateLegionProgress(stats.total_xp || 0, currentLegion);
+    const xpNeeded = xpCeiling === Infinity ? 0 : xpCeiling - (stats.total_xp || 0);
+
+    // Get legion info
+    const currentLegionInfo = LEGIONS[currentLegion] || LEGIONS[0];
+    const nextLegionInfo = currentLegion < 8 ? LEGIONS[currentLegion + 1] : null;
+
+    // Fetch completed challenges count for current legion
+    const { count: completedChallengesCount } = await supabase
+      .from('completed_challenges')
+      .select('*', { count: 'exact', head: true })
+      .eq('wallet_address', normalizedWallet)
+      .eq('prestige_level', currentLegion)
+      .neq('category', 'humiliation');
+
     return NextResponse.json({
       success: true,
       data: {
-        stats: userData || defaultStats,
+        stats,
         activity: activityData || [],
+        progression: {
+          currentLegion: currentLegionInfo,
+          nextLegion: nextLegionInfo,
+          totalXp: stats.total_xp || 0,
+          actionXp: stats.action_xp || 0,
+          xpFloor,
+          xpCeiling: xpCeiling === Infinity ? null : xpCeiling,
+          xpProgress: Math.round(xpProgress * 100) / 100, // Round to 2 decimals
+          xpNeeded: xpNeeded > 0 ? xpNeeded : 0,
+          challengesCompleted: completedChallengesCount || 0,
+          isMaxLevel: currentLegion >= 8,
+        },
       },
     });
   } catch (error) {

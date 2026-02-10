@@ -6,6 +6,13 @@ import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 import PixelBlastBackground from '@/components/ui/PixelBlastBackground';
 import { useUserAchievements } from '@/hooks/useUserAchievements';
 import { PixelSpinner } from '@/components/ui/PixelSpinner';
+import { LegionProgressBar } from '@/components/ui/LegionProgressBar';
+import {
+  LEGION_XP_THRESHOLDS,
+  calculateLegionProgress,
+  getXpFloor,
+  getXpForNextLevel,
+} from '@/constants/xp';
 
 // Prestige levels with Greek letters - user starts at Alpha
 const PRESTIGE_LEVELS = [
@@ -508,71 +515,129 @@ function AllChallengesTable({
   const prestigeChallenges = PRESTIGE_CHALLENGES[prestigeIndex];
   if (!prestigeChallenges) return null;
 
-  // Flatten all challenges into one list: required first, then bonus (humiliation)
-  const allChallenges: { challenge: Challenge; isBonus: boolean }[] = [];
+  // Get required challenges (non-humiliation)
+  const requiredChallenges: Challenge[] = [];
   (Object.keys(prestigeChallenges) as ChallengeCategory[]).forEach((category) => {
     if (category !== 'humiliation') {
-      prestigeChallenges[category].challenges.forEach((c) => allChallenges.push({ challenge: c, isBonus: false }));
+      prestigeChallenges[category].challenges.forEach((c) => requiredChallenges.push(c));
     }
   });
-  prestigeChallenges.humiliation.challenges.forEach((c) => allChallenges.push({ challenge: c, isBonus: true }));
+
+  // Get wildcard challenges (humiliation category)
+  const wildcardChallenges = prestigeChallenges.humiliation.challenges;
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full">
-        <thead>
-          <tr className="border-b border-white/10">
-            <th className="text-left py-3 px-4 text-gray-400 font-medium text-sm">Challenge</th>
-            <th className="text-left py-3 px-4 text-gray-400 font-medium text-sm hidden sm:table-cell">Requirement</th>
-            <th className="text-right py-3 px-4 text-gray-400 font-medium text-sm">XP</th>
-          </tr>
-        </thead>
-        <tbody>
-          {allChallenges.map(({ challenge, isBonus }) => {
-            const isCompleted = completedChallenges.includes(challenge.name);
-            return (
-              <tr
-                key={challenge.name}
-                className={`border-b border-white/5 transition-colors hover:bg-white/5 ${isCompleted ? 'opacity-60' : ''}`}
-              >
-                <td className="py-3 px-4">
-                  <div className="flex items-center gap-3">
-                    {isCompleted ? (
-                      <div className="w-5 h-5 rounded-full bg-green-500/20 flex items-center justify-center flex-shrink-0">
-                        <svg className="w-3 h-3 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
-                      </div>
-                    ) : (
-                      <div className={`w-5 h-5 rounded-full border flex-shrink-0 ${isBonus ? 'border-red-500/30' : 'border-white/20'}`} />
-                    )}
-                    <div>
-                      <div className="flex items-center gap-2">
+    <div className="space-y-6">
+      {/* Required Challenges Table */}
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-white/10">
+              <th className="text-left py-3 px-4 text-gray-400 font-medium text-sm">Challenge</th>
+              <th className="text-left py-3 px-4 text-gray-400 font-medium text-sm hidden sm:table-cell">Requirement</th>
+              <th className="text-right py-3 px-4 text-gray-400 font-medium text-sm">XP</th>
+            </tr>
+          </thead>
+          <tbody>
+            {requiredChallenges.map((challenge) => {
+              const isCompleted = completedChallenges.includes(challenge.name);
+              return (
+                <tr
+                  key={challenge.name}
+                  className={`border-b border-white/5 transition-colors hover:bg-white/5 ${isCompleted ? 'opacity-60' : ''}`}
+                >
+                  <td className="py-3 px-4">
+                    <div className="flex items-center gap-3">
+                      {isCompleted ? (
+                        <div className="w-5 h-5 rounded-full bg-green-500/20 flex items-center justify-center flex-shrink-0">
+                          <svg className="w-3 h-3 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
+                      ) : (
+                        <div className="w-5 h-5 rounded-full border border-white/20 flex-shrink-0" />
+                      )}
+                      <div>
                         <span className={`font-medium ${isCompleted ? 'text-gray-400 line-through' : 'text-white'}`}>
                           {challenge.name}
                         </span>
-                        {isBonus && (
-                          <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 leading-none">
-                            Bonus
-                          </span>
-                        )}
+                        <div className="text-gray-500 text-sm">{challenge.description}</div>
+                        <div className="text-gray-500 text-xs sm:hidden mt-1">{challenge.requirement}</div>
                       </div>
-                      <div className="text-gray-500 text-sm">{challenge.description}</div>
-                      <div className="text-gray-500 text-xs sm:hidden mt-1">{challenge.requirement}</div>
                     </div>
-                  </div>
-                </td>
-                <td className="py-3 px-4 text-gray-400 text-sm hidden sm:table-cell">{challenge.requirement}</td>
-                <td className="py-3 px-4 text-right">
-                  <span className={`font-mono font-medium ${isCompleted ? 'text-gray-500' : isBonus ? 'text-red-400' : 'text-amber-400'}`}>
-                    +{challenge.xp.toLocaleString()}
-                  </span>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                  </td>
+                  <td className="py-3 px-4 text-gray-400 text-sm hidden sm:table-cell">{challenge.requirement}</td>
+                  <td className="py-3 px-4 text-right">
+                    <span className={`font-mono font-medium ${isCompleted ? 'text-gray-500' : 'text-amber-400'}`}>
+                      +{challenge.xp.toLocaleString()}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Wildcard Challenges Section */}
+      {wildcardChallenges.length > 0 && (
+        <div className="mt-6 pt-6 border-t border-white/10">
+          <div className="flex items-center gap-3 mb-4">
+            <span className="text-xl">🎲</span>
+            <div>
+              <h3 className="text-lg font-semibold text-purple-400">Wildcard Challenges</h3>
+              <p className="text-gray-500 text-sm">Fun bonus challenges - not required for advancement</p>
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <tbody>
+                {wildcardChallenges.map((challenge) => {
+                  const isCompleted = completedChallenges.includes(challenge.name);
+                  return (
+                    <tr
+                      key={challenge.name}
+                      className={`border-b border-white/5 transition-colors hover:bg-purple-500/5 ${isCompleted ? 'opacity-60' : ''}`}
+                    >
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-3">
+                          {isCompleted ? (
+                            <div className="w-5 h-5 rounded-full bg-purple-500/20 flex items-center justify-center flex-shrink-0">
+                              <svg className="w-3 h-3 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                            </div>
+                          ) : (
+                            <div className="w-5 h-5 rounded-full border border-purple-500/30 flex-shrink-0" />
+                          )}
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className={`font-medium ${isCompleted ? 'text-gray-400 line-through' : 'text-white'}`}>
+                                {challenge.name}
+                              </span>
+                              <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400 leading-none">
+                                Wildcard
+                              </span>
+                            </div>
+                            <div className="text-gray-500 text-sm">{challenge.description}</div>
+                            <div className="text-gray-500 text-xs sm:hidden mt-1">{challenge.requirement}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-gray-400 text-sm hidden sm:table-cell">{challenge.requirement}</td>
+                      <td className="py-3 px-4 text-right">
+                        <span className={`font-mono font-medium ${isCompleted ? 'text-gray-500' : 'text-purple-400'}`}>
+                          +{challenge.xp.toLocaleString()}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -639,6 +704,23 @@ export default function RanksPage() {
         }, 0)
     : 0;
 
+  // Calculate challenges for CURRENT ACTIVE prestige (used in progress bar)
+  const activeLegionIndex = currentActivePrestige >= 0 ? currentActivePrestige : 0;
+  const activePrestigeChallenges = PRESTIGE_CHALLENGES[activeLegionIndex];
+  const completedInActivePrestige = userData.completedChallenges[activeLegionIndex] || [];
+  const requiredInActivePrestige = activePrestigeChallenges
+    ? (Object.keys(activePrestigeChallenges) as ChallengeCategory[])
+        .filter((cat) => cat !== 'humiliation')
+        .reduce((acc, cat) => acc + activePrestigeChallenges[cat].challenges.length, 0)
+    : 0;
+  const requiredCompletedInActive = activePrestigeChallenges
+    ? (Object.keys(activePrestigeChallenges) as ChallengeCategory[])
+        .filter((cat) => cat !== 'humiliation')
+        .reduce((acc, cat) => {
+          return acc + activePrestigeChallenges[cat].challenges.filter((c) => completedInActivePrestige.includes(c.name)).length;
+        }, 0)
+    : 0;
+
   return (
     <main className="flex min-h-screen flex-col items-center relative overflow-hidden">
       {/* Animated background */}
@@ -661,8 +743,22 @@ export default function RanksPage() {
               blurIntensity="xl"
               className="p-4 md:p-6"
             >
+              {/* XP Progress Bar - only show when viewing current active legion */}
+              {selectedPrestige === activeLegionIndex && (
+                <div className="mb-6">
+                  <LegionProgressBar
+                    currentLegion={activeLegionIndex}
+                    totalXp={userData.currentXp}
+                    xpProgress={calculateLegionProgress(userData.currentXp, activeLegionIndex)}
+                    xpFloor={getXpFloor(activeLegionIndex)}
+                    xpCeiling={getXpForNextLevel(activeLegionIndex)}
+                    challengesCompleted={requiredCompletedInActive}
+                    requiredChallenges={requiredInActivePrestige}
+                  />
+                </div>
+              )}
               <p className="text-gray-400 text-sm mb-4 text-center">
-                Complete all required challenges to unlock the next legion.
+                Complete all required challenges AND reach the XP threshold to unlock the next legion.
               </p>
               <div className="flex items-center justify-center gap-2 md:gap-3 flex-wrap">
                 {PRESTIGE_LEVELS.map((prestige, index) => {

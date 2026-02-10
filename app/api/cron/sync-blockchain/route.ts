@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { createPublicClient, http, parseAbiItem } from 'viem';
 import { pulsechain } from 'viem/chains';
 import { TOKEN_CONSTANTS } from '@/constants/crypto';
+import { ACTION_XP, calculateVolumeBonus } from '@/constants/xp';
 
 // Supabase with service role for writes
 const supabaseUrl = process.env.SUPABASE_URL!;
@@ -59,14 +60,12 @@ const ORDER_PROCEEDS_COLLECTED_EVENT = parseAbiItem(
   'event OrderProceedsCollected(address indexed user, uint256 indexed orderID)'
 );
 
-const EVENT_XP: Record<string, number> = {
-  order_created: 10,
-  order_filled: 10,
-  order_cancelled: 0,
-  proceeds_claimed: 5,
-  trade_completed: 25,
-  wallet_connected: 0,
-};
+// XP values now come from constants/xp.ts
+// ACTION_XP.ORDER_CREATED = 20
+// ACTION_XP.ORDER_FILLED = 25
+// ACTION_XP.ORDER_FILLED_AS_MAKER = 30
+// ACTION_XP.PROCEEDS_CLAIMED = 10
+// Plus volume bonus: +1 XP per $10 USD (capped at 100)
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
@@ -241,13 +240,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
       const sellDecimals = getTokenDecimals(sellToken);
 
-      // Record event (dedup via tx_hash)
+      // Record event (dedup via tx_hash) - 20 XP for order creation
       await recordEvent(owner, 'order_created', {
         order_id: Number(orderId),
         sell_token: getTokenTicker(sellToken),
         sell_amount: formatAmount(sellAmount, sellDecimals).toString(),
         tx_hash: log.transactionHash,
-      }, EVENT_XP.order_created, timestamp);
+      }, ACTION_XP.ORDER_CREATED, timestamp);
 
       // Write to orders table
       try {
@@ -311,40 +310,48 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
       const orderMeta = orderOwnerMap.get(orderId);
 
-      // Record order_filled for filler
+      // Record order_filled for filler - 25 XP for filling an order
       await recordEvent(buyer, 'order_filled', {
         order_id: Number(orderId),
         buy_token_used: buyTicker,
         fill_amount: formatAmount(buyAmount, buyDecimals).toString(),
         tx_hash: log.transactionHash,
-      }, EVENT_XP.order_filled, timestamp);
+      }, ACTION_XP.ORDER_FILLED, timestamp);
 
-      // Record trade_completed for filler (taker)
+      // Record trade_completed for filler (taker) and maker
+      // Note: volume_usd is 0 here as we don't have price data in sync
+      // In production, this would be calculated from DEX prices
       if (orderMeta) {
+        const volumeUsd = 0; // TODO: Calculate from token prices
+        const volumeBonus = calculateVolumeBonus(volumeUsd);
+
+        // Taker XP: base order_filled XP already awarded above, no additional XP for trade_completed
+        // We only record trade_completed for stats tracking
         await recordEvent(buyer, 'trade_completed', {
           order_id: Number(orderId),
           sell_token: orderMeta.sellTicker,
           buy_token: buyTicker,
           sell_amount: '0',
           buy_amount: formatAmount(buyAmount, buyDecimals).toString(),
-          volume_usd: 0,
+          volume_usd: volumeUsd,
           is_maker: false,
           filler_wallet: buyer,
           tx_hash: log.transactionHash,
-        }, EVENT_XP.trade_completed, timestamp);
+        }, volumeBonus, timestamp); // Only volume bonus, no base XP (already got ORDER_FILLED)
 
-        // Record trade_completed for maker
+        // Maker gets ORDER_FILLED_AS_MAKER XP (30) + volume bonus
+        const makerXp = ACTION_XP.ORDER_FILLED_AS_MAKER + volumeBonus;
         await recordEvent(orderMeta.owner, 'trade_completed', {
           order_id: Number(orderId),
           sell_token: orderMeta.sellTicker,
           buy_token: buyTicker,
           sell_amount: '0',
           buy_amount: formatAmount(buyAmount, buyDecimals).toString(),
-          volume_usd: 0,
+          volume_usd: volumeUsd,
           is_maker: true,
           filler_wallet: buyer,
           tx_hash: log.transactionHash,
-        }, EVENT_XP.trade_completed, timestamp);
+        }, makerXp, timestamp);
       }
 
       // Write to order_fills table
@@ -380,11 +387,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       const orderMeta = orderOwnerMap.get(orderId);
       const timeSinceCreation = orderMeta ? Math.max(0, timestamp - orderMeta.timestamp) : 0;
 
+      // Order cancelled - no XP awarded
       await recordEvent(user, 'order_cancelled', {
         order_id: Number(orderId),
         time_since_creation_seconds: timeSinceCreation,
         tx_hash: log.transactionHash,
-      }, EVENT_XP.order_cancelled, timestamp);
+      }, ACTION_XP.ORDER_CANCELLED, timestamp);
 
       // Write to order_cancellations table
       try {
@@ -420,10 +428,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       const timestamp = blockTimestamps.get(log.blockNumber) || 0;
       if (!orderId) continue;
 
+      // Proceeds claimed - 10 XP
       await recordEvent(user, 'proceeds_claimed', {
         order_id: Number(orderId),
         tx_hash: log.transactionHash,
-      }, EVENT_XP.proceeds_claimed, timestamp);
+      }, ACTION_XP.PROCEEDS_CLAIMED, timestamp);
 
       // Write to order_proceeds table
       try {
@@ -566,6 +575,7 @@ async function recalculateUserStats(wallet: string) {
       .eq('wallet_address', wallet);
 
     const challengeXpTotal = challengeXp?.reduce((sum, c) => sum + (c.xp_awarded || 0), 0) || 0;
+    const actionXp = totalXp; // totalXp from events is the action XP
 
     // Query orders table for accurate current_active_orders count
     // Only count orders that are status 0 (active) AND not expired (expiration 0 means no expiry, or expiration > now)
@@ -578,7 +588,8 @@ async function recalculateUserStats(wallet: string) {
       .or(`expiration.eq.0,expiration.gt.${nowUnix}`);
 
     const updateData: Record<string, any> = {
-      total_xp: totalXp + challengeXpTotal,
+      action_xp: actionXp, // XP from actions (order creates, fills, etc.)
+      total_xp: actionXp + challengeXpTotal, // Total = action XP + challenge XP
       total_orders_created: ordersCreated,
       total_orders_filled: ordersFilled,
       total_orders_cancelled: ordersCancelled,
