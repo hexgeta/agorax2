@@ -46,8 +46,8 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Allow cron jobs authenticated by bearer token (no Origin header)
-  if (pathname.startsWith('/api/cron/') || pathname.startsWith('/api/events/backfill')) {
+  // Allow server-to-server routes authenticated by bearer token (no Origin header)
+  if (pathname.startsWith('/api/cron/') || pathname.startsWith('/api/events/backfill') || pathname.startsWith('/api/admin/')) {
     const authHeader = request.headers.get('authorization');
     if (authHeader?.startsWith('Bearer ')) {
       return NextResponse.next();

@@ -28,6 +28,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         .select(
           'wallet_address, total_xp, current_prestige, total_orders_created, total_orders_filled, total_trades, total_volume_usd'
         )
+        .neq('is_blacklisted', true)
         .order('total_xp', { ascending: false })
         .range(offset, offset + limit - 1);
 

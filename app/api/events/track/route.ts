@@ -100,6 +100,21 @@ export async function POST(request: NextRequest): Promise<NextResponse<TrackEven
     }
 
     const normalizedWallet = wallet_address.toLowerCase();
+
+    // Reject blacklisted wallets immediately
+    const { data: userRow } = await supabase
+      .from('users')
+      .select('is_blacklisted')
+      .eq('wallet_address', normalizedWallet)
+      .maybeSingle();
+
+    if (userRow?.is_blacklisted) {
+      return NextResponse.json(
+        { success: false, error: 'Account suspended' },
+        { status: 403 },
+      );
+    }
+
     const baseXp = getEventXp(event_type, event_data);
 
     // Events that don't require authentication (harmless view events)
