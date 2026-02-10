@@ -8,6 +8,7 @@ import { useTransaction } from '@/context/TransactionContext'
 import { DisclaimerDialog } from './DisclaimerDialog'
 import Link from 'next/link'
 import { useEventTracking } from '@/hooks/useEventTracking'
+import { useWalletAuth } from '@/hooks/useWalletAuth'
 // import { PrestigeBadge } from './PrestigeBadge'
 
 interface ConnectButtonProps {
@@ -18,6 +19,8 @@ interface ConnectButtonProps {
 export const ConnectButton = ({ connectedText, connectedHref }: ConnectButtonProps = {}) => {
   const { isConnected, address } = useAccount()
   const { trackWalletConnected } = useEventTracking()
+  // Auto-triggers "Sign message" popup on wallet connect to prove ownership
+  useWalletAuth()
 
   // Track wallet connection event (API handles deduplication)
   useEffect(() => {

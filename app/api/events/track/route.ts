@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import type { TrackEventRequest, TrackEventResponse, CompletedChallenge, EventType } from '@/types/events';
+import { verifySessionToken } from '@/lib/auth';
 
 // Use service role for server-side operations
 const supabaseUrl = process.env.SUPABASE_URL!;
@@ -96,7 +97,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<TrackEven
     const normalizedWallet = wallet_address.toLowerCase();
     const baseXp = EVENT_XP[event_type] || 0;
 
-    // Events that don't require on-chain verification (no XP, no meaningful challenges)
+    // Events that don't require authentication (harmless view events)
     const UNVERIFIED_EVENTS: EventType[] = [
       'wallet_connected',
       'marketplace_visited',
@@ -104,26 +105,31 @@ export async function POST(request: NextRequest): Promise<NextResponse<TrackEven
       'chart_viewed',
     ];
 
-    // Verify wallet has on-chain activity before accepting challenge-triggering events.
-    // A wallet must have created at least one order or filled at least one order on the
-    // smart contract. This data comes from the blockchain sync cron, so it's trustworthy.
+    // For challenge-triggering events, require a valid signed session token.
+    // This proves the caller owns the wallet (they signed a message with it).
     if (!UNVERIFIED_EVENTS.includes(event_type)) {
-      const [{ count: orderCount }, { count: fillCount }] = await Promise.all([
-        supabase
-          .from('orders')
-          .select('order_id', { count: 'exact', head: true })
-          .eq('maker_address', normalizedWallet)
-          .limit(1),
-        supabase
-          .from('order_fills')
-          .select('id', { count: 'exact', head: true })
-          .eq('filler_address', normalizedWallet)
-          .limit(1),
-      ]);
+      const authHeader = request.headers.get('authorization');
+      const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
 
-      if (!orderCount && !fillCount) {
+      if (!token) {
         return NextResponse.json(
-          { success: false, error: 'Wallet has no on-chain activity' },
+          { success: false, error: 'Authentication required. Please verify wallet ownership.' },
+          { status: 401 },
+        );
+      }
+
+      const tokenWallet = verifySessionToken(token);
+      if (!tokenWallet) {
+        return NextResponse.json(
+          { success: false, error: 'Session expired or invalid. Please re-verify wallet.' },
+          { status: 401 },
+        );
+      }
+
+      // Ensure the token's wallet matches the request's wallet
+      if (tokenWallet !== normalizedWallet) {
+        return NextResponse.json(
+          { success: false, error: 'Token wallet mismatch' },
           { status: 403 },
         );
       }
