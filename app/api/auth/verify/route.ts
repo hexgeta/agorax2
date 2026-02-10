@@ -40,13 +40,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Issue a stateless session token
-    const { token, expiresAt } = createSessionToken(wallet_address);
+    // Issue a stateless session token (no expiry)
+    const token = createSessionToken(wallet_address);
 
     return NextResponse.json({
       success: true,
       token,
-      expires_at: expiresAt,
     });
   } catch (error) {
     console.error('Auth verify error:', error);

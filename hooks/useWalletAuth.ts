@@ -9,17 +9,15 @@ const STORAGE_KEY = 'agorax-session';
 interface StoredSession {
   token: string;
   wallet: string;
-  expiresAt: number;
 }
 
 function getStoredSession(): StoredSession | null {
   try {
-    const raw = sessionStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const session: StoredSession = JSON.parse(raw);
-    // Expired or missing fields
-    if (!session.token || !session.wallet || Date.now() > session.expiresAt) {
-      sessionStorage.removeItem(STORAGE_KEY);
+    if (!session.token || !session.wallet) {
+      localStorage.removeItem(STORAGE_KEY);
       return null;
     }
     return session;
@@ -29,11 +27,11 @@ function getStoredSession(): StoredSession | null {
 }
 
 function storeSession(session: StoredSession) {
-  sessionStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
 }
 
 function clearSession() {
-  sessionStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(STORAGE_KEY);
 }
 
 export function useWalletAuth() {
@@ -43,7 +41,7 @@ export function useWalletAuth() {
   const [isVerifying, setIsVerifying] = useState(false);
   const verifyAttempted = useRef<string | null>(null);
 
-  // Restore session from sessionStorage on mount / wallet change
+  // Restore session from localStorage on mount / wallet change
   useEffect(() => {
     if (!address) {
       setSessionToken(null);
@@ -109,7 +107,6 @@ export function useWalletAuth() {
         const session: StoredSession = {
           token: result.token,
           wallet: address.toLowerCase(),
-          expiresAt: result.expires_at,
         };
         storeSession(session);
         setSessionToken(result.token);
