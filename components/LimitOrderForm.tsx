@@ -275,7 +275,18 @@ export function LimitOrderForm({
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   // Basket state - tracks if current buy tokens came from a basket selection
-  const [selectedBasket, setSelectedBasket] = useState<string | null>(null); // basket id or null
+  // Initialize from localStorage to avoid flash of individual tokens before effect runs
+  const [selectedBasket, setSelectedBasket] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('limitOrderSelectedBasket');
+      if (saved) {
+        // Verify the basket still exists
+        const basket = TOKEN_BASKETS.find(b => b.id === saved);
+        return basket ? saved : null;
+      }
+    }
+    return null;
+  });
   // Which buy token's price to display in the ticker (cycles through on click)
   const [internalDisplayedPriceTokenIndex, setInternalDisplayedPriceTokenIndex] = useState(0);
 
@@ -3649,23 +3660,37 @@ export function LimitOrderForm({
                 onClick={() => {
                   const newBound = !pricesBound;
 
-                  // When trying to link prices, validate that all tokens have amounts
+                  // When trying to link prices, validate requirements
                   if (newBound) {
-                    // Check if all tokens are selected and have amounts
-                    const hasInvalidToken = buyTokens.some((token, i) => {
-                      if (!token) return true; // Missing token
-                      const amount = buyAmounts[i];
-                      if (!amount || amount.trim() === '' || parseFloat(removeCommas(amount)) <= 0) return true; // Missing/zero amount
-                      return false;
-                    });
+                    // Check that all tokens are selected (but amounts can be missing - we'll calculate them)
+                    const hasMissingToken = buyTokens.some((token) => !token);
 
-                    if (hasInvalidToken) {
-                      // Don't allow linking if any token is missing or has no amount
+                    if (hasMissingToken) {
+                      toast({
+                        title: 'Cannot link prices',
+                        description: 'All token slots must have a token selected',
+                        variant: 'destructive',
+                      });
                       return;
                     }
 
-                    // Also check that limit price is set
+                    // Need limit price to calculate amounts
                     if (!limitPrice || parseFloat(limitPrice) <= 0) {
+                      toast({
+                        title: 'Cannot link prices',
+                        description: 'Set a limit price first before linking',
+                        variant: 'destructive',
+                      });
+                      return;
+                    }
+
+                    // Need sell amount to calculate buy amounts
+                    if (sellAmountNum <= 0) {
+                      toast({
+                        title: 'Cannot link prices',
+                        description: 'Set a sell amount first before linking',
+                        variant: 'destructive',
+                      });
                       return;
                     }
                   }
