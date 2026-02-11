@@ -5,7 +5,7 @@ import { useAccount } from 'wagmi';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 import { PixelSpinner } from '@/components/ui/PixelSpinner';
 import { formatDistanceToNow } from 'date-fns';
-import { ExternalLink, ArrowUpRight, ArrowDownRight, X, Gift, Clock, RefreshCw, Search, ChevronUp, ChevronDown } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, X, Gift, Clock, RefreshCw, Search, ChevronUp, ChevronDown } from 'lucide-react';
 
 interface OrderEvent {
   id: string;
@@ -92,11 +92,6 @@ const EVENT_TYPE_OPTIONS = [
 type SortField = 'type' | 'description' | 'xp' | 'time';
 type SortDirection = 'asc' | 'desc';
 
-function formatTxHash(hash: string): string {
-  if (!hash) return '';
-  return `${hash.slice(0, 6)}...${hash.slice(-4)}`;
-}
-
 function formatWallet(address: string): string {
   if (!address) return '';
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
@@ -151,7 +146,8 @@ export function OrderHistoryLog() {
 
     switch (event.event_type) {
       case 'order_created':
-        return `You created order #${data.order_id} to sell ${data.sell_amount || '?'} ${data.sell_token || 'tokens'}`;
+        const orderIdStr = data.order_id ? `#${data.order_id}` : 'a new order';
+        return `You created ${orderIdStr} to sell ${data.sell_amount || '?'} ${data.sell_token || 'tokens'}`;
 
       case 'order_filled':
         return `You filled someone's order #${data.order_id} with ${data.fill_amount || '?'} ${data.buy_token_used || 'tokens'}`;
@@ -167,9 +163,18 @@ export function OrderHistoryLog() {
 
       case 'trade_completed':
         if (data.is_maker) {
-          return `Your order #${data.order_id} was filled by ${formatWallet(data.filler_wallet || '')} → you received ${data.buy_amount || '?'} ${data.buy_token || 'tokens'}`;
+          // User is the order maker - they received the buy token
+          const receivedAmount = data.buy_amount && data.buy_amount !== '0' ? data.buy_amount : null;
+          const fillerInfo = data.filler_wallet ? ` by ${formatWallet(data.filler_wallet)}` : '';
+          return receivedAmount
+            ? `Your order #${data.order_id} was filled${fillerInfo} → you received ${receivedAmount} ${data.buy_token || 'tokens'}`
+            : `Your order #${data.order_id} was filled${fillerInfo}`;
         } else {
-          return `You filled order #${data.order_id} → you received ${data.sell_amount || '?'} ${data.sell_token || 'tokens'}`;
+          // User filled someone else's order - they received the sell token
+          const receivedAmount = data.sell_amount && data.sell_amount !== '0' ? data.sell_amount : null;
+          return receivedAmount
+            ? `You filled order #${data.order_id} → you received ${receivedAmount} ${data.sell_token || 'tokens'}`
+            : `You filled order #${data.order_id}`;
         }
 
       default:
@@ -353,7 +358,7 @@ export function OrderHistoryLog() {
               </button>
               <button
                 onClick={() => handleSort('description')}
-                className="col-span-5 flex items-center gap-1 hover:text-white/80 transition-colors text-left"
+                className="col-span-6 flex items-center gap-1 hover:text-white/80 transition-colors text-left"
               >
                 Description <SortIcon field="description" />
               </button>
@@ -369,7 +374,6 @@ export function OrderHistoryLog() {
               >
                 Time <SortIcon field="time" />
               </button>
-              <div className="col-span-1 text-right">Tx</div>
             </div>
 
             {/* Events List */}
@@ -382,11 +386,11 @@ export function OrderHistoryLog() {
                   bgColor: 'bg-white/10',
                 };
 
-                return (
-                  <div
-                    key={event.id}
-                    className="grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-4 px-4 py-4 hover:bg-white/5 transition-colors"
-                  >
+                const txHash = event.event_data.tx_hash;
+                const explorerUrl = txHash ? `https://otter.pulsechain.com/tx/${txHash}` : null;
+
+                const rowContent = (
+                  <>
                     {/* Event Type */}
                     <div className="md:col-span-2 flex items-center gap-2">
                       <span className={`p-1.5 rounded-lg ${config.bgColor}`}>
@@ -398,7 +402,7 @@ export function OrderHistoryLog() {
                     </div>
 
                     {/* Description */}
-                    <div className="md:col-span-5 text-sm text-white/80">
+                    <div className="md:col-span-6 text-sm text-white/80">
                       {getEventDescription(event)}
                     </div>
 
@@ -415,23 +419,25 @@ export function OrderHistoryLog() {
                     <div className="md:col-span-2 text-right text-sm text-white/50">
                       {formatDistanceToNow(new Date(event.created_at), { addSuffix: true })}
                     </div>
+                  </>
+                );
 
-                    {/* Tx Link */}
-                    <div className="md:col-span-1 text-right">
-                      {event.event_data.tx_hash ? (
-                        <a
-                          href={`https://scan.pulsechain.com/tx/${event.event_data.tx_hash}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors"
-                        >
-                          <span className="hidden md:inline">{formatTxHash(event.event_data.tx_hash)}</span>
-                          <ExternalLink className="w-3 h-3" />
-                        </a>
-                      ) : (
-                        <span className="text-white/20">-</span>
-                      )}
-                    </div>
+                return explorerUrl ? (
+                  <a
+                    key={event.id}
+                    href={explorerUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-4 px-4 py-4 hover:bg-white/5 transition-colors cursor-pointer"
+                  >
+                    {rowContent}
+                  </a>
+                ) : (
+                  <div
+                    key={event.id}
+                    className="grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-4 px-4 py-4"
+                  >
+                    {rowContent}
                   </div>
                 );
               })}

@@ -31,47 +31,68 @@ export async function waitForTransactionWithTimeout(
   hash: Hash,
   timeout: number = TRANSACTION_TIMEOUTS.TRANSACTION
 ) {
-  try {
-    // Add a small delay to allow transaction to propagate to RPC
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    const receipt = await publicClient.waitForTransactionReceipt({
-      hash,
-      timeout,
-      confirmations: 1, // Only wait for 1 confirmation
-      pollingInterval: 2000, // Poll every 2 seconds instead of default
-    });
+  const maxRetries = 3;
+  let lastError: Error | null = null;
 
-    // Check if transaction was successful
-    if (receipt.status === 'reverted') {
-      throw new Error('Transaction reverted on-chain. The contract rejected the transaction.');
-    }
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      // Add delay before each attempt - longer delay for retries
+      const delay = attempt === 0 ? 1000 : 3000;
+      await new Promise(resolve => setTimeout(resolve, delay));
 
-    return receipt;
-  } catch (error: any) {
-    
-    
-    // Handle timeout or "could not be found" errors (transaction was submitted but receipt not found)
-    if (error.message?.includes('timeout') || 
-        error.message?.includes('timed out') || 
+      const receipt = await publicClient.waitForTransactionReceipt({
+        hash,
+        timeout: attempt === 0 ? timeout : 60000, // Shorter timeout for retries
+        confirmations: 1,
+        pollingInterval: 2000,
+      });
+
+      // Check if transaction was successful
+      if (receipt.status === 'reverted') {
+        throw new Error('Transaction reverted on-chain. The contract rejected the transaction.');
+      }
+
+      return receipt;
+    } catch (error: any) {
+      // Handle user rejection - don't retry
+      if (error.message?.includes('rejected') || error.message?.includes('denied')) {
+        throw new Error('Transaction was rejected by user.');
+      }
+
+      // Handle revert - don't retry
+      if (error.message?.includes('reverted')) {
+        throw error;
+      }
+
+      // Check if this is a retriable error (not found, timeout, etc.)
+      const isRetriable =
+        error.message?.includes('timeout') ||
+        error.message?.includes('timed out') ||
         error.message?.includes('could not be found') ||
-        error.message?.includes('may not be processed on a block yet')) {
-      // This is a timeout/receipt not found error - transaction was likely submitted successfully
-      const timeoutError = new Error(
-        `Transaction submitted but confirmation is taking longer than expected. Check Otterscan to verify: https://otter.pulsechain.com/tx/${hash}`
-      );
-      (timeoutError as any).isTimeout = true; // Flag this as a timeout error
-      throw timeoutError;
-    }
+        error.message?.includes('may not be processed on a block yet');
 
-    // Handle user rejection
-    if (error.message?.includes('rejected') || error.message?.includes('denied')) {
-      throw new Error('Transaction was rejected by user.');
-    }
+      if (isRetriable && attempt < maxRetries - 1) {
+        // Retry after delay
+        lastError = error;
+        continue;
+      }
 
-    // Re-throw with original message
-    throw error;
+      // Final attempt failed or non-retriable error
+      if (isRetriable) {
+        const timeoutError = new Error(
+          `Transaction submitted but confirmation is taking longer than expected. Check Otterscan to verify: https://otter.pulsechain.com/tx/${hash}`
+        );
+        (timeoutError as any).isTimeout = true;
+        throw timeoutError;
+      }
+
+      // Re-throw non-retriable errors
+      throw error;
+    }
   }
+
+  // Should not reach here, but handle just in case
+  throw lastError || new Error('Transaction confirmation failed after retries');
 }
 
 /**

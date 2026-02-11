@@ -997,15 +997,18 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                       const useCompactLayout = displayQuoteTokenInfos.length >= 5;
 
                       if (useCompactLayout) {
-                        // Compact layout: Logo | Ticker | Price - all in a row
+                        // Compact layout: Logo | Ticker (index) | Price - all in a row
                         return (
                           <>
                             <TokenLogo
                               ticker={tokenInfo?.ticker || ''}
                               className="w-[16px] h-[16px] object-contain flex-shrink-0"
                             />
-                            <span className="text-xs whitespace-nowrap text-[#FF0080]">
+                            <span className="text-xs whitespace-nowrap text-[#FF0080] leading-none flex items-center">
                               {formatTokenTicker(tokenInfo?.ticker || '')}
+                            </span>
+                            <span className="text-[10px] text-white/40 leading-none flex items-center">
+                              ({displayedTokenIndex + 1}/{displayQuoteTokenInfos.length})
                             </span>
                             <span className="text-sm font-bold text-white whitespace-nowrap">
                               {showUsdPrices
@@ -1014,9 +1017,6 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                                     maximumFractionDigits: limitUsdPrice < 0.01 ? 6 : limitUsdPrice < 1 ? 4 : 2
                                   })}`
                                 : (priceForThisToken || 0).toPrecision(4).replace(/\.?0+$/, '')}
-                            </span>
-                            <span className="text-[10px] text-white/40">
-                              ({displayedTokenIndex + 1}/{displayQuoteTokenInfos.length})
                             </span>
                           </>
                         );
@@ -1027,9 +1027,14 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                           <span className="text-xs text-white/70 whitespace-nowrap flex items-center gap-1">
                             Limit Price:
                             {displayQuoteTokenInfos.length > 1 && (
-                              <span className="text-[10px] text-white/40 group-hover:text-white transition-colors">
-                                ({formatTokenTicker(tokenInfo?.ticker || '')})
-                              </span>
+                              <>
+                                <span className="text-[10px] text-white/40 group-hover:text-white transition-colors leading-none flex items-center">
+                                  ({formatTokenTicker(tokenInfo?.ticker || '')})
+                                </span>
+                                <span className="text-[10px] text-white/40 group-hover:text-white transition-colors leading-none flex items-center">
+                                  ({displayedTokenIndex + 1}/{displayQuoteTokenInfos.length})
+                                </span>
+                              </>
                             )}
                           </span>
                           <div className="flex items-center gap-2">
@@ -1234,9 +1239,14 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                       <span className="text-xs text-white/70 whitespace-nowrap flex items-center gap-1">
                         Limit Price:
                         {displayQuoteTokenInfos.length > 1 && (
-                          <span className="text-[10px] text-white/40 group-hover:text-white transition-colors">
-                            ({formatTokenTicker(activeTokenInfo?.ticker || '')})
-                          </span>
+                          <>
+                            <span className="text-[10px] text-white/40 group-hover:text-white transition-colors leading-none flex items-center">
+                              ({formatTokenTicker(activeTokenInfo?.ticker || '')})
+                            </span>
+                            <span className="text-[10px] text-white/40 group-hover:text-white transition-colors leading-none flex items-center">
+                              ({activeIndex + 1}/{displayQuoteTokenInfos.length})
+                            </span>
+                          </>
                         )}
                       </span>
                       <div className="flex items-center gap-2">
@@ -1272,11 +1282,6 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
                             </>
                           );
                         })()}
-                        {displayQuoteTokenInfos.length > 1 && (
-                          <span className="text-[10px] text-white/40 group-hover:text-white transition-colors ml-1">
-                            ({activeIndex + 1}/{displayQuoteTokenInfos.length})
-                          </span>
-                        )}
                       </div>
                     </LiquidGlassCard>
                   </div>

@@ -39,14 +39,37 @@
 import { useCallback } from 'react';
 import { formatNumberWithCommas, removeCommas } from '@/utils/format';
 
-// Helper to format calculated values
+// Helper to format calculated values - handles small numbers with proper precision
 const formatCalculatedValue = (value: number): string => {
   if (value === 0) return '';
-  const rounded = Math.round(value * 10000) / 10000;
-  let str = rounded.toString();
-  if (str.includes('.')) {
-    str = str.replace(/\.?0+$/, '');
+
+  // Dynamically determine precision based on magnitude
+  // Goal: always show at least 4 significant digits
+  const absValue = Math.abs(value);
+  const magnitude = Math.floor(Math.log10(absValue));
+
+  let precision: number;
+  if (magnitude >= 4) {
+    // Large numbers (10000+): no decimal places needed
+    precision = 0;
+  } else if (magnitude >= 0) {
+    // Numbers >= 1: use 4 decimal places
+    precision = 4;
+  } else {
+    // Numbers < 1: ensure we show 4 significant figures
+    // e.g., 0.00012 has magnitude -4, needs precision of 8 to show 0.00012000
+    precision = Math.min(18, Math.abs(magnitude) + 4);
   }
+
+  const multiplier = Math.pow(10, precision);
+  const rounded = Math.round(value * multiplier) / multiplier;
+
+  if (rounded === 0) return '';
+
+  let str = rounded.toFixed(precision);
+  // Remove trailing zeros but keep meaningful precision
+  str = str.replace(/\.?0+$/, '');
+
   return formatNumberWithCommas(str);
 };
 

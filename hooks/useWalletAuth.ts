@@ -4,31 +4,32 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAccount, useSignMessage } from 'wagmi';
 
 const AUTH_MESSAGE = 'Verify AgoráX wallet ownership';
-const STORAGE_KEY = 'agorax-session';
+const STORAGE_KEY = 'agorax-sessions'; // Now stores multiple sessions
 
-interface StoredSession {
-  token: string;
-  wallet: string;
+interface StoredSessions {
+  [wallet: string]: string; // wallet address (lowercase) -> token
 }
 
-function getStoredSession(): StoredSession | null {
-  if (typeof window === 'undefined') return null;
+function getStoredSessions(): StoredSessions {
+  if (typeof window === 'undefined') return {};
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const session: StoredSession = JSON.parse(raw);
-    if (!session.token || !session.wallet) {
-      localStorage.removeItem(STORAGE_KEY);
-      return null;
-    }
-    return session;
+    if (!raw) return {};
+    return JSON.parse(raw) as StoredSessions;
   } catch {
-    return null;
+    return {};
   }
 }
 
-function storeSession(session: StoredSession) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+function getSessionForWallet(wallet: string): string | null {
+  const sessions = getStoredSessions();
+  return sessions[wallet.toLowerCase()] || null;
+}
+
+function storeSessionForWallet(wallet: string, token: string) {
+  const sessions = getStoredSessions();
+  sessions[wallet.toLowerCase()] = token;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
 }
 
 /**
@@ -52,7 +53,7 @@ export function useWalletAuth() {
   const verifyingRef = useRef(false);
 
   // Restore session from localStorage on mount / wallet change
-  // This runs first and sets isInitialized when done
+  // Sessions are stored per-wallet, so switching wallets won't lose previous sessions
   useEffect(() => {
     if (!address) {
       setSessionToken(null);
@@ -60,15 +61,11 @@ export function useWalletAuth() {
       return;
     }
 
-    const stored = getStoredSession();
-    // Validate both wallet match AND token format is correct
-    if (stored && stored.wallet === address.toLowerCase() && isValidTokenFormat(stored.token, address)) {
-      setSessionToken(stored.token);
+    const token = getSessionForWallet(address);
+    // Validate token format is correct for this wallet
+    if (token && isValidTokenFormat(token, address)) {
+      setSessionToken(token);
     } else {
-      // Clear invalid session
-      if (stored) {
-        localStorage.removeItem(STORAGE_KEY);
-      }
       setSessionToken(null);
     }
     setIsInitialized(true);
@@ -86,10 +83,10 @@ export function useWalletAuth() {
     if (verifyingRef.current) return null; // Prevent concurrent verification
 
     // Check stored session first - if valid, skip signature prompt
-    const stored = getStoredSession();
-    if (stored && stored.wallet === address.toLowerCase() && isValidTokenFormat(stored.token, address)) {
-      setSessionToken(stored.token);
-      return stored.token;
+    const existingToken = getSessionForWallet(address);
+    if (existingToken && isValidTokenFormat(existingToken, address)) {
+      setSessionToken(existingToken);
+      return existingToken;
     }
 
     verifyingRef.current = true;
@@ -111,11 +108,8 @@ export function useWalletAuth() {
       const result = await response.json();
 
       if (result.success && result.token) {
-        const session: StoredSession = {
-          token: result.token,
-          wallet: address.toLowerCase(),
-        };
-        storeSession(session);
+        // Store token for this wallet (keeps other wallet sessions intact)
+        storeSessionForWallet(address, result.token);
         setSessionToken(result.token);
         return result.token;
       }
@@ -136,8 +130,8 @@ export function useWalletAuth() {
   // This is separate from isVerified to avoid race conditions
   const hasStoredSession = (() => {
     if (!address) return false;
-    const stored = getStoredSession();
-    return !!(stored && stored.wallet === address.toLowerCase() && isValidTokenFormat(stored.token, address));
+    const token = getSessionForWallet(address);
+    return !!(token && isValidTokenFormat(token, address));
   })();
 
   return {

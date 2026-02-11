@@ -28,24 +28,18 @@ export const ConnectButton = ({ connectedText, connectedHref }: ConnectButtonPro
     }
   }, [isConnected, address, trackWalletConnected])
 
-  // Prompt for verification ONLY on fresh wallet connect (no existing session)
-  // If user already has a stored session, skip the prompt entirely
-  const hasPromptedVerify = useRef(false)
+  // Prompt for verification only if this wallet hasn't been verified before
+  // Sessions are now stored per-wallet, so switching wallets won't re-prompt
+  const hasPromptedForWallet = useRef<string | null>(null)
   useEffect(() => {
-    // Skip if already verifying, already verified, has stored session, or already prompted
     if (!isConnected || !address || !isInitialized) return
-    if (isVerifying || isVerified || hasStoredSession || hasPromptedVerify.current) return
+    if (isVerifying || isVerified || hasStoredSession) return
+    // Don't prompt again for the same wallet in this session
+    if (hasPromptedForWallet.current === address) return
 
-    hasPromptedVerify.current = true
+    hasPromptedForWallet.current = address
     verify()
   }, [isConnected, address, isInitialized, isVerifying, isVerified, hasStoredSession, verify])
-
-  // Reset prompt flag when wallet disconnects
-  useEffect(() => {
-    if (!isConnected) {
-      hasPromptedVerify.current = false
-    }
-  }, [isConnected])
 
   const { open } = useAppKit()
   const { isTransactionPending } = useTransaction()

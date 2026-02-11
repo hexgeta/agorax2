@@ -18,7 +18,7 @@ import { useTransaction } from '@/context/TransactionContext';
 import { PAYWALL_ENABLED, REQUIRED_PARTY_TOKENS, REQUIRED_TEAM_TOKENS, PAYWALL_TITLE, PAYWALL_DESCRIPTION } from '@/config/paywall';
 import PaywallModal from './PaywallModal';
 import { TokenLogo } from '@/components/TokenLogo';
-import { Lock, ArrowLeftRight, Calendar as CalendarIcon } from 'lucide-react';
+import { Lock, ArrowLeftRight, Calendar as CalendarIcon, Link, Unlink } from 'lucide-react';
 import { PixelSpinner } from './ui/PixelSpinner';
 import { Slider } from '@/components/ui/slider';
 import { Calendar } from '@/components/ui/calendar';
@@ -101,16 +101,53 @@ const formatDisplayValue = (value: number): number => {
   return parseFloat(value.toPrecision(4));
 };
 
+// Helper to format amounts for display in labels (handles small numbers)
+const formatAmountForLabel = (value: number): string => {
+  if (value === 0) return '0';
+
+  const absValue = Math.abs(value);
+
+  // For large numbers, use compact notation
+  if (absValue >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(2)}B`;
+  if (absValue >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
+  if (absValue >= 1_000) return `${(value / 1_000).toFixed(2)}K`;
+
+  // For numbers >= 1, show up to 4 decimal places
+  if (absValue >= 1) return formatNumberWithCommas(value.toFixed(4).replace(/\.?0+$/, ''));
+
+  // For small numbers < 1, use toPrecision but ensure we show enough digits
+  // toPrecision(4) would show 0.0001200 as "0.0001200" -> we want "0.00012"
+  const magnitude = Math.floor(Math.log10(absValue));
+  const sigFigs = Math.max(4, Math.abs(magnitude) + 2); // At least 4 sig figs, more for very small
+  let result = value.toPrecision(Math.min(sigFigs, 10));
+
+  // Remove trailing zeros after decimal
+  if (result.includes('.')) {
+    result = result.replace(/\.?0+$/, '');
+  }
+
+  return result;
+};
+
 // Helper to format calculated values for state (with commas)
 const formatCalculatedValue = (value: number): string => {
   if (value === 0) return '';
 
-  // For very small numbers, preserve more decimal places
-  // Determine precision based on magnitude
-  let precision = 4; // default 4 decimal places
-  if (value !== 0 && Math.abs(value) < 0.0001) {
-    // For very small values, find first significant digit and keep 4 more
-    const magnitude = Math.floor(Math.log10(Math.abs(value)));
+  // Dynamically determine precision based on magnitude
+  // Goal: always show at least 4 significant digits
+  const absValue = Math.abs(value);
+  const magnitude = Math.floor(Math.log10(absValue));
+
+  let precision: number;
+  if (magnitude >= 4) {
+    // Large numbers (10000+): no decimal places needed
+    precision = 0;
+  } else if (magnitude >= 0) {
+    // Numbers >= 1: use 4 decimal places
+    precision = 4;
+  } else {
+    // Numbers < 1: ensure we show 4 significant figures
+    // e.g., 0.00012 has magnitude -4, needs precision of 8 to show 0.00012000
     precision = Math.min(18, Math.abs(magnitude) + 4);
   }
 
@@ -120,7 +157,7 @@ const formatCalculatedValue = (value: number): string => {
   if (rounded === 0) return '';
 
   let str = rounded.toFixed(precision);
-  // Remove trailing zeros but keep at least one decimal for very small numbers
+  // Remove trailing zeros but keep meaningful precision
   str = str.replace(/\.?0+$/, '');
 
   return formatNumberWithCommas(str);
@@ -2178,6 +2215,20 @@ export function LimitOrderForm({
       });
 
       // Track order creation event
+      // Note: We don't have the exact order ID from the contract (no event emitted)
+      // so we'll fetch the latest order count to estimate it
+      let orderId: number | undefined;
+      try {
+        const totalOrders = await publicClient.readContract({
+          address: AGORAX_CONTRACT_ADDRESS,
+          abi: AGORAX_ABI,
+          functionName: 'getTotalOrderCount',
+        }) as bigint;
+        orderId = Number(totalOrders);
+      } catch {
+        // If we can't get the order ID, continue without it
+      }
+
       const sellAmountNum = parseFloat(removeCommas(sellAmount));
       const sellTokenPrice = prices[sellToken.a]?.price || 0;
       const sellValueUsd = sellAmountNum * sellTokenPrice;
@@ -2200,12 +2251,14 @@ export function LimitOrderForm({
         : 0;
 
       trackOrderCreated({
+        order_id: orderId || 0,
         sell_token: sellToken.ticker,
+        sell_amount: removeCommas(sellAmount),
         buy_tokens: buyTokens.filter(Boolean).map(t => t!.ticker),
-        sell_amount_usd: sellValueUsd,
-        buy_amount_usd: totalBuyValueUsd,
-        expiration_days: expirationDays,
-        all_or_nothing: allOrNothing,
+        buy_amounts: buyAmounts.filter((_, i) => buyTokens[i]).map(a => removeCommas(a)),
+        volume_usd: sellValueUsd,
+        is_all_or_nothing: allOrNothing,
+        expiration: expirationDays,
         price_vs_market_percent: priceVsMarketPercent,
       });
 
@@ -2227,6 +2280,41 @@ export function LimitOrderForm({
       setShowConfirmation(false);
 
     } catch (error: any) {
+      // Check if this is a timeout error (transaction submitted but confirmation pending)
+      const isTimeout = error?.isTimeout ||
+        error?.message?.includes('confirmation is taking') ||
+        error?.message?.includes('Check Otterscan');
+
+      if (isTimeout) {
+        // Extract tx hash from error message if present
+        const txHashMatch = error?.message?.match(/0x[a-fA-F0-9]{64}/);
+        const txHash = txHashMatch ? txHashMatch[0] : null;
+
+        // Show a non-destructive pending toast instead of error
+        toast({
+          title: "Order Pending",
+          description: "Your order was submitted but is taking longer to confirm. It may still succeed - check the block explorer.",
+          variant: "default",
+          action: txHash ? (
+            <a
+              href={getBlockExplorerTxUrl(chainId, txHash)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-white hover:underline font-medium"
+            >
+              View Tx
+            </a>
+          ) : undefined,
+        });
+
+        // Still clear form and trigger refresh since tx was submitted
+        setShowConfirmation(false);
+        if (onOrderCreated) {
+          setTimeout(() => onOrderCreated(), 3000); // Delayed refresh
+        }
+        return;
+      }
+
       // Extract detailed error information
       let errorMessage = "Failed to create order. Please try again.";
       let errorDetails = "";
@@ -2487,10 +2575,10 @@ export function LimitOrderForm({
     }
 
     // Reset the flag after React has processed the state updates
-    // Use setTimeout to ensure this runs after the next render cycle
+    // Use longer timeout to ensure all effects have run with the updated state
     setTimeout(() => {
       isPercentageClickInProgressRef.current = false;
-    }, 0);
+    }, 100);
   };
 
   // Handler for setting limit price to backing value
@@ -2572,9 +2660,10 @@ export function LimitOrderForm({
     }
 
     // Reset the flag after React has processed the state updates
+    // Use longer timeout to ensure all effects have run with the updated state
     setTimeout(() => {
       isPercentageClickInProgressRef.current = false;
-    }, 0);
+    }, 100);
   };
 
   // Handler for individual token percentage clicks (when prices are unbound)
@@ -3342,6 +3431,16 @@ export function LimitOrderForm({
                   </span>
                 </div>
 
+                {/* All or Nothing */}
+                {allOrNothing && (
+                  <div className="flex justify-between items-center border-t border-white/10 pt-3">
+                    <span className="text-white/60">Order Type</span>
+                    <span className="px-2 py-1 rounded-full text-xs font-medium bg-purple-500/20 text-purple-400 border border-purple-500/30">
+                      All or Nothing
+                    </span>
+                  </div>
+                )}
+
                 {/* Total You Pay */}
                 {sellToken && isNativeToken(sellToken.a) && (
                   <div className="flex justify-between items-center border-t border-white/10 pt-3">
@@ -3609,8 +3708,9 @@ export function LimitOrderForm({
             )}
           </div>
 
-          <div className="flex items-center gap-2 mt-2">
-            <div className="w-[140px] shrink-0 text-white/50 text-sm font-semibold">
+          <div className="flex items-stretch gap-2 mt-2">
+            {/* Placeholder to align with token selector */}
+            <div className="min-w-[120px] shrink-0 text-white/50 text-sm font-semibold flex items-center">
               {pricesLoading && sellTokenPrice === 0 && sellAmountNum > 0 ? (
                 <div className="flex items-center gap-1.5 animate-pulse">
                   <span className="w-1.5 h-1.5 rounded-full bg-white/30" />
@@ -3620,28 +3720,31 @@ export function LimitOrderForm({
                 `$${formatNumberWithCommas(sellUsdValue.toFixed(2))}`
               ) : '$0.00'}
             </div>
-            {sellToken && isConnected && (
-              <div className="flex-1 flex items-center gap-2">
-                <span className="text-white/50 text-xs">
-                  {isBalanceLoading ? (
-                    'Loading balance...'
-                  ) : actualBalance ? (
-                    `Balance: ${formatBalanceDisplay(actualBalance.formatted)}`
-                  ) : (
-                    'Balance: 0'
+            {/* Balance aligned with input */}
+            <div className="flex-1 flex items-center gap-2">
+              {sellToken && isConnected && (
+                <>
+                  <span className="text-white/50 text-xs">
+                    {isBalanceLoading ? (
+                      'Loading balance...'
+                    ) : actualBalance ? (
+                      `Balance: ${formatBalanceDisplay(actualBalance.formatted)}`
+                    ) : (
+                      'Balance: 0'
+                    )}
+                  </span>
+                  {actualBalance && !isBalanceLoading && (
+                    <button
+                      type="button"
+                      onClick={handleMaxSellAmount}
+                      className="text-white hover:text-white text-xs font-bold transition-colors"
+                    >
+                      MAX
+                    </button>
                   )}
-                </span>
-                {actualBalance && !isBalanceLoading && (
-                  <button
-                    type="button"
-                    onClick={handleMaxSellAmount}
-                    className="text-white hover:text-white text-xs font-bold transition-colors"
-                  >
-                    MAX
-                  </button>
-                )}
-              </div>
-            )}
+                </>
+              )}
+            </div>
           </div>
 
           {/* Swap Button Divider */}
@@ -3668,8 +3771,23 @@ export function LimitOrderForm({
           <div className="flex items-center justify-between mb-2">
             <label className="text-white/80 text-sm font-semibold text-left">BUY</label>
 
-            {/* Bind Prices Toggle - Only show when there are multiple buy tokens or basket selected */}
-            {(buyTokens.length > 1 || selectedBasket) && (
+            <div className="flex items-center gap-2">
+              {/* All or Nothing Toggle Button */}
+              <button
+                type="button"
+                onClick={() => setAllOrNothing(!allOrNothing)}
+                className={`flex items-center gap-1.5 px-2 py-1 text-xs rounded-full transition-all ${
+                  allOrNothing
+                    ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
+                    : 'bg-white/5 text-white/60 border border-white/10 hover:bg-white/10'
+                }`}
+                title={allOrNothing ? 'All or Nothing: Order must be filled completely' : 'Partial fills allowed'}
+              >
+                <span>AON: {allOrNothing ? 'On' : 'Off'}</span>
+              </button>
+
+              {/* Bind Prices Toggle - Only show when there are multiple buy tokens or basket selected */}
+              {(buyTokens.length > 1 || selectedBasket) && (
               <button
                 type="button"
                 onClick={() => {
@@ -3677,16 +3795,28 @@ export function LimitOrderForm({
 
                   // When trying to link prices, validate requirements
                   if (newBound) {
-                    // Check that all tokens are selected (but amounts can be missing - we'll calculate them)
+                    // Remove any undefined/empty token slots before linking
                     const hasMissingToken = buyTokens.some((token) => !token);
 
                     if (hasMissingToken) {
-                      toast({
-                        title: 'Cannot link prices',
-                        description: 'All token slots must have a token selected',
-                        variant: 'destructive',
-                      });
-                      return;
+                      // Filter out undefined tokens and their amounts
+                      const validTokens = buyTokens.filter((token) => token !== null && token !== undefined);
+                      const validAmounts = buyAmounts.filter((_, i) => buyTokens[i] !== null && buyTokens[i] !== undefined);
+
+                      // If no valid tokens remain, can't link
+                      if (validTokens.length === 0) {
+                        toast({
+                          title: 'Cannot link prices',
+                          description: 'Select at least one token first',
+                          variant: 'destructive',
+                        });
+                        return;
+                      }
+
+                      // Update state with only valid tokens
+                      setBuyTokens(validTokens as TokenInfo[]);
+                      setBuyAmounts(validAmounts);
+                      setShowBuyDropdowns(validTokens.map(() => false));
                     }
 
                     // Need limit price to calculate amounts
@@ -3814,17 +3944,14 @@ export function LimitOrderForm({
                 title={pricesBound ? 'Prices linked: same % from market for all tokens' : 'Prices unlinked: set individual prices'}
               >
                 {pricesBound ? (
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                  </svg>
+                  <Link className="w-3.5 h-3.5" />
                 ) : (
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1M18 6L6 18" />
-                  </svg>
+                  <Unlink className="w-3.5 h-3.5" />
                 )}
                 <span>{pricesBound ? 'Linked Price' : 'Unlinked Price'}</span>
               </button>
-            )}
+              )}
+            </div>
           </div>
 
           <div className="space-y-4">
@@ -4059,7 +4186,7 @@ export function LimitOrderForm({
                       <TokenLogo ticker={token.ticker} className="w-4 h-4 flex-shrink-0" />
                       <span className="text-white/70 text-xs group-hover:text-white/90 transition-colors">
                         {buyAmounts[index] && parseFloat(removeCommas(buyAmounts[index])) > 0
-                          ? `${formatNumberWithCommas(parseFloat(parseFloat(removeCommas(buyAmounts[index])).toPrecision(4)).toString())} `
+                          ? `${formatAmountForLabel(parseFloat(removeCommas(buyAmounts[index])))} `
                           : ''}
                         {formatTokenTicker(token.ticker, chainId)}
                       </span>
@@ -4816,7 +4943,7 @@ export function LimitOrderForm({
                         <TokenLogo ticker={token.ticker} className="w-4 h-4 flex-shrink-0" />
                         <span className="text-white/70 text-xs group-hover:text-white/90 transition-colors">
                           {buyAmounts[tokenIndex] && parseFloat(removeCommas(buyAmounts[tokenIndex])) > 0
-                            ? `${formatNumberWithCommas(parseFloat(parseFloat(removeCommas(buyAmounts[tokenIndex])).toPrecision(4)).toString())} `
+                            ? `${formatAmountForLabel(parseFloat(removeCommas(buyAmounts[tokenIndex])))} `
                             : ''}
                           {formatTokenTicker(token.ticker, chainId)}
                         </span>
@@ -5741,27 +5868,6 @@ export function LimitOrderForm({
                   </button>
                 </div>
 
-                {/* All or Nothing Toggle */}
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-white/70 text-sm">All or Nothing?</span>
-                    <span className="text-white/40 text-xs">Order must be filled completely in one transaction</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setAllOrNothing(!allOrNothing)}
-                    className={`relative w-11 h-6 flex-shrink-0 rounded-full transition-colors duration-200 ${
-                      allOrNothing ? 'bg-green-500' : 'bg-white/20'
-                    }`}
-                  >
-                    <span
-                      className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform duration-200 ${
-                        allOrNothing ? 'translate-x-5' : 'translate-x-0'
-                      }`}
-                    />
-                  </button>
-                </div>
-
                 {/* Maxi Stats Toggle */}
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex flex-col min-w-0">
@@ -5787,18 +5893,26 @@ export function LimitOrderForm({
           </div>
         </LiquidGlassCard>
 
-        {/* Add another token button - only show when acceptMultipleTokens is enabled and not in basket mode with linked prices */}
-        {acceptMultipleTokens && !(selectedBasket && pricesBound) && buyAmounts[buyTokens.length - 1] && buyAmounts[buyTokens.length - 1].trim() !== '' && (
+        {/* Add another token button - show when acceptMultipleTokens is enabled */}
+        {acceptMultipleTokens && buyAmounts[buyTokens.length - 1] && buyAmounts[buyTokens.length - 1].trim() !== '' && (
           <>
             {buyTokens.length < 10 ? (
               <button
-                onClick={handleAddBuyToken}
-                className="mb-4 w-full py-2 bg-black/40 border border-white/10 hover:border-white/30 transition-all flex items-center justify-center space-x-2 opacity-60 hover:opacity-100 rounded-full"
+                onClick={() => {
+                  // If prices are linked, unlink them first before adding a new token
+                  if (pricesBound) {
+                    setPricesBound(false);
+                    // Clear selected basket since we're going to individual token mode
+                    setSelectedBasket(null);
+                  }
+                  handleAddBuyToken();
+                }}
+                className="mb-4 w-full py-2.5 bg-white/5 border border-white/20 hover:border-white/40 hover:bg-white/10 transition-all flex items-center justify-center space-x-2 rounded-full"
               >
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
-                <span className="text-white text-sm">Add alternative token</span>
+                <span className="text-white/70 text-sm">Add alternative token</span>
               </button>
             ) : (
               <div className="mb-4 w-full py-2 text-center text-gray-500 text-sm">
@@ -5958,15 +6072,8 @@ export function LimitOrderForm({
         </LiquidGlassCard>
 
 
-        {/* Pro Plan - Show when maxiStats is enabled:
-            - If user has NO access: always show (blurred) to tease the feature
-            - If user HAS access: only show when MAXI tokens are in buy or sell */}
-        {maxiStats && (
-          // Show if user doesn't have access (blurred teaser) OR if user has access and MAXI tokens are involved
-          (PAYWALL_ENABLED && !hasTokenAccess) ||
-          (hasTokenAccess && sellToken && buyTokens.length > 0 && buyTokens[0] && (showSellStats || showBuyStats || (isTokenEligibleForStats(sellToken) || buyTokens.some(t => isTokenEligibleForStats(t)))) && !duplicateTokenError &&
-            !(MAXI_TOKENS.includes(sellToken.a.toLowerCase()) && buyTokens.every(t => t && MAXI_TOKENS.includes(t.a.toLowerCase()))))
-        ) && (
+        {/* Pro Plan - Moved to render outside showConfirmation ternary - see below */}
+        {false && (
           proStatsContainerRef?.current ? createPortal(
             <LiquidGlassCard
               className="p-4 bg-white/5 border-white/10"
@@ -6380,6 +6487,323 @@ export function LimitOrderForm({
           </>
         )}
       </LiquidGlassCard >
+
+      {/* Pro Plan - Show when maxiStats is enabled (outside showConfirmation ternary so it persists):
+          - If user has NO access: always show (blurred) to tease the feature
+          - If user HAS access: only show when MAXI tokens are in buy or sell */}
+      {maxiStats && (
+        // Show if user doesn't have access (blurred teaser) OR if user has access and MAXI tokens are involved
+        (PAYWALL_ENABLED && !hasTokenAccess) ||
+        (hasTokenAccess && sellToken && buyTokens.length > 0 && buyTokens[0] && (showSellStats || showBuyStats || (isTokenEligibleForStats(sellToken) || buyTokens.some(t => isTokenEligibleForStats(t)))) && !duplicateTokenError &&
+          !(MAXI_TOKENS.includes(sellToken.a.toLowerCase()) && buyTokens.every(t => t && MAXI_TOKENS.includes(t.a.toLowerCase()))))
+      ) && proStatsContainerRef?.current && createPortal(
+        <LiquidGlassCard
+          className="p-4 bg-white/5 border-white/10"
+          borderRadius="12px"
+          shadowIntensity="xs"
+          glowIntensity="none"
+        >
+          <h3 className="text-[#FF0080]/90 text-sm font-semibold mb-4 text-left">PRO PLAN STATS</h3>
+
+          {/* Content with conditional blur */}
+          <div className={(PAYWALL_ENABLED && !hasTokenAccess) ? 'blur-md select-none pointer-events-none' : ''}>
+            {statsLoading && hasTokenAccess ? (
+              <div className="text-white/60 text-center py-4">Loading token stats...</div>
+            ) : statsError && hasTokenAccess ? (
+              <div className="text-red-400 text-center py-4">
+                <div className="font-semibold mb-2">Failed to load token stats</div>
+                <div className="text-xs text-red-300">{statsError.message || 'Unknown error'}</div>
+              </div>
+            ) : (PAYWALL_ENABLED && !hasTokenAccess) ? (
+              // Show placeholder content when no access (for blur effect)
+              <div className="space-y-3">
+                <div className="flex justify-between text-sm">
+                  <span className="text-white/70">Progress:</span>
+                  <span className="text-white">22.5%</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-white/70">Current Market Price:</span>
+                  <span className="text-white">1.1433 HEX</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-white/70">Backing per Token:</span>
+                  <span className="text-white">2.1977 HEX</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-white/70">Your OTC Price:</span>
+                  <span className="text-white">1.0000 HEX</span>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Sell Token Stats */}
+                {showSellStats && sellToken && (() => {
+                  const tokensWithVersions = ['DECI', 'LUCKY', 'TRIO', 'BASE'];
+                  let sellTokenKey: string;
+
+                  if (sellToken.ticker.startsWith('we')) {
+                    const baseTicker = sellToken.ticker.slice(2);
+                    if (tokensWithVersions.includes(baseTicker)) {
+                      sellTokenKey = getHighestTokenVersion(tokenStats, 'e', baseTicker);
+                    } else {
+                      sellTokenKey = `e${baseTicker}`;
+                    }
+                  } else if (sellToken.ticker.startsWith('e')) {
+                    const baseTicker = sellToken.ticker.slice(1);
+                    if (tokensWithVersions.includes(baseTicker)) {
+                      sellTokenKey = getHighestTokenVersion(tokenStats, 'e', baseTicker);
+                    } else {
+                      sellTokenKey = sellToken.ticker;
+                    }
+                  } else {
+                    if (tokensWithVersions.includes(sellToken.ticker)) {
+                      sellTokenKey = getHighestTokenVersion(tokenStats, 'p', sellToken.ticker);
+                    } else {
+                      sellTokenKey = `p${sellToken.ticker}`;
+                    }
+                  }
+                  const sellStats = tokenStats[sellTokenKey];
+
+                  if (!sellStats) return null;
+
+                  const yourPriceInHEX = calculateOtcPriceInHex;
+                  const hexDisplayName = (buyTokens[0]?.ticker === 'eHEX' || buyTokens[0]?.ticker === 'weHEX') ? 'eHEX' :
+                    (buyTokens[0]?.ticker === 'pHEX') ? 'pHEX' : 'HEX';
+                  const isBaseToken = sellToken.ticker === 'BASE' || sellToken.ticker === 'eBASE' ||
+                    sellToken.ticker === 'pBASE' || sellToken.ticker === 'weBASE';
+
+                  let yourDiscountFromBacking: number | null = null;
+                  let yourDiscountFromMint: number | null = null;
+
+                  if (yourPriceInHEX !== null && sellStats.token.backingPerToken > 0) {
+                    yourDiscountFromBacking = (yourPriceInHEX - sellStats.token.backingPerToken) / sellStats.token.backingPerToken;
+                  }
+
+                  if (yourPriceInHEX !== null && sellStats.token.priceHEX > 0) {
+                    const mintPriceHEX = sellStats.token.priceHEX / (1 + sellStats.token.discountFromMint);
+                    yourDiscountFromMint = (yourPriceInHEX - mintPriceHEX) / mintPriceHEX;
+                  }
+
+                  return (
+                    <div key="sell-stats" className="space-y-2 text-sm">
+                      <h4 className="text-white font-medium mb-3 text-left">{formatTokenTicker(sellToken.ticker, chainId)} Stats</h4>
+                      <div className="flex justify-between">
+                        <span className="text-white/70">Progress:</span>
+                        <span className="text-white">{(sellStats.dates.progressPercentage * 100).toFixed(1)}%</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-white/70">Current Market Price:</span>
+                        <span className="text-white">{sellStats.token.priceHEX.toFixed(4)} {hexDisplayName}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-white/70">Backing per Token:</span>
+                        <span className="text-white">{sellStats.token.backingPerToken.toFixed(4)} {hexDisplayName}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-white/70">Market Discount from Backing:</span>
+                        <span className={`font-medium ${sellStats.token.discountFromBacking > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {(sellStats.token.discountFromBacking * 100).toFixed(2)}%
+                        </span>
+                      </div>
+                      {!isBaseToken && (
+                        <div className="flex justify-between">
+                          <span className="text-white/70">Market Discount from Mint:</span>
+                          <span className={`font-medium ${sellStats.token.discountFromMint > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                            {(sellStats.token.discountFromMint * 100).toFixed(2)}%
+                          </span>
+                        </div>
+                      )}
+                      <div className="border-t border-white/20 my-3"></div>
+                      <div className="flex justify-between">
+                        <span className="text-white/70">Your OTC Price:</span>
+                        <span className="text-white">{yourPriceInHEX ? yourPriceInHEX.toFixed(4) : 'N/A'} {hexDisplayName}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-white/70">Your Discount from Backing:</span>
+                        <span className={`font-medium ${yourDiscountFromBacking !== null ? (yourDiscountFromBacking > 0 ? 'text-green-400' : 'text-red-400') : 'text-white/60'}`}>
+                          {yourDiscountFromBacking !== null ? (yourDiscountFromBacking * 100).toFixed(2) + '%' : 'N/A'}
+                        </span>
+                      </div>
+                      {!isBaseToken && (
+                        <div className="flex justify-between">
+                          <span className="text-white/70">Your Discount from Mint:</span>
+                          <span className={`font-medium ${yourDiscountFromMint !== null ? (yourDiscountFromMint > 0 ? 'text-green-400' : 'text-red-400') : 'text-white/60'}`}>
+                            {yourDiscountFromMint !== null ? (yourDiscountFromMint * 100).toFixed(2) + '%' : 'N/A'}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Buy Token Stats */}
+                {buyTokens.map((buyToken, buyIndex) => {
+                  if (!buyToken || !shouldShowTokenStats(buyToken)) return null;
+
+                  const tokensWithVersions = ['DECI', 'LUCKY', 'TRIO', 'BASE'];
+                  let buyTokenKey: string;
+
+                  if (buyToken.ticker.startsWith('we')) {
+                    const baseTicker = buyToken.ticker.slice(2);
+                    if (tokensWithVersions.includes(baseTicker)) {
+                      buyTokenKey = getHighestTokenVersion(tokenStats, 'e', baseTicker);
+                    } else {
+                      buyTokenKey = `e${baseTicker}`;
+                    }
+                  } else if (buyToken.ticker.startsWith('e')) {
+                    const baseTicker = buyToken.ticker.slice(1);
+                    if (tokensWithVersions.includes(baseTicker)) {
+                      buyTokenKey = getHighestTokenVersion(tokenStats, 'e', baseTicker);
+                    } else {
+                      buyTokenKey = buyToken.ticker;
+                    }
+                  } else {
+                    if (tokensWithVersions.includes(buyToken.ticker)) {
+                      buyTokenKey = getHighestTokenVersion(tokenStats, 'p', buyToken.ticker);
+                    } else {
+                      buyTokenKey = `p${buyToken.ticker}`;
+                    }
+                  }
+                  const buyStats = tokenStats[buyTokenKey];
+
+                  if (!buyStats) return null;
+
+                  const buyAmount = buyAmounts[buyIndex];
+                  let yourPriceInHEX: number | null = null;
+
+                  if (sellToken && buyToken && sellAmount && buyAmount &&
+                    parseFloat(removeCommas(sellAmount)) > 0 && parseFloat(removeCommas(buyAmount)) > 0) {
+                    const isHexVariant = (ticker: string) => {
+                      return ticker === 'HEX' || ticker === 'eHEX' || ticker === 'pHEX' || ticker === 'weHEX';
+                    };
+
+                    if (isHexVariant(buyToken.ticker)) {
+                      yourPriceInHEX = parseFloat(removeCommas(buyAmount)) / parseFloat(removeCommas(sellAmount));
+                    } else if (isHexVariant(sellToken.ticker)) {
+                      yourPriceInHEX = parseFloat(removeCommas(sellAmount)) / parseFloat(removeCommas(buyAmount));
+                    } else {
+                      const buyTokenPriceInHex = getTokenPriceInHex(buyToken.a);
+                      if (buyTokenPriceInHex) {
+                        const buyAmountInHex = parseFloat(removeCommas(buyAmount)) * buyTokenPriceInHex;
+                        yourPriceInHEX = buyAmountInHex / parseFloat(removeCommas(sellAmount));
+                      }
+                    }
+                  }
+
+                  const hexDisplayName = sellToken.ticker === 'eHEX' || sellToken.ticker === 'weHEX' ? 'eHEX' :
+                    sellToken.ticker === 'pHEX' ? 'pHEX' : 'HEX';
+                  const isBaseToken = buyToken.ticker === 'BASE' || buyToken.ticker === 'eBASE' ||
+                    buyToken.ticker === 'pBASE' || buyToken.ticker === 'weBASE';
+
+                  let yourDiscountFromBacking: number | null = null;
+                  let yourDiscountFromMint: number | null = null;
+
+                  if (yourPriceInHEX !== null && buyStats.token.backingPerToken > 0) {
+                    yourDiscountFromBacking = (yourPriceInHEX - buyStats.token.backingPerToken) / buyStats.token.backingPerToken;
+                  }
+
+                  if (yourPriceInHEX !== null && buyStats.token.priceHEX > 0) {
+                    const mintPriceHEX = buyStats.token.priceHEX / (1 + buyStats.token.discountFromMint);
+                    yourDiscountFromMint = (yourPriceInHEX - mintPriceHEX) / mintPriceHEX;
+                  }
+
+                  return (
+                    <div key={`buy-stats-${buyIndex}`} className="space-y-2 text-sm border-t border-white/20 pt-4 first:border-t-0 first:pt-0">
+                      <h4 className="text-white font-medium mb-3 text-left">{formatTokenTicker(buyToken.ticker, chainId)} Stats</h4>
+                      <div className="flex justify-between">
+                        <span className="text-white/70">Progress:</span>
+                        <span className="text-white">{(buyStats.dates.progressPercentage * 100).toFixed(1)}%</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-white/70">Current Market Price:</span>
+                        <span className="text-white">{buyStats.token.priceHEX.toFixed(4)} {hexDisplayName}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-white/70">Backing per Token:</span>
+                        <span className="text-white">{buyStats.token.backingPerToken.toFixed(4)} {hexDisplayName}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-white/70">Market Discount from Backing:</span>
+                        <span className={`font-medium ${buyStats.token.discountFromBacking > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {(buyStats.token.discountFromBacking * 100).toFixed(2)}%
+                        </span>
+                      </div>
+                      {!isBaseToken && (
+                        <>
+                          <div className="flex justify-between">
+                            <span className="text-white/70">Current Mint Price:</span>
+                            <span className="text-white">1 {hexDisplayName}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-white/70">Market Discount from Mint:</span>
+                            <span className={`font-medium ${buyStats.token.discountFromMint > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                              {(buyStats.token.discountFromMint * 100).toFixed(2)}%
+                            </span>
+                          </div>
+                        </>
+                      )}
+                      <div className="border-t border-white/10 my-3"></div>
+                      <div className="flex justify-between">
+                        <span className="text-white/70">Your OTC Price:</span>
+                        <span className="text-white">{yourPriceInHEX ? yourPriceInHEX.toFixed(4) : 'N/A'} {hexDisplayName}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-white/70">Your Discount from Market:</span>
+                        <span className={`font-medium ${yourPriceInHEX !== null && buyStats.token.priceHEX > 0 ?
+                          ((yourPriceInHEX - buyStats.token.priceHEX) / buyStats.token.priceHEX > 0 ? 'text-green-400' : 'text-red-400') : 'text-white/60'}`}>
+                          {yourPriceInHEX !== null && buyStats.token.priceHEX > 0 ?
+                            ((yourPriceInHEX - buyStats.token.priceHEX) / buyStats.token.priceHEX * 100).toFixed(2) + '%' : 'N/A'}
+                        </span>
+                      </div>
+                      {!isBaseToken && (
+                        <div className="flex justify-between">
+                          <span className="text-white/70">Your Discount from Mint:</span>
+                          <span className={`font-medium ${yourDiscountFromMint !== null ? (yourDiscountFromMint > 0 ? 'text-green-400' : 'text-red-400') : 'text-white/60'}`}>
+                            {yourDiscountFromMint !== null ? (yourDiscountFromMint * 100).toFixed(2) + '%' : 'N/A'}
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex justify-between">
+                        <span className="text-white/70">Your Discount from Backing:</span>
+                        <span className={`font-medium ${yourDiscountFromBacking !== null ? (yourDiscountFromBacking > 0 ? 'text-green-400' : 'text-red-400') : 'text-white/60'}`}>
+                          {yourDiscountFromBacking !== null ? (yourDiscountFromBacking * 100).toFixed(2) + '%' : 'N/A'}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Paywall Overlay with Lock Button */}
+          {(PAYWALL_ENABLED && !hasTokenAccess) && (
+            <div
+              className="absolute inset-0 bg-black/40 backdrop-blur-[2px] rounded-xl flex items-center justify-center z-10"
+              onClick={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  setShowPaywallModal(true);
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+                className="flex flex-col items-center space-y-3 p-6 rounded-lg bg-black/60 hover:bg-white/5 transition-all border border-white/10"
+              >
+                <Lock className="w-12 h-12 text-white transition-colors" />
+                <div className="text-center">
+                  <p className="text-white font-semibold">Premium Data Access</p>
+                  <p className="text-white/70 text-sm">Click to unlock advanced backing data.</p>
+                </div>
+              </button>
+            </div>
+          )}
+        </LiquidGlassCard>,
+        proStatsContainerRef.current
+      )}
 
       {/* Paywall Modal - Rendered outside form container for full-page overlay */}
       < PaywallModal

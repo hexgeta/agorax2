@@ -125,14 +125,14 @@ export function SwipeCard({ order, onSwipeComplete, isTop, stackIndex, cardRef, 
 
   let currentPriceDiscount = 0;
   if (sellTokenPrice > 0 && currentBuyTokenPrice > 0 && buyAmountFormatted > 0) {
-    // Calculate sell value in USD
+    // Calculate sell value in USD (what the sell token is worth at market)
     const sellValueUsd = sellAmountFormatted * sellTokenPrice;
-    // Calculate the limit price per buy token (what the seller is implicitly pricing their token at)
-    const limitBuyTokenPrice = sellValueUsd / buyAmountFormatted;
-    // How much above/below market is this limit price?
-    // Positive = seller pricing buy token above market = good deal for buyer
-    // Negative = seller pricing buy token below market = bad deal for buyer
-    currentPriceDiscount = ((limitBuyTokenPrice - currentBuyTokenPrice) / currentBuyTokenPrice) * 100;
+    // Calculate what the seller is ASKING for in USD (value of buy tokens at market price)
+    const askingValueUsd = buyAmountFormatted * currentBuyTokenPrice;
+    // How much above/below market is the seller pricing their token?
+    // Positive = seller asking for premium (above market) = bad deal for buyer
+    // Negative = seller offering discount (below market) = good deal for buyer
+    currentPriceDiscount = ((askingValueUsd - sellValueUsd) / sellValueUsd) * 100;
     currentPriceDiscount = Math.round(currentPriceDiscount * 10) / 10; // Round to 1 decimal
   }
 

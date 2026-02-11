@@ -352,6 +352,9 @@ export default function MyOrdersPage() {
 
                         {/* Orders Table */}
                         <OpenPositionsTable ref={openPositionsTableRef} showViewAllLink compactMode />
+
+                        {/* Pro Stats container - directly after order history */}
+                        <div ref={proStatsContainerRef} className="w-full" />
                       </div>
 
                       {/* Right Column - Order Form, sticky on desktop */}
@@ -399,9 +402,6 @@ export default function MyOrdersPage() {
                         />
                       </div>
                     </div>
-
-                    {/* Pro Stats container - below order history, aligned with left column */}
-                    <div ref={proStatsContainerRef} className="w-full lg:w-[60%]" />
                   </div>
                 </div>
               </motion.div>

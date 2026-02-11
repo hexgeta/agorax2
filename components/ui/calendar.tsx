@@ -86,7 +86,7 @@ function Calendar({
         range_start: "bg-white/20 rounded-l-md [&>button]:!bg-white [&>button]:!text-black [&>button]:hover:!bg-white [&>button]:hover:!text-black",
         range_middle: "bg-white/20 rounded-none [&>button]:!bg-transparent [&>button]:!text-white [&>button]:hover:!bg-white/10",
         range_end: "bg-white/20 rounded-r-md [&>button]:!bg-white [&>button]:!text-black [&>button]:hover:!bg-white [&>button]:hover:!text-black",
-        selected: "",
+        selected: "[&>button]:!bg-white [&>button]:!text-black [&>button]:hover:!bg-white [&>button]:hover:!text-black",
         today: "[&>button]:ring-1 [&>button]:ring-white/50",
         outside: cn("text-white/30 opacity-50 [&>button]:text-white/30", defaultClassNames.outside),
         disabled: cn("text-white/20 opacity-50 pointer-events-none", defaultClassNames.disabled),

@@ -1557,12 +1557,24 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
       }
 
       // Track trade completed event for the overall transaction
-      // Calculate total USD volume for all fills
+      // Calculate total USD volume for all fills and the actual sell amount received
       let totalVolumeUsd = 0;
-      for (const { tokenInfo: buyTokenInfo, buyAmount } of tokensToExecute) {
+      let totalSellAmountReceived = 0n;
+      const remainingSellAmount = order.orderDetailsWithID.remainingSellAmount;
+      const buyAmountsFromOrder = order.orderDetailsWithID.orderDetails.buyAmounts;
+
+      for (const { index, tokenInfo: buyTokenInfo, buyAmount } of tokensToExecute) {
         const buyTokenPrice = getTokenPrice(buyTokenInfo.address, tokenPrices);
         const buyAmountNum = parseFloat(formatTokenAmount(buyAmount, buyTokenInfo.decimals));
         totalVolumeUsd += buyAmountNum * (buyTokenPrice || 0);
+
+        // Calculate the proportional sell amount received for this fill
+        // sellReceived = (buyAmountPaid / requiredBuyAmount) * remainingSellAmount
+        const requiredBuyAmount = buyAmountsFromOrder[index];
+        if (requiredBuyAmount > 0n) {
+          const sellReceived = (buyAmount * remainingSellAmount) / requiredBuyAmount;
+          totalSellAmountReceived += sellReceived;
+        }
       }
 
       // Get sell token info for tracking
@@ -1570,11 +1582,12 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
       const sellTokenInfo = getTokenInfo(sellTokenAddress);
 
       // Track trade completed with full token info for challenges
+      // sell_amount is what the filler RECEIVED (the sell token from the order)
       trackTradeCompleted({
         order_id: parseInt(orderId),
         sell_token: sellTokenInfo.ticker,
         buy_token: tokensToExecute.map(t => t.tokenInfo.ticker).join(','), // Primary buy token(s)
-        sell_amount: formatTokenAmount(order.orderDetailsWithID.orderDetails.sellAmount, sellTokenInfo.decimals),
+        sell_amount: formatTokenAmount(totalSellAmountReceived, sellTokenInfo.decimals),
         buy_amount: tokensToExecute.map(t => formatTokenAmount(t.buyAmount, t.tokenInfo.decimals)).join(','),
         volume_usd: totalVolumeUsd,
         is_maker: false, // User is filling someone else's order
@@ -2387,8 +2400,10 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
 
         if (sellUsdValue <= 0 || buyTokenAmount <= 0 || buyTokenMarketPrice <= 0) return true;
 
-        const limitBuyTokenPrice = sellUsdValue / buyTokenAmount;
-        const positionPercentage = ((limitBuyTokenPrice - buyTokenMarketPrice) / buyTokenMarketPrice) * 100;
+        // Calculate using seller's perspective (matching table display):
+        // What the seller is ASKING for in USD vs what their sell token is worth
+        const askingUsdValue = buyTokenAmount * buyTokenMarketPrice;
+        const positionPercentage = ((askingUsdValue - sellUsdValue) / sellUsdValue) * 100;
 
         return positionPercentage >= positionRange[0] && positionPercentage <= positionRange[1];
       });
@@ -2504,8 +2519,9 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
               const buyTokenMarketPrice = getTokenPrice(firstBuyTokenInfo.address, tokenPrices);
 
               if (sellUsdValue > 0 && buyTokenAmount > 0 && buyTokenMarketPrice > 0) {
-                const limitBuyTokenPrice = sellUsdValue / buyTokenAmount;
-                return ((limitBuyTokenPrice - buyTokenMarketPrice) / buyTokenMarketPrice) * 100;
+                // Calculate using seller's perspective (matching table display)
+                const askingUsdValue = buyTokenAmount * buyTokenMarketPrice;
+                return ((askingUsdValue - sellUsdValue) / sellUsdValue) * 100;
               }
             }
             return -Infinity; // Orders without percentage go to the end
@@ -2543,8 +2559,9 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
               const buyTokenMarketPrice = getTokenPrice(firstBuyTokenInfo.address, tokenPrices);
 
               if (sellUsdValue > 0 && buyTokenAmount > 0 && buyTokenMarketPrice > 0) {
-                const limitBuyTokenPrice = sellUsdValue / buyTokenAmount;
-                return ((limitBuyTokenPrice - buyTokenMarketPrice) / buyTokenMarketPrice) * 100;
+                // Calculate using seller's perspective (matching table display)
+                const askingUsdValue = buyTokenAmount * buyTokenMarketPrice;
+                return ((askingUsdValue - sellUsdValue) / sellUsdValue) * 100;
               }
             }
             return -Infinity; // Orders without percentage go to the end
@@ -2910,7 +2927,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
       transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
     >
     <LiquidGlassCard
-      className={`w-full max-w-[1200px] mb-6 mt-2 p-0 ${isLandingPageMode ? 'overflow-hidden' : 'mx-auto'}`}
+      className={`w-full max-w-[1200px] p-0 ${compactMode ? '' : 'mb-6 mt-2'} ${isLandingPageMode ? 'overflow-hidden' : 'mx-auto'}`}
       shadowIntensity="sm"
       glowIntensity="sm"
       blurIntensity="xl"
@@ -3031,6 +3048,29 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
           </svg>
         </button>
+
+        {/* Clear All Filters Button - shown when there are active filters */}
+        {activeFilterCount > 0 && (
+          <button
+            type="button"
+            onClick={() => {
+              setSearchQuery('');
+              setAonFilterEnabled(false);
+              setDustFilterEnabled(false);
+              setClaimableFilterEnabled(false);
+              setHideMyOrders(false);
+              setFillRange([0, 100]);
+              setPositionRange([-100, 100]);
+              setDateFilterPreset(null);
+              setCustomDateStart(undefined);
+              setCustomDateEnd(undefined);
+              setShowDatePicker(false);
+            }}
+            className="px-2 py-1 text-red-400 hover:text-red-300 text-xs transition-colors whitespace-nowrap"
+          >
+            Clear All
+          </button>
+        )}
 
         {/* View All Orders Link - shown on swap page to link to full my-orders page */}
         {showViewAllLink && (
@@ -3255,20 +3295,6 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                             </div>
                           )}
                         </div>
-                        {/* Clear Filter Button */}
-                        {dateFilterPreset && (dateFilterPreset !== 'custom' || (customDateStart && customDateEnd)) && (
-                          <button
-                            onClick={() => {
-                              setDateFilterPreset(null);
-                              setCustomDateStart(undefined);
-                              setCustomDateEnd(undefined);
-                              setShowDatePicker(false);
-                            }}
-                            className="px-2 py-1 text-red-400 hover:text-red-300 text-xs transition-colors"
-                          >
-                            Clear
-                          </button>
-                        )}
                       </div>
                       {dateFilterPreset === 'custom' && customDateStart && customDateEnd && (
                         <div className="text-white/50 text-xs">
@@ -3746,7 +3772,10 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                   }
                   const tokenPercentages: TokenPercentage[] = [];
 
-                  // Calculate the effective price per buy token for each buy token
+                  // Calculate the percentage difference from market for each buy token
+                  // This shows how much above/below market the SELLER is pricing their token
+                  // Positive = seller asking for premium (more than market value)
+                  // Negative = seller offering discount (less than market value)
                   if (buyTokensIndex && buyAmounts && Array.isArray(buyTokensIndex) && Array.isArray(buyAmounts) && buyTokensIndex.length > 0) {
                     buyTokensIndex.forEach((tokenIndex: bigint, idx: number) => {
                       const buyTokenInfo = getTokenInfoByIndex(Number(tokenIndex));
@@ -3760,8 +3789,12 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                       const buyTokenMarketPrice = getTokenPrice(buyTokenInfo.address, tokenPrices);
 
                       if (sellUsdValue > 0 && buyTokenAmount > 0 && buyTokenMarketPrice > 0) {
-                        const limitBuyTokenPrice = sellUsdValue / buyTokenAmount;
-                        const percentageDiff = ((limitBuyTokenPrice - buyTokenMarketPrice) / buyTokenMarketPrice) * 100;
+                        // What the seller is ASKING for in USD (value of buy tokens at market price)
+                        const askingUsdValue = buyTokenAmount * buyTokenMarketPrice;
+                        // Compare asking value vs what their sell token is worth
+                        // Positive = asking for more than market (premium/above market)
+                        // Negative = asking for less than market (discount/below market)
+                        const percentageDiff = ((askingUsdValue - sellUsdValue) / sellUsdValue) * 100;
                         tokenPercentages.push({
                           percentage: percentageDiff,
                           isBelowMarket: percentageDiff < 0,
@@ -4575,8 +4608,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                                         }`}
                                                       >
                                                         {isBetterDeal && (
-                                                          <span className="absolute -top-2.5 -right-2 px-1 py-0.5 bg-green-500/90 text-white text-[8px] font-medium rounded leading-none">
-                                                            Better deal
+                                                          <span className="absolute -top-3 -right-3 px-1.5 py-0.5 bg-green-500/90 text-white text-[10px] font-medium rounded leading-none whitespace-nowrap">
+                                                            Best Deal
                                                           </span>
                                                         )}
                                                         <TokenLogo

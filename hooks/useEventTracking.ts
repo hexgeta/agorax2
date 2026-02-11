@@ -14,15 +14,14 @@ import type {
 
 // Debounce time for view events (ms)
 const VIEW_EVENT_DEBOUNCE = 5000;
-const STORAGE_KEY = 'agorax-session';
+const STORAGE_KEY = 'agorax-sessions';
 
-function getSessionToken(): string | null {
+function getSessionToken(wallet: string): string | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    const session = JSON.parse(raw);
-    if (!session.token) return null;
-    return session.token;
+    const sessions = JSON.parse(raw);
+    return sessions[wallet.toLowerCase()] || null;
   } catch {
     return null;
   }
@@ -42,7 +41,7 @@ export function useEventTracking() {
 
       // Include auth token if available (stored by useWalletAuth)
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      const token = getSessionToken();
+      const token = getSessionToken(address);
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       }
