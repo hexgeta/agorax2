@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CircleDollarSign, DollarSign, ChevronDown, Trash2, Lock, Search, ArrowRight, MoveRight, ChevronRight, Play, CalendarDays, ExternalLink } from 'lucide-react';
+import { CircleDollarSign, DollarSign, ChevronDown, Trash2, Lock, Search, ArrowRight, MoveRight, ChevronRight, Play, CalendarDays, ExternalLink, Star } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import Link from 'next/link';
 import { PixelSpinner } from './ui/PixelSpinner';
@@ -35,6 +35,7 @@ import { useTokenAccess } from '@/context/TokenAccessContext';
 import { PAYWALL_ENABLED, REQUIRED_PARTY_TOKENS, REQUIRED_TEAM_TOKENS, PAYWALL_TITLE, PAYWALL_DESCRIPTION } from '@/config/paywall';
 import { getContractAddress } from '@/config/testing';
 import { useEventTracking } from '@/hooks/useEventTracking';
+import { useFavorites } from '@/hooks/useFavorites';
 
 // Sorting types
 type SortField = 'sellAmount' | 'askingFor' | 'progress' | 'owner' | 'status' | 'date' | 'backingPrice' | 'currentPrice' | 'otcVsMarket';
@@ -361,6 +362,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
   const { data: walletClient } = useWalletClient();
   const { open: openWalletModal } = useAppKit();
   const { trackOrderFilled, trackOrderCancelled, trackProceedsClaimed, trackTradeCompleted, trackOrderExpired } = useEventTracking();
+  const { favoriteOrderIds, isFavorite, toggleFavorite } = useFavorites();
 
   // Contract address for querying events - get based on current chain
   const OTC_CONTRACT_ADDRESS = getContractAddress(chainId) as `0x${string}`;
@@ -417,6 +419,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
   const [aonFilterEnabled, setAonFilterEnabled] = useState<boolean>(initialAonFilter || false);
   // Hide my orders filter (marketplace mode only)
   const [hideMyOrders, setHideMyOrders] = useState<boolean>(false);
+  const [favoritesOnly, setFavoritesOnly] = useState<boolean>(false);
   // Dust filter - hide low value orders
   const [dustFilterEnabled, setDustFilterEnabled] = useState<boolean>(!!initialDustFilter);
   const [dustFilterMinValue, setDustFilterMinValue] = useState<string>(initialDustFilter || '10');
@@ -2216,11 +2219,12 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     if (dustFilterEnabled) count++;
     if (claimableFilterEnabled) count++;
     if (hideMyOrders && isMarketplaceMode) count++;
+    if (favoritesOnly && isMarketplaceMode) count++;
     if (fillRange[0] > 0 || fillRange[1] < 100) count++;
     if (positionRange[0] > -100 || positionRange[1] < 100) count++;
     if (dateFilterPreset) count++;
     return count;
-  }, [searchQuery, aonFilterEnabled, dustFilterEnabled, claimableFilterEnabled, hideMyOrders, isMarketplaceMode, fillRange, positionRange, dateFilterPreset]);
+  }, [searchQuery, aonFilterEnabled, dustFilterEnabled, claimableFilterEnabled, hideMyOrders, favoritesOnly, isMarketplaceMode, fillRange, positionRange, dateFilterPreset]);
 
   // Memoize the display orders with 3-level filtering
   const displayOrders = useMemo(() => {
@@ -2249,6 +2253,13 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
           order.userDetails.orderOwner.toLowerCase() !== address.toLowerCase()
         );
       }
+    }
+
+    // Filter to favorites only (marketplace mode)
+    if (favoritesOnly && isMarketplaceMode && favoriteOrderIds.size > 0) {
+      orders = orders.filter(order =>
+        favoriteOrderIds.has(Number(order.orderDetailsWithID.orderID))
+      );
     }
 
     // Level 3: Filter by status
@@ -2580,7 +2591,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     });
 
     return sortedOrders;
-  }, [allOrders, tokenFilter, ownershipFilter, statusFilter, searchQuery, aonFilterEnabled, hideMyOrders, dustFilterEnabled, dustFilterMinValue, fillRange, positionRange, claimableFilterEnabled, isMarketplaceMode, getActiveDateRange, sortField, sortDirection, tokenPrices, tokenStats, address, purchasedOrderIds, purchaseTransactions]);
+  }, [allOrders, tokenFilter, ownershipFilter, statusFilter, searchQuery, aonFilterEnabled, hideMyOrders, favoritesOnly, favoriteOrderIds, dustFilterEnabled, dustFilterMinValue, fillRange, positionRange, claimableFilterEnabled, isMarketplaceMode, getActiveDateRange, sortField, sortDirection, tokenPrices, tokenStats, address, purchasedOrderIds, purchaseTransactions]);
 
   // Helper functions
   const formatTimestamp = (timestamp: number) => {
@@ -2685,6 +2696,13 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
           order.userDetails.orderOwner.toLowerCase() !== address.toLowerCase()
         );
       }
+    }
+
+    // Filter to favorites only (marketplace mode)
+    if (favoritesOnly && isMarketplaceMode && favoriteOrderIds.size > 0) {
+      orders = orders.filter(order =>
+        favoriteOrderIds.has(Number(order.orderDetailsWithID.orderID))
+      );
     }
 
     // Apply status filter
@@ -3382,7 +3400,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                   <div className="flex items-center justify-between">
                     <div className="flex flex-col">
                       <span className="text-white/70 text-sm">Hide my orders</span>
-                      <span className="text-white/40 text-xs">Don't show orders I created</span>
+                      <span className="text-white/40 text-xs">Don&apos;t show orders I created</span>
                     </div>
                     <button
                       type="button"
@@ -3394,6 +3412,32 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                       <span
                         className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform duration-200 ${
                           hideMyOrders ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                )}
+
+                {/* Favorites Only Toggle - only show if wallet connected and in marketplace mode */}
+                {address && isMarketplaceMode && (
+                  <div className="flex items-center justify-between">
+                    <div className="flex flex-col">
+                      <div className="flex items-center gap-1.5">
+                        <Star className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" />
+                        <span className="text-white/70 text-sm">Favorites only</span>
+                      </div>
+                      <span className="text-white/40 text-xs">Show only orders you&apos;ve starred</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setFavoritesOnly(!favoritesOnly)}
+                      className={`relative w-11 h-6 rounded-full transition-colors duration-200 flex-shrink-0 ${
+                        favoritesOnly ? 'bg-yellow-500' : 'bg-white/20'
+                      }`}
+                    >
+                      <span
+                        className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform duration-200 ${
+                          favoritesOnly ? 'translate-x-5' : 'translate-x-0'
                         }`}
                       />
                     </button>
@@ -4238,7 +4282,25 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                       </div>
 
                       {/* COLUMN 8: Order ID */}
-                      <div className="flex items-start justify-center min-w-0 mt-1.5">
+                      <div className="flex items-start justify-center gap-1.5 min-w-0 mt-1.5">
+                        {isMarketplaceMode && address && order.userDetails.orderOwner.toLowerCase() !== address.toLowerCase() && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleFavorite(order.orderDetailsWithID.orderID);
+                            }}
+                            className="flex-shrink-0 mt-0.5 transition-colors hover:scale-110 active:scale-95"
+                            title={isFavorite(order.orderDetailsWithID.orderID) ? 'Remove from favorites' : 'Add to favorites'}
+                          >
+                            <Star
+                              className={`w-3.5 h-3.5 ${
+                                isFavorite(order.orderDetailsWithID.orderID)
+                                  ? 'text-yellow-400 fill-yellow-400'
+                                  : 'text-gray-600 hover:text-yellow-400/60'
+                              }`}
+                            />
+                          </button>
+                        )}
                         <div className="text-gray-400 text-sm">{order.orderDetailsWithID.orderID.toString()}</div>
                       </div>
 

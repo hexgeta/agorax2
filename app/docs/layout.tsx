@@ -27,6 +27,7 @@ const searchableDocs: SearchableDoc[] = [
   { title: 'Order Types', href: '/docs/concepts/order-types', content: 'Two order types: Partial Fill allows buyers to purchase any amount up to total. All-or-Nothing requires the entire order to be filled at once. Set expiration dates and accept multiple payment tokens.', section: 'Core Concepts' },
   { title: 'Token Compatibility', href: '/docs/concepts/token-compatibility', content: 'Any standard ERC20 token can be sold. Buy tokens must be whitelisted including PLS, WPLS, HEX, PLSX, INC, DAI, and more. Fee-on-transfer and rebasing tokens are not supported.', section: 'Core Concepts' },
   { title: 'Pricing & Fees', href: '/docs/concepts/pricing-fees', content: 'Listing fee is 100 PLS per order. 0.2% seller fee on trades, zero fees for buyers. Set prices above or below market using percentage buttons (+1%, +2%, +5%, +10%) or drag the limit line on the price chart.', section: 'Core Concepts' },
+  { title: 'Platform Comparison', href: '/docs/concepts/comparison', content: 'Compare AgoraX to other limit order and trading platforms on PulseChain and Ethereum. Side-by-side comparison with Matcha, 1inch, CoW Swap, UniswapX, PulseX, and 9inch. Fee comparison, feature matrix, MEV protection, slippage, partial fills, multi-token payments, oracle dependency, and contract immutability.', section: 'Core Concepts' },
   { title: 'Creating Orders', href: '/docs/guide/creating-orders', content: 'Step-by-step guide to creating limit orders. Select sell token and amount, choose accepted buy tokens, set your price above market, approve token spending, pay the listing fee, and confirm the transaction.', section: 'User Guide' },
   { title: 'Filling Orders', href: '/docs/guide/filling-orders', content: 'Browse the marketplace to find orders. Use filters for status, fill percentage, minimum USD, position relative to market. Select an order, choose payment token, enter fill amount, approve and confirm.', section: 'User Guide' },
   { title: 'Managing Orders', href: '/docs/guide/managing-orders', content: 'View all your orders in My Orders page. Claim proceeds from filled orders, cancel unfilled portions to reclaim tokens, track order status and fill history. Filter by active, expired, completed.', section: 'User Guide' },
@@ -55,6 +56,7 @@ const navigation: NavItem[] = [
       { title: 'Order Types', href: '/docs/concepts/order-types' },
       { title: 'Token Compatibility', href: '/docs/concepts/token-compatibility' },
       { title: 'Pricing & Fees', href: '/docs/concepts/pricing-fees' },
+      { title: 'Platform Comparison', href: '/docs/concepts/comparison' },
     ],
   },
   {
