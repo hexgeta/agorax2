@@ -85,14 +85,14 @@ export const ConnectButton = ({ connectedText, connectedHref }: ConnectButtonPro
           onClick={() => open()}
           disabled={isTransactionPending}
           className={`px-4 md:px-8 py-2 md:py-3 rounded-full font-semibold transition-colors text-sm md:text-base ${isTransactionPending
-            ? 'bg-white border-2 border-white text-white cursor-not-allowed'
+            ? 'bg-white/20 border border-white/30 text-white cursor-not-allowed'
             : 'bg-white text-black hover:bg-white/80'
             }`}
         >
           {isTransactionPending ? (
             <div className="flex items-center gap-2">
               <PixelSpinner size={16} />
-              <span>Loading</span>
+              <span>Processing</span>
             </div>
           ) : (
             `${address.slice(0, 6)}...${address.slice(-4)}`
