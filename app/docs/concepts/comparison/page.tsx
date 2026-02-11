@@ -267,70 +267,9 @@ export default function ComparisonPage() {
         </p>
       </div>
 
-      {/* Legend */}
-      <LiquidGlassCard className="p-4">
-        <div className="flex flex-wrap gap-6 text-sm">
-          <div className="flex items-center gap-2">
-            {checkIcon}
-            <span className="text-white/70">Fully supported</span>
-          </div>
-          <div className="flex items-center gap-2">
-            {partialIcon}
-            <span className="text-white/70">Partial / limited</span>
-          </div>
-          <div className="flex items-center gap-2">
-            {crossIcon}
-            <span className="text-white/70">Not supported</span>
-          </div>
-        </div>
-      </LiquidGlassCard>
-
-      {/* Fee Comparison */}
+      {/* Comparison Table */}
       <div>
-        <h2 className="text-2xl font-semibold text-white mb-4">Fee Comparison</h2>
-        <LiquidGlassCard className="p-0 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-white/10">
-                  <th className="text-left text-white/60 font-medium p-4">Platform</th>
-                  <th className="text-left text-white/60 font-medium p-4">Chain</th>
-                  <th className="text-left text-white/60 font-medium p-4">Type</th>
-                  <th className="text-left text-white/60 font-medium p-4">Seller Fee</th>
-                  <th className="text-left text-white/60 font-medium p-4">Buyer Fee</th>
-                </tr>
-              </thead>
-              <tbody>
-                {platforms.map((p, i) => (
-                  <tr
-                    key={p.name}
-                    className={`border-b border-white/5 ${i === 0 ? 'bg-green-500/5' : ''}`}
-                  >
-                    <td className={`p-4 font-medium ${i === 0 ? 'text-green-400' : 'text-white'}`}>
-                      {p.name}
-                    </td>
-                    <td className="p-4 text-white/60">{p.chain}</td>
-                    <td className="p-4 text-white/60">{p.type}</td>
-                    <td className={`p-4 ${i === 0 ? 'text-green-400 font-medium' : 'text-white/70'}`}>
-                      {p.tradingFee}
-                    </td>
-                    <td className={`p-4 ${i === 0 ? 'text-green-400 font-medium' : 'text-white/70'}`}>
-                      {p.buyerFee}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </LiquidGlassCard>
-        <p className="text-white/50 text-xs mt-2">
-          * CoW Swap takes 50% of price surplus, capped at 0.98% of order volume. 1inch and UniswapX charge 0% interface fees but execution costs may be embedded in settlement prices.
-        </p>
-      </div>
-
-      {/* Feature Comparison Table */}
-      <div>
-        <h2 className="text-2xl font-semibold text-white mb-4">Feature Comparison</h2>
+        <h2 className="text-2xl font-semibold text-white mb-4">Comparison Table</h2>
         <LiquidGlassCard className="p-0 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -342,12 +281,29 @@ export default function ComparisonPage() {
                       key={p.name}
                       className={`text-left font-medium p-4 min-w-[120px] ${i === 0 ? 'text-green-400' : 'text-white/80'}`}
                     >
-                      {p.name}
+                      <div>{p.name}</div>
+                      <div className="text-white/40 text-xs font-normal">{p.chain}</div>
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
+                <tr className="border-b border-white/5">
+                  <td className="p-4 text-white font-medium">Seller Fee</td>
+                  {platforms.map((p, i) => (
+                    <td key={p.name} className={`p-4 ${i === 0 ? 'text-green-400 font-medium' : 'text-white/70'}`}>
+                      {p.tradingFee}
+                    </td>
+                  ))}
+                </tr>
+                <tr className="border-b border-white/5">
+                  <td className="p-4 text-white font-medium">Buyer Fee</td>
+                  {platforms.map((p, i) => (
+                    <td key={p.name} className={`p-4 ${i === 0 ? 'text-green-400 font-medium' : 'text-white/70'}`}>
+                      {p.buyerFee}
+                    </td>
+                  ))}
+                </tr>
                 <tr className="border-b border-white/5">
                   <td className="p-4 text-white font-medium">Limit Orders</td>
                   {platforms.map((p) => (
@@ -432,6 +388,9 @@ export default function ComparisonPage() {
             </table>
           </div>
         </LiquidGlassCard>
+        <p className="text-white/50 text-xs mt-2">
+          * CoW Swap takes 50% of price surplus, capped at 0.98% of order volume. 1inch and UniswapX charge 0% interface fees but execution costs may be embedded in settlement prices.
+        </p>
       </div>
 
       {/* Per-Platform Breakdown - Cards */}
@@ -441,15 +400,8 @@ export default function ComparisonPage() {
 
           {/* AgoraX */}
           <LiquidGlassCard className="p-6">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center">
-                <span className="text-green-400 font-bold text-sm">AX</span>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-green-400">AgoraX</h3>
-                <p className="text-white/50 text-xs">PulseChain &middot; Limit Order DEX</p>
-              </div>
-            </div>
+            <h3 className="text-lg font-semibold text-green-400 mb-1">AgoraX</h3>
+            <p className="text-white/50 text-xs mb-3">PulseChain &middot; Limit Order DEX</p>
             <p className="text-white/70 text-sm mb-3">
               Purpose-built on-chain limit order book for PulseChain. Peer-to-peer trading with zero slippage,
               0.2% seller fee (zero for buyers), multi-token payment acceptance (up to 50 tokens per order),
@@ -467,15 +419,8 @@ export default function ComparisonPage() {
 
           {/* Matcha */}
           <LiquidGlassCard className="p-6">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
-                <span className="text-white/80 font-bold text-sm">M</span>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-white">Matcha (0x Protocol)</h3>
-                <p className="text-white/50 text-xs">Ethereum + 16 chains &middot; DEX Aggregator</p>
-              </div>
-            </div>
+            <h3 className="text-lg font-semibold text-white mb-1">Matcha (0x Protocol)</h3>
+            <p className="text-white/50 text-xs mb-3">Ethereum + 16 chains &middot; DEX Aggregator</p>
             <p className="text-white/70 text-sm mb-3">
               Multi-chain DEX aggregator powered by 0x Protocol. Aggregates 130+ liquidity sources across 16 chains.
               Offers limit orders via off-chain order book on select chains (Ethereum, Polygon, BNB Chain).
@@ -492,15 +437,8 @@ export default function ComparisonPage() {
 
           {/* 1inch */}
           <LiquidGlassCard className="p-6">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
-                <span className="text-white/80 font-bold text-sm">1&quot;</span>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-white">1inch</h3>
-                <p className="text-white/50 text-xs">Ethereum + 12 chains &middot; DEX Aggregator</p>
-              </div>
-            </div>
+            <h3 className="text-lg font-semibold text-white mb-1">1inch</h3>
+            <p className="text-white/50 text-xs mb-3">Ethereum + 12 chains &middot; DEX Aggregator</p>
             <p className="text-white/70 text-sm mb-3">
               Leading DEX aggregator with zero platform fees. Fusion mode provides gasless, MEV-protected
               trading via Dutch auction pricing and resolver competition. Programmable limit orders support
@@ -517,15 +455,8 @@ export default function ComparisonPage() {
 
           {/* CoW Swap */}
           <LiquidGlassCard className="p-6">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
-                <span className="text-white/80 font-bold text-sm">CoW</span>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-white">CoW Swap</h3>
-                <p className="text-white/50 text-xs">Ethereum + 4 chains &middot; Intent-based DEX</p>
-              </div>
-            </div>
+            <h3 className="text-lg font-semibold text-white mb-1">CoW Swap</h3>
+            <p className="text-white/50 text-xs mb-3">Ethereum + 4 chains &middot; Intent-based DEX</p>
             <p className="text-white/70 text-sm mb-3">
               Intent-based DEX with industry-leading MEV protection through batch auctions and Coincidence of Wants
               (peer-to-peer matching). Surplus-based fee model: takes 50% of price improvement, capped at 0.98%.
@@ -542,15 +473,8 @@ export default function ComparisonPage() {
 
           {/* UniswapX */}
           <LiquidGlassCard className="p-6">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
-                <span className="text-white/80 font-bold text-sm">UX</span>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-white">UniswapX</h3>
-                <p className="text-white/50 text-xs">Ethereum + Arbitrum &middot; Intent-based AMM</p>
-              </div>
-            </div>
+            <h3 className="text-lg font-semibold text-white mb-1">UniswapX</h3>
+            <p className="text-white/50 text-xs mb-3">Ethereum + Arbitrum &middot; Intent-based AMM</p>
             <p className="text-white/70 text-sm mb-3">
               Intent-based trading layer on top of Uniswap. Uses Exclusive Dutch Orders where price decays from
               a user-favorable starting point. Zero interface fees. Fillers pay gas and compete to provide best
@@ -567,15 +491,8 @@ export default function ComparisonPage() {
 
           {/* PulseX */}
           <LiquidGlassCard className="p-6">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
-                <span className="text-white/80 font-bold text-sm">PX</span>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-white">PulseX</h3>
-                <p className="text-white/50 text-xs">PulseChain &middot; AMM (Uniswap V2 fork)</p>
-              </div>
-            </div>
+            <h3 className="text-lg font-semibold text-white mb-1">PulseX</h3>
+            <p className="text-white/50 text-xs mb-3">PulseChain &middot; AMM (Uniswap V2 fork)</p>
             <p className="text-white/70 text-sm mb-3">
               Dominant AMM on PulseChain, forked from Uniswap V2. 0.29% swap fee on every trade for both sides.
               No native limit order support — only instant AMM swaps with variable slippage. No MEV protection.
@@ -592,15 +509,8 @@ export default function ComparisonPage() {
 
           {/* 9inch */}
           <LiquidGlassCard className="p-6">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
-                <span className="text-white/80 font-bold text-sm">9&quot;</span>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-white">9inch</h3>
-                <p className="text-white/50 text-xs">PulseChain + Ethereum &middot; AMM + Limit Orders</p>
-              </div>
-            </div>
+            <h3 className="text-lg font-semibold text-white mb-1">9inch</h3>
+            <p className="text-white/50 text-xs mb-3">PulseChain + Ethereum &middot; AMM + Limit Orders</p>
             <p className="text-white/70 text-sm mb-3">
               PulseChain DEX offering both AMM swaps and basic limit orders. 0.29% fee on all trades.
               One of the first platforms on PulseChain to introduce limit order functionality.
