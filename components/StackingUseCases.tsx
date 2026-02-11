@@ -116,7 +116,7 @@ export function StackingUseCases() {
   const xOffsets = [0, 8, -5, 12, -8, 6, -10, 8, -6, 10, -7, 7];
 
   return (
-    <section className="relative bg-black py-16 md:py-24 px-4 md:px-6">
+    <section className="relative bg-black py-16 md:py-24 px-4 md:px-6 w-full z-10">
       {/* Header */}
       <div className="text-center max-w-2xl mx-auto mb-12 md:mb-16">
         <h1 className="text-3xl md:text-5xl font-bold text-white tracking-tight leading-tight mb-4">

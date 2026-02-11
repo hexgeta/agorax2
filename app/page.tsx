@@ -259,11 +259,16 @@ export default function Home() {
               </motion.section>
 
             </div>
-            {/* End of padded container - Use Cases needs full width */}
+          </div>
+        </div>
+        {/* End of max-width container - Use Cases needs full width */}
 
-            {/* Use Cases Section - After How It Works, before Unique Features */}
-            <StackingUseCases />
+        {/* Use Cases Section - Full width */}
+        <StackingUseCases />
 
+        {/* Resume max-width container */}
+        <div className="w-full px-2 md:px-8 relative z-10">
+          <div className="max-w-[1200px] mx-auto">
             {/* Content After Use Cases */}
             <div className="pt-12 md:pt-20 pb-16 px-4 md:px-6">
               {/* Why AgoráX Wins Section */}
