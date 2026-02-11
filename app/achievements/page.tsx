@@ -350,7 +350,7 @@ export default function RanksPage() {
   const [selectedPrestige, setSelectedPrestige] = useState<number>(0);
 
   // Fetch real user data from Supabase
-  const { stats, completedChallenges: rawCompletedChallenges, isLoading, isConnected } = useUserAchievements();
+  const { stats, completedChallenges: rawCompletedChallenges, xpBreakdown, isLoading, isConnected } = useUserAchievements();
 
   // Transform completed challenges into the format expected by the UI
   const userData = useMemo(() => {
@@ -526,6 +526,47 @@ export default function RanksPage() {
               </LiquidGlassCard>
             )}
           </motion.div>
+
+          {/* XP Breakdown */}
+          {xpBreakdown && xpBreakdown.total_xp > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.4 }}
+            >
+              <LiquidGlassCard shadowIntensity="sm" glowIntensity="sm" blurIntensity="xl" className="p-4 md:p-6">
+                <h3 className="text-lg font-bold text-white mb-4">XP Breakdown</h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
+                  <div className="bg-white/5 rounded-lg p-3">
+                    <p className="text-white/50 text-xs mb-1">Total XP</p>
+                    <p className="text-white font-bold text-lg">{xpBreakdown.total_xp.toLocaleString()}</p>
+                  </div>
+                  <div className="bg-white/5 rounded-lg p-3">
+                    <p className="text-white/50 text-xs mb-1">From Actions</p>
+                    <p className="text-amber-400 font-bold text-lg">{xpBreakdown.action_xp.toLocaleString()}</p>
+                  </div>
+                  <div className="bg-white/5 rounded-lg p-3">
+                    <p className="text-white/50 text-xs mb-1">From Challenges</p>
+                    <p className="text-emerald-400 font-bold text-lg">{xpBreakdown.challenge_xp.toLocaleString()}</p>
+                  </div>
+                </div>
+                {xpBreakdown.by_source.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-white/60 text-sm font-medium mb-2">Action XP by Source</p>
+                    {xpBreakdown.by_source.map((source) => (
+                      <div key={source.event_type} className="flex items-center justify-between py-2 border-b border-white/5 last:border-0">
+                        <div>
+                          <span className="text-white text-sm">{source.source}</span>
+                          <span className="text-white/40 text-xs ml-2">({source.count}x)</span>
+                        </div>
+                        <span className="text-amber-400 font-medium">+{source.xp.toLocaleString()} XP</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </LiquidGlassCard>
+            </motion.div>
+          )}
 
           {/* Footer Note */}
           <motion.p

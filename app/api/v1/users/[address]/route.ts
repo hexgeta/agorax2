@@ -20,7 +20,7 @@ const RATE_LIMIT = { limit: 30, windowSeconds: 60 };
  * and order summary.
  *
  * Query params:
- *   include=challenges,events,orders,daily  (comma-separated, defaults to all)
+ *   include=challenges,events,orders,daily,xp_breakdown  (comma-separated, defaults to all)
  *   events_limit=50       (max recent events to return, default 50, max 200)
  *   orders_limit=50       (max orders to return, default 50, max 200)
  */
@@ -40,7 +40,7 @@ export async function GET(
 
   const wallet = address.toLowerCase();
   const url = new URL(request.url);
-  const includeParam = url.searchParams.get('include') || 'challenges,events,orders,daily';
+  const includeParam = url.searchParams.get('include') || 'challenges,events,orders,daily,xp_breakdown';
   const includes = new Set(includeParam.split(',').map(s => s.trim()));
   const eventsLimit = Math.min(parseInt(url.searchParams.get('events_limit') || '50', 10), 200);
   const ordersLimit = Math.min(parseInt(url.searchParams.get('orders_limit') || '50', 10), 200);
@@ -175,6 +175,72 @@ export async function GET(
           .then(({ data, error }) => {
             if (error) console.error('Daily activity fetch error:', error);
             result.daily_activity = data || [];
+          })
+      );
+    }
+
+    if (includes.has('xp_breakdown')) {
+      // Fetch XP breakdown by event type from user_events
+      promises.push(
+        supabase
+          .from('user_events')
+          .select('event_type, xp_awarded')
+          .eq('wallet_address', wallet)
+          .then(({ data, error }) => {
+            if (error) console.error('XP breakdown fetch error:', error);
+
+            // Aggregate XP by event type
+            const eventXp: Record<string, { count: number; xp: number }> = {};
+            let totalActionXp = 0;
+
+            (data || []).forEach((event) => {
+              const type = event.event_type;
+              if (!eventXp[type]) {
+                eventXp[type] = { count: 0, xp: 0 };
+              }
+              eventXp[type].count += 1;
+              eventXp[type].xp += event.xp_awarded || 0;
+              totalActionXp += event.xp_awarded || 0;
+            });
+
+            // Also get challenge XP total
+            return supabase
+              .from('completed_challenges')
+              .select('xp_awarded')
+              .eq('wallet_address', wallet)
+              .then(({ data: challengeData, error: challengeError }) => {
+                if (challengeError) console.error('Challenge XP fetch error:', challengeError);
+
+                const totalChallengeXp = (challengeData || []).reduce(
+                  (sum, c) => sum + (c.xp_awarded || 0),
+                  0
+                );
+
+                // Map event types to user-friendly labels
+                const labelMap: Record<string, string> = {
+                  order_created: 'Orders Created',
+                  order_filled: 'Orders Filled (as buyer)',
+                  order_filled_as_maker: 'Orders Filled (as seller)',
+                  trade_completed: 'Volume Bonus',
+                  proceeds_claimed: 'Proceeds Claimed',
+                  order_cancelled: 'Orders Cancelled',
+                  wallet_connected: 'Wallet Connected',
+                };
+
+                const breakdown = Object.entries(eventXp).map(([type, data]) => ({
+                  source: labelMap[type] || type,
+                  event_type: type,
+                  count: data.count,
+                  xp: data.xp,
+                })).sort((a, b) => b.xp - a.xp);
+
+                result.xp_breakdown = {
+                  total_xp: userData.total_xp,
+                  action_xp: totalActionXp,
+                  challenge_xp: totalChallengeXp,
+                  by_source: breakdown,
+                };
+              });
           })
       );
     }

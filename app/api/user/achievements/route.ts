@@ -60,6 +60,54 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       console.error('Error fetching challenges:', challengesError);
     }
 
+    // Fetch XP breakdown by event type
+    const { data: eventsData, error: eventsError } = await supabase
+      .from('user_events')
+      .select('event_type, xp_awarded')
+      .eq('wallet_address', normalizedWallet);
+
+    if (eventsError) {
+      console.error('Error fetching events for XP breakdown:', eventsError);
+    }
+
+    // Aggregate XP by event type
+    const eventXp: Record<string, { count: number; xp: number }> = {};
+    let totalActionXp = 0;
+
+    (eventsData || []).forEach((event) => {
+      const type = event.event_type;
+      if (!eventXp[type]) {
+        eventXp[type] = { count: 0, xp: 0 };
+      }
+      eventXp[type].count += 1;
+      eventXp[type].xp += event.xp_awarded || 0;
+      totalActionXp += event.xp_awarded || 0;
+    });
+
+    // Calculate challenge XP
+    const totalChallengeXp = (challengesData || []).reduce(
+      (sum, c) => sum + (c.xp_awarded || 0),
+      0
+    );
+
+    // Map event types to user-friendly labels
+    const labelMap: Record<string, string> = {
+      order_created: 'Orders Created',
+      order_filled: 'Orders Filled (as buyer)',
+      order_filled_as_maker: 'Orders Filled (as seller)',
+      trade_completed: 'Volume Bonus',
+      proceeds_claimed: 'Proceeds Claimed',
+      order_cancelled: 'Orders Cancelled',
+      wallet_connected: 'Wallet Connected',
+    };
+
+    const xpBreakdown = Object.entries(eventXp).map(([type, data]) => ({
+      source: labelMap[type] || type,
+      event_type: type,
+      count: data.count,
+      xp: data.xp,
+    })).sort((a, b) => b.xp - a.xp);
+
     // If user doesn't exist yet, return empty/default data
     if (!userData) {
       return NextResponse.json({
@@ -83,7 +131,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
             updated_at: new Date().toISOString(),
           } as UserStats,
           completed_challenges: [],
-        } as UserAchievements,
+          xp_breakdown: {
+            total_xp: 0,
+            action_xp: 0,
+            challenge_xp: 0,
+            by_source: [],
+          },
+        },
       });
     }
 
@@ -92,7 +146,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       data: {
         stats: userData as UserStats,
         completed_challenges: challengesData || [],
-      } as UserAchievements,
+        xp_breakdown: {
+          total_xp: userData.total_xp || 0,
+          action_xp: totalActionXp,
+          challenge_xp: totalChallengeXp,
+          by_source: xpBreakdown,
+        },
+      },
     });
   } catch (error) {
     console.error('Error in achievements API:', error);

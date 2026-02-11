@@ -2921,9 +2921,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
       {/* Compact mode header - Order History title with View All */}
       {compactMode && (
         <div className="mb-4">
-          <h2 className="text-xl font-bold text-white mb-1">Order History</h2>
-          <div className="flex items-center justify-between">
-            <p className="text-white/60 text-sm">Showing your 10 most recent orders</p>
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="text-xl font-bold text-white">Order History</h2>
             <Link
               href="/my-orders"
               className="flex items-center gap-1 text-white/50 hover:text-white transition-colors text-sm"
@@ -2932,6 +2931,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
               <ChevronRight className="w-4 h-4" />
             </Link>
           </div>
+          <p className="text-white/60 text-sm">Showing your 10 most recent orders</p>
         </div>
       )}
       {/* Status filter buttons - hide in landing page mode and compact mode */}

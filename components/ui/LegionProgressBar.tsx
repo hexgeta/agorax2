@@ -121,7 +121,7 @@ export function LegionProgressBar({
       </div>
 
       {/* Progress Bar */}
-      <div className="h-3 bg-white/10 rounded-full overflow-hidden mb-3">
+      <div className="h-4 bg-white/10 rounded-full overflow-hidden mb-3">
         <motion.div
           initial={{ width: 0 }}
           animate={{ width: `${Math.min(xpProgress, 100)}%` }}

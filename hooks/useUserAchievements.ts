@@ -55,6 +55,7 @@ export function useUserAchievements() {
     achievements,
     stats: achievements?.stats || null,
     completedChallenges: achievements?.completed_challenges || [],
+    xpBreakdown: achievements?.xp_breakdown || null,
     isLoading,
     error,
     refetch,

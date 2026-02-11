@@ -120,6 +120,20 @@ export interface UserStats {
   updated_at: string;
 }
 
+export interface XpBreakdownSource {
+  source: string;
+  event_type: string;
+  count: number;
+  xp: number;
+}
+
+export interface XpBreakdown {
+  total_xp: number;
+  action_xp: number;
+  challenge_xp: number;
+  by_source: XpBreakdownSource[];
+}
+
 export interface UserAchievements {
   stats: UserStats;
   completed_challenges: {
@@ -129,6 +143,7 @@ export interface UserAchievements {
     xp_awarded: number;
     completed_at: string;
   }[];
+  xp_breakdown?: XpBreakdown;
 }
 
 // Leaderboard entry
