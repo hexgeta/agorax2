@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Ratelimit } from '@upstash/ratelimit';
-import { Redis } from '@upstash/redis';
+import { kv } from '@vercel/kv';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -17,40 +16,63 @@ interface RateLimitInfo {
   reset: number; // unix seconds
 }
 
-// ── Vercel KV (Redis) setup ────────────────────────────────────────────────────
-// Vercel KV auto-sets KV_REST_API_URL and KV_REST_API_TOKEN when you create a
-// KV store in the Vercel dashboard. The @upstash/redis client works directly
-// with these since Vercel KV is Upstash Redis under the hood.
+// ── Check if Vercel KV is configured ───────────────────────────────────────────
 
-let redis: Redis | null = null;
-
-function getRedis(): Redis | null {
-  if (redis) return redis;
-  const url = process.env.KV_REST_API_URL;
-  const token = process.env.KV_REST_API_TOKEN;
-  if (!url || !token) return null;
-  redis = new Redis({ url, token });
-  return redis;
+function isKvConfigured(): boolean {
+  return !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
 }
 
-// Cache Ratelimit instances by config key so we don't re-create them
-const limiters = new Map<string, Ratelimit>();
+// ── Vercel KV Rate Limiting ────────────────────────────────────────────────────
 
-function getLimiter(config: RateLimitConfig): Ratelimit | null {
-  const r = getRedis();
-  if (!r) return null;
+async function kvRateLimit(
+  identifier: string,
+  config: RateLimitConfig,
+): Promise<RateLimitInfo & { blocked: boolean }> {
+  const key = `rl:${identifier}`;
+  const now = Math.floor(Date.now() / 1000);
+  const windowStart = now - config.windowSeconds;
 
-  const key = `${config.limit}:${config.windowSeconds}`;
-  let limiter = limiters.get(key);
-  if (!limiter) {
-    limiter = new Ratelimit({
-      redis: r,
-      limiter: Ratelimit.slidingWindow(config.limit, `${config.windowSeconds} s`),
-      prefix: 'agorax-rl',
-    });
-    limiters.set(key, limiter);
+  try {
+    // Use a sliding window approach with sorted sets
+    // Remove old entries
+    await kv.zremrangebyscore(key, 0, windowStart);
+
+    // Count current entries
+    const count = await kv.zcard(key);
+
+    if (count >= config.limit) {
+      // Get the oldest entry to calculate reset time
+      const oldest = await kv.zrange(key, 0, 0, { withScores: true });
+      const resetTime = oldest.length > 1 ? (oldest[1] as number) + config.windowSeconds : now + config.windowSeconds;
+
+      return {
+        blocked: true,
+        limit: config.limit,
+        remaining: 0,
+        reset: resetTime,
+      };
+    }
+
+    // Add new entry with current timestamp as score
+    await kv.zadd(key, { score: now, member: `${now}:${Math.random()}` });
+    await kv.expire(key, config.windowSeconds + 1);
+
+    return {
+      blocked: false,
+      limit: config.limit,
+      remaining: config.limit - count - 1,
+      reset: now + config.windowSeconds,
+    };
+  } catch (error) {
+    console.error('KV rate limit error:', error);
+    // Fall back to allowing the request on error
+    return {
+      blocked: false,
+      limit: config.limit,
+      remaining: config.limit - 1,
+      reset: now + config.windowSeconds,
+    };
   }
-  return limiter;
 }
 
 // ── In-memory fallback (local dev / missing env vars) ──────────────────────────
@@ -125,7 +147,7 @@ const requestRateLimitInfo = new WeakMap<NextRequest, RateLimitInfo>();
 
 /**
  * Check rate limit for a request.
- * Uses Upstash Redis when configured, falls back to in-memory otherwise.
+ * Uses Vercel KV when configured, falls back to in-memory otherwise.
  * Returns null if allowed, or a 429 NextResponse if blocked.
  */
 export async function checkRateLimit(
@@ -136,43 +158,13 @@ export async function checkRateLimit(
   const path = new URL(request.url).pathname;
   const identifier = `${ip}:${path}`;
 
-  const upstashLimiter = getLimiter(config);
+  let result: RateLimitInfo & { blocked: boolean };
 
-  if (upstashLimiter) {
-    // ── Upstash path ──
-    const result = await upstashLimiter.limit(identifier);
-
-    requestRateLimitInfo.set(request, {
-      limit: result.limit,
-      remaining: result.remaining,
-      reset: result.reset,
-    });
-
-    if (!result.success) {
-      const retryAfter = Math.ceil((result.reset - Date.now()) / 1000);
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Rate limit exceeded',
-          retry_after_seconds: Math.max(retryAfter, 1),
-        },
-        {
-          status: 429,
-          headers: {
-            'Retry-After': String(Math.max(retryAfter, 1)),
-            'X-RateLimit-Limit': String(result.limit),
-            'X-RateLimit-Remaining': '0',
-            'X-RateLimit-Reset': String(Math.ceil(result.reset / 1000)),
-          },
-        },
-      );
-    }
-
-    return null;
+  if (isKvConfigured()) {
+    result = await kvRateLimit(identifier, config);
+  } else {
+    result = memoryRateLimit(identifier, config);
   }
-
-  // ── In-memory fallback ──
-  const result = memoryRateLimit(identifier, config);
 
   requestRateLimitInfo.set(request, {
     limit: result.limit,
@@ -192,7 +184,7 @@ export async function checkRateLimit(
         status: 429,
         headers: {
           'Retry-After': String(retryAfter),
-          'X-RateLimit-Limit': String(config.limit),
+          'X-RateLimit-Limit': String(result.limit),
           'X-RateLimit-Remaining': '0',
           'X-RateLimit-Reset': String(result.reset),
         },

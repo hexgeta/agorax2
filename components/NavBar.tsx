@@ -211,16 +211,20 @@ const NavBar = () => {
               {isConnected && (
                 <Link
                   href="/achievements"
-                  className="transition-transform hover:text-white"
+                  className="group"
                   title={hasCompletedFirstLegion ? `${prestige.name} Legion` : 'Legion'}
                 >
                   <div
-                    className={`w-9 h-9 rounded-full flex items-center justify-center ${
-                      hasCompletedFirstLegion ? prestige.bgColor : 'bg-gray-500/20'
+                    className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors duration-200 ${
+                      hasCompletedFirstLegion
+                        ? 'bg-rose-500/20 group-hover:bg-rose-500/40'
+                        : 'bg-gray-500/20 group-hover:bg-gray-500/40'
                     } ${pathname === '/achievements' ? 'ring-2 ring-white/50' : ''}`}
                   >
-                    <span className={`text-base font-bold ${
-                      hasCompletedFirstLegion ? prestige.color : 'text-gray-500'
+                    <span className={`text-base font-bold transition-colors duration-200 ${
+                      hasCompletedFirstLegion
+                        ? 'text-rose-400 group-hover:text-rose-300'
+                        : 'text-gray-500 group-hover:text-gray-300'
                     }`}>
                       {prestige.symbol}
                     </span>
@@ -363,18 +367,22 @@ const NavBar = () => {
               <Link
                 href="/achievements"
                 onClick={() => setMobileMenuOpen(false)}
-                className={`flex items-center justify-center gap-3 py-3 px-6 rounded-lg transition-colors w-full ${pathname === '/achievements'
+                className={`group flex items-center justify-center gap-3 py-3 px-6 rounded-lg transition-colors w-full ${pathname === '/achievements'
                   ? 'bg-white/10'
                   : 'hover:bg-white/5'
                   }`}
               >
                 <div
-                  className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                    hasCompletedFirstLegion ? prestige.bgColor : 'bg-gray-500/20'
+                  className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors duration-200 ${
+                    hasCompletedFirstLegion
+                      ? 'bg-rose-500/20 group-hover:bg-rose-500/40'
+                      : 'bg-gray-500/20 group-hover:bg-gray-500/40'
                   }`}
                 >
-                  <span className={`text-lg font-bold ${
-                    hasCompletedFirstLegion ? prestige.color : 'text-gray-500'
+                  <span className={`text-lg font-bold transition-colors duration-200 ${
+                    hasCompletedFirstLegion
+                      ? 'text-rose-400 group-hover:text-rose-300'
+                      : 'text-gray-500 group-hover:text-gray-300'
                   }`}>
                     {prestige.symbol}
                   </span>

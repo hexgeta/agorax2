@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAccount } from 'wagmi'
 import { PixelSpinner } from './ui/PixelSpinner';
 import { useAppKit } from '@reown/appkit/react'
@@ -19,8 +19,7 @@ interface ConnectButtonProps {
 export const ConnectButton = ({ connectedText, connectedHref }: ConnectButtonProps = {}) => {
   const { isConnected, address } = useAccount()
   const { trackWalletConnected } = useEventTracking()
-  // Auto-triggers "Sign message" popup on wallet connect to prove ownership
-  useWalletAuth()
+  const { isVerified, isVerifying, isInitialized, hasStoredSession, verify } = useWalletAuth()
 
   // Track wallet connection event (API handles deduplication)
   useEffect(() => {
@@ -28,6 +27,26 @@ export const ConnectButton = ({ connectedText, connectedHref }: ConnectButtonPro
       trackWalletConnected()
     }
   }, [isConnected, address, trackWalletConnected])
+
+  // Prompt for verification ONLY on fresh wallet connect (no existing session)
+  // If user already has a stored session, skip the prompt entirely
+  const hasPromptedVerify = useRef(false)
+  useEffect(() => {
+    // Skip if already verifying, already verified, has stored session, or already prompted
+    if (!isConnected || !address || !isInitialized) return
+    if (isVerifying || isVerified || hasStoredSession || hasPromptedVerify.current) return
+
+    hasPromptedVerify.current = true
+    verify()
+  }, [isConnected, address, isInitialized, isVerifying, isVerified, hasStoredSession, verify])
+
+  // Reset prompt flag when wallet disconnects
+  useEffect(() => {
+    if (!isConnected) {
+      hasPromptedVerify.current = false
+    }
+  }, [isConnected])
+
   const { open } = useAppKit()
   const { isTransactionPending } = useTransaction()
   const [showDisclaimer, setShowDisclaimer] = useState(false)

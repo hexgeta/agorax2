@@ -12,6 +12,7 @@ interface StoredSession {
 }
 
 function getStoredSession(): StoredSession | null {
+  if (typeof window === 'undefined') return null;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
@@ -30,8 +31,16 @@ function storeSession(session: StoredSession) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
 }
 
-function clearSession() {
-  localStorage.removeItem(STORAGE_KEY);
+/**
+ * Validate the token format matches what we expect: wallet:hmac
+ * We can't verify the HMAC client-side (no secret), but we can check format.
+ */
+function isValidTokenFormat(token: string, wallet: string): boolean {
+  if (!token || !wallet) return false;
+  const parts = token.split(':');
+  if (parts.length !== 2) return false;
+  // Token should start with the wallet address (lowercase)
+  return parts[0] === wallet.toLowerCase() && parts[1].length === 64;
 }
 
 export function useWalletAuth() {
@@ -39,53 +48,51 @@ export function useWalletAuth() {
   const { signMessageAsync } = useSignMessage();
   const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
-  const verifyAttempted = useRef<string | null>(null);
+  const [isInitialized, setIsInitialized] = useState(false);
+  const verifyingRef = useRef(false);
 
   // Restore session from localStorage on mount / wallet change
+  // This runs first and sets isInitialized when done
   useEffect(() => {
     if (!address) {
       setSessionToken(null);
+      setIsInitialized(true);
       return;
     }
 
     const stored = getStoredSession();
-    if (stored && stored.wallet === address.toLowerCase()) {
+    // Validate both wallet match AND token format is correct
+    if (stored && stored.wallet === address.toLowerCase() && isValidTokenFormat(stored.token, address)) {
       setSessionToken(stored.token);
     } else {
+      // Clear invalid session
+      if (stored) {
+        localStorage.removeItem(STORAGE_KEY);
+      }
       setSessionToken(null);
     }
+    setIsInitialized(true);
   }, [address]);
 
-  // Reset in-memory state when wallet disconnects, but keep localStorage
-  // so reconnecting the same wallet doesn't require re-signing.
+  // Reset state when wallet disconnects
   useEffect(() => {
     if (!isConnected) {
       setSessionToken(null);
-      verifyAttempted.current = null;
     }
   }, [isConnected]);
 
-  // Auto-verify when wallet connects and no valid session exists
-  useEffect(() => {
-    if (!isConnected || !address) return;
-    if (sessionToken) return; // Already have a valid session
-    if (verifyAttempted.current === address) return; // Already tried for this wallet
-
-    verifyAttempted.current = address;
-    verify();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isConnected, address, sessionToken]);
-
   const verify = useCallback(async (): Promise<string | null> => {
     if (!address) return null;
+    if (verifyingRef.current) return null; // Prevent concurrent verification
 
-    // Check stored session first
+    // Check stored session first - if valid, skip signature prompt
     const stored = getStoredSession();
-    if (stored && stored.wallet === address.toLowerCase()) {
+    if (stored && stored.wallet === address.toLowerCase() && isValidTokenFormat(stored.token, address)) {
       setSessionToken(stored.token);
       return stored.token;
     }
 
+    verifyingRef.current = true;
     setIsVerifying(true);
     try {
       // Ask the user to sign the message
@@ -120,14 +127,25 @@ export function useWalletAuth() {
       console.error('Wallet auth error:', error);
       return null;
     } finally {
+      verifyingRef.current = false;
       setIsVerifying(false);
     }
   }, [address, signMessageAsync]);
 
+  // Check localStorage synchronously - used to determine if we should prompt for verification
+  // This is separate from isVerified to avoid race conditions
+  const hasStoredSession = (() => {
+    if (!address) return false;
+    const stored = getStoredSession();
+    return !!(stored && stored.wallet === address.toLowerCase() && isValidTokenFormat(stored.token, address));
+  })();
+
   return {
     sessionToken,
-    isVerified: !!sessionToken,
+    isVerified: !!sessionToken || hasStoredSession,
     isVerifying,
+    isInitialized,
+    hasStoredSession, // Expose this so ConnectButton can skip prompts for returning users
     verify,
   };
 }

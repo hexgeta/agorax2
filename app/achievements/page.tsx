@@ -47,10 +47,40 @@ const PRESTIGE_CHALLENGES: Record<number, PrestigeChallenges> = {
       { name: 'First Steps', description: 'Connect your wallet for the first time', requirement: 'Connect wallet', xp: 50 },
       { name: 'First Order', description: 'Create your first limit order', requirement: 'Create 1 order', xp: 250 },
       { name: 'First Fill', description: 'Fill your first order', requirement: 'Fill 1 order', xp: 250 },
-      { name: 'Small Fry', description: 'Complete a trade worth $100+', requirement: '$100+ trade', xp: 300 },
+      { name: 'First Trade', description: 'Complete your first trade', requirement: '1 trade', xp: 300 },
     ],
     wildcard: [
+      // All wildcards consolidated here
       { name: 'Paper Hands', description: 'Cancel an order within 1 minute of creating it', requirement: 'Cancel < 1min', xp: 50 },
+      { name: 'Small Fry', description: 'Complete a trade worth $100+', requirement: '$100+ trade', xp: 300 },
+      { name: 'Micro Trader', description: 'Complete a trade worth less than $1', requirement: '< $1 trade', xp: 75 },
+      { name: 'Ghost Order', description: 'Have an order expire without any fills', requirement: 'Order expired 0%', xp: 75 },
+      { name: 'Deja Vu', description: 'Create two orders with the same sell token and buy tokens', requirement: 'Duplicate order', xp: 100 },
+      { name: 'Indecisive', description: 'Cancel 5 orders in one day', requirement: '5 cancels/day', xp: 100 },
+      { name: 'Renegade', description: 'Create an order with another DEX token (PLSX, 9MM, 9INCH, PHUX, TIDE, or UNI)', requirement: 'DEX token order', xp: 150 },
+      { name: 'Fatfinger', description: 'Create an order above market price', requirement: 'Above market price', xp: 150 },
+      { name: 'Dip Catcher', description: 'Create an order 50% below market price', requirement: '50% below market', xp: 150 },
+      { name: 'Penny Pincher', description: 'Complete 10 trades each worth less than $1', requirement: '10 trades < $1', xp: 200 },
+      { name: 'Ghost Town', description: 'Have 5 orders expire with zero fills', requirement: '5 ghost orders', xp: 200 },
+      { name: 'Order Hoarder', description: 'Have 15 open orders with zero fills', requirement: '15 unfilled orders', xp: 300 },
+      { name: 'Speed Runner', description: 'Have your order filled within 30 seconds of creating it', requirement: 'Fill < 30s', xp: 400 },
+      { name: 'Total Chaos', description: 'Cancel 10 orders in one day', requirement: '10 cancels/day', xp: 500 },
+      { name: 'PLS Stacker', description: 'Trade 1,000,000 PLS total', requirement: '1M PLS', xp: 1000 },
+      { name: 'Iron Hands', description: 'Hold an open order for 30+ days without cancelling', requirement: 'Order open 30 days', xp: 1500 },
+      { name: 'Ethereum Maxi', description: 'Trade wrapped Ethereum tokens (weHEX, etc.)', requirement: 'Trade we* tokens', xp: 1500 },
+      { name: 'Sniper', description: 'Fill an order within 1 minute of creation', requirement: 'Fill < 1min', xp: 2000 },
+      { name: 'MAXI Maxi', description: 'Trade any MAXI token', requirement: 'Trade MAXI tokens', xp: 2000 },
+      { name: 'Bond Trader', description: 'Create an order with HTT (Hedron T-Share Token)', requirement: 'Trade HTT', xp: 2000 },
+      { name: 'Coupon Clipper', description: 'Create an order with COM (Community Token)', requirement: 'Trade COM', xp: 2000 },
+      { name: '$1 Inevitable', description: 'Create an order with pDAI', requirement: 'Trade pDAI', xp: 2000 },
+      { name: 'AON Champion', description: 'Create and fully complete 3 All-or-Nothing orders', requirement: '3 completed AON', xp: 2500 },
+      { name: 'HEX Baron', description: 'Trade 1,000,000 HEX in total volume', requirement: '1M HEX volume', xp: 3000 },
+      { name: 'PLS Baron', description: 'Trade 10,000,000 PLS in total volume', requirement: '10M PLS volume', xp: 3000 },
+      { name: 'Multi-Fill', description: 'Have a single order filled by 2 or more different wallets', requirement: '2 unique fillers', xp: 3000 },
+      { name: 'Diamond Hands', description: 'Hold an open order for 90+ days without cancelling', requirement: 'Order open 90 days', xp: 5000 },
+      { name: 'Stablecoin Baron', description: 'Trade 100,000 stablecoins in total volume (DAI/USDC/USDT/USDL)', requirement: '100K stablecoin vol', xp: 5000 },
+      { name: 'Domination', description: 'Have 20 active orders at once', requirement: '20 concurrent orders', xp: 5000 },
+      { name: 'Full House', description: 'Have 3 of your orders with partial fills active simultaneously', requirement: '3 partially filled', xp: 5000 },
     ],
   },
   // Beta - Building Momentum
@@ -61,10 +91,7 @@ const PRESTIGE_CHALLENGES: Record<number, PrestigeChallenges> = {
       { name: 'Weekend Warrior', description: 'Create an order on a Saturday or Sunday', requirement: 'Order on Sat/Sun', xp: 300 },
       { name: 'Volume Starter', description: 'Trade $500 in total volume', requirement: '$500 volume', xp: 500 },
     ],
-    wildcard: [
-      { name: 'DEX Degen', description: 'Create an order with a PulseChain DEX token (PLSX, 9MM, 9INCH, PHUX, TIDE, or UNI)', requirement: 'DEX token order', xp: 150 },
-      { name: 'Micro Trader', description: 'Complete a trade worth less than $1', requirement: '< $1 trade', xp: 75 },
-    ],
+    wildcard: [],
   },
   // Gamma - Active Trading
   2: {
@@ -76,10 +103,7 @@ const PRESTIGE_CHALLENGES: Record<number, PrestigeChallenges> = {
       { name: 'Volume Builder', description: 'Trade $1,000 in total volume', requirement: '$1K volume', xp: 750 },
       { name: 'Rising Star', description: 'Complete a trade worth $500+', requirement: '$500+ trade', xp: 600 },
     ],
-    wildcard: [
-      { name: 'Night Owl', description: 'Complete a trade between 3-5 AM UTC', requirement: 'Trade at 3-5 AM', xp: 200 },
-      { name: 'Deja Vu', description: 'Create the exact same order (same tokens, same amounts) twice', requirement: 'Duplicate order', xp: 100 },
-    ],
+    wildcard: [],
   },
   // Delta - Dedicated Trader
   3: {
@@ -92,11 +116,7 @@ const PRESTIGE_CHALLENGES: Record<number, PrestigeChallenges> = {
       { name: 'Clean Sweep', description: 'Have 5 of your orders reach 100% fill', requirement: '5 fully filled', xp: 800 },
       { name: 'Big Spender', description: 'Complete a trade worth $1,000+', requirement: '$1K+ trade', xp: 1200 },
     ],
-    wildcard: [
-      { name: 'Indecisive', description: 'Cancel 5 orders in one day', requirement: '5 cancels/day', xp: 100 },
-      { name: 'Ghost Order', description: 'Have an order expire without any fills', requirement: 'Order expired 0%', xp: 75 },
-      { name: 'Early Bird', description: 'Complete a trade in the first hour of the day (00:00-01:00 UTC)', requirement: 'Trade at midnight UTC', xp: 250 },
-    ],
+    wildcard: [],
   },
   // Epsilon - Experienced Trader
   4: {
@@ -109,46 +129,29 @@ const PRESTIGE_CHALLENGES: Record<number, PrestigeChallenges> = {
       { name: 'Perfect Record', description: 'Complete 10 trades with zero cancellations', requirement: '10 trades, 0 cancels', xp: 1500 },
       { name: 'Volume Veteran', description: 'Trade $10,000 in total volume', requirement: '$10K volume', xp: 2000 },
     ],
-    wildcard: [
-      { name: 'Speed Runner', description: 'Have your order filled within 30 seconds of creating it', requirement: 'Fill < 30s', xp: 400 },
-      { name: 'Penny Pincher', description: 'Complete 10 trades each worth less than $1', requirement: '10 trades < $1', xp: 200 },
-      { name: 'Iron Hands', description: 'Hold an open order for 30+ days without cancelling', requirement: 'Order open 30 days', xp: 1500 },
-    ],
+    wildcard: [],
   },
   // Zeta - Professional Trader
   5: {
     challenges: [
       { name: 'Diversified', description: 'Trade 30 different tokens', requirement: '30 tokens traded', xp: 1200 },
-      { name: 'PLS Stacker', description: 'Trade 1,000,000 PLS total', requirement: '1M PLS', xp: 1000 },
       { name: 'Century Trader', description: 'Complete 100 trades total', requirement: '100 trades', xp: 3000 },
       { name: 'Order Legend', description: 'Create 100 orders', requirement: '100 orders', xp: 2500 },
       { name: 'Market Maker', description: 'Have 5 active orders at once', requirement: '5 concurrent orders', xp: 1500 },
-      { name: 'AON Champion', description: 'Create and fully complete 3 All-or-Nothing orders', requirement: '3 completed AON', xp: 2500 },
       { name: 'Claim Machine', description: 'Claim proceeds 50 times', requirement: '50 claims', xp: 2000 },
       { name: 'Whale Alert', description: 'Complete a trade worth $10,000+', requirement: '$10K+ trade', xp: 4000 },
-      { name: 'HEX Baron', description: 'Trade 1,000,000 HEX in total volume', requirement: '1M HEX volume', xp: 3000 },
     ],
-    wildcard: [
-      { name: 'Fatfinger', description: 'Create an order above market price', requirement: 'Above market price', xp: 150 },
-      { name: 'Dip Catcher', description: 'Create an order 50% below market price', requirement: '50% below market', xp: 150 },
-      { name: 'Order Hoarder', description: 'Have 15 open orders with zero fills', requirement: '15 unfilled orders', xp: 300 },
-      { name: 'Ghost Town', description: 'Have 5 orders expire with zero fills', requirement: '5 ghost orders', xp: 200 },
-    ],
+    wildcard: [],
   },
   // Eta - Elite Trader
   6: {
     challenges: [
       { name: 'Token Master', description: 'Trade 40 different tokens', requirement: '40 tokens traded', xp: 2000 },
-      { name: 'Ethereum Maxi', description: 'Trade wrapped Ethereum tokens (weHEX, etc.)', requirement: 'Trade we* tokens', xp: 1500 },
       { name: 'Fill Master', description: 'Fill 200 orders', requirement: '200 fills', xp: 5000 },
       { name: 'Power Maker', description: 'Have 10 active orders at once', requirement: '10 concurrent orders', xp: 2500 },
       { name: 'Volume King', description: 'Trade $100,000 in total volume', requirement: '$100K volume', xp: 8000 },
-      { name: 'PLS Baron', description: 'Trade 10,000,000 PLS in total volume', requirement: '10M PLS volume', xp: 3000 },
     ],
-    wildcard: [
-      { name: 'Multi-Fill', description: 'Have a single order filled by 5 or more different wallets', requirement: '5 unique fillers', xp: 3000 },
-      { name: 'Diamond Hands', description: 'Hold an open order for 90+ days without cancelling', requirement: 'Order open 90 days', xp: 5000 },
-    ],
+    wildcard: [],
   },
   // Theta - Master Trader
   7: {
@@ -157,17 +160,9 @@ const PRESTIGE_CHALLENGES: Record<number, PrestigeChallenges> = {
       { name: 'Trade Machine', description: 'Complete 500 trades total', requirement: '500 trades', xp: 10000 },
       { name: 'Order God', description: 'Create 500 orders', requirement: '500 orders', xp: 8000 },
       { name: 'Mega Whale', description: 'Complete a trade worth $100,000+', requirement: '$100K+ trade', xp: 20000 },
-      { name: 'Stablecoin Baron', description: 'Trade 100,000 stablecoins in total volume (DAI/USDC/USDT/USDL)', requirement: '100K stablecoin vol', xp: 5000 },
       { name: 'Profit Master', description: 'Collect proceeds 100 times total', requirement: '100 claims', xp: 12000 },
     ],
-    wildcard: [
-      { name: 'MAXI Maxi', description: 'Trade any MAXI token', requirement: 'Trade MAXI tokens', xp: 2000 },
-      { name: 'Bond Trader', description: 'Create an order with HTT (Hedron T-Share Token)', requirement: 'Trade HTT', xp: 2000 },
-      { name: 'Coupon Clipper', description: 'Create an order with COM (Community Token)', requirement: 'Trade COM', xp: 2000 },
-      { name: '$1 Inevitable', description: 'Create an order with pDAI', requirement: 'Trade pDAI', xp: 2000 },
-      { name: 'Full House', description: 'Have 3 of your orders with partial fills active simultaneously', requirement: '3 partially filled', xp: 5000 },
-      { name: 'Total Chaos', description: 'Cancel 20 orders in one day', requirement: '20 cancels/day', xp: 500 },
-    ],
+    wildcard: [],
   },
   // Omega - God Mode
   8: {
@@ -175,13 +170,10 @@ const PRESTIGE_CHALLENGES: Record<number, PrestigeChallenges> = {
       { name: 'Token God', description: 'Trade 75 different tokens', requirement: '75 tokens traded', xp: 5000 },
       { name: 'Trade Legend', description: 'Complete 1,000 trades total', requirement: '1,000 trades', xp: 25000 },
       { name: 'Order Immortal', description: 'Create 1,000 orders', requirement: '1,000 orders', xp: 20000 },
-      { name: 'Domination', description: 'Have 20 active orders at once', requirement: '20 concurrent orders', xp: 5000 },
       { name: 'Volume God', description: 'Trade $1,000,000 in total volume', requirement: '$1M volume', xp: 50000 },
       { name: 'Leviathan', description: 'Complete a trade worth $500,000+', requirement: '$500K+ trade', xp: 75000 },
     ],
-    wildcard: [
-      { name: 'Sniper', description: 'Fill an order within 1 minute of creation', requirement: 'Fill < 1min', xp: 2000 },
-    ],
+    wildcard: [],
   },
 };
 
@@ -227,8 +219,8 @@ function AllChallengesTable({
   const prestigeChallenges = PRESTIGE_CHALLENGES[prestigeIndex];
   if (!prestigeChallenges) return null;
 
-  const requiredChallenges = prestigeChallenges.challenges;
-  const wildcardChallenges = prestigeChallenges.wildcard;
+  const requiredChallenges = [...prestigeChallenges.challenges].sort((a, b) => a.xp - b.xp);
+  const wildcardChallenges = [...prestigeChallenges.wildcard].sort((a, b) => a.xp - b.xp);
 
   return (
     <div className="space-y-6">
@@ -462,14 +454,14 @@ export default function RanksPage() {
                       className="flex flex-col items-center gap-1 group"
                     >
                       <div
-                        className={`w-11 h-11 md:w-14 md:h-14 rounded-full flex items-center justify-center transition-all
+                        className={`w-11 h-11 md:w-14 md:h-14 rounded-full flex items-center justify-center transition-all border-2 border-transparent group-hover:border-white
                           ${isSelected ? 'ring-2 ring-white ring-offset-2 ring-offset-black' : ''}
                           ${isComplete ? prestige.bgColor : isCurrent ? 'bg-gray-500/30' : isLocked ? 'bg-gray-800/30' : prestige.bgColor}
                           ${isCurrent && !isSelected ? 'ring-1 ring-gray-400/50' : ''}
                         `}
                       >
                         <span
-                          className={`text-xl md:text-2xl font-bold ${
+                          className={`text-xl md:text-2xl font-bold transition-colors group-hover:text-white ${
                             isComplete ? prestige.color : isCurrent ? 'text-gray-300' : isLocked ? 'text-gray-600' : prestige.color
                           }`}
                         >

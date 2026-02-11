@@ -255,17 +255,7 @@ export default function StatsOverviewCards({ transactions, orders, tokenPrices, 
     return max;
   }, [contractOrders, tokenPrices]);
 
-  // AON orders count and percentage
-  const aonStats = useMemo(() => {
-    if (contractOrders.length === 0) return { count: 0, pct: 0 };
-    const aonCount = contractOrders.filter(o => o.orderDetailsWithID.orderDetails.allOrNothing).length;
-    return {
-      count: aonCount,
-      pct: effectiveOrderCount > 0 ? (aonCount / effectiveOrderCount) * 100 : 0,
-    };
-  }, [contractOrders, effectiveOrderCount]);
-
-  // Protocol age in days
+  // Protocol age in days (used for daily avg calculation)
   const protocolAge = useMemo(() => {
     let earliest = Infinity;
     if (contractOrders.length > 0) {
@@ -316,11 +306,6 @@ export default function StatsOverviewCards({ transactions, orders, tokenPrices, 
           value={uniqueTokenCount.toLocaleString()}
           subValue="Traded on protocol"
         />
-        <StatCard
-          label="Protocol Age"
-          value={`${protocolAge}d`}
-          subValue="Since first order"
-        />
       </div>
 
       {/* Stats Cards - Row 2: Averages & Rates */}
@@ -339,16 +324,6 @@ export default function StatsOverviewCards({ transactions, orders, tokenPrices, 
           label="Largest Order"
           value={formatUSD(largestOrder)}
           subValue="Single order"
-        />
-        <StatCard
-          label="$ Fill %"
-          value={`${fillRate.toFixed(1)}%`}
-          subValue="$ filled vs listed"
-        />
-        <StatCard
-          label="Order Fill %"
-          value={`${completionRate.toFixed(1)}%`}
-          subValue="Orders completed"
         />
         <StatCard
           label="Cancel Rate"
@@ -388,11 +363,6 @@ export default function StatsOverviewCards({ transactions, orders, tokenPrices, 
           value={orderCounts.cancelled.toLocaleString()}
           subValue="By owner"
           dotColor="red"
-        />
-        <StatCard
-          label="AON Orders"
-          value={aonStats.count.toLocaleString()}
-          subValue={`${aonStats.pct.toFixed(1)}% of all orders`}
         />
       </div>
 

@@ -301,26 +301,6 @@ export default function OrderbookChart({ orders, tokenPrices, whitelist }: Order
         ))}
       </div>
 
-      {/* Current token info */}
-      {selectedTokenData && (
-        <div className="flex flex-wrap items-center gap-4 mb-6 p-4 bg-white/5 rounded-lg">
-          <CoinLogo symbol={selectedTokenData.ticker} size="lg" />
-          <div>
-            <p className="text-white font-bold text-lg">{selectedTokenData.ticker}</p>
-            <p className="text-gray-400 text-sm">
-              Market: <span className="font-medium" style={{ color: '#00D9FF' }}>{formatPriceSigFig(selectedTokenData.marketPrice)}</span>
-            </p>
-          </div>
-
-          {/* Spread */}
-          {spread !== null && (
-            <div className="ml-auto bg-white/10 rounded px-3 py-1 text-center">
-              <span className="text-gray-400 text-xs">Spread: </span>
-              <span className="text-white font-medium text-sm">{spread.toFixed(2)}%</span>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Price scatter chart */}
       <TokenOrderPricesChart
