@@ -105,12 +105,23 @@ const formatDisplayValue = (value: number): number => {
 const formatCalculatedValue = (value: number): string => {
   if (value === 0) return '';
 
-  const rounded = Math.round(value * 10000) / 10000;
-
-  let str = rounded.toString();
-  if (str.includes('.')) {
-    str = str.replace(/\.?0+$/, '');
+  // For very small numbers, preserve more decimal places
+  // Determine precision based on magnitude
+  let precision = 4; // default 4 decimal places
+  if (value !== 0 && Math.abs(value) < 0.0001) {
+    // For very small values, find first significant digit and keep 4 more
+    const magnitude = Math.floor(Math.log10(Math.abs(value)));
+    precision = Math.min(18, Math.abs(magnitude) + 4);
   }
+
+  const multiplier = Math.pow(10, precision);
+  const rounded = Math.round(value * multiplier) / multiplier;
+
+  if (rounded === 0) return '';
+
+  let str = rounded.toFixed(precision);
+  // Remove trailing zeros but keep at least one decimal for very small numbers
+  str = str.replace(/\.?0+$/, '');
 
   return formatNumberWithCommas(str);
 };
@@ -1587,6 +1598,10 @@ export function LimitOrderForm({
 
   // Recalculate percentage when invert display changes
   useEffect(() => {
+    // Skip recalculation if a percentage button click is in progress
+    // This prevents floating point precision issues from overwriting the exact percentage
+    if (isPercentageClickInProgressRef.current) return;
+
     const sellTokenPrice = sellToken ? getPrice(sellToken.a) : 0;
     const buyToken = buyTokens[0];
     const buyTokenPrice = buyToken ? getPrice(buyToken.a) : 0;
@@ -3845,7 +3860,7 @@ export function LimitOrderForm({
                     </button>
 
                     {/* Amount Input - uses first buy amount */}
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 relative">
                       <input
                         ref={el => { buyInputRefs.current[0] = el; }}
                         type="text"
@@ -3864,8 +3879,13 @@ export function LimitOrderForm({
                           activeInputRef.current = null;
                         }}
                         placeholder="0.00"
-                        className="w-full h-full bg-black/40 border border-white/10 p-3 text-white text-base placeholder-white/30 focus:outline-none rounded-lg"
+                        className="w-full h-full bg-black/40 border border-white/10 p-3 pr-16 text-white text-base placeholder-white/30 focus:outline-none rounded-lg"
                       />
+                      {buyTokens[0] && (
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 text-sm font-medium">
+                          {formatTokenTicker(buyTokens[0].ticker, chainId)}
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -4298,7 +4318,7 @@ export function LimitOrderForm({
                         </button>
                         <button
                           onClick={() => handlePercentageClick(1, invertPriceDisplay ? 'below' : 'above')}
-                          className={`flex-1 py-2 border-accent-pink text-xs transition-all font-medium rounded-full ${pricePercentage !== null && Math.abs(Math.abs(pricePercentage) - 1) < 0.01 && (invertPriceDisplay ? pricePercentage < 0 : pricePercentage > 0)
+                          className={`flex-1 py-2 border-accent-pink text-xs transition-all font-medium rounded-full ${pricePercentage !== null && Math.abs(Math.abs(pricePercentage) - 1) < 0.1 && (invertPriceDisplay ? pricePercentage < 0 : pricePercentage > 0)
                             ? 'bg-[#FF0080]/20 text-white'
                             : 'bg-black/40 text-[#FF0080] hover:bg-[#FF0080]/20 hover:text-white'
                             }`}
@@ -4307,7 +4327,7 @@ export function LimitOrderForm({
                         </button>
                         <button
                           onClick={() => handlePercentageClick(2, invertPriceDisplay ? 'below' : 'above')}
-                          className={`flex-1 py-2 border-accent-pink text-xs transition-all font-medium rounded-full ${pricePercentage !== null && Math.abs(Math.abs(pricePercentage) - 2) < 0.01 && (invertPriceDisplay ? pricePercentage < 0 : pricePercentage > 0)
+                          className={`flex-1 py-2 border-accent-pink text-xs transition-all font-medium rounded-full ${pricePercentage !== null && Math.abs(Math.abs(pricePercentage) - 2) < 0.1 && (invertPriceDisplay ? pricePercentage < 0 : pricePercentage > 0)
                             ? 'bg-[#FF0080]/20 text-white'
                             : 'bg-black/40 text-[#FF0080] hover:bg-[#FF0080]/20 hover:text-white'
                             }`}
@@ -4316,7 +4336,7 @@ export function LimitOrderForm({
                         </button>
                         <button
                           onClick={() => handlePercentageClick(5, invertPriceDisplay ? 'below' : 'above')}
-                          className={`flex-1 py-2 border-accent-pink text-xs transition-all font-medium rounded-full ${pricePercentage !== null && Math.abs(Math.abs(pricePercentage) - 5) < 0.01 && (invertPriceDisplay ? pricePercentage < 0 : pricePercentage > 0)
+                          className={`flex-1 py-2 border-accent-pink text-xs transition-all font-medium rounded-full ${pricePercentage !== null && Math.abs(Math.abs(pricePercentage) - 5) < 0.1 && (invertPriceDisplay ? pricePercentage < 0 : pricePercentage > 0)
                             ? 'bg-[#FF0080]/20 text-white'
                             : 'bg-black/40 text-[#FF0080] hover:bg-[#FF0080]/20 hover:text-white'
                             }`}
@@ -4327,14 +4347,14 @@ export function LimitOrderForm({
                           // Check if current percentage is a custom value (not a preset button)
                           const presetValues = [0, 1, 2, 5];
                           const isCustomActive = pricePercentage !== null &&
-                            !presetValues.some(p => Math.abs(Math.abs(pricePercentage) - p) < 0.01) &&
+                            !presetValues.some(p => Math.abs(Math.abs(pricePercentage) - p) < 0.1) &&
                             (invertPriceDisplay ? pricePercentage < 0 : pricePercentage > 0);
-                          const isWholeNumber = (n: number) => Math.abs(n - Math.round(n)) < 0.01;
-                          // Format: show sign, absolute value, no .0 suffix (% shown separately)
+                          const isWholeNumber = (n: number) => Math.abs(n - Math.round(n)) < 0.1;
+                          // Format: show sign, absolute value, no .0 suffix, includes %
                           const formatPct = (n: number) => {
                             const sign = n < 0 ? '-' : '+';
                             const absVal = isWholeNumber(n) ? String(Math.round(Math.abs(n))) : Math.abs(n).toFixed(1).replace(/\.0$/, '');
-                            return sign + absVal;
+                            return sign + absVal + '%';
                           };
                           // Cap display at ±999% to prevent UI overflow
                           const cappedPct = pricePercentage !== null ? Math.max(-999, Math.min(999, pricePercentage)) : 0;
@@ -4347,8 +4367,8 @@ export function LimitOrderForm({
                                 type="text"
                                 inputMode="decimal"
                                 defaultValue={displayValue}
-                                maxLength={6}
-                                className={`peer w-full py-2 pl-2 pr-4 border text-xs font-medium rounded-full text-center focus:outline-none focus:border-[#FF0080] focus:bg-[#FF0080]/20 focus:text-white ${
+                                maxLength={7}
+                                className={`peer w-full py-2 px-2 border text-xs font-medium rounded-full text-center focus:outline-none focus:border-[#FF0080] focus:bg-[#FF0080]/20 focus:text-white ${
                                   isCustomActive
                                     ? 'bg-[#FF0080]/20 border-[#FF0080]/40 text-white'
                                     : 'bg-black/40 border-[#FF0080]/40 text-[#FF0080] placeholder-transparent'
@@ -4358,6 +4378,47 @@ export function LimitOrderForm({
                                   e.target.dataset.originalValue = e.target.value;
                                   // When focused, show the sign prefix for the direction
                                   e.target.value = invertPriceDisplay ? '-' : '+';
+                                  // Move cursor to end (after the sign)
+                                  setTimeout(() => {
+                                    e.target.setSelectionRange(1, 1);
+                                  }, 0);
+                                }}
+                                onSelect={(e) => {
+                                  // Prevent cursor from being placed before the sign
+                                  const input = e.target as HTMLInputElement;
+                                  if (input.selectionStart !== null && input.selectionStart < 1) {
+                                    e.preventDefault();
+                                    input.setSelectionRange(1, Math.max(1, input.selectionEnd || 1));
+                                  }
+                                }}
+                                onMouseUp={(e) => {
+                                  // Block cursor placement before sign on click
+                                  const input = e.target as HTMLInputElement;
+                                  requestAnimationFrame(() => {
+                                    if (input.selectionStart !== null && input.selectionStart < 1) {
+                                      input.setSelectionRange(1, Math.max(1, input.selectionEnd || 1));
+                                    }
+                                  });
+                                }}
+                                onKeyDown={(e) => {
+                                  // Block arrow keys and home from moving cursor before sign
+                                  const input = e.target as HTMLInputElement;
+                                  if (e.key === 'ArrowLeft' || e.key === 'Home') {
+                                    if (input.selectionStart !== null && input.selectionStart <= 1) {
+                                      e.preventDefault();
+                                    }
+                                  }
+                                  if (e.key === 'Enter') {
+                                    const val = input.value;
+                                    const isNegative = val.startsWith('-');
+                                    const numStr = val.replace(/[^0-9.]/g, '');
+                                    const value = parseFloat(numStr);
+                                    if (!isNaN(value) && value !== 0) {
+                                      const capped = Math.min(999, value);
+                                      handlePercentageClick(capped, isNegative ? 'below' : 'above');
+                                      input.blur();
+                                    }
+                                  }
                                 }}
                                 onInput={(e) => {
                                   const input = e.target as HTMLInputElement;
@@ -4377,43 +4438,26 @@ export function LimitOrderForm({
                                   input.value = sign + cleaned;
                                   input.dataset.prevValue = input.value;
                                 }}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
-                                    const input = e.target as HTMLInputElement;
-                                    const val = input.value;
-                                    const isNegative = val.startsWith('-');
-                                    const numStr = val.replace(/[^0-9.]/g, '');
-                                    const value = parseFloat(numStr);
-                                    if (!isNaN(value) && value !== 0) {
-                                      const capped = Math.min(999, value);
-                                      handlePercentageClick(capped, isNegative ? 'below' : 'above');
-                                      input.blur();
-                                    }
-                                  }
-                                }}
                                 onBlur={(e) => {
                                   const val = e.target.value;
                                   const isNegative = val.startsWith('-');
-                                  const numStr = val.replace(/[^0-9.]/g, '');
+                                  const numStr = val.replace(/[^0-9.%]/g, '');
                                   const value = parseFloat(numStr);
                                   if (!isNaN(value) && value !== 0) {
                                     const capped = Math.min(999, value);
                                     handlePercentageClick(capped, isNegative ? 'below' : 'above');
+                                    // Show value with % sign
+                                    e.target.value = (isNegative ? '-' : '+') + capped + '%';
                                   } else {
                                     // Restore original value if nothing was typed (or clear if original was empty)
                                     e.target.value = e.target.dataset.originalValue || '';
                                   }
                                 }}
                               />
-                              {/* % symbol always visible on the right side */}
-                              <span className={`absolute right-2 top-1/2 -translate-y-1/2 text-xs font-medium pointer-events-none ${
-                                isCustomActive ? 'text-white' : 'text-[#FF0080]/60'
-                              }`}>
-                                %
-                              </span>
+                              {/* Placeholder ? when no custom value is active */}
                               {!isCustomActive && (
-                                <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-[#FF0080]/60 pointer-events-none peer-focus:hidden pr-3">
-                                  ?
+                                <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-[#FF0080]/60 pointer-events-none peer-focus:hidden">
+                                  ?%
                                 </span>
                               )}
                             </div>
@@ -5013,7 +5057,7 @@ export function LimitOrderForm({
                           ) : (
                             <button
                               onClick={() => handlePercentageClick(1, invertPriceDisplay ? 'below' : 'above')}
-                              className={`flex-1 py-2 border-accent-pink text-xs transition-all font-medium rounded-full ${pricePercentage !== null && Math.abs(Math.abs(pricePercentage) - 1) < 0.01 && (invertPriceDisplay ? pricePercentage < 0 : pricePercentage > 0)
+                              className={`flex-1 py-2 border-accent-pink text-xs transition-all font-medium rounded-full ${pricePercentage !== null && Math.abs(Math.abs(pricePercentage) - 1) < 0.1 && (invertPriceDisplay ? pricePercentage < 0 : pricePercentage > 0)
                                 ? 'bg-[#FF0080]/20 text-white'
                                 : 'bg-black/40 text-[#FF0080] hover:bg-[#FF0080]/20 hover:text-white'
                                 }`}
@@ -5023,7 +5067,7 @@ export function LimitOrderForm({
                           )}
                           <button
                             onClick={() => handlePercentageClick(2, invertPriceDisplay ? 'below' : 'above')}
-                            className={`flex-1 py-2 border-accent-pink text-xs transition-all font-medium rounded-full ${pricePercentage !== null && Math.abs(Math.abs(pricePercentage) - 2) < 0.01 && (invertPriceDisplay ? pricePercentage < 0 : pricePercentage > 0)
+                            className={`flex-1 py-2 border-accent-pink text-xs transition-all font-medium rounded-full ${pricePercentage !== null && Math.abs(Math.abs(pricePercentage) - 2) < 0.1 && (invertPriceDisplay ? pricePercentage < 0 : pricePercentage > 0)
                               ? 'bg-[#FF0080]/20 text-white'
                               : 'bg-black/40 text-[#FF0080] hover:bg-[#FF0080]/20 hover:text-white'
                               }`}
@@ -5032,7 +5076,7 @@ export function LimitOrderForm({
                           </button>
                           <button
                             onClick={() => handlePercentageClick(5, invertPriceDisplay ? 'below' : 'above')}
-                            className={`flex-1 py-2 border-accent-pink text-xs transition-all font-medium rounded-full ${pricePercentage !== null && Math.abs(Math.abs(pricePercentage) - 5) < 0.01 && (invertPriceDisplay ? pricePercentage < 0 : pricePercentage > 0)
+                            className={`flex-1 py-2 border-accent-pink text-xs transition-all font-medium rounded-full ${pricePercentage !== null && Math.abs(Math.abs(pricePercentage) - 5) < 0.1 && (invertPriceDisplay ? pricePercentage < 0 : pricePercentage > 0)
                               ? 'bg-[#FF0080]/20 text-white'
                               : 'bg-black/40 text-[#FF0080] hover:bg-[#FF0080]/20 hover:text-white'
                               }`}
@@ -5043,14 +5087,14 @@ export function LimitOrderForm({
                             // Check if current percentage is a custom value (not a preset button)
                             const presetValues = [0, 1, 2, 5];
                             const isCustomActive = pricePercentage !== null &&
-                              !presetValues.some(p => Math.abs(Math.abs(pricePercentage) - p) < 0.01) &&
+                              !presetValues.some(p => Math.abs(Math.abs(pricePercentage) - p) < 0.1) &&
                               (invertPriceDisplay ? pricePercentage < 0 : pricePercentage > 0);
-                            const isWholeNumber = (n: number) => Math.abs(n - Math.round(n)) < 0.01;
-                            // Format: show sign, absolute value, no .0 suffix (% shown separately)
+                            const isWholeNumber = (n: number) => Math.abs(n - Math.round(n)) < 0.1;
+                            // Format: show sign, absolute value, no .0 suffix, includes %
                             const formatPct = (n: number) => {
                               const sign = n < 0 ? '-' : '+';
                               const absVal = isWholeNumber(n) ? String(Math.round(Math.abs(n))) : Math.abs(n).toFixed(1).replace(/\.0$/, '');
-                              return sign + absVal;
+                              return sign + absVal + '%';
                             };
                             // Cap display at ±999% to prevent UI overflow
                             const cappedPct = pricePercentage !== null ? Math.max(-999, Math.min(999, pricePercentage)) : 0;
@@ -5063,8 +5107,8 @@ export function LimitOrderForm({
                                   type="text"
                                   inputMode="decimal"
                                   defaultValue={displayValue}
-                                  maxLength={6}
-                                  className={`peer w-full py-2 pl-2 pr-4 border text-xs font-medium rounded-full text-center focus:outline-none focus:border-[#FF0080] focus:bg-[#FF0080]/20 focus:text-white ${
+                                  maxLength={7}
+                                  className={`peer w-full py-2 px-2 border text-xs font-medium rounded-full text-center focus:outline-none focus:border-[#FF0080] focus:bg-[#FF0080]/20 focus:text-white ${
                                     isCustomActive
                                       ? 'bg-[#FF0080]/20 border-[#FF0080]/40 text-white'
                                       : 'bg-black/40 border-[#FF0080]/40 text-[#FF0080] placeholder-transparent'
@@ -5074,6 +5118,47 @@ export function LimitOrderForm({
                                     e.target.dataset.originalValue = e.target.value;
                                     // When focused, show the sign prefix for the direction
                                     e.target.value = invertPriceDisplay ? '-' : '+';
+                                    // Move cursor to end (after the sign)
+                                    setTimeout(() => {
+                                      e.target.setSelectionRange(1, 1);
+                                    }, 0);
+                                  }}
+                                  onSelect={(e) => {
+                                    // Prevent cursor from being placed before the sign
+                                    const input = e.target as HTMLInputElement;
+                                    if (input.selectionStart !== null && input.selectionStart < 1) {
+                                      e.preventDefault();
+                                      input.setSelectionRange(1, Math.max(1, input.selectionEnd || 1));
+                                    }
+                                  }}
+                                  onMouseUp={(e) => {
+                                    // Block cursor placement before sign on click
+                                    const input = e.target as HTMLInputElement;
+                                    requestAnimationFrame(() => {
+                                      if (input.selectionStart !== null && input.selectionStart < 1) {
+                                        input.setSelectionRange(1, Math.max(1, input.selectionEnd || 1));
+                                      }
+                                    });
+                                  }}
+                                  onKeyDown={(e) => {
+                                    // Block arrow keys and home from moving cursor before sign
+                                    const input = e.target as HTMLInputElement;
+                                    if (e.key === 'ArrowLeft' || e.key === 'Home') {
+                                      if (input.selectionStart !== null && input.selectionStart <= 1) {
+                                        e.preventDefault();
+                                      }
+                                    }
+                                    if (e.key === 'Enter') {
+                                      const val = input.value;
+                                      const isNegative = val.startsWith('-');
+                                      const numStr = val.replace(/[^0-9.]/g, '');
+                                      const value = parseFloat(numStr);
+                                      if (!isNaN(value) && value !== 0) {
+                                        const capped = Math.min(999, value);
+                                        handlePercentageClick(capped, isNegative ? 'below' : 'above');
+                                        input.blur();
+                                      }
+                                    }
                                   }}
                                   onInput={(e) => {
                                     const input = e.target as HTMLInputElement;
@@ -5093,43 +5178,26 @@ export function LimitOrderForm({
                                     input.value = sign + cleaned;
                                     input.dataset.prevValue = input.value;
                                   }}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                      const input = e.target as HTMLInputElement;
-                                      const val = input.value;
-                                      const isNegative = val.startsWith('-');
-                                      const numStr = val.replace(/[^0-9.]/g, '');
-                                      const value = parseFloat(numStr);
-                                      if (!isNaN(value) && value !== 0) {
-                                        const capped = Math.min(999, value);
-                                        handlePercentageClick(capped, isNegative ? 'below' : 'above');
-                                        input.blur();
-                                      }
-                                    }
-                                  }}
                                   onBlur={(e) => {
                                     const val = e.target.value;
                                     const isNegative = val.startsWith('-');
-                                    const numStr = val.replace(/[^0-9.]/g, '');
+                                    const numStr = val.replace(/[^0-9.%]/g, '');
                                     const value = parseFloat(numStr);
                                     if (!isNaN(value) && value !== 0) {
                                       const capped = Math.min(999, value);
                                       handlePercentageClick(capped, isNegative ? 'below' : 'above');
+                                      // Show value with % sign
+                                      e.target.value = (isNegative ? '-' : '+') + capped + '%';
                                     } else {
                                       // Restore original value if nothing was typed (or clear if original was empty)
                                       e.target.value = e.target.dataset.originalValue || '';
                                     }
                                   }}
                                 />
-                                {/* % symbol always visible on the right side */}
-                                <span className={`absolute right-2 top-1/2 -translate-y-1/2 text-xs font-medium pointer-events-none ${
-                                  isCustomActive ? 'text-white' : 'text-[#FF0080]/60'
-                                }`}>
-                                  %
-                                </span>
+                                {/* Placeholder ? when no custom value is active */}
                                 {!isCustomActive && (
-                                  <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-[#FF0080]/60 pointer-events-none peer-focus:hidden pr-3">
-                                    ?
+                                  <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-[#FF0080]/60 pointer-events-none peer-focus:hidden">
+                                    ?%
                                   </span>
                                 )}
                               </div>
@@ -5453,11 +5521,11 @@ export function LimitOrderForm({
                                     !presetValues.some(p => Math.abs(Math.abs(tokenPricePercentage) - p) < 0.1) &&
                                     (invertPriceDisplay ? tokenPricePercentage < 0 : tokenPricePercentage > 0);
                                   const isWholeNumber = (n: number) => Math.abs(n - Math.round(n)) < 0.01;
-                                  // Format: show sign, absolute value, no .0 suffix (% shown separately)
+                                  // Format: show sign, absolute value, no .0 suffix, includes %
                                   const formatPct = (n: number) => {
                                     const sign = n < 0 ? '-' : '+';
                                     const absVal = isWholeNumber(n) ? String(Math.round(Math.abs(n))) : Math.abs(n).toFixed(1).replace(/\.0$/, '');
-                                    return sign + absVal;
+                                    return sign + absVal + '%';
                                   };
                                   // Cap display at ±999% to prevent UI overflow
                                   const cappedPct = tokenPricePercentage !== null ? Math.max(-999, Math.min(999, tokenPricePercentage)) : 0;
@@ -5470,8 +5538,8 @@ export function LimitOrderForm({
                                         type="text"
                                         inputMode="decimal"
                                         defaultValue={displayValue}
-                                        maxLength={6}
-                                        className="peer w-full py-2 pl-2 pr-5 text-xs font-medium rounded-full text-center focus:outline-none"
+                                        maxLength={7}
+                                        className="peer w-full py-2 px-2 text-xs font-medium rounded-full text-center focus:outline-none"
                                         style={{
                                           backgroundColor: isCustomActive ? `${accentColor}33` : 'rgba(0,0,0,0.4)',
                                           color: isCustomActive ? 'white' : accentColor,
@@ -5485,6 +5553,47 @@ export function LimitOrderForm({
                                           e.target.dataset.originalValue = e.target.value;
                                           // When focused, show the sign prefix for the direction
                                           e.target.value = invertPriceDisplay ? '-' : '+';
+                                          // Move cursor to end (after the sign)
+                                          setTimeout(() => {
+                                            e.target.setSelectionRange(1, 1);
+                                          }, 0);
+                                        }}
+                                        onSelect={(e) => {
+                                          // Prevent cursor from being placed before the sign
+                                          const input = e.target as HTMLInputElement;
+                                          if (input.selectionStart !== null && input.selectionStart < 1) {
+                                            e.preventDefault();
+                                            input.setSelectionRange(1, Math.max(1, input.selectionEnd || 1));
+                                          }
+                                        }}
+                                        onMouseUp={(e) => {
+                                          // Block cursor placement before sign on click
+                                          const input = e.target as HTMLInputElement;
+                                          requestAnimationFrame(() => {
+                                            if (input.selectionStart !== null && input.selectionStart < 1) {
+                                              input.setSelectionRange(1, Math.max(1, input.selectionEnd || 1));
+                                            }
+                                          });
+                                        }}
+                                        onKeyDown={(e) => {
+                                          // Block arrow keys and home from moving cursor before sign
+                                          const input = e.target as HTMLInputElement;
+                                          if (e.key === 'ArrowLeft' || e.key === 'Home') {
+                                            if (input.selectionStart !== null && input.selectionStart <= 1) {
+                                              e.preventDefault();
+                                            }
+                                          }
+                                          if (e.key === 'Enter') {
+                                            const val = input.value;
+                                            const isNegative = val.startsWith('-');
+                                            const numStr = val.replace(/[^0-9.]/g, '');
+                                            const value = parseFloat(numStr);
+                                            if (!isNaN(value) && value !== 0) {
+                                              const capped = Math.min(999, value);
+                                              handleIndividualPercentageClick(index, capped, isNegative ? 'below' : 'above');
+                                              input.blur();
+                                            }
+                                          }
                                         }}
                                         onInput={(e) => {
                                           const input = e.target as HTMLInputElement;
@@ -5507,11 +5616,13 @@ export function LimitOrderForm({
                                         onBlur={(e) => {
                                           const val = e.target.value;
                                           const isNegative = val.startsWith('-');
-                                          const numStr = val.replace(/[^0-9.]/g, '');
+                                          const numStr = val.replace(/[^0-9.%]/g, '');
                                           const value = parseFloat(numStr);
                                           if (!isNaN(value) && value !== 0) {
                                             const capped = Math.min(999, value);
                                             handleIndividualPercentageClick(index, capped, isNegative ? 'below' : 'above');
+                                            // Show value with % sign
+                                            e.target.value = (isNegative ? '-' : '+') + capped + '%';
                                           } else if (e.target.dataset.originalValue) {
                                             // Restore original value if nothing was typed
                                             e.target.value = e.target.dataset.originalValue;
@@ -5523,28 +5634,11 @@ export function LimitOrderForm({
                                             e.target.style.color = accentColor;
                                           }
                                         }}
-                                        onKeyDown={(e) => {
-                                          if (e.key === 'Enter') {
-                                            const input = e.target as HTMLInputElement;
-                                            const val = input.value;
-                                            const isNegative = val.startsWith('-');
-                                            const numStr = val.replace(/[^0-9.]/g, '');
-                                            const value = parseFloat(numStr);
-                                            if (!isNaN(value) && value !== 0) {
-                                              const capped = Math.min(999, value);
-                                              handleIndividualPercentageClick(index, capped, isNegative ? 'below' : 'above');
-                                              input.blur();
-                                            }
-                                          }
-                                        }}
                                       />
-                                      {/* % symbol always visible on the right side */}
-                                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-medium pointer-events-none" style={{ color: isCustomActive ? 'white' : `${accentColor}99` }}>
-                                        %
-                                      </span>
+                                      {/* Placeholder ? when no custom value is active */}
                                       {!isCustomActive && (
-                                        <span className="absolute inset-0 flex items-center justify-center text-xs font-medium pointer-events-none peer-focus:hidden pr-3" style={{ color: `${accentColor}99` }}>
-                                          ?
+                                        <span className="absolute inset-0 flex items-center justify-center text-xs font-medium pointer-events-none peer-focus:hidden" style={{ color: `${accentColor}99` }}>
+                                          ?%
                                         </span>
                                       )}
                                     </div>
