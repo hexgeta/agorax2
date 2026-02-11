@@ -12,7 +12,15 @@ interface AchievementsResponse {
 
 interface LeaderboardResponse {
   success: boolean;
-  data?: LeaderboardEntry[];
+  data?: {
+    leaderboard: LeaderboardEntry[];
+    pagination: {
+      total: number;
+      limit: number;
+      offset: number;
+      has_more: boolean;
+    };
+  };
   error?: string;
 }
 
@@ -64,14 +72,14 @@ export function useLeaderboard(limit = 100) {
   } = useQuery<LeaderboardEntry[]>({
     queryKey: ['leaderboard', limit],
     queryFn: async () => {
-      const response = await fetch(`/api/leaderboard?limit=${limit}`);
+      const response = await fetch(`/api/v1/leaderboard?limit=${limit}`);
       const result: LeaderboardResponse = await response.json();
 
       if (!result.success) {
         throw new Error(result.error || 'Failed to fetch leaderboard');
       }
 
-      return result.data || [];
+      return result.data?.leaderboard || [];
     },
     staleTime: 60000, // 1 minute
   });

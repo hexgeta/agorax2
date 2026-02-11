@@ -49,8 +49,7 @@ export async function GET(request: NextRequest): Promise<Response> {
       .select(
         'wallet_address, total_xp, current_prestige, total_orders_created, total_orders_filled, ' +
         'total_orders_cancelled, total_trades, total_volume_usd, unique_tokens_traded, ' +
-        'current_active_orders, longest_streak_days, current_streak_days, last_trade_date, ' +
-        'total_proceeds_claimed, created_at',
+        'current_active_orders, longest_streak_days, current_streak_days, last_trade_date, created_at',
         { count: 'exact' }
       );
 
@@ -64,8 +63,8 @@ export async function GET(request: NextRequest): Promise<Response> {
     const { data, error, count } = await query;
 
     if (error) {
-      console.error('Leaderboard query error:', error);
-      return apiError('Failed to fetch leaderboard', 500);
+      console.error('Leaderboard query error:', error.message, error.code, error.details);
+      return apiError(`Failed to fetch leaderboard: ${error.message}`, 500);
     }
 
     const ranked = (data || []).map((user, idx) => ({
@@ -84,7 +83,6 @@ export async function GET(request: NextRequest): Promise<Response> {
       longest_streak_days: user.longest_streak_days,
       current_streak_days: user.current_streak_days,
       last_trade_date: user.last_trade_date,
-      total_proceeds_claimed: user.total_proceeds_claimed || 0,
       fill_rate_percent:
         user.total_orders_created > 0
           ? Math.round((user.total_orders_filled / user.total_orders_created) * 1000) / 10

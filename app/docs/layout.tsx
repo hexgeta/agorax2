@@ -30,10 +30,10 @@ const searchableDocs: SearchableDoc[] = [
   { title: 'Creating Orders', href: '/docs/guide/creating-orders', content: 'Step-by-step guide to creating limit orders. Select sell token and amount, choose accepted buy tokens, set your price above market, approve token spending, pay the listing fee, and confirm the transaction.', section: 'User Guide' },
   { title: 'Filling Orders', href: '/docs/guide/filling-orders', content: 'Browse the marketplace to find orders. Use filters for status, fill percentage, minimum USD, position relative to market. Select an order, choose payment token, enter fill amount, approve and confirm.', section: 'User Guide' },
   { title: 'Managing Orders', href: '/docs/guide/managing-orders', content: 'View all your orders in My Orders page. Claim proceeds from filled orders, cancel unfilled portions to reclaim tokens, track order status and fill history. Filter by active, expired, completed.', section: 'User Guide' },
-  { title: 'Challenges & XP', href: '/docs/guide/challenges', content: 'Complete 84 challenges across 9 prestige levels (Legions) to earn XP. Alpha, Beta, Gamma, Delta, Epsilon, Zeta, Eta, Theta, Omega. Token-specific challenges for HTT, COM, pDAI, MAXI tokens. Trade milestones, volume goals, streak rewards.', section: 'User Guide' },
+  { title: 'Legions', href: '/docs/guide/challenges', content: 'Complete 84 challenges across 9 prestige levels (Legions) to earn XP. Alpha, Beta, Gamma, Delta, Epsilon, Zeta, Eta, Theta, Omega. Token-specific challenges for HTT, COM, pDAI, MAXI tokens. Trade milestones, volume goals, streak rewards.', section: 'User Guide' },
   { title: 'Smart Contract', href: '/docs/technical/smart-contract', content: 'Technical reference for the AgoráX smart contract. Contract address 0xc8a47F14b1833310E2aC72e4C397b5b14a9FEf8B on PulseChain mainnet. Functions include createOrder, fillOrder, cancelOrder, claimProceeds.', section: 'Technical Reference' },
   { title: 'Data Structures', href: '/docs/technical/data-structures', content: 'TypeScript interfaces for order data. OrderDetails includes orderId, maker, sellToken, sellAmount, buyTokens, buyAmounts, expiration, isAllOrNothing. CompleteOrderDetails adds computed fields.', section: 'Technical Reference' },
-  { title: 'API Reference', href: '/docs/technical/api', content: 'REST API endpoints for integrating with AgoraX. POST /events/track to record events and evaluate challenges. GET /user/achievements for user stats and XP. GET /leaderboard for rankings. POST /events/backfill for historical data.', section: 'Technical Reference' },
+  { title: 'API Reference', href: '/docs/technical/api', content: 'REST API v1 endpoints for integrating with AgoraX. GET /v1/stats for protocol statistics. GET /v1/leaderboard for rankings. GET /v1/users/{address} for user profiles. GET /v1/orders for order listings. GET /v1/orders/{orderId} for order details.', section: 'Technical Reference' },
   { title: 'Audit Report', href: '/docs/security/audit', content: 'Security audit findings and report. Contract reviewed for vulnerabilities including reentrancy, integer overflow, access control. All critical and high severity issues resolved before mainnet launch.', section: 'Security' },
   { title: 'Security Features', href: '/docs/security/features', content: 'Non-custodial design means you control your funds. Escrow only holds sell tokens during active orders. No admin keys or upgrade mechanisms. Permissionless and trustless trading on PulseChain.', section: 'Security' },
 ];
@@ -64,7 +64,7 @@ const navigation: NavItem[] = [
       { title: 'Creating Orders', href: '/docs/guide/creating-orders' },
       { title: 'Filling Orders', href: '/docs/guide/filling-orders' },
       { title: 'Managing Orders', href: '/docs/guide/managing-orders' },
-      { title: 'Challenges & XP', href: '/docs/guide/challenges' },
+      { title: 'Legions', href: '/docs/guide/challenges' },
     ],
   },
   {
@@ -437,7 +437,7 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
         }`}
       >
         <LiquidGlassCard
-          className="h-full flex flex-col !rounded-none !overflow-y-auto"
+          className="h-full flex flex-col !rounded-l-none !rounded-r-2xl !overflow-y-auto"
           shadowIntensity="none"
           glowIntensity="sm"
           blurIntensity="xl"
@@ -538,7 +538,7 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
       <div className="flex-1 flex relative z-10">
         {/* Main Content - offset by sidebar width on desktop */}
         <main className="flex-1 min-w-0 md:ml-96">
-          <div className="max-w-4xl px-4 md:px-8 md:pl-24 md:pr-24 pb-24">
+          <div className="max-w-4xl px-4 md:px-8 md:pl-24 md:pr-24 pt-8 md:pt-12 pb-24">
             {children}
           </div>
         </main>

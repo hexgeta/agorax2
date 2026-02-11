@@ -625,13 +625,46 @@ The evaluation checks conditions and calls the `complete_challenge` database fun
 
 ---
 
-## 10. Existing Endpoints (Pre-v1)
+## 10. Complete API Reference
 
-These endpoints still work and are used by the frontend:
+### Public v1 API (Recommended)
 
-| Endpoint | Purpose |
-|---|---|
-| `POST /api/events/track` | Record a single event (used by `useEventTracking` hook) |
-| `POST /api/events/backfill` | Historical blockchain event backfill |
-| `GET /api/user/achievements?wallet=0x...` | User achievements for the frontend |
-| `GET /api/leaderboard?limit=100` | Legacy leaderboard for the frontend |
+| Endpoint | Method | Rate Limit | Description |
+|---|---|---|---|
+| `/api/v1/stats` | GET | 20/60s | Protocol-wide aggregate statistics |
+| `/api/v1/leaderboard` | GET | 20/60s | Ranked user list with sorting/filtering |
+| `/api/v1/orders` | GET | 30/60s | List/search orders with pagination |
+| `/api/v1/orders/{orderId}` | GET | 60/60s | Full order details with fills/cancellation |
+| `/api/v1/users/{address}` | GET | 30/60s | Complete user profile |
+
+### Internal/Frontend Endpoints
+
+| Endpoint | Method | Rate Limit | Description |
+|---|---|---|---|
+| `/api/user/achievements` | GET | None | User stats and challenges (frontend) |
+| `/api/user` | GET | None | User profile with activity history |
+| `/api/leaderboard` | GET | None | **DEPRECATED** - Use `/api/v1/leaderboard` |
+| `/api/token-stats` | GET | Cache 30s | Token stats from external source |
+| `/api/prices/historic` | GET | Rate-limited | Historic token prices |
+| `/api/validate-token-access` | POST | Rate-limited | Check PARTY/TEAM token access |
+
+### Event Tracking
+
+| Endpoint | Method | Rate Limit | Auth | Description |
+|---|---|---|---|---|
+| `/api/events/track` | POST | 30/60s/wallet | Optional | Record user events, award XP |
+| `/api/auth/verify` | POST | 10/60s | None | Wallet signature verification |
+
+### Admin/Internal Only
+
+| Endpoint | Method | Auth | Description |
+|---|---|---|---|
+| `/api/cron/sync-blockchain` | GET | CRON_SECRET | Sync blockchain events (cron job) |
+| `/api/events/backfill` | POST | BACKFILL_SECRET | Historical blockchain backfill |
+| `/api/admin/blacklist` | GET/POST/DELETE | ADMIN_SECRET | Manage blacklisted wallets |
+
+### Deprecated Endpoints
+
+| Endpoint | Replacement | Notes |
+|---|---|---|
+| `/api/leaderboard` | `/api/v1/leaderboard` | v1 has rate limiting, sorting, filtering |
