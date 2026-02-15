@@ -346,7 +346,7 @@ export default function Home() {
                       </svg>
                     </div>
                     <h3 className="text-lg font-semibold text-white mb-2">100+ Tokens Supported</h3>
-                    <p className="text-gray-400 text-sm">Supports sells of any token and buys of 100+ tokens on PulseChain.</p>
+                    <p className="text-gray-400 text-sm">Supports selling any compatible token in exchange for over 100 whitelisted options, with additions available upon request.</p>
                   </LiquidGlassCard>
 
                   <LiquidGlassCard
@@ -410,7 +410,7 @@ export default function Home() {
                         </svg>
                       </div>
                       <div>
-                        <h3 className="text-white font-semibold mb-1">Claims Proceed Only When You Want</h3>
+                        <h3 className="text-white font-semibold mb-1">Claim Proceeds Only When You Want</h3>
                         <p className="text-gray-400 text-sm">Choose when to collect your proceeds - useful for tax planning or security reasons. Unlike LP positions where rewards auto-compound.</p>
                       </div>
                     </div>
@@ -491,7 +491,7 @@ export default function Home() {
                       </div>
                       <div>
                         <h3 className="text-white font-semibold mb-1">MEV & Flash Loan Protection</h3>
-                        <p className="text-gray-400 text-sm">Built-in cooldown period on new orders prevents flash loan attacks and MEV exploitation. Your orders can't be sandwiched.</p>
+                        <p className="text-gray-400 text-sm">Built-in cooldown period on new and revived previously expired orders prevents flash loan attacks and MEV exploitation. Your orders can't be sandwiched.</p>
                       </div>
                     </div>
                   </LiquidGlassCard>

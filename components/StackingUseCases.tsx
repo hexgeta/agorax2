@@ -32,7 +32,7 @@ const useCases = [
   {
     title: 'Instant Arb Fills',
     description:
-      'Set orders slightly above market price on illiquid tokens. Arb bots fill them instantly at your exact price - no waiting, no slippage.',
+      'Place orders for your tokens slightly below market value. Arb bots fill them instantly at your exact price - no waiting, no slippage.',
   },
   {
     title: 'Zero-Fee Arbitrage',
@@ -57,7 +57,7 @@ const useCases = [
   {
     title: 'Simply the Best Rates',
     description:
-      'Not interested in advanced strategies? Just sell tokens at the lowest fees on PulseChain. 0.2% beats every AMM - more profit stays in your pocket.',
+      'Zero slippage and a 0.2% fee beats every AMM - that means more profit stays in your pocket.',
   },
   {
     title: 'Privacy-Enhanced Transfers',
