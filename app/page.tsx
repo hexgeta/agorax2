@@ -410,7 +410,7 @@ export default function Home() {
                         </svg>
                       </div>
                       <div>
-                        <h3 className="text-white font-semibold mb-1">Claims Proceed Only When You Want</h3>
+                        <h3 className="text-white font-semibold mb-1">Claim Proceeds Only When You Want</h3>
                         <p className="text-gray-400 text-sm">Choose when to collect your proceeds - useful for tax planning or security reasons. Unlike LP positions where rewards auto-compound.</p>
                       </div>
                     </div>
