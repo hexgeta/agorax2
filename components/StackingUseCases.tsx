@@ -32,7 +32,7 @@ const useCases = [
   {
     title: 'Instant Arb Fills',
     description:
-      'Set orders slightly above market price on illiquid tokens. Arb bots fill them instantly at your exact price - no waiting, no slippage.',
+      'Place orders for your tokens slightly below market value. Arb bots fill them instantly at your exact price - no waiting, no slippage.',
   },
   {
     title: 'Zero-Fee Arbitrage',
