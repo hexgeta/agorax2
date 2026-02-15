@@ -491,7 +491,7 @@ export default function Home() {
                       </div>
                       <div>
                         <h3 className="text-white font-semibold mb-1">MEV & Flash Loan Protection</h3>
-                        <p className="text-gray-400 text-sm">Built-in cooldown period on new orders prevents flash loan attacks and MEV exploitation. Your orders can't be sandwiched.</p>
+                        <p className="text-gray-400 text-sm">Built-in cooldown period on new and revived previously expired orders prevents flash loan attacks and MEV exploitation. Your orders can't be sandwiched.</p>
                       </div>
                     </div>
                   </LiquidGlassCard>
