@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAccount, useSignMessage } from 'wagmi';
 
-const AUTH_MESSAGE = 'Verify AgoráX wallet ownership';
+const AUTH_MESSAGE = 'Your signature verifies wallet ownership for AgoráX sign-in. This does not cost any gas or submit a transaction.';
 const STORAGE_KEY = 'agorax-sessions'; // Now stores multiple sessions
 
 interface StoredSessions {

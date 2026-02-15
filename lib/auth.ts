@@ -1,7 +1,7 @@
 import { createHmac } from 'crypto';
 
 // The message users sign to prove wallet ownership
-export const AUTH_MESSAGE = 'Verify AgoráX wallet ownership';
+export const AUTH_MESSAGE = 'Your signature verifies wallet ownership for AgoráX sign-in. This does not cost any gas or submit a transaction.';
 
 function getSecret(): string {
   const secret = process.env.AUTH_TOKEN_SECRET;
