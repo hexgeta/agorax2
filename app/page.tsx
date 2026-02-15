@@ -346,7 +346,7 @@ export default function Home() {
                       </svg>
                     </div>
                     <h3 className="text-lg font-semibold text-white mb-2">100+ Tokens Supported</h3>
-                    <p className="text-gray-400 text-sm">Supports sells of any token and buys of 100+ tokens on PulseChain.</p>
+                    <p className="text-gray-400 text-sm">Supports selling any compatible token in exchange for over 100 whitelisted options, with additions available upon request.</p>
                   </LiquidGlassCard>
 
                   <LiquidGlassCard
