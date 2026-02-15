@@ -57,7 +57,7 @@ const useCases = [
   {
     title: 'Simply the Best Rates',
     description:
-      'Not interested in advanced strategies? Just sell tokens at the lowest fees on PulseChain. 0.2% beats every AMM - more profit stays in your pocket.',
+      'Zero slippage and a 0.2% fee beats every AMM - that means more profit stays in your pocket.',
   },
   {
     title: 'Privacy-Enhanced Transfers',
