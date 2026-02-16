@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useAccount } from 'wagmi'
 import { PixelSpinner } from './ui/PixelSpinner';
 import { useAppKit } from '@reown/appkit/react'
@@ -11,6 +11,10 @@ import { useEventTracking } from '@/hooks/useEventTracking'
 import { useWalletAuth } from '@/hooks/useWalletAuth'
 // import { PrestigeBadge } from './PrestigeBadge'
 
+// Module-level set shared across all ConnectButton instances to prevent
+// multiple instances on the same page from each triggering verify()
+const promptedWallets = new Set<string>();
+
 interface ConnectButtonProps {
   connectedText?: string;
   connectedHref?: string;
@@ -19,7 +23,7 @@ interface ConnectButtonProps {
 export const ConnectButton = ({ connectedText, connectedHref }: ConnectButtonProps = {}) => {
   const { isConnected, address } = useAccount()
   const { trackWalletConnected } = useEventTracking()
-  const { isVerified, isVerifying, isInitialized, hasStoredSession, verify } = useWalletAuth()
+  const { isVerified, isVerifying, isInitialized, hasStoredSession, hasBeenPrompted, verify } = useWalletAuth()
 
   // Track wallet connection event (API handles deduplication)
   useEffect(() => {
@@ -28,18 +32,20 @@ export const ConnectButton = ({ connectedText, connectedHref }: ConnectButtonPro
     }
   }, [isConnected, address, trackWalletConnected])
 
-  // Prompt for verification only if this wallet hasn't been verified before
-  // Sessions are now stored per-wallet, so switching wallets won't re-prompt
-  const hasPromptedForWallet = useRef<string | null>(null)
+  // Prompt for verification only if this wallet hasn't been verified or prompted before.
+  // Uses module-level Set to prevent multiple ConnectButton instances on the same page
+  // from each triggering verify(), and localStorage-backed hasBeenPrompted to prevent
+  // re-prompting across page loads if the user dismissed the popup.
   useEffect(() => {
     if (!isConnected || !address || !isInitialized) return
     if (isVerifying || isVerified || hasStoredSession) return
-    // Don't prompt again for the same wallet in this session
-    if (hasPromptedForWallet.current === address) return
+    if (hasBeenPrompted) return
+    // Module-level dedup: don't prompt if another instance already triggered verify
+    if (promptedWallets.has(address)) return
 
-    hasPromptedForWallet.current = address
+    promptedWallets.add(address)
     verify()
-  }, [isConnected, address, isInitialized, isVerifying, isVerified, hasStoredSession, verify])
+  }, [isConnected, address, isInitialized, isVerifying, isVerified, hasStoredSession, hasBeenPrompted, verify])
 
   const { open } = useAppKit()
   const { isTransactionPending } = useTransaction()
