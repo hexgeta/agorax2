@@ -67,8 +67,11 @@ const formatCalculatedValue = (value: number): string => {
   if (rounded === 0) return '';
 
   let str = rounded.toFixed(precision);
-  // Remove trailing zeros but keep meaningful precision
-  str = str.replace(/\.?0+$/, '');
+  // Remove trailing decimal zeros (e.g. "0.040000" → "0.04"), but never strip
+  // trailing zeros from integers (e.g. "10000000" must stay "10000000", not "1")
+  if (str.includes('.')) {
+    str = str.replace(/0+$/, '').replace(/\.$/, '');
+  }
 
   return formatNumberWithCommas(str);
 };
