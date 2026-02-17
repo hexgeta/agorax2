@@ -30,8 +30,7 @@ export function useFavorites() {
             setFavoriteOrderIds(new Set(data.favorites));
           }
         }
-      } catch (err) {
-        console.error('Failed to fetch favorites:', err);
+      } catch {
       } finally {
         setIsLoading(false);
         fetchedRef.current = address.toLowerCase();

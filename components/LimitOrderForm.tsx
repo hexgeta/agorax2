@@ -496,7 +496,6 @@ export function LimitOrderForm({
         }) as bigint;
         setListingFee(fee);
       } catch (error) {
-        console.warn('Could not fetch listing fee:', error);
         setListingFee(0n);
       }
     };

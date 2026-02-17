@@ -88,7 +88,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     if (syncError || !syncState) {
       // Table may not exist yet - use deployment block
-      console.log('sync_state not found, using deployment block');
     }
 
     const lastSyncedBlock = syncState ? BigInt(syncState.value) : DEPLOYMENT_BLOCK;
@@ -131,8 +130,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         args: [0n, 1000n],
       }) as [Array<{ tokenAddress: string; isActive: boolean }>, bigint];
       whitelist = whitelistResult[0].map((t) => t.tokenAddress.toLowerCase());
-    } catch (err) {
-      console.error('Failed to fetch whitelist:', err);
+    } catch {
     }
 
     // 2. Fetch events in the block range
@@ -477,7 +475,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       duration_ms: Date.now() - startTime,
     });
   } catch (error) {
-    console.error('Sync cron error:', error);
     return NextResponse.json({ success: false, error: `Sync failed: ${error}` }, { status: 500 });
   }
 }

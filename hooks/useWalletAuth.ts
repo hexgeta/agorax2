@@ -139,11 +139,8 @@ export function useWalletAuth() {
         return result.token;
       }
 
-      console.error('Auth verification failed:', result.error);
       return null;
-    } catch (error) {
-      // User rejected the signature or network error
-      console.error('Wallet auth error:', error);
+    } catch {
       return null;
     } finally {
       verifyingRef.current = false;

@@ -57,7 +57,6 @@ export async function GET(request: NextRequest) {
     .order('created_at', { ascending: false });
 
   if (error) {
-    console.error('Error fetching favorites:', error);
     return NextResponse.json(
       { success: false, error: 'Failed to fetch favorites' },
       { status: 500 }
@@ -109,7 +108,6 @@ export async function POST(request: NextRequest) {
       );
 
     if (error) {
-      console.error('Error adding favorite:', error);
       return NextResponse.json(
         { success: false, error: 'Failed to add favorite' },
         { status: 500 }
@@ -160,7 +158,6 @@ export async function DELETE(request: NextRequest) {
       .eq('order_id', order_id);
 
     if (error) {
-      console.error('Error removing favorite:', error);
       return NextResponse.json(
         { success: false, error: 'Failed to remove favorite' },
         { status: 500 }

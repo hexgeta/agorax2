@@ -57,7 +57,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       .single();
 
     if (userError && userError.code !== 'PGRST116') {
-      console.error('Error fetching user:', userError);
       return NextResponse.json(
         { success: false, error: 'Failed to fetch user data' },
         { status: 500 }
@@ -74,7 +73,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       .limit(100);
 
     if (activityError) {
-      console.error('Error fetching activity:', activityError);
     }
 
     // Default stats for new users
@@ -137,8 +135,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         },
       },
     });
-  } catch (error) {
-    console.error('Error in user API:', error);
+  } catch {
     return NextResponse.json(
       { success: false, error: 'Internal server error' },
       { status: 500 }

@@ -62,7 +62,6 @@ export async function GET(
           503
         );
       }
-      console.error('Order fetch error:', orderError);
       return apiError('Failed to fetch order', 500);
     }
 
@@ -95,7 +94,6 @@ export async function GET(
           .limit(fillsLimit)
           .then(({ data, error }) => {
             if (error && error.code !== '42P01') {
-              console.error('Fills fetch error:', error);
             }
             const fills = (data || []).map((f) => ({
               ...f,
@@ -127,7 +125,6 @@ export async function GET(
           .single()
           .then(({ data, error }) => {
             if (error && error.code !== 'PGRST116' && error.code !== '42P01') {
-              console.error('Cancellation fetch error:', error);
             }
             result.cancellation = data || null;
           })
@@ -143,7 +140,6 @@ export async function GET(
           .order('claimed_at', { ascending: true })
           .then(({ data, error }) => {
             if (error && error.code !== '42P01') {
-              console.error('Proceeds fetch error:', error);
             }
             result.proceeds = {
               total_claims: (data || []).length,
@@ -175,7 +171,6 @@ export async function GET(
 
     return apiSuccess(result, request);
   } catch (error) {
-    console.error('Order detail API error:', error);
     return apiError('Internal server error', 500);
   }
 }

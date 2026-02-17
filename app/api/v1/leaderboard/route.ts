@@ -63,7 +63,6 @@ export async function GET(request: NextRequest): Promise<Response> {
     const { data, error, count } = await query;
 
     if (error) {
-      console.error('Leaderboard query error:', error.message, error.code, error.details);
       return apiError(`Failed to fetch leaderboard: ${error.message}`, 500);
     }
 
@@ -103,7 +102,6 @@ export async function GET(request: NextRequest): Promise<Response> {
       request,
     );
   } catch (error) {
-    console.error('Leaderboard API error:', error);
     return apiError('Internal server error', 500);
   }
 }

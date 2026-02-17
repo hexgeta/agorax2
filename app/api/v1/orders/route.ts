@@ -115,7 +115,6 @@ export async function GET(request: NextRequest): Promise<Response> {
           503
         );
       }
-      console.error('Orders query error:', error);
       return apiError('Failed to fetch orders', 500);
     }
 
@@ -139,7 +138,6 @@ export async function GET(request: NextRequest): Promise<Response> {
       request,
     );
   } catch (error) {
-    console.error('Orders API error:', error);
     return apiError('Internal server error', 500);
   }
 }

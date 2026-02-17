@@ -48,7 +48,6 @@ export async function POST(request: NextRequest) {
     .eq('wallet_address', normalized);
 
   if (error) {
-    console.error('Blacklist error:', error);
     return NextResponse.json({ success: false, error: 'Database error' }, { status: 500 });
   }
 
@@ -84,7 +83,6 @@ export async function DELETE(request: NextRequest) {
     .eq('wallet_address', normalized);
 
   if (error) {
-    console.error('Unblacklist error:', error);
     return NextResponse.json({ success: false, error: 'Database error' }, { status: 500 });
   }
 
@@ -108,7 +106,6 @@ export async function GET(request: NextRequest) {
     .order('blacklisted_at', { ascending: false });
 
   if (error) {
-    console.error('Blacklist list error:', error);
     return NextResponse.json({ success: false, error: 'Database error' }, { status: 500 });
   }
 

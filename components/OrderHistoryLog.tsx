@@ -132,7 +132,6 @@ export function OrderHistoryLog() {
         }
       } catch (err) {
         setError('Failed to fetch activity');
-        console.error('Activity fetch error:', err);
       } finally {
         setIsLoading(false);
       }

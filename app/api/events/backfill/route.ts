@@ -103,7 +103,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // If reset flag is set, delete all existing user_events first
     if (resetEvents) {
       await supabase.from('user_events').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      console.log('Cleared all user_events for fresh backfill');
     }
 
     const client = createPublicClient({
@@ -696,7 +695,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       },
     });
   } catch (error) {
-    console.error('Backfill error:', error);
     return NextResponse.json(
       { success: false, error: `Backfill failed: ${error}` },
       { status: 500 }

@@ -42,7 +42,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     if (userError && userError.code !== 'PGRST116') {
       // PGRST116 = no rows returned
-      console.error('Error fetching user:', userError);
       return NextResponse.json(
         { success: false, error: 'Failed to fetch user data' },
         { status: 500 }
@@ -57,7 +56,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       .order('completed_at', { ascending: false });
 
     if (challengesError) {
-      console.error('Error fetching challenges:', challengesError);
     }
 
     // Fetch XP breakdown by event type
@@ -67,7 +65,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       .eq('wallet_address', normalizedWallet);
 
     if (eventsError) {
-      console.error('Error fetching events for XP breakdown:', eventsError);
     }
 
     // Aggregate XP by event type
@@ -155,7 +152,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       },
     });
   } catch (error) {
-    console.error('Error in achievements API:', error);
     return NextResponse.json(
       { success: false, error: 'Internal server error' },
       { status: 500 }

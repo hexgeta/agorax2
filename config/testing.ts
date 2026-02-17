@@ -16,8 +16,7 @@ export const PULSECHAIN_CHAIN_ID = 369;
 export const ETHEREUM_CHAIN_ID = 1;
 
 // Get contract address from environment variables
-// AgoraX Mainnet: 0xc8a47F14b1833310E2aC72e4C397b5b14a9FEf8B (PLS Mainnet Chain ID 369)
-const AGORAX_CONTRACT = process.env.NEXT_PUBLIC_AGORAX_SMART_CONTRACT || '0xc8a47F14b1833310E2aC72e4C397b5b14a9FEf8B';
+const AGORAX_CONTRACT = process.env.NEXT_PUBLIC_AGORAX_SMART_CONTRACT || '';
 
 // Debug: Log contract address on load (only once)
 // Removed console log for performance

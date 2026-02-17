@@ -64,7 +64,6 @@ async function kvRateLimit(
       reset: now + config.windowSeconds,
     };
   } catch (error) {
-    console.error('KV rate limit error:', error);
     // Fall back to allowing the request on error
     return {
       blocked: false,

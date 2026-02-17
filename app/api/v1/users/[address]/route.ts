@@ -54,7 +54,6 @@ export async function GET(
       .single();
 
     if (userError && userError.code !== 'PGRST116') {
-      console.error('User fetch error:', userError);
       return apiError('Failed to fetch user data', 500);
     }
 
@@ -103,7 +102,6 @@ export async function GET(
           .eq('wallet_address', wallet)
           .order('completed_at', { ascending: false })
           .then(({ data, error }) => {
-            if (error) console.error('Challenges fetch error:', error);
             result.challenges = {
               total: (data || []).length,
               by_prestige: groupBy(data || [], 'prestige_level'),
@@ -123,7 +121,6 @@ export async function GET(
           .order('created_at', { ascending: false })
           .limit(eventsLimit)
           .then(({ data, error }) => {
-            if (error) console.error('Events fetch error:', error);
             result.recent_events = data || [];
           })
       );
@@ -140,7 +137,6 @@ export async function GET(
           .then(({ data, error }) => {
             if (error && error.code !== '42P01') {
               // 42P01 = table doesn't exist yet (migration not run)
-              console.error('Orders fetch error:', error);
             }
             if (data) {
               const statusCounts = { active: 0, completed: 0, cancelled: 0 };
@@ -173,7 +169,6 @@ export async function GET(
           .order('activity_date', { ascending: false })
           .limit(90)
           .then(({ data, error }) => {
-            if (error) console.error('Daily activity fetch error:', error);
             result.daily_activity = data || [];
           })
       );
@@ -187,7 +182,6 @@ export async function GET(
           .select('event_type, xp_awarded')
           .eq('wallet_address', wallet)
           .then(({ data, error }) => {
-            if (error) console.error('XP breakdown fetch error:', error);
 
             // Aggregate XP by event type
             const eventXp: Record<string, { count: number; xp: number }> = {};
@@ -209,8 +203,6 @@ export async function GET(
               .select('xp_awarded')
               .eq('wallet_address', wallet)
               .then(({ data: challengeData, error: challengeError }) => {
-                if (challengeError) console.error('Challenge XP fetch error:', challengeError);
-
                 const totalChallengeXp = (challengeData || []).reduce(
                   (sum, c) => sum + (c.xp_awarded || 0),
                   0
@@ -249,7 +241,6 @@ export async function GET(
 
     return apiSuccess(result, request);
   } catch (error) {
-    console.error('User API error:', error);
     return apiError('Internal server error', 500);
   }
 }

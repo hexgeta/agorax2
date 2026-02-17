@@ -195,7 +195,6 @@ export default function StatsPage() {
 
       setOrders(placedOrders);
     } catch (error) {
-      console.error('Error fetching orders:', error);
     }
   }, [publicClient, OTC_CONTRACT_ADDRESS]);
 
@@ -285,7 +284,6 @@ export default function StatsPage() {
 
       setTransactions(txs);
     } catch (error) {
-      console.error('Error fetching transactions:', error);
     } finally {
       setIsLoading(false);
     }

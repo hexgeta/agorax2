@@ -211,7 +211,6 @@ export async function POST(request: NextRequest): Promise<NextResponse<TrackEven
       );
 
     if (userError) {
-      console.error('Error upserting user:', userError);
     }
 
     // Record the event using the database function
@@ -223,8 +222,6 @@ export async function POST(request: NextRequest): Promise<NextResponse<TrackEven
     });
 
     if (eventError) {
-      console.error('Error recording event:', eventError);
-
       // Fallback: direct insert if function fails
       const { data: insertData, error: insertError } = await supabase
         .from('user_events')
@@ -300,7 +297,6 @@ export async function POST(request: NextRequest): Promise<NextResponse<TrackEven
       challenges_completed: completedChallenges,
     });
   } catch (error) {
-    console.error('Error in track event API:', error);
     return NextResponse.json(
       { success: false, error: 'Internal server error' },
       { status: 500 }

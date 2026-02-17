@@ -47,8 +47,7 @@ export async function POST(request: NextRequest) {
       success: true,
       token,
     });
-  } catch (error) {
-    console.error('Auth verify error:', error);
+  } catch {
     return NextResponse.json(
       { success: false, error: 'Verification failed' },
       { status: 500 },

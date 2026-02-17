@@ -35,7 +35,6 @@ export function useEventTracking() {
   const trackEvent = useCallback(
     async (eventType: EventType, eventData?: EventData): Promise<TrackEventResponse | null> => {
       if (!address) {
-        console.warn('Cannot track event: No wallet connected');
         return null;
       }
 
@@ -60,15 +59,11 @@ export function useEventTracking() {
         const result: TrackEventResponse = await response.json();
 
         if (!result.success) {
-          console.error('Event tracking failed:', result.error);
         } else if (result.challenges_completed && result.challenges_completed.length > 0) {
-          // Could trigger a toast notification here for completed challenges
-          console.log('Challenges completed:', result.challenges_completed);
         }
 
         return result;
-      } catch (error) {
-        console.error('Error tracking event:', error);
+      } catch {
         return null;
       }
     },

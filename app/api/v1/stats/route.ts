@@ -114,8 +114,7 @@ export async function GET(request: NextRequest): Promise<Response> {
       },
       request,
     );
-  } catch (error) {
-    console.error('Stats API error:', error);
+  } catch {
     return apiError('Internal server error', 500);
   }
 }

@@ -6,7 +6,6 @@ const LOGO_CACHE_DURATION = 30 * 24 * 60 * 60 * 1000; // 30 days in milliseconds
 
 // Install event - nothing to do on install
 self.addEventListener('install', (event) => {
-  console.log('[SW] Logo cache service worker installed');
   self.skipWaiting();
 });
 
@@ -21,7 +20,6 @@ self.addEventListener('activate', (event) => {
       );
     })
   );
-  console.log('[SW] Logo cache service worker activated');
 });
 
 // Fetch event - cache logo requests
