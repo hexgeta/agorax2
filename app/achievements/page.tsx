@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 import PixelBlastBackground from '@/components/ui/PixelBlastBackground';
 import { useUserAchievements } from '@/hooks/useUserAchievements';
+import { useWalletAuth } from '@/hooks/useWalletAuth';
 import { PixelSpinner } from '@/components/ui/PixelSpinner';
 import { LegionProgressBar } from '@/components/ui/LegionProgressBar';
 import {
@@ -351,6 +352,13 @@ export default function RanksPage() {
 
   // Fetch real user data from Supabase
   const { stats, completedChallenges: rawCompletedChallenges, xpBreakdown, isLoading, isConnected } = useUserAchievements();
+
+  // Re-prompt wallet verification on achievements page even if previously dismissed
+  const { isVerified, isInitialized, verify } = useWalletAuth();
+  useEffect(() => {
+    if (!isConnected || !isInitialized || isVerified) return;
+    verify();
+  }, [isConnected, isInitialized, isVerified, verify]);
 
   // Transform completed challenges into the format expected by the UI
   const userData = useMemo(() => {

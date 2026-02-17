@@ -5,6 +5,7 @@ import { useAccount, useSignMessage } from 'wagmi';
 
 const AUTH_MESSAGE = 'Your signature verifies wallet ownership for AgoráX sign-in. This does not cost any gas or submit a transaction.';
 const STORAGE_KEY = 'agorax-sessions'; // Now stores multiple sessions
+const PROMPTED_KEY = 'agorax-auth-prompted'; // Tracks wallets we've already prompted
 
 interface StoredSessions {
   [wallet: string]: string; // wallet address (lowercase) -> token
@@ -30,6 +31,27 @@ function storeSessionForWallet(wallet: string, token: string) {
   const sessions = getStoredSessions();
   sessions[wallet.toLowerCase()] = token;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+}
+
+function getPromptedWallets(): Set<string> {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const raw = localStorage.getItem(PROMPTED_KEY);
+    if (!raw) return new Set();
+    return new Set(JSON.parse(raw) as string[]);
+  } catch {
+    return new Set();
+  }
+}
+
+function markWalletPrompted(wallet: string) {
+  const prompted = getPromptedWallets();
+  prompted.add(wallet.toLowerCase());
+  localStorage.setItem(PROMPTED_KEY, JSON.stringify([...prompted]));
+}
+
+function hasWalletBeenPrompted(wallet: string): boolean {
+  return getPromptedWallets().has(wallet.toLowerCase());
 }
 
 /**
@@ -89,6 +111,9 @@ export function useWalletAuth() {
       return existingToken;
     }
 
+    // Mark as prompted before showing popup so we don't re-prompt on dismiss
+    markWalletPrompted(address);
+
     verifyingRef.current = true;
     setIsVerifying(true);
     try {
@@ -134,12 +159,16 @@ export function useWalletAuth() {
     return !!(token && isValidTokenFormat(token, address));
   })();
 
+  // Check if we've already prompted this wallet (even if they dismissed)
+  const hasBeenPrompted = address ? hasWalletBeenPrompted(address) : false;
+
   return {
     sessionToken,
     isVerified: !!sessionToken || hasStoredSession,
     isVerifying,
     isInitialized,
     hasStoredSession, // Expose this so ConnectButton can skip prompts for returning users
+    hasBeenPrompted, // True if we've already shown the sign popup for this wallet
     verify,
   };
 }

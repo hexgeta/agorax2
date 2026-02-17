@@ -625,7 +625,7 @@ export default function Home() {
                   />
                   <FAQItem
                     question="What are the fees?"
-                    answer="AgoráX charges a flat <strong class='text-white'>100 PLS</strong> listing fee + a <strong class='text-white'>0.2%</strong> fee deducted from the seller's received tokens on order completion.<br/><br/>These are the lowest fees of any DEX on PulseChain:<br/><br/><span class='text-green-400'>✓ AgoráX: 0.2%</span><br/><span class='text-gray-500'>• 9inch V2: 0.22%</span><br/><span class='text-gray-500'>• 9mm V2/V3: 0.25%</span><br/><span class='text-gray-500'>• 9inch V3: 0.25%</span><br/><span class='text-gray-500'>• PulseX V1/V2: 0.29%</span><br/><span class='text-gray-500'>• Uniswap V2/V3: 0.3%</span><br/><span class='text-gray-500'>• PHUX/TIDE: 0.3%</span>"
+                    answer="AgoráX charges a flat <strong class='text-white'>100 PLS</strong> listing fee + a <strong class='text-white'>0.2%</strong> fee deducted from the seller's proceeds.<br/><br/>These are the lowest fees of any DEX on PulseChain:<br/><br/><span class='text-green-400'>✓ AgoráX: 0.2%</span><br/><span class='text-gray-500'>• 9inch V2: 0.22%</span><br/><span class='text-gray-500'>• 9mm V2/V3: 0.25%</span><br/><span class='text-gray-500'>• 9inch V3: 0.25%</span><br/><span class='text-gray-500'>• PulseX V1/V2: 0.29%</span><br/><span class='text-gray-500'>• Uniswap V2/V3: 0.3%</span><br/><span class='text-gray-500'>• PHUX/TIDE: 0.3%</span>"
                     isOpen={openFaqIndex === 2}
                     onToggle={() => setOpenFaqIndex(openFaqIndex === 2 ? null : 2)}
                   />
