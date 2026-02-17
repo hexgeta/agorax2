@@ -67,7 +67,7 @@ export default async function RootLayout({
   return (
     <html lang="en" className="font-sans">
       <head>
-        <script defer data-domain="agorax2.lookintomaxi.com" src="https://plausible.io/js/script.js"></script>
+        <script defer data-domain="agorax.win" src="https://plausible.io/js/script.js"></script>
       </head>
       <body className="min-h-screen bg-black text-white">
         <AppKitProvider cookies={cookies}>

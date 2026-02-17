@@ -358,15 +358,9 @@ export function OrderHistoryLog() {
               </button>
               <button
                 onClick={() => handleSort('description')}
-                className="col-span-6 flex items-center gap-1 hover:text-white/80 transition-colors text-left"
+                className="col-span-8 flex items-center gap-1 hover:text-white/80 transition-colors text-left"
               >
                 Description <SortIcon field="description" />
-              </button>
-              <button
-                onClick={() => handleSort('xp')}
-                className="col-span-2 flex items-center gap-1 justify-end hover:text-white/80 transition-colors"
-              >
-                XP <SortIcon field="xp" />
               </button>
               <button
                 onClick={() => handleSort('time')}
@@ -402,17 +396,8 @@ export function OrderHistoryLog() {
                     </div>
 
                     {/* Description */}
-                    <div className="md:col-span-6 text-sm text-white/80">
+                    <div className="md:col-span-8 text-sm text-white/80">
                       {getEventDescription(event)}
-                    </div>
-
-                    {/* XP */}
-                    <div className="md:col-span-2 text-right">
-                      {event.xp_awarded > 0 ? (
-                        <span className="text-sm text-yellow-400">+{event.xp_awarded} XP</span>
-                      ) : (
-                        <span className="text-sm text-white/30">-</span>
-                      )}
                     </div>
 
                     {/* Time */}

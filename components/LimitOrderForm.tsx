@@ -444,7 +444,6 @@ export function LimitOrderForm({
   const activeInputRef = useRef<'sell' | 'buy' | null>(null);
   // Track when percentage/backing click is in progress - prevents useEffect from overwriting amounts
   const isPercentageClickInProgressRef = useRef<boolean>(false);
-
   // Track previous token addresses to detect changes for deferred price recalculation
   // This fixes the race condition where prices aren't ready when token selection happens
   const prevSellTokenAddressRef = useRef<string | undefined>(sellToken?.a);
@@ -4390,6 +4389,24 @@ export function LimitOrderForm({
                               setBuyAmounts(prev => {
                                 const newAmounts = [...prev];
                                 newAmounts[0] = formatCalculatedValue(newBuyAmount);
+                                // Also recalculate alt token amounts inline (bound mode)
+                                if (pricesBound && buyTokens.length > 1) {
+                                  const sellTokenUsdPrice = sellToken ? getPrice(sellToken.a) : 0;
+                                  const firstBuyTokenUsdPrice = buyTokens[0] ? getPrice(buyTokens[0].a) : 0;
+                                  const marketPriceForFirst = sellTokenUsdPrice > 0 && firstBuyTokenUsdPrice > 0
+                                    ? sellTokenUsdPrice / firstBuyTokenUsdPrice : 0;
+                                  const premiumMultiplier = marketPriceForFirst > 0 ? basePrice / marketPriceForFirst : 1;
+                                  for (let i = 1; i < buyTokens.length; i++) {
+                                    if (buyTokens[i]) {
+                                      const tokenUsdPrice = getPrice(buyTokens[i]!.a);
+                                      if (sellTokenUsdPrice > 0 && tokenUsdPrice > 0) {
+                                        const marketPriceForThis = sellTokenUsdPrice / tokenUsdPrice;
+                                        const adjustedPrice = marketPriceForThis * premiumMultiplier;
+                                        newAmounts[i] = formatCalculatedValue(sellAmt * adjustedPrice);
+                                      }
+                                    }
+                                  }
+                                }
                                 return newAmounts;
                               });
                             }
@@ -5103,6 +5120,24 @@ export function LimitOrderForm({
                                 setBuyAmounts(prev => {
                                   const newAmounts = [...prev];
                                   newAmounts[0] = formatCalculatedValue(newBuyAmount);
+                                  // Also recalculate alt token amounts inline (bound mode)
+                                  if (pricesBound && buyTokens.length > 1) {
+                                    const sellTokenUsdPrice = sellToken ? getPrice(sellToken.a) : 0;
+                                    const firstBuyTokenUsdPrice = buyTokens[0] ? getPrice(buyTokens[0].a) : 0;
+                                    const marketPriceForFirst = sellTokenUsdPrice > 0 && firstBuyTokenUsdPrice > 0
+                                      ? sellTokenUsdPrice / firstBuyTokenUsdPrice : 0;
+                                    const premiumMultiplier = marketPriceForFirst > 0 ? basePrice / marketPriceForFirst : 1;
+                                    for (let i = 1; i < buyTokens.length; i++) {
+                                      if (buyTokens[i]) {
+                                        const tokenUsdPrice = getPrice(buyTokens[i]!.a);
+                                        if (sellTokenUsdPrice > 0 && tokenUsdPrice > 0) {
+                                          const marketPriceForThis = sellTokenUsdPrice / tokenUsdPrice;
+                                          const adjustedPrice = marketPriceForThis * premiumMultiplier;
+                                          newAmounts[i] = formatCalculatedValue(sellAmt * adjustedPrice);
+                                        }
+                                      }
+                                    }
+                                  }
                                   return newAmounts;
                                 });
                               }
