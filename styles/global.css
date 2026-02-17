@@ -116,6 +116,36 @@ w3m-connect-button,
   background-color: rgba(255, 255, 255, 0.1) !important;
 }
 
+/* Calendar selected & range day button styling.
+   Order matters: range_middle MUST come after selected so it wins when both apply. */
+.rdp-selected > button {
+  background-color: white !important;
+  color: black !important;
+}
+.rdp-selected > button:hover {
+  background-color: white !important;
+  color: black !important;
+}
+.rdp-range_start > button,
+.rdp-range_end > button {
+  background-color: white !important;
+  color: black !important;
+}
+.rdp-range_start > button:hover,
+.rdp-range_end > button:hover {
+  background-color: white !important;
+  color: black !important;
+}
+/* range_middle after selected — white text on translucent bg */
+.rdp-range_middle > button {
+  background-color: transparent !important;
+  color: white !important;
+}
+.rdp-range_middle > button:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  color: white !important;
+}
+
 /* No-select utility classes */
 .no-select {
   @apply select-none !important;

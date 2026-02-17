@@ -79,14 +79,14 @@ function Calendar({
           defaultClassNames.day
         ),
         day_button: cn(
-          buttonVariants({ variant: "ghost" }),
-          "w-[var(--cell-size)] h-[var(--cell-size)] p-0 font-normal text-white text-sm hover:bg-white/20 hover:text-white rounded-md"
+          "inline-flex items-center justify-center whitespace-nowrap text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 disabled:pointer-events-none disabled:opacity-50",
+          "w-[var(--cell-size)] h-[var(--cell-size)] p-0 font-normal text-white hover:bg-white/20 hover:text-white rounded-md"
         ),
-        // Range styling - background on the cell itself
-        range_start: "bg-white/20 rounded-l-md [&>button]:!bg-white [&>button]:!text-black [&>button]:hover:!bg-white [&>button]:hover:!text-black",
-        range_middle: "bg-white/20 rounded-none [&>button]:!bg-transparent [&>button]:!text-white [&>button]:hover:!bg-white/10",
-        range_end: "bg-white/20 rounded-r-md [&>button]:!bg-white [&>button]:!text-black [&>button]:hover:!bg-white [&>button]:hover:!text-black",
-        selected: "[&>button]:!bg-white [&>button]:!text-black [&>button]:hover:!bg-white [&>button]:hover:!text-black",
+        // Range styling - button colors handled via CSS in global.css for proper specificity
+        range_start: cn("bg-white/20 rounded-l-md", defaultClassNames.range_start),
+        range_middle: cn("bg-white/20 rounded-none", defaultClassNames.range_middle),
+        range_end: cn("bg-white/20 rounded-r-md", defaultClassNames.range_end),
+        selected: defaultClassNames.selected,
         today: "[&>button]:ring-1 [&>button]:ring-white/50",
         outside: cn("text-white/30 opacity-50 [&>button]:text-white/30", defaultClassNames.outside),
         disabled: cn("text-white/20 opacity-50 pointer-events-none", defaultClassNames.disabled),
