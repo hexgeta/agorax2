@@ -210,13 +210,13 @@ export default function ProtocolActivityChart({ transactions, orders, contractOr
 
   return (
     <LiquidGlassCard
-      className="p-6 bg-black/40"
+      className="p-2 md:p-6 bg-black/40"
       shadowIntensity="none"
       glowIntensity="none"
     >
-      <div className="mb-6">
-        <h3 className="text-2xl font-bold text-white mb-2">Protocol Volume</h3>
-        <div className="flex flex-wrap gap-6">
+      <div className="mb-4 md:mb-6">
+        <h3 className="text-xl md:text-2xl font-bold text-white mb-2">Protocol Volume</h3>
+        <div className="flex flex-wrap gap-3 md:gap-6">
           <div>
             <p className="text-gray-400 text-sm">Listed Volume</p>
             <p className="text-pink-400 text-xl font-bold">{formatUSD(totalListedVolume)}</p>
@@ -239,7 +239,7 @@ export default function ProtocolActivityChart({ transactions, orders, contractOr
       <ResponsiveContainer width="100%" height={350}>
         <ComposedChart
           data={chartData}
-          margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+          margin={{ top: 10, right: 5, left: -10, bottom: 0 }}
           barGap={0}
           barCategoryGap="20%"
         >

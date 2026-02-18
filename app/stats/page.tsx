@@ -98,6 +98,8 @@ export default function StatsPage() {
   const [selectedTraderFilter, setSelectedTraderFilter] = useState<string | null>(null);
   const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | 'active' | 'completed' | 'cancelled'>('all');
 
+  const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
   const OTC_CONTRACT_ADDRESS = getContractAddress(chainId);
 
   // Fetch all orders for stats and price levels chart
@@ -587,13 +589,13 @@ export default function StatsPage() {
                   selectedToken={selectedTokenFilter?.address}
                 />
 
-                {/* Leaderboard */}
-                <TopTradersLeaderboard
+                {/* Leaderboard - hidden for now */}
+                {/* <TopTradersLeaderboard
                   transactions={transactions}
                   orders={orders}
                   tokenPrices={tokenPrices}
                   contractOrders={contractOrders}
-                />
+                /> */}
 
                 {/* Order Book */}
                 {filteredActiveOrders.length > 0 && whitelist.length > 0 && (

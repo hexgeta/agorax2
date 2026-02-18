@@ -1732,6 +1732,21 @@ export function LimitOrderForm({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showBuyDropdowns]);
 
+  // Lock scrolling when date picker is open
+  useEffect(() => {
+    if (showDatePicker) {
+      document.documentElement.style.overflow = 'hidden';
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.documentElement.style.overflow = '';
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.documentElement.style.overflow = '';
+      document.body.style.overflow = '';
+    };
+  }, [showDatePicker]);
+
   const getTokenLogo = (ticker: string) => {
     const format = (logoManifest as Record<string, string>)[ticker];
     return format ? `/coin-logos/${ticker}.${format}` : '/coin-logos/default.svg';
@@ -3504,7 +3519,7 @@ export function LimitOrderForm({
                 }
                 setShowSellDropdown(!showSellDropdown);
               }}
-              className="min-w-[120px] shrink-0 bg-black/40 border border-white/10 p-3 flex items-center justify-between hover:bg-white/5 transition-all shadow-sm rounded-lg"
+              className="min-w-0 shrink-0 bg-black/40 border border-white/10 p-2 sm:p-3 flex items-center justify-between hover:bg-white/5 transition-all shadow-sm rounded-lg"
             >
               <div className="flex items-center space-x-2">
                 {sellToken ? (
@@ -3972,23 +3987,21 @@ export function LimitOrderForm({
                         const newDropdowns = showBuyDropdowns.map((_, i) => i === 0 ? !showBuyDropdowns[0] : false);
                         setShowBuyDropdowns(newDropdowns);
                       }}
-                      className="min-w-[120px] shrink-0 bg-black/40 border border-white/10 p-3 flex items-center justify-between hover:bg-white/5 transition-all shadow-sm rounded-lg"
+                      className="min-w-0 shrink overflow-hidden bg-black/40 border border-white/10 p-2 sm:p-3 flex items-center gap-1.5 sm:gap-2 hover:bg-white/5 transition-all shadow-sm rounded-lg"
                     >
-                      <div className="flex items-center space-x-2">
-                        <div className="w-6 h-6 rounded-full bg-gradient-to-br from-[#FF0080]/30 to-[#00BFFF]/30 flex items-center justify-center">
-                          <svg className="w-3.5 h-3.5 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                          </svg>
-                        </div>
-                        <span className="text-white font-medium text-sm">{TOKEN_BASKETS.find(b => b.id === selectedBasket)?.name || 'Basket'}</span>
+                      <div className="w-5 h-5 sm:w-6 sm:h-6 shrink-0 rounded-full bg-gradient-to-br from-[#FF0080]/30 to-[#00BFFF]/30 flex items-center justify-center">
+                        <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                        </svg>
                       </div>
-                      <svg className="w-4 h-4 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <span className="text-white font-medium truncate">{TOKEN_BASKETS.find(b => b.id === selectedBasket)?.name || 'Basket'}</span>
+                      <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white/50 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                       </svg>
                     </button>
 
                     {/* Amount Input - uses first buy amount */}
-                    <div className="flex-1 min-w-0 relative">
+                    <div className="min-w-0 w-[60%] shrink-0">
                       <input
                         ref={el => { buyInputRefs.current[0] = el; }}
                         type="text"
@@ -4007,16 +4020,10 @@ export function LimitOrderForm({
                           activeInputRef.current = null;
                         }}
                         placeholder="0.00"
-                        className="w-full h-full bg-black/40 border border-white/10 p-3 pr-16 text-white text-base placeholder-white/30 focus:outline-none rounded-lg"
+                        className="w-full h-full bg-black/40 border border-white/10 p-3 text-white text-base placeholder-white/30 focus:outline-none rounded-lg"
                       />
-                      {buyTokens[0] && (
-                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 text-sm font-medium">
-                          {formatTokenTicker(buyTokens[0].ticker, chainId)}
-                        </span>
-                      )}
                     </div>
                   </div>
-
                   {/* Basket Dropdown */}
                   {showBuyDropdowns[0] && (
                     <div className="absolute top-full left-0 right-0 mt-1 bg-black/90 border border-white/10 z-10 shadow-xl backdrop-blur-md rounded-lg overflow-hidden">
@@ -4131,12 +4138,10 @@ export function LimitOrderForm({
                   )}
                 </div>
 
-                {/* Buy Token USD Value for Basket - show minimum (conservative) since it's "one of" */}
-                <div className="flex items-center gap-2 mt-2">
-                  <div className="w-[140px] shrink-0 text-white/50 text-sm font-semibold">
+                {/* Buy Token USD Value + ticker on same row */}
+                <div className="flex items-center justify-between mt-1">
+                  <div className="text-white/50 text-sm font-semibold">
                     {(() => {
-                      // Find the minimum USD value across all basket tokens (conservative estimate)
-                      // Since the order accepts "one of" these tokens, we show the lowest value
                       const usdValues: number[] = [];
                       let hasAnyPrice = false;
                       let hasAnyAmount = false;
@@ -4165,6 +4170,11 @@ export function LimitOrderForm({
                       return minUsdValue > 0 ? `$${formatNumberWithCommas(minUsdValue.toFixed(2))}` : '$0.00';
                     })()}
                   </div>
+                  {buyTokens[0] && (
+                    <div className="text-white/50 text-xs font-medium">
+                      {formatTokenTicker(buyTokens[0].ticker, chainId)}
+                    </div>
+                  )}
                 </div>
 
                 {/* Basket Tokens Preview - show which tokens are in the basket */}
@@ -4455,7 +4465,7 @@ export function LimitOrderForm({
                       <div className="flex gap-2 mt-3">
                         <button
                           onClick={() => handlePercentageClick(0, 'above')}
-                          className={`flex-1 py-2 border-accent-pink text-xs transition-all font-medium rounded-full ${pricePercentage === null || Math.abs(pricePercentage) < 0.01
+                          className={`flex-1 py-2 border-accent-pink text-[10px] sm:text-xs transition-all font-medium rounded-full ${pricePercentage === null || Math.abs(pricePercentage) < 0.01
                             ? 'bg-[#FF0080]/20 text-white'
                             : 'bg-black/40 text-[#FF0080] hover:bg-[#FF0080]/20 hover:text-white'
                             }`}
@@ -4464,7 +4474,7 @@ export function LimitOrderForm({
                         </button>
                         <button
                           onClick={() => handlePercentageClick(1, invertPriceDisplay ? 'below' : 'above')}
-                          className={`flex-1 py-2 border-accent-pink text-xs transition-all font-medium rounded-full ${pricePercentage !== null && Math.abs(Math.abs(pricePercentage) - 1) < 0.1 && (invertPriceDisplay ? pricePercentage < 0 : pricePercentage > 0)
+                          className={`flex-1 py-2 border-accent-pink text-[10px] sm:text-xs transition-all font-medium rounded-full ${pricePercentage !== null && Math.abs(Math.abs(pricePercentage) - 1) < 0.1 && (invertPriceDisplay ? pricePercentage < 0 : pricePercentage > 0)
                             ? 'bg-[#FF0080]/20 text-white'
                             : 'bg-black/40 text-[#FF0080] hover:bg-[#FF0080]/20 hover:text-white'
                             }`}
@@ -4473,7 +4483,7 @@ export function LimitOrderForm({
                         </button>
                         <button
                           onClick={() => handlePercentageClick(2, invertPriceDisplay ? 'below' : 'above')}
-                          className={`flex-1 py-2 border-accent-pink text-xs transition-all font-medium rounded-full ${pricePercentage !== null && Math.abs(Math.abs(pricePercentage) - 2) < 0.1 && (invertPriceDisplay ? pricePercentage < 0 : pricePercentage > 0)
+                          className={`flex-1 py-2 border-accent-pink text-[10px] sm:text-xs transition-all font-medium rounded-full ${pricePercentage !== null && Math.abs(Math.abs(pricePercentage) - 2) < 0.1 && (invertPriceDisplay ? pricePercentage < 0 : pricePercentage > 0)
                             ? 'bg-[#FF0080]/20 text-white'
                             : 'bg-black/40 text-[#FF0080] hover:bg-[#FF0080]/20 hover:text-white'
                             }`}
@@ -4482,7 +4492,7 @@ export function LimitOrderForm({
                         </button>
                         <button
                           onClick={() => handlePercentageClick(5, invertPriceDisplay ? 'below' : 'above')}
-                          className={`flex-1 py-2 border-accent-pink text-xs transition-all font-medium rounded-full ${pricePercentage !== null && Math.abs(Math.abs(pricePercentage) - 5) < 0.1 && (invertPriceDisplay ? pricePercentage < 0 : pricePercentage > 0)
+                          className={`flex-1 py-2 border-accent-pink text-[10px] sm:text-xs transition-all font-medium rounded-full ${pricePercentage !== null && Math.abs(Math.abs(pricePercentage) - 5) < 0.1 && (invertPriceDisplay ? pricePercentage < 0 : pricePercentage > 0)
                             ? 'bg-[#FF0080]/20 text-white'
                             : 'bg-black/40 text-[#FF0080] hover:bg-[#FF0080]/20 hover:text-white'
                             }`}
@@ -4514,7 +4524,7 @@ export function LimitOrderForm({
                                 inputMode="decimal"
                                 defaultValue={displayValue}
                                 maxLength={7}
-                                className={`peer w-full py-2 px-2 border text-xs font-medium rounded-full text-center focus:outline-none focus:border-[#FF0080] focus:bg-[#FF0080]/20 focus:text-white ${
+                                className={`peer w-full py-2 px-1 border text-[10px] sm:text-xs font-medium rounded-full text-center focus:outline-none focus:border-[#FF0080] focus:bg-[#FF0080]/20 focus:text-white ${
                                   isCustomActive
                                     ? 'bg-[#FF0080]/20 border-[#FF0080]/40 text-white'
                                     : 'bg-black/40 border-[#FF0080]/40 text-[#FF0080] placeholder-transparent'
@@ -4643,7 +4653,7 @@ export function LimitOrderForm({
                         const newDropdowns = showBuyDropdowns.map((_, i) => i === index ? !showBuyDropdowns[index] : false);
                         setShowBuyDropdowns(newDropdowns);
                       }}
-                      className="min-w-[120px] shrink-0 bg-black/40 border border-white/10 p-3 flex items-center justify-between hover:bg-white/5 transition-all shadow-sm rounded-lg"
+                      className="min-w-0 shrink-0 bg-black/40 border border-white/10 p-2 sm:p-3 flex items-center justify-between hover:bg-white/5 transition-all shadow-sm rounded-lg"
                     >
                       <div className="flex items-center space-x-2">
                         {buyToken ? (
@@ -4661,7 +4671,7 @@ export function LimitOrderForm({
                     </button>
 
                     {/* Amount Input - inline */}
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-[100px]">
                       <input
                         ref={el => { buyInputRefs.current[index] = el; }}
                         type="text"
@@ -5195,7 +5205,7 @@ export function LimitOrderForm({
                         <div className="flex gap-2 mt-3">
                           <button
                             onClick={() => handlePercentageClick(0, 'above')}
-                            className={`flex-1 py-2 border-accent-pink text-xs transition-all font-medium rounded-full ${pricePercentage === null || Math.abs(pricePercentage) < 0.01
+                            className={`flex-1 py-2 border-accent-pink text-[10px] sm:text-xs transition-all font-medium rounded-full ${pricePercentage === null || Math.abs(pricePercentage) < 0.01
                               ? 'bg-[#FF0080]/20 text-white'
                               : 'bg-black/40 text-[#FF0080] hover:bg-[#FF0080]/20 hover:text-white'
                               }`}
@@ -5205,7 +5215,7 @@ export function LimitOrderForm({
                           {canShowBackingButton ? (
                             <button
                               onClick={handleBackingPriceClick}
-                              className={`flex-1 py-2 border-accent-pink text-xs transition-all font-medium rounded-full ${(() => {
+                              className={`flex-1 py-2 border-accent-pink text-[10px] sm:text-xs transition-all font-medium rounded-full ${(() => {
                                 const backingPrice = getBackingLimitPrice();
                                 if (!backingPrice || !marketPrice) return false;
                                 const backingPercent = ((backingPrice - marketPrice) / marketPrice) * 100;
@@ -5221,7 +5231,7 @@ export function LimitOrderForm({
                           ) : (
                             <button
                               onClick={() => handlePercentageClick(1, invertPriceDisplay ? 'below' : 'above')}
-                              className={`flex-1 py-2 border-accent-pink text-xs transition-all font-medium rounded-full ${pricePercentage !== null && Math.abs(Math.abs(pricePercentage) - 1) < 0.1 && (invertPriceDisplay ? pricePercentage < 0 : pricePercentage > 0)
+                              className={`flex-1 py-2 border-accent-pink text-[10px] sm:text-xs transition-all font-medium rounded-full ${pricePercentage !== null && Math.abs(Math.abs(pricePercentage) - 1) < 0.1 && (invertPriceDisplay ? pricePercentage < 0 : pricePercentage > 0)
                                 ? 'bg-[#FF0080]/20 text-white'
                                 : 'bg-black/40 text-[#FF0080] hover:bg-[#FF0080]/20 hover:text-white'
                                 }`}
@@ -5231,7 +5241,7 @@ export function LimitOrderForm({
                           )}
                           <button
                             onClick={() => handlePercentageClick(2, invertPriceDisplay ? 'below' : 'above')}
-                            className={`flex-1 py-2 border-accent-pink text-xs transition-all font-medium rounded-full ${pricePercentage !== null && Math.abs(Math.abs(pricePercentage) - 2) < 0.1 && (invertPriceDisplay ? pricePercentage < 0 : pricePercentage > 0)
+                            className={`flex-1 py-2 border-accent-pink text-[10px] sm:text-xs transition-all font-medium rounded-full ${pricePercentage !== null && Math.abs(Math.abs(pricePercentage) - 2) < 0.1 && (invertPriceDisplay ? pricePercentage < 0 : pricePercentage > 0)
                               ? 'bg-[#FF0080]/20 text-white'
                               : 'bg-black/40 text-[#FF0080] hover:bg-[#FF0080]/20 hover:text-white'
                               }`}
@@ -5240,7 +5250,7 @@ export function LimitOrderForm({
                           </button>
                           <button
                             onClick={() => handlePercentageClick(5, invertPriceDisplay ? 'below' : 'above')}
-                            className={`flex-1 py-2 border-accent-pink text-xs transition-all font-medium rounded-full ${pricePercentage !== null && Math.abs(Math.abs(pricePercentage) - 5) < 0.1 && (invertPriceDisplay ? pricePercentage < 0 : pricePercentage > 0)
+                            className={`flex-1 py-2 border-accent-pink text-[10px] sm:text-xs transition-all font-medium rounded-full ${pricePercentage !== null && Math.abs(Math.abs(pricePercentage) - 5) < 0.1 && (invertPriceDisplay ? pricePercentage < 0 : pricePercentage > 0)
                               ? 'bg-[#FF0080]/20 text-white'
                               : 'bg-black/40 text-[#FF0080] hover:bg-[#FF0080]/20 hover:text-white'
                               }`}
@@ -5990,10 +6000,10 @@ export function LimitOrderForm({
           </div>
 
           {/* Expiration Preset Buttons */}
-          <div className="flex gap-2 w-full">
+          <div className="flex gap-1.5 sm:gap-2 w-full justify-center">
             <button
               onClick={() => handleExpirationPreset(1 / 24)} // 1 hour = 1/24 day
-              className={`flex-1 py-1.5 text-xs text-white transition-all h-[32px] flex items-center justify-center rounded-full border ${Math.abs(expirationDays - (1 / 24)) < 0.0001
+              className={`flex-1 py-2 text-[10px] sm:text-xs text-white transition-all flex items-center justify-center rounded-full border ${Math.abs(expirationDays - (1 / 24)) < 0.0001
                 ? 'bg-white/20 text-white border-white/50'
                 : 'bg-black/40 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'
                 }`}
@@ -6002,7 +6012,7 @@ export function LimitOrderForm({
             </button>
             <button
               onClick={() => handleExpirationPreset(0.25)} // 6 hours
-              className={`flex-1 py-1.5 text-xs text-white transition-all h-[32px] flex items-center justify-center rounded-full border ${Math.abs(expirationDays - 0.25) < 0.0001
+              className={`flex-1 py-2 text-[10px] sm:text-xs text-white transition-all flex items-center justify-center rounded-full border ${Math.abs(expirationDays - 0.25) < 0.0001
                 ? 'bg-white/20 text-white border-white/50'
                 : 'bg-black/40 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'
                 }`}
@@ -6011,7 +6021,7 @@ export function LimitOrderForm({
             </button>
             <button
               onClick={() => handleExpirationPreset(0.5)} // 12 hours
-              className={`flex-1 py-1.5 text-xs text-white transition-all h-[32px] flex items-center justify-center rounded-full border ${Math.abs(expirationDays - 0.5) < 0.0001
+              className={`flex-1 py-2 text-[10px] sm:text-xs text-white transition-all flex items-center justify-center rounded-full border ${Math.abs(expirationDays - 0.5) < 0.0001
                 ? 'bg-white/20 text-white border-white/50'
                 : 'bg-black/40 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'
                 }`}
@@ -6020,7 +6030,7 @@ export function LimitOrderForm({
             </button>
             <button
               onClick={() => handleExpirationPreset(1)} // 24 hours
-              className={`flex-1 py-1.5 text-xs text-white transition-all h-[32px] flex items-center justify-center rounded-full border ${Math.abs(expirationDays - 1) < 0.0001
+              className={`flex-1 py-2 text-[10px] sm:text-xs text-white transition-all flex items-center justify-center rounded-full border ${Math.abs(expirationDays - 1) < 0.0001
                 ? 'bg-white/20 text-white border-white/50'
                 : 'bg-black/40 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'
                 }`}
@@ -6029,7 +6039,7 @@ export function LimitOrderForm({
             </button>
             <button
               onClick={() => handleExpirationPreset(7)}
-              className={`flex-1 py-1.5 text-xs text-white transition-all h-[32px] flex items-center justify-center rounded-full border ${Math.abs(expirationDays - 7) < 0.0001
+              className={`flex-1 py-2 text-[10px] sm:text-xs text-white transition-all flex items-center justify-center rounded-full border ${Math.abs(expirationDays - 7) < 0.0001
                 ? 'bg-white/20 text-white border-white/50'
                 : 'bg-black/40 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'
                 }`}
@@ -6038,7 +6048,7 @@ export function LimitOrderForm({
             </button>
             <button
               onClick={() => handleExpirationPreset(30)}
-              className={`flex-1 py-1.5 text-xs text-white transition-all h-[32px] flex items-center justify-center rounded-full border ${Math.abs(expirationDays - 30) < 0.0001
+              className={`flex-1 py-2 text-[10px] sm:text-xs text-white transition-all flex items-center justify-center rounded-full border ${Math.abs(expirationDays - 30) < 0.0001
                 ? 'bg-white/20 text-white border-white/50'
                 : 'bg-black/40 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'
                 }`}
@@ -6047,7 +6057,7 @@ export function LimitOrderForm({
             </button>
             <button
               onClick={() => handleExpirationPreset(90)}
-              className={`flex-1 py-1.5 text-xs text-white transition-all h-[32px] flex items-center justify-center rounded-full border ${Math.abs(expirationDays - 90) < 0.0001
+              className={`flex-1 py-2 text-[10px] sm:text-xs text-white transition-all flex items-center justify-center rounded-full border ${Math.abs(expirationDays - 90) < 0.0001
                 ? 'bg-white/20 text-white border-white/50'
                 : 'bg-black/40 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'
                 }`}
@@ -6056,7 +6066,7 @@ export function LimitOrderForm({
             </button>
 
             {/* Calendar Date Picker Button */}
-            <div ref={datePickerRef} className="relative date-picker-container flex-1">
+            <div ref={datePickerRef} className="relative date-picker-container">
               <button
                 onClick={() => {
                   const opening = !showDatePicker;
@@ -6067,42 +6077,53 @@ export function LimitOrderForm({
                     setSelectedDate(defaultDate);
                   }
                 }}
-                className="w-full py-1.5 text-xs bg-black/40 text-white border border-white/10 hover:bg-white/10 hover:border-white/30 transition-all h-[32px] flex items-center justify-center rounded-full"
+                className="py-2 px-3 text-[10px] sm:text-xs bg-black/40 text-white border border-white/10 hover:bg-white/10 hover:border-white/30 transition-all flex items-center justify-center rounded-full"
                 title="Select specific date"
               >
                 <CalendarIcon className="w-3 h-3" />
               </button>
 
-              {/* Calendar Popup - positioned absolutely like dropdowns */}
-              {showDatePicker && (
-                <div
-                  className="absolute top-full right-0 mt-2 w-[340px] bg-black border border-white/30 rounded-lg shadow-xl overflow-hidden animate-in fade-in duration-150 z-[100]"
-                  onClick={(e) => e.stopPropagation()}
-                  onMouseDown={(e) => e.stopPropagation()}
-                >
-                  <Calendar
-                    mode="single"
-                    selected={selectedDate}
-                    onSelect={handleDateSelect}
-                    captionLayout="dropdown"
-                    defaultMonth={selectedDate || new Date()}
-                    disabled={(date: Date) => {
-                      const today = new Date();
-                      today.setHours(0, 0, 0, 0);
-                      return date < today;
-                    }}
+              {/* Calendar Popup - portaled to body, fixed overlay */}
+              {showDatePicker && typeof document !== 'undefined' && createPortal(
+                <div className="fixed inset-0 z-[200] flex items-center justify-center px-4">
+                  <div
+                    className="fixed inset-0 bg-black/80"
+                    onClick={() => setShowDatePicker(false)}
                   />
-                  <div className="px-3 pb-3 border-t border-white/10 pt-3">
-                    <label className="text-white/60 text-xs mb-2 block">Time (UTC)</label>
-                    <input
-                      type="time"
-                      step="1"
-                      value={selectedDate ? `${String(selectedDate.getHours()).padStart(2, '0')}:${String(selectedDate.getMinutes()).padStart(2, '0')}:${String(selectedDate.getSeconds()).padStart(2, '0')}` : ''}
-                      onChange={handleTimeChange}
-                      className="w-full bg-black text-white border border-white/20 rounded-md px-3 py-2 text-sm appearance-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none focus:outline-none focus:border-white/50 selection:bg-white/30 selection:text-white [&::-webkit-datetime-edit-hour-field:focus]:bg-white/30 [&::-webkit-datetime-edit-minute-field:focus]:bg-white/30 [&::-webkit-datetime-edit-second-field:focus]:bg-white/30 [&::-webkit-datetime-edit-hour-field:focus]:text-white [&::-webkit-datetime-edit-minute-field:focus]:text-white [&::-webkit-datetime-edit-second-field:focus]:text-white"
+                  <div
+                    className="relative bg-black border border-white/20 rounded-lg p-4 md:p-6 shadow-2xl max-w-[95vw] md:min-w-[400px]"
+                    onClick={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => e.stopPropagation()}
+                  >
+                    <Calendar
+                      mode="single"
+                      selected={selectedDate}
+                      onSelect={handleDateSelect}
+                      captionLayout="dropdown"
+                      defaultMonth={selectedDate || new Date()}
+                      disabled={(date: Date) => {
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        return date < today;
+                      }}
+                      classNames={{
+                        root: "w-full",
+                      }}
+                      className="w-full [--cell-size:2.75rem]"
                     />
+                    <div className="border-t border-white/10 pt-3 mt-3">
+                      <label className="text-white/60 text-xs mb-2 block">Time (UTC)</label>
+                      <input
+                        type="time"
+                        step="1"
+                        value={selectedDate ? `${String(selectedDate.getHours()).padStart(2, '0')}:${String(selectedDate.getMinutes()).padStart(2, '0')}:${String(selectedDate.getSeconds()).padStart(2, '0')}` : ''}
+                        onChange={handleTimeChange}
+                        className="w-full bg-black text-white border border-white/20 rounded-md px-3 py-2 text-sm appearance-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none focus:outline-none focus:border-white/50 selection:bg-white/30 selection:text-white [&::-webkit-datetime-edit-hour-field:focus]:bg-white/30 [&::-webkit-datetime-edit-minute-field:focus]:bg-white/30 [&::-webkit-datetime-edit-second-field:focus]:bg-white/30 [&::-webkit-datetime-edit-hour-field:focus]:text-white [&::-webkit-datetime-edit-minute-field:focus]:text-white [&::-webkit-datetime-edit-second-field:focus]:text-white"
+                      />
+                    </div>
                   </div>
-                </div>
+                </div>,
+                document.body
               )}
             </div>
           </div>

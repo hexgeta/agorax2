@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useState, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 import { formatUSD, getTokenPrice } from '@/utils/format';
 import { getTokenInfo, formatTokenAmount } from '@/utils/tokenUtils';
@@ -277,10 +278,12 @@ export default function StatsOverviewCards({ transactions, orders, tokenPrices, 
     return (orderCounts.cancelled / effectiveOrderCount) * 100;
   }, [orderCounts.cancelled, effectiveOrderCount]);
 
+  const [expanded, setExpanded] = useState(false);
+
   return (
     <div className="space-y-4">
-      {/* Stats Cards - Row 1: Volume & Overview */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      {/* Stats Cards - Rows 1 & 2 */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 lg:gap-4">
         <StatCard
           label="Total Value Locked"
           value={formatUSD(totalValueLocked)}
@@ -306,35 +309,6 @@ export default function StatsOverviewCards({ transactions, orders, tokenPrices, 
           value={uniqueTokenCount.toLocaleString()}
           subValue="Traded on protocol"
         />
-      </div>
-
-      {/* Stats Cards - Row 2: Averages & Rates */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        <StatCard
-          label="Avg Placement Size"
-          value={formatUSD(avgOrderSize)}
-          subValue="Per order created"
-        />
-        <StatCard
-          label="Avg Fill Size"
-          value={formatUSD(avgTradeSize)}
-          subValue="Per fill"
-        />
-        <StatCard
-          label="Largest Order"
-          value={formatUSD(largestOrder)}
-          subValue="Single order"
-        />
-        <StatCard
-          label="Cancel Rate"
-          value={`${cancelRate.toFixed(1)}%`}
-          subValue="Orders cancelled"
-          dotColor={cancelRate > 50 ? 'red' : cancelRate > 25 ? 'yellow' : 'green'}
-        />
-      </div>
-
-      {/* Stats Cards - Row 3: Order Status */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <StatCard
           label="Total Orders"
           value={orderCounts.total.toLocaleString()}
@@ -366,41 +340,92 @@ export default function StatsOverviewCards({ transactions, orders, tokenPrices, 
         />
       </div>
 
-      {/* Stats Cards - Row 4: Per-User Averages */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        <StatCard
-          label="Avg Orders/Trader"
-          value={avgOrdersPerAddress.toFixed(1)}
-          subValue="Orders per address"
-        />
-        <StatCard
-          label="Avg Volume/Trader"
-          value={formatUSD(uniqueTraders > 0 ? totalListedVolume / uniqueTraders : 0)}
-          subValue="Listed per address"
-        />
-        <StatCard
-          label="Avg Fills/Trader"
-          value={uniqueTraders > 0 ? (totalFills / uniqueTraders).toFixed(1) : '0'}
-          subValue="Fills per address"
-        />
-        <StatCard
-          label="Maker/Taker Ratio"
-          value={transactions.length > 0 && effectiveOrderCount > 0
-            ? `${(effectiveOrderCount / transactions.length).toFixed(1)}x`
-            : '-'}
-          subValue="Orders to fills"
-        />
-        <StatCard
-          label="Active TVL Share"
-          value={totalListedVolume > 0 ? `${((totalValueLocked / totalListedVolume) * 100).toFixed(1)}%` : '0%'}
-          subValue="Active vs total listed"
-        />
-        <StatCard
-          label="Daily Avg Volume"
-          value={formatUSD(protocolAge > 0 ? totalFilledVolume / protocolAge : 0)}
-          subValue="Filled per day"
-        />
-      </div>
+      {/* See More Toggle */}
+      <AnimatePresence initial={false}>
+        {expanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+            className="overflow-hidden space-y-4"
+          >
+            {/* Stats Cards - Rows 3 & 4 */}
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 lg:gap-4">
+              <StatCard
+                label="Avg Placement Size"
+                value={formatUSD(avgOrderSize)}
+                subValue="Per order created"
+              />
+              <StatCard
+                label="Avg Fill Size"
+                value={formatUSD(avgTradeSize)}
+                subValue="Per fill"
+              />
+              <StatCard
+                label="Avg Orders/Trader"
+                value={avgOrdersPerAddress.toFixed(1)}
+                subValue="Orders per address"
+              />
+              <StatCard
+                label="Avg Volume/Trader"
+                value={formatUSD(uniqueTraders > 0 ? totalListedVolume / uniqueTraders : 0)}
+                subValue="Listed per address"
+              />
+              <StatCard
+                label="Avg Fills/Trader"
+                value={uniqueTraders > 0 ? (totalFills / uniqueTraders).toFixed(1) : '0'}
+                subValue="Fills per address"
+              />
+              <StatCard
+                label="Largest Order"
+                value={formatUSD(largestOrder)}
+                subValue="Single order"
+              />
+              <StatCard
+                label="Cancel Rate"
+                value={`${cancelRate.toFixed(1)}%`}
+                subValue="Orders cancelled"
+              />
+              <StatCard
+                label="Daily Avg Volume"
+                value={formatUSD(protocolAge > 0 ? totalFilledVolume / protocolAge : 0)}
+                subValue="Filled per day"
+              />
+              <StatCard
+                label="Maker/Taker Ratio"
+                value={transactions.length > 0 && effectiveOrderCount > 0
+                  ? `${(effectiveOrderCount / transactions.length).toFixed(1)}x`
+                  : '-'}
+                subValue="Orders to fills"
+              />
+              <StatCard
+                label="Active TVL Share"
+                value={totalListedVolume > 0 ? `${((totalValueLocked / totalListedVolume) * 100).toFixed(1)}%` : '0%'}
+                subValue="Active vs total listed"
+              />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* See More / See Less Button */}
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-center gap-2 py-2.5 text-gray-400 hover:text-white transition-colors text-sm font-medium"
+      >
+        <span>{expanded ? 'See less' : 'See more'}</span>
+        <motion.svg
+          animate={{ rotate: expanded ? 180 : 0 }}
+          transition={{ duration: 0.3 }}
+          className="w-4 h-4"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </motion.svg>
+      </button>
     </div>
   );
 }

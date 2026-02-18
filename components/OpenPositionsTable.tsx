@@ -2966,7 +2966,50 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
               <ChevronRight className="w-4 h-4" />
             </Link>
           </div>
-          <p className="text-white/60 text-sm">Showing your 10 most recent orders</p>
+          <div className="flex items-center gap-3">
+            <p className="text-white/60 text-sm">Showing your 10 most recent orders</p>
+            <button
+              type="button"
+              onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
+              className="flex items-center gap-1.5 text-white/50 hover:text-white/80 transition-colors text-sm whitespace-nowrap"
+            >
+              <span>Filters</span>
+              {activeFilterCount > 0 && !showAdvancedOptions && (
+                <span className="flex items-center justify-center w-5 h-5 text-xs font-medium bg-white/20 text-white rounded-full">
+                  {activeFilterCount}
+                </span>
+              )}
+              <svg
+                className={`w-3 h-3 transition-transform duration-200 ${showAdvancedOptions ? 'rotate-180' : ''}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+              </svg>
+            </button>
+            {activeFilterCount > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('');
+                  setAonFilterEnabled(false);
+                  setDustFilterEnabled(false);
+                  setClaimableFilterEnabled(false);
+                  setHideMyOrders(false);
+                  setFillRange([0, 100]);
+                  setPositionRange([-100, 100]);
+                  setDateFilterPreset(null);
+                  setCustomDateStart(undefined);
+                  setCustomDateEnd(undefined);
+                  setShowDatePicker(false);
+                }}
+                className="px-2 py-0.5 text-red-400 hover:text-red-300 text-xs transition-colors whitespace-nowrap"
+              >
+                Clear All
+              </button>
+            )}
+          </div>
         </div>
       )}
       {/* Status filter buttons - hide in landing page mode and compact mode */}
@@ -3422,17 +3465,14 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                 {address && isMarketplaceMode && (
                   <div className="flex items-center justify-between">
                     <div className="flex flex-col">
-                      <div className="flex items-center gap-1.5">
-                        <Star className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" />
-                        <span className="text-white/70 text-sm">Favorites only</span>
-                      </div>
+                      <span className="text-white/70 text-sm">Favorites only</span>
                       <span className="text-white/40 text-xs">Show only orders you&apos;ve starred</span>
                     </div>
                     <button
                       type="button"
                       onClick={() => setFavoritesOnly(!favoritesOnly)}
                       className={`relative w-11 h-6 rounded-full transition-colors duration-200 flex-shrink-0 ${
-                        favoritesOnly ? 'bg-yellow-500' : 'bg-white/20'
+                        favoritesOnly ? 'bg-green-500' : 'bg-white/20'
                       }`}
                     >
                       <span
@@ -4282,14 +4322,15 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                       </div>
 
                       {/* COLUMN 8: Order ID */}
-                      <div className="flex items-start justify-center gap-1.5 min-w-0 mt-1.5">
+                      <div className="flex flex-col items-center justify-start min-w-0 mt-1.5">
+                        <div className="text-gray-400 text-sm">{order.orderDetailsWithID.orderID.toString()}</div>
                         {isMarketplaceMode && address && order.userDetails.orderOwner.toLowerCase() !== address.toLowerCase() && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               toggleFavorite(order.orderDetailsWithID.orderID);
                             }}
-                            className="flex-shrink-0 mt-0.5 transition-colors hover:scale-110 active:scale-95"
+                            className="flex-shrink-0 mt-1 transition-colors hover:scale-110 active:scale-95"
                             title={isFavorite(order.orderDetailsWithID.orderID) ? 'Remove from favorites' : 'Add to favorites'}
                           >
                             <Star
@@ -4301,7 +4342,6 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                             />
                           </button>
                         )}
-                        <div className="text-gray-400 text-sm">{order.orderDetailsWithID.orderID.toString()}</div>
                       </div>
 
                       {/* COLUMN 8: Actions - hidden in compact mode since entire row is clickable */}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ComposedChart, Scatter, XAxis, YAxis, ReferenceLine, ResponsiveContainer, Tooltip, Cell, CartesianGrid } from 'recharts';
 import { formatUSD, formatPriceSigFig, getTokenPrice } from '@/utils/format';
 import { getTokenInfo, getTokenInfoByIndex } from '@/utils/tokenUtils';
@@ -38,6 +38,14 @@ interface TokenOrderData {
 
 export default function TokenOrderPricesChart({ orders, tokenPrices, whitelist, selectedToken }: TokenOrderPricesChartProps) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
 
   // Process orders to get price levels for ALL tokens (both sell and buy sides)
   const tokenOrderData = useMemo(() => {
@@ -225,35 +233,36 @@ export default function TokenOrderPricesChart({ orders, tokenPrices, whitelist, 
   // Generate nice round tick values for Y axis
   const generateNiceTicks = (min: number, max: number, count: number = 5): { ticks: number[]; domain: [number, number] } => {
     const range = max - min;
-    // Find the order of magnitude
-    const magnitude = Math.pow(10, Math.floor(Math.log10(range)));
-    // Nice step values: 1, 2, 5, 10, 20, 50, etc.
-    const niceSteps = [1, 2, 5, 10];
-    let step = magnitude;
+    if (range <= 0) return { ticks: [min], domain: [min, max] };
 
-    // Find a step that gives us approximately the right number of ticks
-    for (const mult of niceSteps) {
-      const testStep = magnitude * mult / 10;
-      const tickCount = Math.ceil(range / testStep);
-      if (tickCount <= count + 2 && tickCount >= count - 2) {
-        step = testStep;
+    // Find the order of magnitude of the range
+    const rawStep = range / count;
+    const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)));
+    // Nice step multipliers
+    const niceMultipliers = [1, 2, 2.5, 5, 10];
+
+    // Pick the smallest nice step that gives <= count+1 ticks
+    let step = magnitude * 10;
+    for (const mult of niceMultipliers) {
+      const candidate = magnitude * mult;
+      if (candidate >= rawStep) {
+        step = candidate;
         break;
       }
     }
 
-    // Round min down and max up to nice values - ensure we cover all data
+    // Round min down and max up to step boundaries
     const niceMin = Math.floor(min / step) * step;
-    // Add one extra step to ensure we have headroom above the highest point
-    const niceMax = Math.ceil(max / step) * step + step;
+    const niceMax = Math.ceil(max / step) * step;
 
     const ticks: number[] = [];
-    for (let v = niceMin; v <= niceMax; v += step) {
-      ticks.push(Number(v.toPrecision(4)));
+    for (let v = niceMin; v <= niceMax + step * 0.5; v += step) {
+      ticks.push(Number(v.toPrecision(6)));
     }
 
     return {
       ticks,
-      domain: [niceMin, niceMax] as [number, number]
+      domain: [niceMin, ticks[ticks.length - 1]] as [number, number]
     };
   };
 
@@ -295,9 +304,9 @@ export default function TokenOrderPricesChart({ orders, tokenPrices, whitelist, 
                 value: `Market: ${formatPriceSigFig(displayToken.marketPrice)}`,
                 position: 'insideLeft',
                 fill: '#00D9FF4D',
-                fontSize: 24,
+                fontSize: isMobile ? 12 : 24,
                 fontWeight: 'bold',
-                dy: -20
+                dy: isMobile ? -14 : -20
               }}
             />
             {/* Weighted average line */}
