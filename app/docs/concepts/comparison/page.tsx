@@ -295,7 +295,7 @@ export default function ComparisonPage() {
       <div>
         <h2 className="text-2xl font-semibold text-white mb-4">Comparison Table</h2>
         <LiquidGlassCard className="p-0 overflow-hidden">
-          <div className="overflow-x-auto" style={{ scrollbarGutter: 'stable' }}>
+          <div className="overflow-x-auto modern-scrollbar">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-white/10">
