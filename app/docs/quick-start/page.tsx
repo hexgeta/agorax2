@@ -22,7 +22,7 @@ const steps = [
   {
     number: 4,
     title: 'Set Your Price',
-    description: 'Use the percentage buttons (+1%, +2%, +5%, +10%) to set your price above market, or drag the limit line on the chart for precise control.',
+    description: 'Use the percentage buttons to set your limit price relative to the estimated market value, or simply enter one manually.',
   },
   {
     number: 5,
