@@ -7,14 +7,14 @@
  * Usage: node scripts/check-whitelist.js
  * 
  * The script uses NEXT_PUBLIC_AGORAX_SMART_CONTRACT from .env.local
- * Or defaults to mainnet: 0xc8a47F14b1833310E2aC72e4C397b5b14a9FEf8B
+ * Or defaults to mainnet: 0x06856CEa795D001bED91acdf1264CaB174949bf3
  */
 
 require('dotenv').config({ path: '.env.local' });
 const { ethers } = require("ethers");
 
 // Use env variable or default to mainnet contract
-const AGORAX_CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_AGORAX_SMART_CONTRACT || '0xc8a47F14b1833310E2aC72e4C397b5b14a9FEf8B';
+const AGORAX_CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_AGORAX_SMART_CONTRACT || '0x06856CEa795D001bED91acdf1264CaB174949bf3';
 
 const WHITELIST_ABI = [
   {

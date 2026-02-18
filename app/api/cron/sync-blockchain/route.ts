@@ -11,7 +11,7 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 // Contract config
-const CONTRACT_ADDRESS = (process.env.NEXT_PUBLIC_AGORAX_SMART_CONTRACT || '0xc8a47F14b1833310E2aC72e4C397b5b14a9FEf8B') as `0x${string}`;
+const CONTRACT_ADDRESS = (process.env.NEXT_PUBLIC_AGORAX_SMART_CONTRACT || '0x06856CEa795D001bED91acdf1264CaB174949bf3') as `0x${string}`;
 const RPC_URL = 'https://rpc.pulsechain.com';
 const DEPLOYMENT_BLOCK = 21266815n;
 
@@ -57,7 +57,10 @@ const ORDER_CANCELLED_EVENT = parseAbiItem(
   'event OrderCancelled(address indexed user, uint256 indexed orderID)'
 );
 const ORDER_PROCEEDS_COLLECTED_EVENT = parseAbiItem(
-  'event OrderProceedsCollected(address indexed user, uint256 indexed orderID)'
+  'event OrderProceedsCollected(address indexed user, uint256 indexed orderID, uint256[] buyTokenIndices, uint256[] amountsCollected)'
+);
+const PROCEEDS_COLLECTION_FAILED_EVENT = parseAbiItem(
+  'event ProceedsCollectionFailed(address indexed user, uint256 indexed orderID, address failedToken)'
 );
 
 // XP values now come from constants/xp.ts
@@ -136,14 +139,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     // 2. Fetch events in the block range
     const logParams = { address: CONTRACT_ADDRESS, fromBlock, toBlock };
 
-    const [placedLogs, filledLogs, cancelledLogs, proceedsLogs] = await Promise.all([
+    const [placedLogs, filledLogs, cancelledLogs, proceedsLogs, proceedsFailedLogs] = await Promise.all([
       client.getLogs({ ...logParams, event: ORDER_PLACED_EVENT as any }).catch(() => [] as any[]),
       client.getLogs({ ...logParams, event: ORDER_FILLED_EVENT as any }).catch(() => [] as any[]),
       client.getLogs({ ...logParams, event: ORDER_CANCELLED_EVENT as any }).catch(() => [] as any[]),
       client.getLogs({ ...logParams, event: ORDER_PROCEEDS_COLLECTED_EVENT as any }).catch(() => [] as any[]),
+      client.getLogs({ ...logParams, event: PROCEEDS_COLLECTION_FAILED_EVENT as any }).catch(() => [] as any[]),
     ]);
 
-    const totalEvents = placedLogs.length + filledLogs.length + cancelledLogs.length + proceedsLogs.length;
+    const totalEvents = placedLogs.length + filledLogs.length + cancelledLogs.length + proceedsLogs.length + proceedsFailedLogs.length;
 
     // If no events, just advance the cursor
     if (totalEvents === 0) {
@@ -162,7 +166,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     // 3. Collect unique blocks for timestamps
     const uniqueBlocks = new Set<bigint>();
-    for (const log of [...placedLogs, ...filledLogs, ...cancelledLogs, ...proceedsLogs]) {
+    for (const log of [...placedLogs, ...filledLogs, ...cancelledLogs, ...proceedsLogs, ...proceedsFailedLogs]) {
       uniqueBlocks.add(log.blockNumber);
     }
 
@@ -184,6 +188,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     for (const log of filledLogs) if (log.args.buyer) allWallets.add((log.args.buyer as string).toLowerCase());
     for (const log of cancelledLogs) if (log.args.user) allWallets.add((log.args.user as string).toLowerCase());
     for (const log of proceedsLogs) if (log.args.user) allWallets.add((log.args.user as string).toLowerCase());
+    for (const log of proceedsFailedLogs) if (log.args.user) allWallets.add((log.args.user as string).toLowerCase());
 
     for (const wallet of allWallets) {
       await supabase
@@ -197,6 +202,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     for (const log of filledLogs) { const oid = log.args.orderID?.toString(); if (oid) allOrderIds.add(oid); }
     for (const log of cancelledLogs) { const oid = log.args.orderID?.toString(); if (oid) allOrderIds.add(oid); }
     for (const log of proceedsLogs) { const oid = log.args.orderID?.toString(); if (oid) allOrderIds.add(oid); }
+    for (const log of proceedsFailedLogs) { const oid = log.args.orderID?.toString(); if (oid) allOrderIds.add(oid); }
 
     const onChainOrders = new Map<string, any>();
     const orderIdArray = Array.from(allOrderIds);
@@ -447,6 +453,22 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       }
 
       stats.proceeds++;
+    }
+
+    // 9b. Process ProceedsCollectionFailed events
+    for (const log of proceedsFailedLogs) {
+      const user = (log.args.user as string).toLowerCase();
+      const orderId = log.args.orderID?.toString();
+      const failedToken = (log.args.failedToken as string).toLowerCase();
+      const timestamp = blockTimestamps.get(log.blockNumber) || 0;
+      if (!orderId) continue;
+
+      await recordEvent(user, 'proceeds_collection_failed', {
+        order_id: Number(orderId),
+        failed_token: getTokenTicker(failedToken),
+        failed_token_address: failedToken,
+        tx_hash: log.transactionHash,
+      }, 0, timestamp);
     }
 
     // 10. Recalculate stats for affected users

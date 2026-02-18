@@ -156,7 +156,7 @@ export default function AuditPage() {
         </div>
         <div className="mt-4 pt-4 border-t border-green-500/20">
           <a
-            href="https://otter.pulsechain.com/address/0xc8a47F14b1833310E2aC72e4C397b5b14a9FEf8B/contract"
+            href="https://otter.pulsechain.com/address/0x06856CEa795D001bED91acdf1264CaB174949bf3/contract"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 text-green-400 hover:text-green-300 transition-colors"

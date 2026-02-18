@@ -4,6 +4,7 @@ import {
   OrderCancelled,
   OrderFilled,
   OrderProceedsCollected,
+  ProceedsCollectionFailed,
   OrderExpirationUpdated,
   TokenWhitelisted,
   TokenStatusChanged,
@@ -260,6 +261,21 @@ export function handleOrderProceedsCollected(event: OrderProceedsCollected): voi
   order.save();
 
   // Update user
+  let user = User.load(order.maker);
+  if (user != null) {
+    user.lastActiveAt = event.block.timestamp;
+    user.save();
+  }
+}
+
+export function handleProceedsCollectionFailed(event: ProceedsCollectionFailed): void {
+  // Log the failure - the order proceeds were partially collected
+  // The successful tokens are handled by OrderProceedsCollected
+  // This just tracks which token failed for debugging/UI notification
+  let order = Order.load(event.params.orderID.toString());
+  if (order == null) return;
+
+  // Update user activity
   let user = User.load(order.maker);
   if (user != null) {
     user.lastActiveAt = event.block.timestamp;

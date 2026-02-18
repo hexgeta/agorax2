@@ -10,7 +10,7 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 // Contract config
-const CONTRACT_ADDRESS = (process.env.NEXT_PUBLIC_AGORAX_SMART_CONTRACT || '0xc8a47F14b1833310E2aC72e4C397b5b14a9FEf8B') as `0x${string}`;
+const CONTRACT_ADDRESS = (process.env.NEXT_PUBLIC_AGORAX_SMART_CONTRACT || '0x06856CEa795D001bED91acdf1264CaB174949bf3') as `0x${string}`;
 const RPC_URL = 'https://rpc.pulsechain.com';
 const DEPLOYMENT_BLOCK = 21266815n;
 
@@ -58,7 +58,10 @@ const ORDER_CANCELLED_EVENT = parseAbiItem(
   'event OrderCancelled(address indexed user, uint256 indexed orderID)'
 );
 const ORDER_PROCEEDS_COLLECTED_EVENT = parseAbiItem(
-  'event OrderProceedsCollected(address indexed user, uint256 indexed orderID)'
+  'event OrderProceedsCollected(address indexed user, uint256 indexed orderID, uint256[] buyTokenIndices, uint256[] amountsCollected)'
+);
+const PROCEEDS_COLLECTION_FAILED_EVENT = parseAbiItem(
+  'event ProceedsCollectionFailed(address indexed user, uint256 indexed orderID, address failedToken)'
 );
 
 // XP values (same as track/route.ts) - all 0 since XP only comes from challenges
@@ -151,7 +154,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       ...(toBlock ? { toBlock } : {}),
     };
 
-    const [placedLogs, filledLogs, cancelledLogs, proceedsLogs] = await Promise.all([
+    const [placedLogs, filledLogs, cancelledLogs, proceedsLogs, proceedsFailedLogs] = await Promise.all([
       client.getLogs({ ...logParams, event: ORDER_PLACED_EVENT as any }).catch((err) => {
         result.errors.push(`OrderPlaced fetch failed: ${err}`);
         return [] as any[];
@@ -166,6 +169,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       }),
       client.getLogs({ ...logParams, event: ORDER_PROCEEDS_COLLECTED_EVENT as any }).catch((err) => {
         result.errors.push(`OrderProceedsCollected fetch failed: ${err}`);
+        return [] as any[];
+      }),
+      client.getLogs({ ...logParams, event: PROCEEDS_COLLECTION_FAILED_EVENT as any }).catch((err) => {
+        result.errors.push(`ProceedsCollectionFailed fetch failed: ${err}`);
         return [] as any[];
       }),
     ]);
@@ -186,6 +193,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     for (const log of proceedsLogs) {
       if (log.args.user) allWallets.add((log.args.user as string).toLowerCase());
     }
+    for (const log of proceedsFailedLogs) {
+      if (log.args.user) allWallets.add((log.args.user as string).toLowerCase());
+    }
 
     // Batch upsert all users
     for (const wallet of allWallets) {
@@ -201,7 +211,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // ================================================================
     // We need block timestamps. Batch unique blocks to minimize RPC calls.
     const uniqueBlocks = new Set<bigint>();
-    for (const log of [...placedLogs, ...filledLogs, ...cancelledLogs, ...proceedsLogs]) {
+    for (const log of [...placedLogs, ...filledLogs, ...cancelledLogs, ...proceedsLogs, ...proceedsFailedLogs]) {
       uniqueBlocks.add(log.blockNumber);
     }
 
@@ -268,6 +278,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       if (oid) allOrderIds.add(oid);
     }
     for (const log of proceedsLogs) {
+      const oid = log.args.orderID?.toString();
+      if (oid) allOrderIds.add(oid);
+    }
+    for (const log of proceedsFailedLogs) {
       const oid = log.args.orderID?.toString();
       if (oid) allOrderIds.add(oid);
     }
@@ -672,6 +686,31 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     // ================================================================
+    // 7b. Process ProceedsCollectionFailed events
+    // ================================================================
+    for (const log of proceedsFailedLogs) {
+      const user = (log.args.user as string).toLowerCase();
+      const orderId = log.args.orderID?.toString();
+      const failedToken = (log.args.failedToken as string).toLowerCase();
+      const timestamp = blockTimestamps.get(log.blockNumber) || 0;
+      if (!orderId) continue;
+
+      await recordEvent(
+        user,
+        'proceeds_collection_failed',
+        {
+          order_id: Number(orderId),
+          failed_token: getTokenTicker(failedToken),
+          failed_token_address: failedToken,
+          tx_hash: log.transactionHash,
+        },
+        0,
+        result,
+        timestamp
+      );
+    }
+
+    // ================================================================
     // 8. Recalculate aggregate stats for all users
     // ================================================================
     for (const wallet of allWallets) {
@@ -691,7 +730,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       summary: {
         wallets_found: allWallets.size,
         blocks_scanned: `${fromBlock} to ${toBlock || 'latest'}`,
-        total_events: placedLogs.length + filledLogs.length + cancelledLogs.length + proceedsLogs.length,
+        total_events: placedLogs.length + filledLogs.length + cancelledLogs.length + proceedsLogs.length + proceedsFailedLogs.length,
       },
     });
   } catch (error) {

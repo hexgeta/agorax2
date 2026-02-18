@@ -24,7 +24,7 @@ export default function DocsPage() {
           <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4">
             <span className="text-white/60 text-sm">Mainnet Address:</span>
             <code className="text-sm bg-white/5 px-3 py-1.5 rounded font-mono text-white/80 break-all">
-              0xc8a47F14b1833310E2aC72e4C397b5b14a9FEf8B
+              0x06856CEa795D001bED91acdf1264CaB174949bf3
             </code>
           </div>
           <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4">
@@ -32,7 +32,7 @@ export default function DocsPage() {
             <span className="text-white/80 text-sm">PulseChain Mainnet (Chain ID: 369)</span>
           </div>
           <a
-            href="https://otter.pulsechain.com/address/0xc8a47F14b1833310E2aC72e4C397b5b14a9FEf8B"
+            href="https://otter.pulsechain.com/address/0x06856CEa795D001bED91acdf1264CaB174949bf3"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 text-sm text-blue-400 hover:text-blue-300 transition-colors mt-2"

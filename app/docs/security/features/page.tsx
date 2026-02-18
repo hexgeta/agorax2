@@ -264,7 +264,7 @@ export default function SecurityFeaturesPage() {
         </p>
         <div className="space-y-3">
           <a
-            href="https://otter.pulsechain.com/address/0xc8a47F14b1833310E2aC72e4C397b5b14a9FEf8B"
+            href="https://otter.pulsechain.com/address/0x06856CEa795D001bED91acdf1264CaB174949bf3"
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-2 text-blue-400 hover:text-blue-300 text-sm"
@@ -275,7 +275,7 @@ export default function SecurityFeaturesPage() {
             View Verified Contract on Otter Explorer
           </a>
           <p className="text-white/50 text-xs">
-            Contract: 0xc8a47F14b1833310E2aC72e4C397b5b14a9FEf8B
+            Contract: 0x06856CEa795D001bED91acdf1264CaB174949bf3
           </p>
         </div>
       </LiquidGlassCard>

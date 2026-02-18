@@ -30,7 +30,7 @@ export default function SmartContractPage() {
           <div>
             <p className="text-white/60 text-sm mb-1">Mainnet Address</p>
             <code className="block bg-white/5 p-3 rounded-lg text-white/80 font-mono text-sm break-all">
-              0xc8a47F14b1833310E2aC72e4C397b5b14a9FEf8B
+              0x06856CEa795D001bED91acdf1264CaB174949bf3
             </code>
           </div>
           <div className="grid md:grid-cols-2 gap-4">
@@ -44,7 +44,7 @@ export default function SmartContractPage() {
             </div>
           </div>
           <a
-            href="https://otter.pulsechain.com/address/0xc8a47F14b1833310E2aC72e4C397b5b14a9FEf8B"
+            href="https://otter.pulsechain.com/address/0x06856CEa795D001bED91acdf1264CaB174949bf3"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 text-sm"

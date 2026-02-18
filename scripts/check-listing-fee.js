@@ -1,7 +1,7 @@
 const { createPublicClient, http, formatEther } = require('viem');
 const { pulsechain } = require('viem/chains');
 
-const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_AGORAX_SMART_CONTRACT || '0xc8a47F14b1833310E2aC72e4C397b5b14a9FEf8B';
+const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_AGORAX_SMART_CONTRACT || '0x06856CEa795D001bED91acdf1264CaB174949bf3';
 
 const client = createPublicClient({
   chain: pulsechain,

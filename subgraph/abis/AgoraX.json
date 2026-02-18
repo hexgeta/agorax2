@@ -38,9 +38,21 @@
     "anonymous": false,
     "inputs": [
       { "indexed": true, "internalType": "address", "name": "user", "type": "address" },
-      { "indexed": true, "internalType": "uint256", "name": "orderID", "type": "uint256" }
+      { "indexed": true, "internalType": "uint256", "name": "orderID", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256[]", "name": "buyTokenIndices", "type": "uint256[]" },
+      { "indexed": false, "internalType": "uint256[]", "name": "amountsCollected", "type": "uint256[]" }
     ],
     "name": "OrderProceedsCollected",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "address", "name": "user", "type": "address" },
+      { "indexed": true, "internalType": "uint256", "name": "orderID", "type": "uint256" },
+      { "indexed": false, "internalType": "address", "name": "failedToken", "type": "address" }
+    ],
+    "name": "ProceedsCollectionFailed",
     "type": "event"
   },
   {

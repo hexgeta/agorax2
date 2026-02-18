@@ -649,7 +649,7 @@ export default function Home() {
                   />
                   <FAQItem
                     question="Is the contract audited?"
-                    answer="Yes. The contract has been audited with no critical or high severity issues found. The full audit report is available in our <a href='/docs/security/audit' class='text-cyan-400 hover:underline'>documentation</a>.<br/><br/>The <a href='https://otter.pulsechain.com/address/0xc8a47F14b1833310E2aC72e4C397b5b14a9FEf8B/contract' target='_blank' class='text-cyan-400 hover:underline'>contract</a> is verified and open to public review. Completely on-chain, transparent, and verifiable by anyone."
+                    answer="Yes. The contract has been audited with no critical or high severity issues found. The full audit report is available in our <a href='/docs/security/audit' class='text-cyan-400 hover:underline'>documentation</a>.<br/><br/>The <a href='https://otter.pulsechain.com/address/0x06856CEa795D001bED91acdf1264CaB174949bf3/contract' target='_blank' class='text-cyan-400 hover:underline'>contract</a> is verified and open to public review. Completely on-chain, transparent, and verifiable by anyone."
                     isOpen={openFaqIndex === 6}
                     onToggle={() => setOpenFaqIndex(openFaqIndex === 6 ? null : 6)}
                   />

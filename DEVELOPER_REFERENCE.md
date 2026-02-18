@@ -2,14 +2,14 @@
 
 ## Contract Information
 
-**Mainnet Address:** `0xc8a47F14b1833310E2aC72e4C397b5b14a9FEf8B`
+**Mainnet Address:** `0x06856CEa795D001bED91acdf1264CaB174949bf3`
 **Network:** PulseChain Mainnet (Chain ID: 369)
 **Testnet Address:** `0x321b52b7f55ea307e9ca87891d52cc92f37905cf`
 **Native Token:** `0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE` (PLS)
 
 ```bash
 # Environment Variable
-NEXT_PUBLIC_AGORAX_SMART_CONTRACT=0xc8a47F14b1833310E2aC72e4C397b5b14a9FEf8B
+NEXT_PUBLIC_AGORAX_SMART_CONTRACT=0x06856CEa795D001bED91acdf1264CaB174949bf3
 ```
 
 ---
@@ -253,7 +253,8 @@ struct OrderDetails {
 event OrderPlaced(address indexed user, uint256 indexed orderID, ...);
 event OrderCancelled(address indexed user, uint256 indexed orderID);
 event OrderFilled(address indexed buyer, uint256 indexed orderID, ...);
-event OrderProceedsCollected(address indexed user, uint256 indexed orderID);
+event OrderProceedsCollected(address indexed user, uint256 indexed orderID, uint256[] buyTokenIndices, uint256[] amountsCollected);
+event ProceedsCollectionFailed(address indexed user, uint256 indexed orderID, address failedToken);
 event OrderExpirationUpdated(uint256 indexed orderID, uint64 newExpiration);
 ```
 
@@ -271,7 +272,7 @@ event OrderExpirationUpdated(uint256 indexed orderID, uint64 newExpiration);
 
 ## Links
 
-- **Block Explorer:** https://otter.pulsechain.com/address/0xc8a47F14b1833310E2aC72e4C397b5b14a9FEf8B
+- **Block Explorer:** https://otter.pulsechain.com/address/0x06856CEa795D001bED91acdf1264CaB174949bf3
 - **Contract Source:** `contracts/core/AgoraX_mainnet.sol`
 
 ---
