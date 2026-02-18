@@ -31,7 +31,7 @@ export default function DataStructuresPage() {
           Represents the current state of an order.
         </p>
         <CodeBlock>{`enum OrderStatus {
-  Active = 0,     // Order is live and fillable
+  Active = 0,     // Order is open (includes expired orders not yet cancelled)
   Cancelled = 1,  // Order was cancelled by owner
   Completed = 2   // Order was fully filled
 }`}</CodeBlock>
