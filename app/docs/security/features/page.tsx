@@ -117,6 +117,25 @@ export default function SecurityFeaturesPage() {
 
           <LiquidGlassCard className="p-6">
             <div className="flex items-start gap-4">
+              <div className="p-3 bg-cyan-500/20 rounded-xl text-cyan-400 flex-shrink-0">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-white mb-2">Graceful Proceeds Collection</h3>
+                <p className="text-white/70 text-sm">
+                  When collecting proceeds from multi-token orders, if one token has a transfer issue
+                  (paused contract, blacklisted address, etc.), the remaining tokens are still collected
+                  successfully. Failed tokens can be retried individually later. This prevents a single
+                  broken token from locking all your proceeds.
+                </p>
+              </div>
+            </div>
+          </LiquidGlassCard>
+
+          <LiquidGlassCard className="p-6">
+            <div className="flex items-start gap-4">
               <div className="p-3 bg-emerald-500/20 rounded-xl text-emerald-400 flex-shrink-0">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />

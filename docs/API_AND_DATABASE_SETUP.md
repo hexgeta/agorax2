@@ -66,16 +66,16 @@ Creates:
 
 ## 3. Contract Events → Supabase Mapping
 
-The smart contract at `0xc8a47F14b1833310E2aC72e4C397b5b14a9FEf8B` (PulseChain) emits these events:
+The AgoráX smart contract on PulseChain emits these events:
 
 | Contract Event | Supabase Tables Written | Event Types Recorded |
 |---|---|---|
-| `OrderPlaced(address user, uint256 orderID, address sellToken, uint256 sellAmount)` | `orders`, `user_events`, `users` | `order_created`, `wallet_connected` |
+| `OrderPlaced(address user, uint256 orderID, address sellToken, uint256 sellAmount, ...)` | `orders`, `user_events`, `users` | `order_created`, `wallet_connected` |
 | `OrderFilled(address buyer, uint256 orderID, uint256 buyTokenIndex, uint256 buyAmount)` | `order_fills`, `user_events`, `users` | `order_filled`, `trade_completed` |
 | `OrderCancelled(address user, uint256 orderID)` | `order_cancellations`, `user_events`, `users` | `order_cancelled` |
-| `OrderProceedsCollected(address user, uint256 orderID)` | `order_proceeds`, `user_events`, `users` | `proceeds_claimed` |
-| `OrderExecuted(address user, uint256 orderId)` | (Used for notifications only) | — |
-| `OrderUpdated(uint256 orderId)` | `orders` (update expiration) | `order_updated` |
+| `OrderProceedsCollected(address user, uint256 orderID, uint256[] buyTokenIndices, uint256[] amountsCollected)` | `order_proceeds`, `user_events`, `users` | `proceeds_claimed` |
+| `ProceedsCollectionFailed(address user, uint256 orderID, address failedToken)` | `user_events` | `proceeds_collection_failed` |
+| `OrderExpirationUpdated(uint256 orderID, uint64 newExpiration)` | `orders` (update expiration) | `order_updated` |
 
 ### Data Not Available On-Chain (Client-Side Only)
 These events can only be tracked from the frontend, not from blockchain logs:
@@ -475,10 +475,11 @@ curl -X POST http://localhost:3000/api/events/backfill \
 | `OrderFilled` | `users`, `user_events`, `order_fills` |
 | `OrderCancelled` | `users`, `user_events`, `order_cancellations`, `orders` (status) |
 | `OrderProceedsCollected` | `users`, `user_events`, `order_proceeds` |
+| `ProceedsCollectionFailed` | `user_events` |
 
 ### What the Backfill Does
 
-1. **Fetches on-chain events** - Reads all `OrderPlaced`, `OrderFilled`, `OrderCancelled`, `OrderProceedsCollected` events from the contract
+1. **Fetches on-chain events** - Reads all `OrderPlaced`, `OrderFilled`, `OrderCancelled`, `OrderProceedsCollected`, and `ProceedsCollectionFailed` events from the contract
 2. **Resolves token info** - Fetches whitelist via `viewWhitelisted` to map buy token indices to addresses/tickers
 3. **Fetches order details** - Batch calls `getOrderDetails` for each order (buy amounts, AON flag, expiration, fill %)
 4. **Creates user records** - Upserts every wallet that interacted with the contract

@@ -162,16 +162,16 @@ export default function FillingOrdersPage() {
         </p>
         <div className="space-y-3">
           <div className="flex items-center gap-3">
-            <span className="px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-sm">-10%</span>
-            <span className="text-white/60 text-sm">Good deal! You pay 10% less than market value</span>
+            <span className="px-3 py-1 bg-red-500/20 text-red-400 rounded-full text-sm">-10%</span>
+            <span className="text-white/60 text-sm">Below market - you pay 10% less than market value</span>
           </div>
           <div className="flex items-center gap-3">
             <span className="px-3 py-1 bg-gray-500/20 text-gray-400 rounded-full text-sm">0%</span>
             <span className="text-white/60 text-sm">Market rate - fair trade</span>
           </div>
           <div className="flex items-center gap-3">
-            <span className="px-3 py-1 bg-red-500/20 text-red-400 rounded-full text-sm">+10%</span>
-            <span className="text-white/60 text-sm">Above market - seller wants a premium</span>
+            <span className="px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-sm">+10%</span>
+            <span className="text-white/60 text-sm">Above market - seller offers a premium</span>
           </div>
         </div>
       </LiquidGlassCard>

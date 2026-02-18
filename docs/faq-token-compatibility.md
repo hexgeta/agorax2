@@ -49,6 +49,14 @@ This design allows maximum flexibility for order creators while protecting order
 | Buy a non-whitelisted token | Transaction reverts with whitelist check failure |
 | Buy an inactive whitelisted token | Transaction reverts with token inactive error |
 
+## What happens if a proceed token has issues when I try to collect?
+
+The contract handles token transfer failures gracefully during proceeds collection:
+
+- **Multi-token orders:** If one buy token fails to transfer (e.g., paused contract, blacklisted address), the remaining tokens are still collected. A `ProceedsCollectionFailed` event is emitted for any token that couldn't be transferred.
+- **Per-token collection:** You can use `collectProceedsByToken` to collect proceeds for a specific buy token individually, useful for retrying a failed token later.
+- **No stuck funds:** A single broken token will never block collection of your other proceeds.
+
 ---
 
 ## Can I request a token to be whitelisted?

@@ -33,12 +33,6 @@ export default function SmartContractPage() {
               0xc8a47F14b1833310E2aC72e4C397b5b14a9FEf8B
             </code>
           </div>
-          <div>
-            <p className="text-white/60 text-sm mb-1">Testnet Address</p>
-            <code className="block bg-white/5 p-3 rounded-lg text-white/80 font-mono text-sm break-all">
-              0x321b52b7f55ea307e9ca87891d52cc92f37905cf
-            </code>
-          </div>
           <div className="grid md:grid-cols-2 gap-4">
             <div>
               <p className="text-white/60 text-sm mb-1">Network</p>
@@ -100,9 +94,8 @@ export default function SmartContractPage() {
               <p className="text-white/80">Parameters:</p>
               <ul className="text-white/60 mt-2 space-y-1">
                 <li>• orderID: uint256</li>
-                <li>• buyTokenIndex: uint256</li>
-                <li>• fillAmount: uint256</li>
-                <li>• recipient: address</li>
+                <li>• buyTokenIndexInOrder: uint256</li>
+                <li>• buyAmount: uint256</li>
               </ul>
             </div>
           </LiquidGlassCard>
@@ -110,20 +103,32 @@ export default function SmartContractPage() {
           <LiquidGlassCard className="p-6">
             <h3 className="text-lg font-semibold text-white font-mono mb-3">cancelOrder</h3>
             <p className="text-white/70 text-sm mb-3">
-              Cancel an order and collect all proceeds.
+              Cancel an order, reclaim unsold tokens, and collect any accumulated proceeds.
             </p>
             <div className="bg-white/5 p-3 rounded-lg font-mono text-sm">
-              <p className="text-white/60">Parameters: orderID: uint256</p>
+              <p className="text-white/60">Parameters: orderID: uint256, recipient: address</p>
             </div>
           </LiquidGlassCard>
 
           <LiquidGlassCard className="p-6">
             <h3 className="text-lg font-semibold text-white font-mono mb-3">collectProceeds</h3>
             <p className="text-white/70 text-sm mb-3">
-              Claim accumulated buy tokens from filled orders.
+              Claim all accumulated buy tokens from filled orders. If a token transfer fails,
+              it is skipped and the remaining tokens are still collected.
             </p>
             <div className="bg-white/5 p-3 rounded-lg font-mono text-sm">
-              <p className="text-white/60">Parameters: orderID: uint256</p>
+              <p className="text-white/60">Parameters: orderID: uint256, recipient: address</p>
+            </div>
+          </LiquidGlassCard>
+
+          <LiquidGlassCard className="p-6">
+            <h3 className="text-lg font-semibold text-white font-mono mb-3">collectProceedsByToken</h3>
+            <p className="text-white/70 text-sm mb-3">
+              Claim proceeds for a specific buy token from an order. Useful for recovering tokens
+              when one token in a multi-token order has transfer issues.
+            </p>
+            <div className="bg-white/5 p-3 rounded-lg font-mono text-sm">
+              <p className="text-white/60">Parameters: orderID: uint256, buyTokenIndexInOrder: uint256, recipient: address</p>
             </div>
           </LiquidGlassCard>
 
@@ -140,10 +145,10 @@ export default function SmartContractPage() {
           <LiquidGlassCard className="p-6">
             <h3 className="text-lg font-semibold text-white font-mono mb-3">cancelAllExpiredOrders</h3>
             <p className="text-white/70 text-sm mb-3">
-              Batch cancel multiple expired orders (max 50).
+              Batch cancel all expired orders (max 50) and collect any accumulated proceeds.
             </p>
             <div className="bg-white/5 p-3 rounded-lg font-mono text-sm">
-              <p className="text-white/60">Parameters: orderIDs: uint256[]</p>
+              <p className="text-white/60">Parameters: recipient: address</p>
             </div>
           </LiquidGlassCard>
         </div>
@@ -176,6 +181,10 @@ export default function SmartContractPage() {
               <tr className="border-b border-white/5">
                 <td className="py-3 font-mono text-sm">viewCollectableProceeds(orderID)</td>
                 <td className="py-3">Check claimable amounts</td>
+              </tr>
+              <tr className="border-b border-white/5">
+                <td className="py-3 font-mono text-sm">findFillableOrders(sellToken, minAmount, cursor, size)</td>
+                <td className="py-3">Search for fillable orders by sell token</td>
               </tr>
               <tr className="border-b border-white/5">
                 <td className="py-3 font-mono text-sm">viewActiveWhitelisted(cursor, size)</td>
@@ -251,6 +260,10 @@ export default function SmartContractPage() {
                 <td className="py-3">collectProceeds</td>
                 <td className="py-3 font-mono">80k - 150k</td>
               </tr>
+              <tr className="border-b border-white/5">
+                <td className="py-3">collectProceedsByToken</td>
+                <td className="py-3 font-mono">60k - 100k</td>
+              </tr>
               <tr>
                 <td className="py-3">updateExpiration</td>
                 <td className="py-3 font-mono">50k - 70k</td>
@@ -268,7 +281,8 @@ export default function SmartContractPage() {
             <p className="text-white/80">OrderPlaced(address indexed user, uint256 indexed orderID, ...)</p>
             <p className="text-white/80">OrderCancelled(address indexed user, uint256 indexed orderID)</p>
             <p className="text-white/80">OrderFilled(address indexed buyer, uint256 indexed orderID, ...)</p>
-            <p className="text-white/80">OrderProceedsCollected(address indexed user, uint256 indexed orderID)</p>
+            <p className="text-white/80">OrderProceedsCollected(address indexed user, uint256 indexed orderID, uint256[] buyTokenIndices, uint256[] amountsCollected)</p>
+            <p className="text-white/80">ProceedsCollectionFailed(address indexed user, uint256 indexed orderID, address failedToken)</p>
             <p className="text-white/80">OrderExpirationUpdated(uint256 indexed orderID, uint64 newExpiration)</p>
           </div>
         </LiquidGlassCard>

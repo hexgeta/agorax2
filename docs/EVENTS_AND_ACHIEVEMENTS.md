@@ -17,7 +17,7 @@ The achievement system tracks on-chain and UI events to award XP and complete ch
 | `order_filled` | 10 | User fills someone else's order | `order_id`, `fill_amount`, `fill_percentage`, `buy_token_used`, `volume_usd?`, `fill_time_seconds?` |
 | `order_cancelled` | 0 | User cancels their order | `order_id`, `time_since_creation_seconds?`, `fill_percentage_at_cancel?` |
 | `order_expired` | 0 | Order reaches expiration | `order_id`, `fill_percentage` |
-| `proceeds_claimed` | 5 | User collects proceeds from filled order | `order_id` |
+| `proceeds_claimed` | 5 | User collects proceeds from filled order | `order_id`, `buy_token_indices[]`, `amounts_collected[]` |
 | `trade_completed` | 25 | A fill completes (fired for both maker + filler) | `order_id`, `sell_token`, `buy_token`, `sell_amount`, `buy_amount`, `volume_usd`, `is_maker`, `filler_wallet?`, `order_completed?`, `is_all_or_nothing?` |
 
 ### UI Events
@@ -26,6 +26,12 @@ The achievement system tracks on-chain and UI events to award XP and complete ch
 |-------|----|---------|------------------------|
 | `chart_viewed` | 1 | User views a price chart | — |
 | `marketplace_visited` | 1 | First marketplace page visit (one-off) | — |
+
+### Failure Events
+
+| Event | XP | Trigger | Key `event_data` fields |
+|-------|----|---------|------------------------|
+| `proceeds_collection_failed` | 0 | A token transfer fails during proceeds collection | `order_id`, `failed_token` |
 
 ### Special Events
 

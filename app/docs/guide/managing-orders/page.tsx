@@ -71,10 +71,18 @@ export default function ManagingOrdersPage() {
                   When your order gets filled, the buy tokens accumulate in the contract. Claim them anytime
                   by clicking "Collect" on orders with claimable proceeds.
                 </p>
-                <div className="bg-white/5 p-3 rounded-lg">
+                <div className="bg-white/5 p-3 rounded-lg space-y-2">
                   <p className="text-white/60 text-sm">
-                    <strong className="text-white">Note:</strong> Proceeds can be collected even from partially
+                    <strong className="text-white">Partial collection:</strong> Proceeds can be collected even from partially
                     filled orders without affecting the remaining unfilled portion.
+                  </p>
+                  <p className="text-white/60 text-sm">
+                    <strong className="text-white">Per-token collection:</strong> If an order accepts multiple buy tokens,
+                    you can collect proceeds for a specific token individually using "Collect by Token".
+                  </p>
+                  <p className="text-white/60 text-sm">
+                    <strong className="text-white">Graceful handling:</strong> If one token has a transfer issue (e.g., paused contract),
+                    the remaining tokens are still collected. You will be notified of any tokens that failed to transfer.
                   </p>
                 </div>
               </div>
