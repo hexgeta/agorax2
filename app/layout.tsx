@@ -5,7 +5,7 @@ import { Providers } from '@/components/Providers'
 import AppKitProvider from '@/context/AppKitProvider'
 import { Toaster } from '@/components/ui/toaster'
 import { headers } from 'next/headers'
-import Script from 'next/script'
+import PlausibleProvider from 'next-plausible'
 
 // Static layout with revalidation
 export const revalidate = 2592000; // 30 days in seconds
@@ -68,10 +68,7 @@ export default async function RootLayout({
   return (
     <html lang="en" className="font-sans">
       <head>
-        <Script src="https://plausible.io/js/pa-Iid2PZXc5c3t5Iet8tczx.js" strategy="afterInteractive" />
-        <Script id="plausible-init" strategy="afterInteractive">
-          {`window.plausible=window.plausible||function(){(plausible.q=plausible.q||[]).push(arguments)},plausible.init=plausible.init||function(i){plausible.o=i||{}};plausible.init({domain:'agorax.win'})`}
-        </Script>
+        <PlausibleProvider domain="agorax.win" />
       </head>
       <body className="min-h-screen bg-black text-white">
         <AppKitProvider cookies={cookies}>
