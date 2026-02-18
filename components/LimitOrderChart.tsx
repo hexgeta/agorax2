@@ -82,12 +82,28 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
   // Use first buy token for price calculation
   const buyToken = (buyTokenAddresses && buyTokenAddresses[0]) || '0x2b591e99afe9f32eaa6214f7b7629768c40eeb39'; // HEX
 
+  // Use form's prices as primary source for currentPrice (ensures chart & form are in sync)
+  // Only fall back to chart's own fetch when form prices aren't available yet
+  const hasExternalPrices = !!(externalSellTokenUsdPrice && externalSellTokenUsdPrice > 0 && externalBuyTokenUsdPrices && externalBuyTokenUsdPrices[buyToken.toLowerCase()] > 0);
+
   useEffect(() => {
+    if (hasExternalPrices) {
+      const buyPrice = externalBuyTokenUsdPrices![buyToken.toLowerCase()];
+      const ratio = externalSellTokenUsdPrice! / buyPrice;
+      setCurrentPrice(ratio);
+      if (onCurrentPriceChange) {
+        onCurrentPriceChange(buyPrice / externalSellTokenUsdPrice!);
+      }
+    }
+  }, [externalSellTokenUsdPrice, externalBuyTokenUsdPrices, buyToken, hasExternalPrices]);
+
+  // Fallback: only fetch chart's own prices when form prices aren't available
+  useEffect(() => {
+    if (hasExternalPrices) return;
     fetchPriceData();
-    // Refresh price every 10 seconds
     const interval = setInterval(fetchPriceData, 10000);
     return () => clearInterval(interval);
-  }, [sellToken, buyToken, JSON.stringify(buyTokenAddresses)]);
+  }, [sellToken, buyToken, JSON.stringify(buyTokenAddresses), hasExternalPrices]);
 
   // Stablecoin addresses that should always be priced at $1
   const STABLECOIN_ADDRESSES = [

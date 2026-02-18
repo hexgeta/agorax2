@@ -860,8 +860,15 @@ export function LimitOrderForm({
     }
 
     // Apply existing percentage to get new limit price
+    // newMarketPrice is in buy/sell canonical format
     const pct = pricePercentage ?? 0;
-    const newLimitPrice = newMarketPrice * (1 + pct / 100);
+    let newLimitPrice: number;
+    if (pct < 0) {
+      // Negative pct came from inverted view: apply to inverted price, convert back
+      newLimitPrice = newMarketPrice / (1 + pct / 100);
+    } else {
+      newLimitPrice = newMarketPrice * (1 + pct / 100);
+    }
 
     // Update limit price
     setLimitPrice(newLimitPrice.toFixed(8));
@@ -1653,10 +1660,14 @@ export function LimitOrderForm({
       // marketPrice is in sell/buy format
       // Convert marketPrice to buy/sell for comparison
       const marketPriceBuyPerSell = 1 / marketPrice;
-      const percentageAboveMarket = ((storedLimitPrice - marketPriceBuyPerSell) / marketPriceBuyPerSell) * 100;
-      setPricePercentage(Math.abs(percentageAboveMarket) > 0.01 ? Number(percentageAboveMarket.toFixed(4)) : null);
+      const canonicalPct = ((storedLimitPrice - marketPriceBuyPerSell) / marketPriceBuyPerSell) * 100;
+      // Show percentage from the user's current view perspective
+      const displayPct = invertPriceDisplay
+        ? ((marketPriceBuyPerSell / storedLimitPrice) - 1) * 100
+        : canonicalPct;
+      setPricePercentage(Math.abs(displayPct) > 0.01 ? Number(displayPct.toFixed(4)) : null);
     }
-  }, [limitPrice, externalMarketPrice, sellToken?.a, firstBuyTokenAddress, getPrice]);
+  }, [limitPrice, externalMarketPrice, sellToken?.a, firstBuyTokenAddress, getPrice, invertPriceDisplay]);
 
   // Create a stable string key for all buy token addresses to use in dependency
   const buyTokenAddressesKey = buyTokens.map(t => t?.a || '').join(',');
@@ -1866,8 +1877,11 @@ export function LimitOrderForm({
 
       if (marketPrice > 0) {
         const marketPriceBuyPerSell = 1 / marketPrice;
-        const percentageAboveMarket = ((externalLimitPrice - marketPriceBuyPerSell) / marketPriceBuyPerSell) * 100;
-        setPricePercentage(percentageAboveMarket);
+        const canonicalPct = ((externalLimitPrice - marketPriceBuyPerSell) / marketPriceBuyPerSell) * 100;
+        const displayPct = invertPriceDisplay
+          ? ((marketPriceBuyPerSell / externalLimitPrice) - 1) * 100
+          : canonicalPct;
+        setPricePercentage(displayPct);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1974,8 +1988,11 @@ export function LimitOrderForm({
         // marketPrice is sell/buy format, newLimitPrice is buy/sell format
         // Convert to same format for comparison
         const marketPriceBuyPerSell = 1 / marketPrice;
-        const percentageAboveMarket = ((newLimitPrice - marketPriceBuyPerSell) / marketPriceBuyPerSell) * 100;
-        setPricePercentage(Math.abs(percentageAboveMarket) > 0.01 ? percentageAboveMarket : null);
+        const canonicalPct = ((newLimitPrice - marketPriceBuyPerSell) / marketPriceBuyPerSell) * 100;
+        const displayPct = invertPriceDisplay
+          ? ((marketPriceBuyPerSell / newLimitPrice) - 1) * 100
+          : canonicalPct;
+        setPricePercentage(Math.abs(displayPct) > 0.01 ? displayPct : null);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2535,9 +2552,19 @@ export function LimitOrderForm({
     setPricePercentage(percentage === 0 ? null : adjustedPercentage);
 
     // marketPrice is in sell/buy format (inverted)
-    // Convert to buy/sell format and apply percentage
+    // Convert to buy/sell format
     const buyPerSellAtMarket = 1 / marketPrice;
-    const priceToStore = buyPerSellAtMarket * (1 + adjustedPercentage / 100);
+
+    let priceToStore: number;
+    if (direction === 'below') {
+      // Inverted view: apply percentage to inverted price, then convert back
+      // -5% on inverted = inverted price * 0.95 = canonical / 0.95 = MORE buy tokens
+      priceToStore = buyPerSellAtMarket / (1 - percentage / 100);
+    } else {
+      // Normal view: apply percentage directly to canonical price
+      // +5% = canonical * 1.05 = MORE buy tokens
+      priceToStore = buyPerSellAtMarket * (1 + percentage / 100);
+    }
 
     setLimitPrice(priceToStore.toFixed(8));
 
@@ -2562,8 +2589,10 @@ export function LimitOrderForm({
         const sellTokenUsdPrice = sellToken ? getPrice(sellToken.a) : 0;
         if (sellTokenUsdPrice > 0) {
           const sellUsdValue = effectiveSellAmount * sellTokenUsdPrice;
-          // The premium multiplier is based on the percentage adjustment
-          const premiumMultiplier = 1 + adjustedPercentage / 100;
+          // The premium multiplier matches the limit price calculation
+          const premiumMultiplier = direction === 'below'
+            ? 1 / (1 - percentage / 100)
+            : 1 + percentage / 100;
 
           for (let i = 1; i < buyTokens.length; i++) {
             if (buyTokens[i]) {
@@ -2619,8 +2648,11 @@ export function LimitOrderForm({
     // Convert marketPrice to buy/sell for comparison
     if (marketPrice && marketPrice > 0) {
       const marketPriceBuyPerSell = 1 / marketPrice;
-      const percentFromMarket = ((backingPrice - marketPriceBuyPerSell) / marketPriceBuyPerSell) * 100;
-      setPricePercentage(percentFromMarket);
+      const canonicalPct = ((backingPrice - marketPriceBuyPerSell) / marketPriceBuyPerSell) * 100;
+      const displayPct = invertPriceDisplay
+        ? ((marketPriceBuyPerSell / backingPrice) - 1) * 100
+        : canonicalPct;
+      setPricePercentage(displayPct);
     } else {
       setPricePercentage(null);
     }
@@ -3626,7 +3658,7 @@ export function LimitOrderForm({
                     type="text"
                     value={sellSearchQuery}
                     onChange={(e) => setSellSearchQuery(e.target.value)}
-                    placeholder={`Search or paste address... (${filteredSellTokens.length})`}
+                    placeholder={`Search or paste address... (${activeTokens.length})`}
                     className="w-full bg-transparent border border-white/10 p-2 text-white text-sm placeholder-white/30 focus:outline-none rounded"
                   />
                 </div>
@@ -4260,18 +4292,17 @@ export function LimitOrderForm({
                       </div>
                       {/* Percentage indicator */}
                       {(() => {
-                        if (!sellToken || !buyTokens[0]) return null;
-                        const sellUsd = getPrice(sellToken.a);
-                        const buyUsd = getPrice(buyTokens[0].a);
-                        if (sellUsd <= 0 || buyUsd <= 0) return null;
-                        const marketPrice = sellUsd / buyUsd;
+                        if (!marketPrice || marketPrice <= 0) return null;
                         const currentLimitPrice = parseFloat(limitPrice) || 0;
-                        if (marketPrice <= 0 || currentLimitPrice <= 0) return null;
-                        const pctDiff = ((currentLimitPrice / marketPrice) - 1) * 100;
-                        const isPositive = pctDiff >= 0;
+                        if (currentLimitPrice <= 0) return null;
+                        const marketPriceBuyPerSell = 1 / marketPrice;
+                        const pctDiff = invertPriceDisplay
+                          ? ((marketPriceBuyPerSell / currentLimitPrice) - 1) * 100
+                          : ((currentLimitPrice / marketPriceBuyPerSell) - 1) * 100;
+                        if (Math.abs(pctDiff) < 0.01) return null;
                         return (
-                          <span className={`text-sm font-semibold select-none ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
-                            {isPositive ? '+' : ''}{pctDiff.toFixed(1)}%
+                          <span className={`text-sm font-semibold select-none ${pctDiff >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                            {pctDiff >= 0 ? '+' : ''}{pctDiff.toFixed(1)}%
                           </span>
                         );
                       })()}
@@ -4388,8 +4419,11 @@ export function LimitOrderForm({
                               // marketPrice is sell/buy format, basePrice is buy/sell format
                               // Convert to same format for comparison
                               const marketPriceBuyPerSell = 1 / marketPrice;
-                              const percentageAboveMarket = ((basePrice - marketPriceBuyPerSell) / marketPriceBuyPerSell) * 100;
-                              setPricePercentage(Math.abs(percentageAboveMarket) > 0.01 ? percentageAboveMarket : null);
+                              const canonicalPct = ((basePrice - marketPriceBuyPerSell) / marketPriceBuyPerSell) * 100;
+                              const displayPct = invertPriceDisplay
+                                ? ((marketPriceBuyPerSell / basePrice) - 1) * 100
+                                : canonicalPct;
+                              setPricePercentage(Math.abs(displayPct) > 0.01 ? displayPct : null);
                             }
                             // Recalculate buy amount: buyAmount = sellAmount * limitPrice
                             const sellAmt = sellAmount ? parseFloat(removeCommas(sellAmount)) : 0;
@@ -5017,18 +5051,17 @@ export function LimitOrderForm({
                         </div>
                         {/* Percentage indicator */}
                         {(() => {
-                          if (!sellToken || !buyToken) return null;
-                          const sellUsd = getPrice(sellToken.a);
-                          const buyUsd = getPrice(buyToken.a);
-                          if (sellUsd <= 0 || buyUsd <= 0) return null;
-                          const marketPrice = sellUsd / buyUsd;
+                          if (!marketPrice || marketPrice <= 0) return null;
                           const currentLimitPrice = parseFloat(limitPrice) || 0;
-                          if (marketPrice <= 0 || currentLimitPrice <= 0) return null;
-                          const pctDiff = ((currentLimitPrice / marketPrice) - 1) * 100;
-                          const isPositive = pctDiff >= 0;
+                          if (currentLimitPrice <= 0) return null;
+                          const marketPriceBuyPerSell = 1 / marketPrice;
+                          const pctDiff = invertPriceDisplay
+                            ? ((marketPriceBuyPerSell / currentLimitPrice) - 1) * 100
+                            : ((currentLimitPrice / marketPriceBuyPerSell) - 1) * 100;
+                          if (Math.abs(pctDiff) < 0.01) return null;
                           return (
-                            <span className={`text-sm font-semibold select-none ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
-                              {isPositive ? '+' : ''}{pctDiff.toFixed(1)}%
+                            <span className={`text-sm font-semibold select-none ${pctDiff >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                              {pctDiff >= 0 ? '+' : ''}{pctDiff.toFixed(1)}%
                             </span>
                           );
                         })()}

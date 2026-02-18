@@ -199,11 +199,24 @@ async function fetchTokenPrices(contractAddresses: string[], customTokens: any[]
       continue;
     }
 
-    const { chain: chainId, ticker } = tokenConfig;
+    const { chain: chainId, dexs, ticker } = tokenConfig;
     const chainName = chainId === 1 ? 'ethereum' : 'pulsechain';
-    
-    // Always find the best pair address dynamically
-    const bestPairAddress = await findBestPairAddress(contractAddress, chainId);
+
+    // PLS/WPLS use hardcoded pair since native gas token address can't be found on DexScreener
+    // All other tokens dynamically find the best pair, falling back to hardcoded dexs
+    let bestPairAddress: string | null = null;
+    const isPLS = contractAddress.toLowerCase() === '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' ||
+      contractAddress.toLowerCase() === '0xa1077a294dde1b09bb078844df40758a5d0f9a27';
+
+    if (isPLS) {
+      bestPairAddress = Array.isArray(dexs) ? dexs[0] : dexs;
+    } else {
+      bestPairAddress = await findBestPairAddress(contractAddress, chainId);
+      // Fall back to hardcoded dexs if dynamic lookup fails
+      if (!bestPairAddress && dexs && dexs !== '' && dexs !== '0x0' && dexs !== '0x0000000000000000000000000000000000000000') {
+        bestPairAddress = Array.isArray(dexs) ? dexs[0] : dexs;
+      }
+    }
     
     if (!bestPairAddress) {
       // Token has no price source - add to results with null price but marked as "no price available"
