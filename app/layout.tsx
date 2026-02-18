@@ -5,7 +5,6 @@ import { Providers } from '@/components/Providers'
 import AppKitProvider from '@/context/AppKitProvider'
 import { Toaster } from '@/components/ui/toaster'
 import { headers } from 'next/headers'
-import PlausibleProvider from 'next-plausible'
 
 // Static layout with revalidation
 export const revalidate = 2592000; // 30 days in seconds
@@ -68,7 +67,7 @@ export default async function RootLayout({
   return (
     <html lang="en" className="font-sans">
       <head>
-        <PlausibleProvider domain="agorax.win" />
+        <script defer data-domain="agorax.win" src="https://plausible.io/js/script.js"></script>
       </head>
       <body className="min-h-screen bg-black text-white">
         <AppKitProvider cookies={cookies}>
