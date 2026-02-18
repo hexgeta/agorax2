@@ -67,7 +67,7 @@ export default async function RootLayout({
   return (
     <html lang="en" className="font-sans">
       <head>
-        <script defer data-domain="agorax.win" src="https://plausible.io/js/script.js"></script>
+       <script async src="https://plausible.io/js/pa-Iid2PZXc5c3t5Iet8tczx.js"></script>
       </head>
       <body className="min-h-screen bg-black text-white">
         <AppKitProvider cookies={cookies}>
