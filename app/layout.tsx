@@ -68,7 +68,7 @@ export default async function RootLayout({
     <html lang="en" className="font-sans">
       <head>
         <script async src="https://plausible.io/js/pa-Iid2PZXc5c3t5Iet8tczx.js"></script>
-        <script dangerouslySetInnerHTML={{ __html: `window.plausible=window.plausible||function(){(plausible.q=plausible.q||[]).push(arguments)},plausible.init=plausible.init||function(i){plausible.o=i||{}};plausible.init()` }} />
+        <script dangerouslySetInnerHTML={{ __html: `window.plausible=window.plausible||function(){(plausible.q=plausible.q||[]).push(arguments)},plausible.init=plausible.init||function(i){plausible.o=i||{}};plausible.init({domain:'agorax.win'})` }} />
       </head>
       <body className="min-h-screen bg-black text-white">
         <AppKitProvider cookies={cookies}>
