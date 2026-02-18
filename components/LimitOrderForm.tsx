@@ -4838,7 +4838,7 @@ export function LimitOrderForm({
                             newQueries[index] = e.target.value;
                             setBuySearchQueries(newQueries);
                           }}
-                          placeholder={`Search tokens... (${getFilteredBuyTokens(index).length})`}
+                          placeholder={`Search tokens... (${activeTokens.length})`}
                           className="w-full bg-transparent border border-white/10 p-2 text-white text-sm placeholder-white/30 focus:outline-none rounded"
                         />
                       </div>

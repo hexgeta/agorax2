@@ -57,6 +57,12 @@ config/whitelisted-emails.private.ts
 order_query.json
 BLACKLIST.md
 
+# Docs
+/docs/
+DEVELOPER_REFERENCE.md
+AUDIT_REPORT.md
+CONTRACT_UPGRADE_GUIDE.md
+
 # Test files
 /test
 scripts/test-*.ts

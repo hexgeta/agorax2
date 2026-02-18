@@ -3849,6 +3849,27 @@ export const TOKEN_CONSTANTS = [{
   ticker: "COMV",
   decimals: 18,
   name: "Communis Volume"
+}, {
+  chain: 369,
+  a: "0x8CDaf3d630Da9E1450832924D5701CC0500E9cfC",
+  dexs: null,
+  ticker: "WICK",
+  decimals: 18,
+  name: "WICK"
+}, {
+  chain: 369,
+  a: "0x9deeaF046e144Fb6304A5ACD2aF142bBfE958030",
+  dexs: null,
+  ticker: "PEWPEW",
+  decimals: 18,
+  name: "PEWPEW"
+}, {
+  chain: 369,
+  a: "0xdedbcc8d9458b2556375680fba297c6aca6c7dcf",
+  dexs: null,
+  ticker: "TIDE",
+  decimals: 18,
+  name: "TIDE"
 }];
 
 export const API_ENDPOINTS = {

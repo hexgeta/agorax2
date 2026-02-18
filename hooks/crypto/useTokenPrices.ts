@@ -199,23 +199,11 @@ async function fetchTokenPrices(contractAddresses: string[], customTokens: any[]
       continue;
     }
 
-    const { chain: chainId, dexs, ticker } = tokenConfig;
+    const { chain: chainId, ticker } = tokenConfig;
     const chainName = chainId === 1 ? 'ethereum' : 'pulsechain';
     
-    // Try to find the best pair address
-    let bestPairAddress: string | null = null;
-    
-    // First, try the configured DEX address if it exists
-    // Treat null address (0x0000...) as no DEX configured
-    const isNullAddress = !dexs || dexs === '' || dexs === '0x0' || dexs === '0x0000000000000000000000000000000000000000';
-    
-    if (!isNullAddress) {
-      const dexAddress = Array.isArray(dexs) ? dexs[0] : dexs;
-      bestPairAddress = dexAddress;
-    } else {
-      // If no DEX address configured, try to find the best one dynamically
-      bestPairAddress = await findBestPairAddress(contractAddress, chainId);
-    }
+    // Always find the best pair address dynamically
+    const bestPairAddress = await findBestPairAddress(contractAddress, chainId);
     
     if (!bestPairAddress) {
       // Token has no price source - add to results with null price but marked as "no price available"
