@@ -3870,6 +3870,13 @@ export const TOKEN_CONSTANTS = [{
   ticker: "TIDE",
   decimals: 18,
   name: "TIDE"
+}, {
+  chain: 369,
+  a: "0xeB2CEed77147893Ba8B250c796c2d4EF02a72B68",
+  dexs: null,
+  ticker: "PDRIP",
+  decimals: 10,
+  name: "PDRIP"
 }];
 
 export const API_ENDPOINTS = {
