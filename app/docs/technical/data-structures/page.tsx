@@ -31,7 +31,7 @@ export default function DataStructuresPage() {
           Represents the current state of an order.
         </p>
         <CodeBlock>{`enum OrderStatus {
-  Active = 0,     // Order is live and fillable
+  Active = 0,     // Order is open (includes expired orders not yet cancelled)
   Cancelled = 1,  // Order was cancelled by owner
   Completed = 2   // Order was fully filled
 }`}</CodeBlock>
@@ -75,12 +75,12 @@ export default function DataStructuresPage() {
         </p>
         <CodeBlock>{`struct OrderDetailsWithID {
     uint256 orderID;             // Unique order identifier
-    address owner;               // Order creator
-    OrderDetails orderDetails;   // Core order data
-    OrderStatus status;          // Current status
     uint256 remainingSellAmount; // Unfilled sell tokens
     uint256 redeemedSellAmount;  // Proceeds already claimed
-    uint256 cooldownExpiry;      // When actions are unlocked
+    uint64 lastUpdateTime;       // Most recent update timestamp (triggers cooldown)
+    OrderStatus status;          // Active, Cancelled, or Completed
+    uint256 creationProtocolFee; // Protocol fee at time of order creation
+    OrderDetails orderDetails;   // Core order data
 }`}</CodeBlock>
       </LiquidGlassCard>
 
@@ -95,13 +95,14 @@ export default function DataStructuresPage() {
               Full order data as used in the React frontend.
             </p>
             <CodeBlock>{`interface CompleteOrderDetails {
+  userDetails: UserOrderDetails;
   orderDetailsWithID: {
     orderID: bigint;
-    owner: \`0x\${string}\`;
-    status: number;
     remainingSellAmount: bigint;
     redeemedSellAmount: bigint;
-    cooldownExpiry: bigint;
+    lastUpdateTime: number;
+    status: number;
+    creationProtocolFee: bigint;
     orderDetails: {
       sellToken: \`0x\${string}\`;
       sellAmount: bigint;
@@ -111,7 +112,6 @@ export default function DataStructuresPage() {
       allOrNothing: boolean;
     };
   };
-  buyTokenAddresses: readonly \`0x\${string}\`[];
 }`}</CodeBlock>
           </LiquidGlassCard>
 

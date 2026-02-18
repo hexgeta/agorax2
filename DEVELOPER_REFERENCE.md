@@ -273,7 +273,7 @@ event OrderExpirationUpdated(uint256 indexed orderID, uint64 newExpiration);
 ## Links
 
 - **Block Explorer:** https://otter.pulsechain.com/address/0x06856CEa795D001bED91acdf1264CaB174949bf3
-- **Contract Source:** `contracts/core/AgoraX_mainnet.sol`
+- **Contract Source:** `contracts/core/AgoraX-final.sol`
 
 ---
 

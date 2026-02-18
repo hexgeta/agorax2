@@ -45,7 +45,7 @@ export default function PricingFeesPage() {
             <li>• Market price: 1 HEX = 1.17 PLSX</li>
             <li>• You want +5% premium</li>
             <li>• Limit price = 1.17 × 1.05 = 1.23 PLSX per HEX</li>
-            <li>• If selling 1000 HEX, you'll receive 1,230 PLSX</li>
+            <li>• If selling 1000 HEX, you'll receive 1,230 PLSX minus any fees</li>
           </ul>
         </div>
       </LiquidGlassCard>
@@ -68,7 +68,7 @@ export default function PricingFeesPage() {
           ))}
         </div>
         <p className="text-white/60 text-sm mt-3">
-          You can also drag the limit line on the price chart or manually enter any price.
+          You can also manually enter any price.
         </p>
       </div>
 

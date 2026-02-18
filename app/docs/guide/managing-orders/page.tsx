@@ -46,7 +46,7 @@ export default function ManagingOrdersPage() {
             <ul className="text-white/60 text-sm space-y-1">
               <li>• Collect proceeds</li>
               <li>• Cancel order</li>
-              <li>• Extend expiration</li>
+              <li>• Update expiration</li>
               <li>• View transaction history</li>
             </ul>
           </div>
@@ -105,8 +105,9 @@ export default function ManagingOrdersPage() {
                 </p>
                 <div className="bg-yellow-500/10 p-3 rounded-lg border border-yellow-500/20">
                   <p className="text-yellow-300 text-sm">
-                    <strong>Cooldown:</strong> There may be a cooldown period after placing an order before
-                    you can cancel it. Check the contract for current cooldown settings.
+                    <strong>Cooldown:</strong> To prevent MEV and flashloan exploits, there is a short cooldown
+                    period after placing or reviving an expired order that prevents immediate filling. You can
+                    still cancel an order at any time within this window.
                   </p>
                 </div>
               </div>
@@ -122,14 +123,15 @@ export default function ManagingOrdersPage() {
                 </svg>
               </div>
               <div className="flex-1">
-                <h3 className="text-lg font-semibold text-white mb-2">Extend Expiration</h3>
+                <h3 className="text-lg font-semibold text-white mb-2">Update Expiration</h3>
                 <p className="text-white/70 mb-3">
-                  Keep your order active longer by extending its expiration time. You can only extend
-                  to a future date, not shorten it.
+                  Change your order&apos;s expiration time to any point in the future. You can extend it
+                  to keep it open longer, or shorten it to expire sooner. The new expiration just needs
+                  to be after the current block time.
                 </p>
                 <div className="bg-white/5 p-3 rounded-lg">
                   <p className="text-white/60 text-sm">
-                    Useful when you want to keep an order open longer without recreating it.
+                    Also used to revive expired orders — setting a new future expiration makes them fillable again.
                   </p>
                 </div>
               </div>

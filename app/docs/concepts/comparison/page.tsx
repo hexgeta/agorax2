@@ -230,6 +230,30 @@ const platforms: Platform[] = [
   },
 ];
 
+interface Feature {
+  key: string;
+  label: string;
+  type: 'text' | 'status';
+  getValue: (p: Platform) => string;
+  getStatus?: (p: Platform) => 'yes' | 'no' | 'partial';
+  getNote?: (p: Platform) => string | undefined;
+}
+
+const features: Feature[] = [
+  { key: 'sellerFee', label: 'Seller Fee', type: 'text', getValue: (p) => p.tradingFee },
+  { key: 'buyerFee', label: 'Buyer Fee', type: 'text', getValue: (p) => p.buyerFee },
+  { key: 'limitOrders', label: 'Limit Orders', type: 'status', getValue: () => '', getStatus: (p) => p.limitOrders, getNote: (p) => p.limitOrderNote },
+  { key: 'zeroSlippage', label: 'Zero Slippage', type: 'status', getValue: () => '', getStatus: (p) => p.zeroSlippage, getNote: (p) => p.slippageNote },
+  { key: 'partialFills', label: 'Partial Fills', type: 'status', getValue: () => '', getStatus: (p) => p.partialFills, getNote: (p) => p.partialFillNote },
+  { key: 'multiToken', label: 'Multi-Token Payment', type: 'status', getValue: () => '', getStatus: (p) => p.multiTokenPayment, getNote: (p) => p.multiTokenNote },
+  { key: 'mev', label: 'MEV Protection', type: 'status', getValue: () => '', getStatus: (p) => p.mevProtection, getNote: (p) => p.mevNote },
+  { key: 'noKyc', label: 'No KYC', type: 'status', getValue: () => '', getStatus: (p) => p.noKyc },
+  { key: 'oracleFree', label: 'Oracle-Free', type: 'status', getValue: () => '', getStatus: (p) => p.oracleFree, getNote: (p) => p.oracleNote },
+  { key: 'gasless', label: 'Gasless Trading', type: 'status', getValue: () => '', getStatus: (p) => p.gasless, getNote: (p) => p.gasNote },
+  { key: 'immutable', label: 'Immutable Contract', type: 'status', getValue: () => '', getStatus: (p) => p.immutableContract, getNote: (p) => p.immutableNote },
+  { key: 'audited', label: 'Audited', type: 'status', getValue: () => '', getStatus: (p) => p.audited, getNote: (p) => p.auditNote },
+];
+
 function StatusIcon({ status }: { status: 'yes' | 'no' | 'partial' }) {
   if (status === 'yes') return checkIcon;
   if (status === 'no') return crossIcon;
@@ -271,119 +295,36 @@ export default function ComparisonPage() {
       <div>
         <h2 className="text-2xl font-semibold text-white mb-4">Comparison Table</h2>
         <LiquidGlassCard className="p-0 overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" style={{ scrollbarGutter: 'stable' }}>
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-white/10">
-                  <th className="text-left text-white/60 font-medium p-4 min-w-[140px]">Feature</th>
-                  {platforms.map((p, i) => (
-                    <th
-                      key={p.name}
-                      className={`text-left font-medium p-4 min-w-[120px] ${i === 0 ? 'text-green-400' : 'text-white/80'}`}
-                    >
-                      <div>{p.name}</div>
-                      <div className="text-white/40 text-xs font-normal">{p.chain}</div>
+                  <th className="sticky left-0 z-10 bg-[#0a0a0f] text-left text-white/60 font-medium p-4 min-w-[160px]">Platform</th>
+                  {features.map((f) => (
+                    <th key={f.key} className="text-left text-white/60 font-medium p-4 min-w-[140px] whitespace-nowrap">
+                      {f.label}
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                <tr className="border-b border-white/5">
-                  <td className="p-4 text-white font-medium">Seller Fee</td>
-                  {platforms.map((p, i) => (
-                    <td key={p.name} className={`p-4 ${i === 0 ? 'text-green-400 font-medium' : 'text-white/70'}`}>
-                      {p.tradingFee}
+                {platforms.map((p, i) => (
+                  <tr key={p.name} className="border-b border-white/5">
+                    <td className={`sticky left-0 z-10 bg-[#0a0a0f] p-4 min-w-[160px] ${i === 0 ? 'text-green-400 font-semibold' : 'text-white font-medium'}`}>
+                      <div>{p.name}</div>
+                      <div className="text-white/40 text-xs font-normal">{p.chain}</div>
                     </td>
-                  ))}
-                </tr>
-                <tr className="border-b border-white/5">
-                  <td className="p-4 text-white font-medium">Buyer Fee</td>
-                  {platforms.map((p, i) => (
-                    <td key={p.name} className={`p-4 ${i === 0 ? 'text-green-400 font-medium' : 'text-white/70'}`}>
-                      {p.buyerFee}
-                    </td>
-                  ))}
-                </tr>
-                <tr className="border-b border-white/5">
-                  <td className="p-4 text-white font-medium">Limit Orders</td>
-                  {platforms.map((p) => (
-                    <td key={p.name} className="p-4">
-                      <FeatureCell status={p.limitOrders} note={p.limitOrderNote} />
-                    </td>
-                  ))}
-                </tr>
-                <tr className="border-b border-white/5">
-                  <td className="p-4 text-white font-medium">Zero Slippage</td>
-                  {platforms.map((p) => (
-                    <td key={p.name} className="p-4">
-                      <FeatureCell status={p.zeroSlippage} note={p.slippageNote} />
-                    </td>
-                  ))}
-                </tr>
-                <tr className="border-b border-white/5">
-                  <td className="p-4 text-white font-medium">Partial Fills</td>
-                  {platforms.map((p) => (
-                    <td key={p.name} className="p-4">
-                      <FeatureCell status={p.partialFills} note={p.partialFillNote} />
-                    </td>
-                  ))}
-                </tr>
-                <tr className="border-b border-white/5">
-                  <td className="p-4 text-white font-medium">Multi-Token Payment</td>
-                  {platforms.map((p) => (
-                    <td key={p.name} className="p-4">
-                      <FeatureCell status={p.multiTokenPayment} note={p.multiTokenNote} />
-                    </td>
-                  ))}
-                </tr>
-                <tr className="border-b border-white/5">
-                  <td className="p-4 text-white font-medium">MEV Protection</td>
-                  {platforms.map((p) => (
-                    <td key={p.name} className="p-4">
-                      <FeatureCell status={p.mevProtection} note={p.mevNote} />
-                    </td>
-                  ))}
-                </tr>
-                <tr className="border-b border-white/5">
-                  <td className="p-4 text-white font-medium">No KYC</td>
-                  {platforms.map((p) => (
-                    <td key={p.name} className="p-4">
-                      <FeatureCell status={p.noKyc} />
-                    </td>
-                  ))}
-                </tr>
-                <tr className="border-b border-white/5">
-                  <td className="p-4 text-white font-medium">Oracle-Free</td>
-                  {platforms.map((p) => (
-                    <td key={p.name} className="p-4">
-                      <FeatureCell status={p.oracleFree} note={p.oracleNote} />
-                    </td>
-                  ))}
-                </tr>
-                <tr className="border-b border-white/5">
-                  <td className="p-4 text-white font-medium">Gasless Trading</td>
-                  {platforms.map((p) => (
-                    <td key={p.name} className="p-4">
-                      <FeatureCell status={p.gasless} note={p.gasNote} />
-                    </td>
-                  ))}
-                </tr>
-                <tr className="border-b border-white/5">
-                  <td className="p-4 text-white font-medium">Immutable Contract</td>
-                  {platforms.map((p) => (
-                    <td key={p.name} className="p-4">
-                      <FeatureCell status={p.immutableContract} note={p.immutableNote} />
-                    </td>
-                  ))}
-                </tr>
-                <tr className="border-b border-white/5">
-                  <td className="p-4 text-white font-medium">Audited</td>
-                  {platforms.map((p) => (
-                    <td key={p.name} className="p-4">
-                      <FeatureCell status={p.audited} note={p.auditNote} />
-                    </td>
-                  ))}
-                </tr>
+                    {features.map((f) => (
+                      <td key={f.key} className={`p-4 ${i === 0 && f.type === 'text' ? 'text-green-400 font-medium' : 'text-white/70'}`}>
+                        {f.type === 'text' ? (
+                          f.getValue(p)
+                        ) : (
+                          <FeatureCell status={f.getStatus!(p)} note={f.getNote?.(p)} />
+                        )}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
