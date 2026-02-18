@@ -68,7 +68,7 @@ export default function PricingFeesPage() {
           ))}
         </div>
         <p className="text-white/60 text-sm mt-3">
-          You can also drag the limit line on the price chart or manually enter any price.
+          You can also manually enter any price.
         </p>
       </div>
 
