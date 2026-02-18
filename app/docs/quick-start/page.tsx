@@ -11,8 +11,8 @@ const steps = [
   },
   {
     number: 2,
-    title: 'Navigate to Swap',
-    description: 'Go to the Swap page where you can create new limit orders. You\'ll see the order form with sell and buy token selectors.',
+    title: 'Navigate to Trade',
+    description: 'Go to the Trade page where you can create new limit orders. You\'ll see the order form with sell and buy token selectors.',
   },
   {
     number: 3,
