@@ -3870,7 +3870,7 @@ export const TOKEN_CONSTANTS = [{
   a: "0x36d8C21602aDa33aB50070214C6e9E24bE0Ab97e",
   dexs: null,
   ticker: "PMKR",
-  decimals: 12,
+  decimals: 18,
   name: "PMKR"
 }];
 
