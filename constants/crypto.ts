@@ -12,7 +12,6 @@ export interface TokenConfig {
   type?: "lp" | "stable"
   platform?: string
   hardcodedPrice?: number
-  isWhitelisted?: boolean
   baskets?: string[] // Array of basket names this token belongs to
 }
 
@@ -48,12 +47,11 @@ export const TOKEN_BASKETS: TokenBasket[] = [
 ]
 
 // ===================================
-// WHITELISTED TOKENS
+// TOKEN METADATA
 // AgoraX Mainnet: 0x06856CEa795D001bED91acdf1264CaB174949bf3 (Chain ID 369)
-// 
-// NOTE: Whitelist is now DYNAMICALLY loaded from the contract via useContractWhitelistRead hook
+//
 // This list provides UI metadata (ticker, name, logo, decimals) for tokens
-// Actual tradable tokens are determined by the on-chain whitelist (active status)
+// Tradable tokens are determined by the on-chain whitelist via useContractWhitelistRead hook
 // ===================================
 // AgoraX uses 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE for native PLS
 // ===================================
@@ -69,7 +67,6 @@ export const TOKEN_CONSTANTS = [{
   ticker: "PLS",
   decimals: 18,
   name: "Pulse",
-  isWhitelisted: true, // Must be whitelisted in AgoraX contract
   baskets: ["core", "pls-peg"]
 }, {
   chain: 369,
@@ -78,7 +75,6 @@ export const TOKEN_CONSTANTS = [{
   ticker: "PLSX",
   decimals: 18,
   name: "PulseX",
-  isWhitelisted: true,
   baskets: ["core"]
 }, {
   chain: 369,
@@ -87,7 +83,6 @@ export const TOKEN_CONSTANTS = [{
   ticker: "HEX",
     decimals: 8,
   name: "HEX on PulseChain",
-  isWhitelisted: true,
   baskets: ["hex", "core"]
 }, {
   chain: 369,
@@ -96,7 +91,6 @@ export const TOKEN_CONSTANTS = [{
   ticker: "INC",
   decimals: 18,
   name: "Incentive",
-  isWhitelisted: true,
   baskets: ["core"]
 }, {
   chain: 369,
@@ -166,7 +160,6 @@ export const TOKEN_CONSTANTS = [{
   decimals: 18,
   name: "Wrapped WETH from Eth",
   origin: [1, "0x0"],
-  isWhitelisted: true,
 },  {
   chain: 369,
   a: "0xefD766cCb38EaF1dfd701853BFCe31359239F305",
@@ -175,7 +168,6 @@ export const TOKEN_CONSTANTS = [{
   decimals: 18,
   name: "Wrapped DAI from Eth",
   origin: [1, "0x6b175474e89094c44da98b954eedeac495271d0f"],
-  isWhitelisted: true,
   type: "stable",
   baskets: ["stable"]
 }, {
@@ -186,7 +178,6 @@ export const TOKEN_CONSTANTS = [{
   decimals: 6,
   name: "Wrapped USDC from Eth",
   origin: [1, "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"],
-  isWhitelisted: false,
   type: "stable",
   baskets: ["stable"]
 }, {
@@ -197,7 +188,6 @@ export const TOKEN_CONSTANTS = [{
   decimals: 6,
   name: "Wrapped USDT from Eth",
   origin: [1, "0xdac17f958d2ee523a2206206994597c13d831ec7"],
-  isWhitelisted: false,
   type: "stable",
   baskets: ["stable"]
 }, {
@@ -346,7 +336,6 @@ export const TOKEN_CONSTANTS = [{
   ticker: "USDL",
   decimals: 18,
   name: "USDL",
-  isWhitelisted: true,
   type: "stable",
   baskets: ["stable"]
 }, {
@@ -1497,8 +1486,7 @@ export const TOKEN_CONSTANTS = [{
     dexs: "0xF283597c0f17F7EEf9eD7323c84755d8Ad1c64CB",
     ticker: "2PHUX",
   decimals: 18,
-    name: "2PHUX Governance Token",
-    isWhitelisted: true
+    name: "2PHUX Governance Token"
   },
 {
     chain: 369,
@@ -3877,23 +3865,19 @@ export const TOKEN_CONSTANTS = [{
   ticker: "PDRIP",
   decimals: 10,
   name: "PDRIP"
+}, {
+  chain: 369,
+  a: "0x36d8C21602aDa33aB50070214C6e9E24bE0Ab97e",
+  dexs: null,
+  ticker: "PMKR",
+  decimals: 12,
+  name: "PMKR"
 }];
 
 export const API_ENDPOINTS = {
   historic_pulsechain: 'https://hexdailystats.com/fulldatapulsechain',
   historic_ethereum: 'https://hexdailystats.com/fulldata',
   livedata: 'https://hexdailystats.com/livedata'
-}
-
-// Helper to get only whitelisted tokens
-export const WHITELISTED_TOKENS = TOKEN_CONSTANTS.filter(token => token.isWhitelisted === true)
-
-// Helper to check if a token is whitelisted by address
-export const isTokenWhitelisted = (address: string): boolean => {
-  const normalizedAddress = address.toLowerCase()
-  return TOKEN_CONSTANTS.some(
-    token => token.a && token.a.toLowerCase() === normalizedAddress && token.isWhitelisted === true
-  )
 }
 
 // LP Token detection is now handled via the `type: "lp"` field in TOKEN_CONSTANTS
