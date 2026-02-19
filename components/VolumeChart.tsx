@@ -103,7 +103,7 @@ export default function VolumeChart({ transactions, tokenPrices }: VolumeChartPr
         volume: dayVolume,
         trades: dayData?.trades || 0,
         uniqueAddresses: dayData?.uniqueAddresses?.size || 0,
-        displayDate: currentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        displayDate: currentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }),
         cumulative: cumulativeTotal
       });
 

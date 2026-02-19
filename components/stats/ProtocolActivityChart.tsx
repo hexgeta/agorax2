@@ -169,7 +169,7 @@ export default function ProtocolActivityChart({ transactions, orders, contractOr
 
       result.push({
         date: dateStr,
-        displayDate: currentDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
+        displayDate: currentDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }),
         cumulativeOrders,
         cumulativeFills,
         cumulativeListedVolume,

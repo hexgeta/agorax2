@@ -227,7 +227,7 @@ export default function TokenOrderPricesChart({ orders, tokenPrices, whitelist, 
   // Format time for X axis
   const formatTime = (timestamp: number) => {
     const date = new Date(timestamp);
-    return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+    return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
   };
 
   // Generate nice round tick values for Y axis

@@ -2171,7 +2171,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
       // Show success toast
       toast({
         title: "Expiration Updated!",
-        description: `Order will now expire on ${selectedExpirationDate.toLocaleDateString()}`,
+        description: `Order will now expire on ${selectedExpirationDate.toLocaleDateString('en-US', { timeZone: 'UTC' })}`,
         variant: "success",
         action: txHash ? (
           <a
@@ -2596,9 +2596,9 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
   // Helper functions
   const formatTimestamp = (timestamp: number) => {
     const date = new Date(timestamp * 1000);
-    const day = date.getDate();
-    const month = date.toLocaleDateString('en-US', { month: 'short' });
-    const year = date.getFullYear().toString().slice(-2);
+    const day = date.getUTCDate();
+    const month = date.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' });
+    const year = date.getUTCFullYear().toString().slice(-2);
     return `${day} ${month} ${year}`;
   };
 
@@ -3359,7 +3359,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                       </div>
                       {dateFilterPreset === 'custom' && customDateStart && customDateEnd && (
                         <div className="text-white/50 text-xs">
-                          {customDateStart.toLocaleDateString()} - {customDateEnd.toLocaleDateString()}
+                          {customDateStart.toLocaleDateString('en-US', { timeZone: 'UTC' })} - {customDateEnd.toLocaleDateString('en-US', { timeZone: 'UTC' })}
                         </div>
                       )}
                     </div>
@@ -3681,7 +3681,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                   </div>
                   {dateFilterPreset === 'custom' && customDateStart && customDateEnd && (
                     <div className="text-white/50 text-xs mt-1">
-                      {customDateStart.toLocaleDateString()} - {customDateEnd.toLocaleDateString()}
+                      {customDateStart.toLocaleDateString('en-US', { timeZone: 'UTC' })} - {customDateEnd.toLocaleDateString('en-US', { timeZone: 'UTC' })}
                     </div>
                   )}
                 </div>
@@ -5641,7 +5641,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                   captionLayout="dropdown"
                   disabled={(date) => {
                     const today = new Date();
-                    today.setHours(0, 0, 0, 0);
+                    today.setUTCHours(0, 0, 0, 0);
                     return date < today;
                   }}
                 />

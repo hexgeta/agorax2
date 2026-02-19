@@ -4,6 +4,7 @@ import Footer from '@/components/Footer'
 import { Providers } from '@/components/Providers'
 import AppKitProvider from '@/context/AppKitProvider'
 import { Toaster } from '@/components/ui/toaster'
+import { ContractPausedBanner } from '@/components/ContractPausedBanner'
 import { headers } from 'next/headers'
 
 // Static layout with revalidation
@@ -74,6 +75,7 @@ export default async function RootLayout({
         <AppKitProvider cookies={cookies}>
           <Providers>
             <div className="flex flex-col min-h-screen">
+              <ContractPausedBanner />
               <NavBar />
               <main className="flex-grow pt-20 md:pt-24">{children}</main>
               <Footer />

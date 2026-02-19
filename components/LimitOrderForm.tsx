@@ -603,8 +603,25 @@ export function LimitOrderForm({
         const isBaseToken = bestPair.baseToken.address.toLowerCase() === contractAddress;
         const tokenInfo = isBaseToken ? bestPair.baseToken : bestPair.quoteToken;
 
-        // Get decimals - default to 18 if not available
-        const decimals = 18; // DexScreener doesn't always provide decimals, default to 18 for PRC20
+        // Fetch decimals on-chain (DexScreener doesn't provide them)
+        let decimals: number;
+        try {
+          decimals = Number(await publicClient!.readContract({
+            address: contractAddress as `0x${string}`,
+            abi: [{
+              name: 'decimals',
+              type: 'function',
+              stateMutability: 'view',
+              inputs: [],
+              outputs: [{ name: '', type: 'uint8' }],
+            }] as const,
+            functionName: 'decimals',
+          }));
+        } catch {
+          setCustomTokenError('Could not read token decimals from chain');
+          setCustomToken(null);
+          return;
+        }
 
         setCustomToken({
           a: contractAddress,
@@ -2159,6 +2176,47 @@ export function LimitOrderForm({
         return BigInt(whitelistIndex);
       });
 
+      // Safety check: verify token decimals against on-chain data before parsing amounts
+      const tokensToVerify = [sellToken, ...buyTokens.filter(Boolean)] as TokenOption[];
+      const seen = new Set<string>();
+      const uniqueTokens = tokensToVerify.filter(t => {
+        const key = t.a.toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return !isNativeToken(t.a); // Skip native PLS (no contract)
+      });
+
+      const decimalsAbi = [{
+        name: 'decimals',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [],
+        outputs: [{ name: '', type: 'uint8' }],
+      }] as const;
+
+      const multicallResults = await publicClient.multicall({
+        contracts: uniqueTokens.map(token => ({
+          address: token.a as `0x${string}`,
+          abi: decimalsAbi,
+          functionName: 'decimals',
+        })),
+        allowFailure: true,
+      });
+
+      for (let i = 0; i < uniqueTokens.length; i++) {
+        const result = multicallResults[i];
+        if (result.status === 'success' && Number(result.result) !== uniqueTokens[i].decimals) {
+          toast({
+            title: "Decimals Mismatch — Order Blocked",
+            description: `${uniqueTokens[i].ticker}: expected ${uniqueTokens[i].decimals} decimals but on-chain is ${Number(result.result)}. Please report this issue.`,
+            variant: "destructive",
+          });
+          setIsCreatingOrder(false);
+          setTransactionPending(false);
+          return;
+        }
+      }
+
       const buyAmountsWei = buyAmounts.map((amount, i) => {
         const token = buyTokens[i];
         if (!token) throw new Error('Buy token is null');
@@ -2468,17 +2526,17 @@ export function LimitOrderForm({
 
     // Preserve the current time from selectedDate if it exists
     if (selectedDate) {
-      date.setHours(selectedDate.getHours(), selectedDate.getMinutes(), selectedDate.getSeconds());
+      date.setUTCHours(selectedDate.getUTCHours(), selectedDate.getUTCMinutes(), selectedDate.getUTCSeconds());
     } else {
       // For new selection, default to 1 hour from now if selecting today
       const now = new Date();
-      const isToday = date.toDateString() === now.toDateString();
+      const isToday = date.toUTCString().slice(0, 16) === now.toUTCString().slice(0, 16);
       if (isToday) {
         const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000);
-        date.setHours(oneHourLater.getHours(), oneHourLater.getMinutes(), oneHourLater.getSeconds());
+        date.setUTCHours(oneHourLater.getUTCHours(), oneHourLater.getUTCMinutes(), oneHourLater.getUTCSeconds());
       } else {
-        // For future dates, default to noon
-        date.setHours(12, 0, 0);
+        // For future dates, default to noon UTC
+        date.setUTCHours(12, 0, 0);
       }
     }
 
@@ -2510,7 +2568,7 @@ export function LimitOrderForm({
 
     // Use selectedDate if exists, otherwise use today
     const newDate = selectedDate ? new Date(selectedDate) : new Date();
-    newDate.setHours(hours, minutes, seconds || 0);
+    newDate.setUTCHours(hours, minutes, seconds || 0);
 
     const now = new Date();
     const diffTime = newDate.getTime() - now.getTime();
@@ -6026,7 +6084,7 @@ export function LimitOrderForm({
                   })()
                 ) : (
                   // Show regular date for day-based presets
-                  selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                  selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
                 )}
               </span>
             )}
@@ -6136,7 +6194,7 @@ export function LimitOrderForm({
                       defaultMonth={selectedDate || new Date()}
                       disabled={(date: Date) => {
                         const today = new Date();
-                        today.setHours(0, 0, 0, 0);
+                        today.setUTCHours(0, 0, 0, 0);
                         return date < today;
                       }}
                       classNames={{
@@ -6149,7 +6207,7 @@ export function LimitOrderForm({
                       <input
                         type="time"
                         step="1"
-                        value={selectedDate ? `${String(selectedDate.getHours()).padStart(2, '0')}:${String(selectedDate.getMinutes()).padStart(2, '0')}:${String(selectedDate.getSeconds()).padStart(2, '0')}` : ''}
+                        value={selectedDate ? `${String(selectedDate.getUTCHours()).padStart(2, '0')}:${String(selectedDate.getUTCMinutes()).padStart(2, '0')}:${String(selectedDate.getUTCSeconds()).padStart(2, '0')}` : ''}
                         onChange={handleTimeChange}
                         className="w-full bg-black text-white border border-white/20 rounded-md px-3 py-2 text-sm appearance-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none focus:outline-none focus:border-white/50 selection:bg-white/30 selection:text-white [&::-webkit-datetime-edit-hour-field:focus]:bg-white/30 [&::-webkit-datetime-edit-minute-field:focus]:bg-white/30 [&::-webkit-datetime-edit-second-field:focus]:bg-white/30 [&::-webkit-datetime-edit-hour-field:focus]:text-white [&::-webkit-datetime-edit-minute-field:focus]:text-white [&::-webkit-datetime-edit-second-field:focus]:text-white"
                       />

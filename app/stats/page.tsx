@@ -83,7 +83,7 @@ function formatTimestamp(timestamp: number | bigint): string {
   if (!timestamp) return '-';
   const ts = typeof timestamp === 'bigint' ? Number(timestamp) : timestamp;
   const date = new Date(ts * 1000);
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
 }
 
 export default function StatsPage() {

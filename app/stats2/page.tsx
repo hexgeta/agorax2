@@ -278,7 +278,7 @@ export default function Stats2Page() {
       const dayData = dailyData[dateStr];
       cumulativeOrders += dayData.orders;
       cumulativeFills += dayData.fills;
-      const displayDate = new Date(dateStr).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+      const displayDate = new Date(dateStr).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
       return {
         date: dateStr,
         displayDate,

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
+import { useAccount } from 'wagmi';
 import { ConnectButton } from './ConnectButton';
 import { ChainSwitcher } from './ChainSwitcher';
 import { TESTING_MODE } from '@/config/testing';
@@ -31,6 +32,7 @@ const NavBar = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { claimableCount } = useClaimableOrdersCount();
   const { stats, isConnected } = useUserAchievements();
+  const { isConnected: walletConnected } = useAccount();
 
   // Prestige level logic:
   // - If prestige is 0, show grey Alpha icon (not yet completed first legion)
@@ -90,7 +92,7 @@ const NavBar = () => {
 
   return (
     <>
-      <nav className="w-full fixed top-0 left-0 right-0 z-[200]">
+      <nav className={`w-full fixed left-0 right-0 z-[200] ${walletConnected ? 'top-9' : 'top-0'}`}>
         <LiquidGlassCard
           className="w-full px-4 md:px-8 py-4 !rounded-none"
           shadowIntensity="none"

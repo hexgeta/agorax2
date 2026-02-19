@@ -1221,7 +1221,7 @@ export const TOKEN_CONSTANTS = [{
     a: "0xeDA0073B4Aa1b1B6f9c718c3036551ab46E5Ec32",
     dexs: null,
     ticker: "BEET",
-  decimals: 18,
+  decimals: 9,
     name: "BEET"
   },
 {
@@ -1533,7 +1533,7 @@ export const TOKEN_CONSTANTS = [{
     a: "0x46565877E756b2ACca78faf2F7FF558DafbdD3E4",
     dexs: "",
     ticker: "Kakadu",
-  decimals: 18,
+  decimals: 9,
     name: "Kakadu"
   },
 {
@@ -1581,7 +1581,7 @@ export const TOKEN_CONSTANTS = [{
     a: "0x8eDb13CE75562056DFf2221D193557Fb4A05770D",
     dexs: "0xc71688A1DC88e831FA813477db68B2847b2189eF",
     ticker: "MEGA",
-  decimals: 18,
+  decimals: 6,
     name: "Make Ethereum Great Again"
   },
 {
@@ -3126,7 +3126,7 @@ export const TOKEN_CONSTANTS = [{
     a: "0x6A46d56F9Dd963cEAc7f60aD148d49219CC3b79f",
     dexs: "0xe72951Df1F42AB9cD5492d08C01157De52b602Bb",
     ticker: "FRIENDSHIP",
-  decimals: 18,
+  decimals: 9,
     name: "Sommi Fan Token"
   },
 {
@@ -3863,7 +3863,7 @@ export const TOKEN_CONSTANTS = [{
   a: "0xeB2CEed77147893Ba8B250c796c2d4EF02a72B68",
   dexs: null,
   ticker: "PDRIP",
-  decimals: 10,
+  decimals: 18,
   name: "PDRIP"
 }, {
   chain: 369,

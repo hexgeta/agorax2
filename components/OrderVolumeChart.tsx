@@ -132,7 +132,7 @@ export default function OrderVolumeChart({ orders, tokenPrices, contractOrders =
         volume: dayVolume,
         orderCount: dayData?.orderCount || 0,
         uniqueCreators: dayData?.uniqueCreators?.size || 0,
-        displayDate: currentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        displayDate: currentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }),
         cumulative: cumulativeTotal
       });
 

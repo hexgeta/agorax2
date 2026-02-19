@@ -52,12 +52,12 @@ export function getDailyCacheKey(baseKey: string) {
 
 export function getMinuteCacheKey(baseKey: string, minutes: number) {
   const now = new Date()
-  const minuteBlock = Math.floor(now.getMinutes() / minutes)
+  const minuteBlock = Math.floor(now.getUTCMinutes() / minutes)
   return `${baseKey}-${now.getUTCHours()}-${minuteBlock}`
 }
 
 export function getSecondCacheKey(baseKey: string, seconds: number) {
   const now = new Date()
-  const secondBlock = Math.floor(now.getSeconds() / seconds)
-  return `${baseKey}-${now.getUTCHours()}-${now.getMinutes()}-${secondBlock}`
+  const secondBlock = Math.floor(now.getUTCSeconds() / seconds)
+  return `${baseKey}-${now.getUTCHours()}-${now.getUTCMinutes()}-${secondBlock}`
 } 
