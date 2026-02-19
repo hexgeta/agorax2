@@ -10,7 +10,7 @@ export function ContractPausedBanner() {
   return (
     <>
       <div className="fixed top-0 left-0 right-0 z-[300] bg-yellow-500 text-black text-center py-2 px-4 text-sm font-semibold">
-        Contract is currently paused due to an error with a whitelisted token on the frontend. Funds are safe and able to be withdrawn.
+        Contract is currently paused. Funds are safe and able to be withdrawn.
       </div>
       <div className="h-9" />
     </>
