@@ -2140,6 +2140,49 @@ export function LimitOrderForm({
       setIsCreatingOrder(true);
       setTransactionPending(true);
 
+      // Safety check: verify token decimals against on-chain data before anything else
+      const tokensToVerify = [sellToken, ...buyTokens.filter(Boolean)] as TokenOption[];
+      const seen = new Set<string>();
+      const uniqueTokens = tokensToVerify.filter(t => {
+        const key = t.a.toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return !isNativeToken(t.a); // Skip native PLS (no contract)
+      });
+
+      const decimalsAbi = [{
+        name: 'decimals',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [],
+        outputs: [{ name: '', type: 'uint8' }],
+      }] as const;
+
+      const decimalsResults = await Promise.all(
+        uniqueTokens.map(token =>
+          publicClient.readContract({
+            address: token.a as `0x${string}`,
+            abi: decimalsAbi,
+            functionName: 'decimals',
+          }).then(result => ({ status: 'success' as const, result: Number(result) }))
+            .catch(() => ({ status: 'failure' as const, result: 0 }))
+        )
+      );
+
+      for (let i = 0; i < uniqueTokens.length; i++) {
+        const result = decimalsResults[i];
+        if (result.status === 'success' && result.result !== uniqueTokens[i].decimals) {
+          toast({
+            title: "Decimals Mismatch — Order Blocked",
+            description: `${uniqueTokens[i].ticker}: expected ${uniqueTokens[i].decimals} decimals but on-chain is ${result.result}. Please report this issue.`,
+            variant: "destructive",
+          });
+          setIsCreatingOrder(false);
+          setTransactionPending(false);
+          return;
+        }
+      }
+
       // Handle token approval if needed
       if (needsApproval && allowance !== undefined && allowance < sellAmountWei) {
         setIsApproving(true);
@@ -2175,47 +2218,6 @@ export function LimitOrderForm({
 
         return BigInt(whitelistIndex);
       });
-
-      // Safety check: verify token decimals against on-chain data before parsing amounts
-      const tokensToVerify = [sellToken, ...buyTokens.filter(Boolean)] as TokenOption[];
-      const seen = new Set<string>();
-      const uniqueTokens = tokensToVerify.filter(t => {
-        const key = t.a.toLowerCase();
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return !isNativeToken(t.a); // Skip native PLS (no contract)
-      });
-
-      const decimalsAbi = [{
-        name: 'decimals',
-        type: 'function',
-        stateMutability: 'view',
-        inputs: [],
-        outputs: [{ name: '', type: 'uint8' }],
-      }] as const;
-
-      const multicallResults = await publicClient.multicall({
-        contracts: uniqueTokens.map(token => ({
-          address: token.a as `0x${string}`,
-          abi: decimalsAbi,
-          functionName: 'decimals',
-        })),
-        allowFailure: true,
-      });
-
-      for (let i = 0; i < uniqueTokens.length; i++) {
-        const result = multicallResults[i];
-        if (result.status === 'success' && Number(result.result) !== uniqueTokens[i].decimals) {
-          toast({
-            title: "Decimals Mismatch — Order Blocked",
-            description: `${uniqueTokens[i].ticker}: expected ${uniqueTokens[i].decimals} decimals but on-chain is ${Number(result.result)}. Please report this issue.`,
-            variant: "destructive",
-          });
-          setIsCreatingOrder(false);
-          setTransactionPending(false);
-          return;
-        }
-      }
 
       const buyAmountsWei = buyAmounts.map((amount, i) => {
         const token = buyTokens[i];
