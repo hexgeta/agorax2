@@ -28,8 +28,9 @@ export function CoinLogo({
   inverted = false,
   variant = 'default'
 }: CoinLogoProps) {
-  // Remove any 'p' or 'e' prefix from the symbol
-  const baseSymbol = symbol.replace(/^[pe]/, '')
+  // Remove lowercase 'p' or 'e' prefix followed by uppercase (e.g. pMKR → MKR, eHEX → HEX)
+  // but not uppercase P/E (e.g. PMKR, PUMP stay as-is)
+  const baseSymbol = symbol.replace(/^[pe](?=[A-Z])/, '')
   
   // Use the base symbol as the logo symbol
   const logoSymbol = baseSymbol
