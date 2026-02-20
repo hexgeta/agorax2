@@ -5,6 +5,8 @@ import { useAccount } from 'wagmi'
 export function ContractPausedBanner() {
   const { isConnected } = useAccount()
 
+  // Banner hidden — uncomment the return below to re-enable
+  return null
   if (!isConnected) return null
 
   return (

@@ -382,14 +382,6 @@ export function LimitOrderForm({
     return true;
   });
 
-  // Show more tokens toggle - when true, shows all tokens in sell dropdown (not just whitelisted)
-  const [showMoreTokens, setShowMoreTokens] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('limitOrderShowMoreTokens') === 'true';
-    }
-    return false;
-  });
-
   // Accept multiple tokens as buy - when true, shows the "Add alternative token" button
   // Default to true for new users (no localStorage value)
   const [acceptMultipleTokens, setAcceptMultipleTokens] = useState(() => {
@@ -644,28 +636,42 @@ export function LimitOrderForm({
   }, [sellSearchQuery]);
 
   // Filter tokens based on search queries and exclude already selected tokens
-  // When showMoreTokens is true, show ALL tokens from TOKEN_CONSTANTS (not just whitelisted)
-  const sellTokenSource = showMoreTokens ? TOKEN_CONSTANTS.filter(t => t.a) : availableTokens;
-  const filteredSellTokensUnsorted = sellTokenSource.filter(token => {
-    if (!token.a) return false;
-
-    // Exclude the currently selected sell token from the dropdown
-    if (sellToken && sellToken.a && token.a.toLowerCase() === sellToken.a.toLowerCase()) {
-      return false;
-    }
-
-    // Exclude if it's already selected in any buy token
-    const isSelectedInBuy = buyTokens.some(buyToken =>
-      buyToken && buyToken.a && token.a && buyToken.a.toLowerCase() === token.a.toLowerCase()
-    );
-    if (isSelectedInBuy) return false;
-
-    // Apply search filter (including address search)
+  // Default: show whitelisted tokens. When searching, also include non-whitelisted TOKEN_CONSTANTS matches.
+  const filteredSellTokensUnsorted = (() => {
     const searchLower = sellSearchQuery.toLowerCase();
-    return token.ticker.toLowerCase().includes(searchLower) ||
-      token.name.toLowerCase().includes(searchLower) ||
-      (token.a && token.a.toLowerCase().includes(searchLower));
-  });
+    const isSearching = searchLower.length > 0;
+
+    // Start with whitelisted tokens, add non-whitelisted TOKEN_CONSTANTS matches when searching
+    const source = isSearching
+      ? TOKEN_CONSTANTS.filter(t => t.a).reduce((unique, token) => {
+          if (!unique.some(u => u.a?.toLowerCase() === token.a?.toLowerCase())) {
+            unique.push(token);
+          }
+          return unique;
+        }, [] as typeof TOKEN_CONSTANTS)
+      : availableTokens;
+
+    return source.filter(token => {
+      if (!token.a) return false;
+
+      // Exclude the currently selected sell token from the dropdown
+      if (sellToken && sellToken.a && token.a.toLowerCase() === sellToken.a.toLowerCase()) {
+        return false;
+      }
+
+      // Exclude if it's already selected in any buy token
+      const isSelectedInBuy = buyTokens.some(buyToken =>
+        buyToken && buyToken.a && token.a && buyToken.a.toLowerCase() === token.a.toLowerCase()
+      );
+      if (isSelectedInBuy) return false;
+
+      // Apply search filter (including address search)
+      if (!isSearching) return true;
+      return token.ticker.toLowerCase().includes(searchLower) ||
+        token.name.toLowerCase().includes(searchLower) ||
+        (token.a && token.a.toLowerCase().includes(searchLower));
+    });
+  })();
 
   const getFilteredBuyTokensUnsorted = (index: number) => {
     const searchQuery = buySearchQueries[index] || '';
@@ -924,6 +930,12 @@ export function LimitOrderForm({
       const aTickerMatches = aLower.includes(searchLower);
       const bTickerMatches = bLower.includes(searchLower);
 
+      // 0. Whitelisted tokens always come before non-whitelisted
+      const aWhitelisted = whitelistedAddresses.has(a.a?.toLowerCase() || '');
+      const bWhitelisted = whitelistedAddresses.has(b.a?.toLowerCase() || '');
+      if (aWhitelisted && !bWhitelisted) return -1;
+      if (bWhitelisted && !aWhitelisted) return 1;
+
       // Get balances and prices
       const aBalance = parseFloat(dropdownTokenBalances[a.a?.toLowerCase() || ''] || '0');
       const bBalance = parseFloat(dropdownTokenBalances[b.a?.toLowerCase() || ''] || '0');
@@ -975,7 +987,7 @@ export function LimitOrderForm({
       // 4. Then alphabetically
       return a.ticker.localeCompare(b.ticker);
     });
-  }, [filteredSellTokensUnsorted, sellSearchQuery, dropdownTokenBalances, prices, Object.keys(prices).length]);
+  }, [filteredSellTokensUnsorted, sellSearchQuery, dropdownTokenBalances, prices, Object.keys(prices).length, whitelistedAddresses]);
 
   // Get sorted filtered buy tokens
   const getFilteredBuyTokens = (index: number) => {
@@ -1546,10 +1558,6 @@ export function LimitOrderForm({
   useEffect(() => {
     localStorage.setItem('limitOrderMaxiStats', maxiStats.toString());
   }, [maxiStats]);
-
-  useEffect(() => {
-    localStorage.setItem('limitOrderShowMoreTokens', showMoreTokens.toString());
-  }, [showMoreTokens]);
 
   useEffect(() => {
     localStorage.setItem('limitOrderAcceptMultipleTokens', acceptMultipleTokens.toString());
@@ -3752,17 +3760,21 @@ export function LimitOrderForm({
                         // Save full custom token object for restoration after reload
                         localStorage.setItem('limitOrderCustomSellToken', JSON.stringify(customToken));
                         setCustomToken(null);
+                        toast({
+                          title: "Unverified token",
+                          description: "This token is not on the AgoráX whitelist. Trade at your own risk.",
+                        });
                       }}
-                      className="w-full p-3 flex items-center space-x-3 hover:bg-white/5 transition-all text-left border-b border-white/5 bg-cyan-900/20"
+                      className="w-full p-3 flex items-center space-x-3 hover:bg-white/5 transition-all text-left border-b border-white/5 bg-amber-900/20"
                     >
                       <img src="/coin-logos/default.svg" alt="Token" className="w-6 h-6" />
                       <div className="flex-1">
                         <div className="flex items-center justify-between">
                           <div>
                             <div className="text-white font-medium">{customToken.ticker}</div>
-                            <div className="text-white/50 text-xs">{customToken.name}</div>
+                            <div className="text-amber-400/70 text-xs">Not on whitelist — trade at your own risk</div>
                           </div>
-                          <span className="text-xs px-2 py-0.5 bg-cyan-900/30 border border-cyan-500/30 text-cyan-400 rounded ml-2">
+                          <span className="text-xs px-2 py-0.5 bg-amber-900/30 border border-amber-500/30 text-amber-400 rounded ml-2">
                             Custom
                           </span>
                         </div>
@@ -3778,22 +3790,33 @@ export function LimitOrderForm({
                       const tokenBalance = parseFloat(dropdownTokenBalances[token.a?.toLowerCase() || ''] || '0');
                       const tokenPrice = getPrice(token.a);
                       const tokenUsdValue = tokenBalance * (tokenPrice > 0 ? tokenPrice : 0);
+                      const isWhitelisted = whitelistedAddresses.has(token.a?.toLowerCase() || '');
                       return (
                         <button
                           key={token.a}
                           onClick={() => {
                             if (token.a) {
                               handleSellTokenSelect({ a: token.a, ticker: token.ticker, name: token.name, decimals: token.decimals });
+                              if (!isWhitelisted) {
+                                toast({
+                                  title: "Unverified token",
+                                  description: "This token is not on the AgoráX whitelist. Trade at your own risk.",
+                                });
+                              }
                             }
                           }}
-                          className="w-full p-3 flex items-center space-x-3 hover:bg-white/5 transition-all text-left border-b border-white/5 last:border-b-0"
+                          className={`w-full p-3 flex items-center space-x-3 hover:bg-white/5 transition-all text-left border-b border-white/5 last:border-b-0 ${!isWhitelisted ? 'bg-amber-900/20' : ''}`}
                         >
                           <TokenLogo ticker={token.ticker} className="w-6 h-6" />
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between">
                               <div className="min-w-0 flex-1">
                                 <div className="text-white font-medium">{formatTokenTicker(token.ticker, chainId)}</div>
-                                <div className="text-white/50 text-xs truncate">{token.name}</div>
+                                {isWhitelisted ? (
+                                  <div className="text-white/50 text-xs truncate">{token.name}</div>
+                                ) : (
+                                  <div className="text-amber-400/70 text-xs truncate">Not on whitelist — trade at your own risk</div>
+                                )}
                               </div>
                               <div className="text-right ml-2 flex-shrink-0">
                                 {tokenBalance > 0 && (
@@ -5982,27 +6005,6 @@ export function LimitOrderForm({
                     <span
                       className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform duration-200 ${
                         acceptMultipleTokens ? 'translate-x-5' : 'translate-x-0'
-                      }`}
-                    />
-                  </button>
-                </div>
-
-                {/* Show More Tokens Toggle */}
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-white/70 text-sm">Show more tokens</span>
-                    <span className="text-white/40 text-xs">Display more sell tokens & enable custom tokens</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowMoreTokens(!showMoreTokens)}
-                    className={`relative w-11 h-6 flex-shrink-0 rounded-full transition-colors duration-200 ${
-                      showMoreTokens ? 'bg-green-500' : 'bg-white/20'
-                    }`}
-                  >
-                    <span
-                      className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform duration-200 ${
-                        showMoreTokens ? 'translate-x-5' : 'translate-x-0'
                       }`}
                     />
                   </button>
