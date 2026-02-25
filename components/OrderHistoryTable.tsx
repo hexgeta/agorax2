@@ -75,7 +75,7 @@ function TokenLogo({ src, alt, className }: { src: string; alt: string; classNam
 }
 
 // Sorting types
-type SortField = 'sellAmount' | 'askingFor' | 'progress' | 'date' | 'otcVsMarket';
+type SortField = 'sellAmount' | 'askingFor' | 'progress' | 'date' | 'otcVsMarket' | 'orderID';
 type SortDirection = 'asc' | 'desc';
 
 // Transaction interface
@@ -364,6 +364,10 @@ export default function OrderHistoryTable({
           comparison = aOtcPercentage - bOtcPercentage;
           break;
         }
+        case 'orderID': {
+          comparison = Number(a.transaction.orderId) - Number(b.transaction.orderId);
+          break;
+        }
       }
 
       return sortDirection === 'asc' ? comparison : -comparison;
@@ -434,7 +438,16 @@ export default function OrderHistoryTable({
           Tx Date {sortField === 'date' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
         </button>
 
-        {/* COLUMN 7: Actions */}
+        {/* COLUMN 7: Order ID */}
+        <button
+          onClick={() => handleSort('orderID')}
+          className={`text-sm font-medium text-center hover:text-[rgba(255,255,255,1)] transition-colors ${sortField === 'orderID' ? 'text-[rgba(255,255,255,1)]' : 'text-[rgba(255,255,255,1)]/60'
+            }`}
+        >
+          Order ID {sortField === 'orderID' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+        </button>
+
+        {/* COLUMN 8: Actions */}
         <div className="text-sm font-medium text-center text-[rgba(255, 255, 255, 1)]/60">
 
         </div>

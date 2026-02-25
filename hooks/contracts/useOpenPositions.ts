@@ -37,9 +37,15 @@ export interface OrderDetailsWithID {
   orderDetails: OrderDetails;
 }
 
+export interface CollectableProceeds {
+  buyTokens: string[];
+  buyAmounts: bigint[];
+}
+
 export interface CompleteOrderDetails {
   userDetails: UserOrderDetails;
   orderDetailsWithID: OrderDetailsWithID;
+  collectableProceeds?: CollectableProceeds;
 }
 
 // Helper function to cast order data to correct types
@@ -238,6 +244,44 @@ async function fetchContractData(contractAddress: Address, chainId: number, user
           await new Promise(resolve => setTimeout(resolve, 100));
         }
       }
+      }
+    }
+
+    // Fetch actual collectable proceeds for orders with potential claims
+    const ordersWithPotentialClaims = allOrders.filter(order => {
+      const sellAmount = order.orderDetailsWithID.orderDetails.sellAmount;
+      const filled = sellAmount - order.orderDetailsWithID.remainingSellAmount;
+      return filled > order.orderDetailsWithID.redeemedSellAmount;
+    });
+
+    if (ordersWithPotentialClaims.length > 0) {
+      const proceedsBatchSize = 10;
+      const proceedsBatches: CompleteOrderDetails[][] = [];
+      for (let i = 0; i < ordersWithPotentialClaims.length; i += proceedsBatchSize) {
+        proceedsBatches.push(ordersWithPotentialClaims.slice(i, i + proceedsBatchSize));
+      }
+
+      for (const batch of proceedsBatches) {
+        const proceedsResults = await Promise.all(
+          batch.map(order =>
+            client.readContract({
+              address: contractAddress,
+              abi: CONTRACT_ABI,
+              functionName: 'viewCollectableProceeds',
+              args: [order.orderDetailsWithID.orderID],
+            }).catch(() => null)
+          )
+        );
+
+        proceedsResults.forEach((result, idx) => {
+          if (result) {
+            const [buyTokens, buyAmounts] = result as [string[], bigint[]];
+            batch[idx].collectableProceeds = {
+              buyTokens: buyTokens.map(t => t as string),
+              buyAmounts: buyAmounts.map(a => a as bigint),
+            };
+          }
+        });
       }
     }
 

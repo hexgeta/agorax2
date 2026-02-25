@@ -38,7 +38,7 @@ import { useEventTracking } from '@/hooks/useEventTracking';
 import { useFavorites } from '@/hooks/useFavorites';
 
 // Sorting types
-type SortField = 'sellAmount' | 'askingFor' | 'progress' | 'owner' | 'status' | 'date' | 'backingPrice' | 'currentPrice' | 'otcVsMarket';
+type SortField = 'sellAmount' | 'askingFor' | 'progress' | 'owner' | 'status' | 'date' | 'backingPrice' | 'currentPrice' | 'otcVsMarket' | 'orderID';
 type SortDirection = 'asc' | 'desc';
 
 // Helper function to get remaining sell amount (AgoraX_final.sol)
@@ -2423,10 +2423,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     // Level 10: Filter for orders with claimable proceeds
     if (claimableFilterEnabled) {
       filteredOrders = filteredOrders.filter(order => {
-        const sellAmount = order.orderDetailsWithID.orderDetails.sellAmount;
-        const filled = sellAmount - order.orderDetailsWithID.remainingSellAmount;
-        const hasProceeds = filled > order.orderDetailsWithID.redeemedSellAmount;
-        return hasProceeds;
+        const proceeds = order.collectableProceeds;
+        return proceeds && proceeds.buyTokens.length > 0;
       });
     }
 
@@ -2579,6 +2577,9 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
           })();
 
           comparison = aLimitPercentage - bLimitPercentage;
+          break;
+        case 'orderID':
+          comparison = Number(a.orderDetailsWithID.orderID) - Number(b.orderDetailsWithID.orderID);
           break;
       }
 
@@ -2807,12 +2808,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
 
     const orders = getOrdersForTabCount(status);
     return orders.filter(order => {
-      const sellAmount = order.orderDetailsWithID.orderDetails.sellAmount;
-      const remainingSellAmount = order.orderDetailsWithID.remainingSellAmount;
-      const redeemedSellAmount = order.orderDetailsWithID.redeemedSellAmount;
-      const filledAmount = sellAmount - remainingSellAmount;
-      const unclaimedAmount = filledAmount - redeemedSellAmount;
-      return unclaimedAmount > 0n;
+      const proceeds = order.collectableProceeds;
+      return proceeds && proceeds.buyTokens.length > 0;
     }).length;
   };
 
@@ -3782,9 +3779,13 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                 </button>
 
                 {/* COLUMN 8: Order ID */}
-                <div className="text-sm font-medium text-center text-white/60">
-                  Order ID
-                </div>
+                <button
+                  onClick={() => handleSort('orderID')}
+                  className={`text-sm font-medium text-center hover:text-white transition-colors ${sortField === 'orderID' ? 'text-white' : 'text-white/60'
+                    }`}
+                >
+                  Order ID {sortField === 'orderID' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                </button>
 
                 {/* COLUMN 8: Actions - hide completely in compact mode */}
                 {!compactMode && (
@@ -4144,34 +4145,36 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                       {ownershipFilter === 'mine' && !compactMode && (
                         <div className="flex flex-col items-center min-w-0">
                           {(() => {
-                            const sellAmount = order.orderDetailsWithID.orderDetails.sellAmount;
-                            const remainingSellAmount = order.orderDetailsWithID.remainingSellAmount;
-                            const redeemedSellAmount = order.orderDetailsWithID.redeemedSellAmount;
-                            const filledAmount = sellAmount - remainingSellAmount;
-                            const unclaimedAmount = filledAmount - redeemedSellAmount;
-                            const hasClaimable = unclaimedAmount > 0n;
-                            const claimPercentage = Number(sellAmount) > 0 ? Number(unclaimedAmount) / Number(sellAmount) : 0;
+                            const proceeds = order.collectableProceeds;
                             const isCollecting = collectingOrders.has(order.orderDetailsWithID.orderID.toString());
 
                             return buyTokensIndex.map((tokenIndex: bigint, idx: number) => {
                               const tokenInfo = getTokenInfoByIndex(Number(tokenIndex));
-                              const originalAmount = buyAmounts[idx];
-                              const maxBuyAmount = parseFloat(formatTokenAmount(originalAmount, tokenInfo.decimals));
-                              const claimableBuyAmount = maxBuyAmount * claimPercentage;
                               const tokenPrice = getTokenPrice(tokenInfo.address, tokenPrices);
-                              // Match the height of the token row based on whether price is shown
                               const hasPrice = tokenPrice > 0;
+
+                              // Check if this token has actual collectable proceeds
+                              let claimableBuyAmount = 0;
+                              if (proceeds && proceeds.buyTokens.length > 0) {
+                                const proceedsIdx = proceeds.buyTokens.findIndex((addr: string) =>
+                                  addr.toLowerCase() === tokenInfo.address.toLowerCase()
+                                );
+                                if (proceedsIdx >= 0) {
+                                  claimableBuyAmount = parseFloat(formatTokenAmount(proceeds.buyAmounts[proceedsIdx], tokenInfo.decimals));
+                                }
+                              }
+                              const hasClaimableForToken = claimableBuyAmount > 0;
 
                               return (
                                 <div key={idx} className={`flex items-center mb-1.5 ${hasPrice ? 'h-[54px]' : 'h-[38px]'}`}>
-                                  {hasClaimable ? (
+                                  {hasClaimableForToken ? (
                                     <button
                                       onClick={() => {
                                         setBatchClaimOrder(order);
                                         setBatchClaimRecipient(address || '');
                                         setBatchClaimCustomRecipient(false);
                                         setBatchClaimWarningAccepted(false);
-                                        setBatchClaimTokenIndex(idx); // Track specific token index
+                                        setBatchClaimTokenIndex(idx); // Track specific token index in order's buyTokensIndex
                                       }}
                                       disabled={isCollecting}
                                       className="w-[150px] flex items-center justify-center px-3 py-1.5 rounded-lg bg-green-500/20 border border-green-500/40 hover:bg-green-500/30 hover:border-green-500/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -4389,12 +4392,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                             <div className="flex items-center gap-1">
                               {/* Batch Claim Button - only show if there are claimable proceeds */}
                               {(() => {
-                                const sellAmount = order.orderDetailsWithID.orderDetails.sellAmount;
-                                const remainingSellAmount = order.orderDetailsWithID.remainingSellAmount;
-                                const redeemedSellAmount = order.orderDetailsWithID.redeemedSellAmount;
-                                const filledAmount = sellAmount - remainingSellAmount;
-                                const unclaimedAmount = filledAmount - redeemedSellAmount;
-                                const hasClaimable = unclaimedAmount > 0n;
+                                const proceeds = order.collectableProceeds;
+                                const hasClaimable = proceeds && proceeds.buyTokens.length > 0;
                                 const isCollecting = collectingOrders.has(order.orderDetailsWithID.orderID.toString());
 
                                 if (!hasClaimable) return null;
@@ -5181,11 +5180,10 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                               {address && order.userDetails.orderOwner.toLowerCase() === address.toLowerCase() && (
                                 <div className="mt-3 pt-3 border-t border-white/10">
                                   <div className="flex gap-2 flex-wrap">
-                                    {/* Collect Proceeds Button - Show if order has been filled */}
+                                    {/* Collect Proceeds Button - Show if order has actual collectable proceeds */}
                                     {(() => {
-                                      const sellAmount = order.orderDetailsWithID.orderDetails.sellAmount;
-                                      const filled = sellAmount - order.orderDetailsWithID.remainingSellAmount;
-                                      const hasProceeds = filled > order.orderDetailsWithID.redeemedSellAmount;
+                                      const proceeds = order.collectableProceeds;
+                                      const hasProceeds = proceeds && proceeds.buyTokens.length > 0;
                                       return hasProceeds && (
                                         <button
                                           onClick={() => handleCollectProceeds(order)}
@@ -5381,23 +5379,25 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                   {batchClaimTokenIndex !== null ? 'Claimable Token' : 'Claimable Tokens'}
                 </div>
                 {(() => {
-                  const sellAmount = batchClaimOrder.orderDetailsWithID.orderDetails.sellAmount;
-                  const remainingSellAmount = batchClaimOrder.orderDetailsWithID.remainingSellAmount;
-                  const redeemedSellAmount = batchClaimOrder.orderDetailsWithID.redeemedSellAmount;
-                  const filledAmount = sellAmount - remainingSellAmount;
-                  const unclaimedAmount = filledAmount - redeemedSellAmount;
-                  const claimPercentage = Number(sellAmount) > 0 ? Number(unclaimedAmount) / Number(sellAmount) : 0;
-
+                  const proceeds = batchClaimOrder.collectableProceeds;
                   const buyTokensIndex = batchClaimOrder.orderDetailsWithID.orderDetails.buyTokensIndex;
-                  const buyAmounts = batchClaimOrder.orderDetailsWithID.orderDetails.buyAmounts;
 
-                  // If specific token index, show only that token
+                  // If specific token index, show only that token using actual proceeds
                   if (batchClaimTokenIndex !== null) {
                     const tokenIndex = buyTokensIndex[batchClaimTokenIndex];
                     const tokenInfo = getTokenInfoByIndex(Number(tokenIndex));
-                    const originalAmount = buyAmounts[batchClaimTokenIndex];
-                    const maxBuyAmount = parseFloat(formatTokenAmount(originalAmount, tokenInfo.decimals));
-                    const claimableBuyAmount = maxBuyAmount * claimPercentage;
+
+                    // Look up actual claimable amount from proceeds
+                    let claimableBuyAmount = 0;
+                    if (proceeds && proceeds.buyTokens.length > 0) {
+                      const proceedsIdx = proceeds.buyTokens.findIndex((addr: string) =>
+                        addr.toLowerCase() === tokenInfo.address.toLowerCase()
+                      );
+                      if (proceedsIdx >= 0) {
+                        claimableBuyAmount = parseFloat(formatTokenAmount(proceeds.buyAmounts[proceedsIdx], tokenInfo.decimals));
+                      }
+                    }
+
                     const tokenPrice = getTokenPrice(tokenInfo.address, tokenPrices);
                     const claimableUsd = claimableBuyAmount * tokenPrice;
 
@@ -5415,14 +5415,16 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                     );
                   }
 
-                  // Show all claimable buy tokens
+                  // Show all claimable buy tokens from actual proceeds
+                  if (!proceeds || proceeds.buyTokens.length === 0) {
+                    return <span className="text-white/50 text-sm">No claimable proceeds</span>;
+                  }
+
                   return (
                     <div className="space-y-1">
-                      {buyTokensIndex.map((tokenIndex: bigint, idx: number) => {
-                        const tokenInfo = getTokenInfoByIndex(Number(tokenIndex));
-                        const originalAmount = buyAmounts[idx];
-                        const maxBuyAmount = parseFloat(formatTokenAmount(originalAmount, tokenInfo.decimals));
-                        const claimableBuyAmount = maxBuyAmount * claimPercentage;
+                      {proceeds.buyTokens.map((tokenAddress: string, idx: number) => {
+                        const tokenInfo = getTokenInfo(tokenAddress);
+                        const claimableBuyAmount = parseFloat(formatTokenAmount(proceeds.buyAmounts[idx], tokenInfo.decimals));
                         const tokenPrice = getTokenPrice(tokenInfo.address, tokenPrices);
                         const claimableUsd = claimableBuyAmount * tokenPrice;
 
