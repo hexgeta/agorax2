@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ComposedChart, Scatter, XAxis, YAxis, ReferenceLine, ResponsiveContainer, Tooltip, Cell, CartesianGrid } from 'recharts';
 import { formatUSD, formatPriceSigFig, getTokenPrice } from '@/utils/format';
-import { getTokenInfo, getTokenInfoByIndex } from '@/utils/tokenUtils';
+import { getTokenInfo, getTokenInfoByIndex, formatTokenTicker } from '@/utils/tokenUtils';
 import { CompleteOrderDetails } from '@/hooks/contracts/useOpenPositions';
 
 interface TokenOrderPricesChartProps {
@@ -386,7 +386,7 @@ export default function TokenOrderPricesChart({ orders, tokenPrices, whitelist, 
                     </p>
                     <p style={{ margin: '4px 0', fontSize: '14px' }}>
                       <span style={{ color: '#999' }}>{data.isSelling ? 'Selling for' : 'Buying with'}:</span>{' '}
-                      <span style={{ fontWeight: 'bold' }}>{data.counterToken}</span>
+                      <span style={{ fontWeight: 'bold' }}>{formatTokenTicker(data.counterToken)}</span>
                     </p>
                     <p style={{ margin: '4px 0', fontSize: '12px', color: '#666' }}>
                       {formatTime(data.timestamp)}

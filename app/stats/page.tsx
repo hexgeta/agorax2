@@ -18,7 +18,7 @@ import { useTokenPrices } from '@/hooks/crypto/useTokenPrices';
 import { useOpenPositions, CompleteOrderDetails } from '@/hooks/contracts/useOpenPositions';
 import { useContractWhitelistRead } from '@/hooks/contracts/useContractWhitelistRead';
 import { getContractAddress } from '@/config/testing';
-import { getTokenInfo, getTokenInfoByIndex, formatTokenAmount } from '@/utils/tokenUtils';
+import { getTokenInfo, getTokenInfoByIndex, formatTokenAmount, formatTokenTicker } from '@/utils/tokenUtils';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 import { CoinLogo } from '@/components/ui/CoinLogo';
 
@@ -520,8 +520,8 @@ export default function StatsPage() {
                     <span className="text-gray-400 text-sm">Filtering by:</span>
                     {selectedTokenFilter && (
                       <div className="flex items-center gap-2 px-2 py-1 bg-white/10 rounded">
-                        <CoinLogo symbol={selectedTokenFilter.ticker} size="sm" />
-                        <span className="text-white font-medium">{selectedTokenFilter.ticker}</span>
+                        <CoinLogo symbol={formatTokenTicker(selectedTokenFilter.ticker)} size="sm" />
+                        <span className="text-white font-medium">{formatTokenTicker(selectedTokenFilter.ticker)}</span>
                         <button
                           onClick={() => setSelectedTokenFilter(null)}
                           className="text-gray-400 hover:text-white transition-colors"
@@ -694,17 +694,17 @@ export default function StatsPage() {
                                   </td>
                                   <td className="py-4 px-2">
                                     <span className="text-white text-sm">
-                                      {order.sellToken}/{order.buyToken}
+                                      {formatTokenTicker(order.sellToken)}/{formatTokenTicker(order.buyToken)}
                                     </span>
                                   </td>
                                   <td className="py-4 px-2 text-right">
                                     <span className="text-gray-300 text-sm whitespace-nowrap">
-                                      {formatDisplayAmount(order.sellAmount)} {order.sellToken}
+                                      {formatDisplayAmount(order.sellAmount)} {formatTokenTicker(order.sellToken)}
                                     </span>
                                   </td>
                                   <td className="py-4 px-2 text-right">
                                     <span className="text-gray-300 text-sm whitespace-nowrap">
-                                      {formatDisplayAmount(order.buyAmount)} {order.buyToken}
+                                      {formatDisplayAmount(order.buyAmount)} {formatTokenTicker(order.buyToken)}
                                     </span>
                                   </td>
                                   <td className="py-4 px-2 text-center">

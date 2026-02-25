@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useAccount } from 'wagmi';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 import { formatUSD, formatPriceSigFig, getTokenPrice } from '@/utils/format';
-import { getTokenInfo, getTokenInfoByIndex } from '@/utils/tokenUtils';
+import { getTokenInfo, getTokenInfoByIndex, formatTokenTicker } from '@/utils/tokenUtils';
 import { CoinLogo } from '@/components/ui/CoinLogo';
 import { CompleteOrderDetails } from '@/hooks/contracts/useOpenPositions';
 import TokenOrderPricesChart from './TokenOrderPricesChart';
@@ -294,8 +294,8 @@ export default function OrderbookChart({ orders, tokenPrices, whitelist }: Order
                 : 'bg-white/5 text-white border-white/20 hover:bg-white/10'
             }`}
           >
-            <CoinLogo symbol={token.ticker} size="sm" />
-            <span className="text-sm font-medium">{token.ticker}</span>
+            <CoinLogo symbol={formatTokenTicker(token.ticker)} size="sm" />
+            <span className="text-sm font-medium">{formatTokenTicker(token.ticker)}</span>
             <span className="text-xs opacity-60">({token.orderCount})</span>
           </button>
         ))}
@@ -348,7 +348,7 @@ export default function OrderbookChart({ orders, tokenPrices, whitelist }: Order
                     <span className={`ml-1 ${order.isSelling ? 'text-pink-400/60' : 'text-green-400/60'}`}>({vsMarket > 0 ? '+' : ''}{vsMarket.toFixed(1)}%)</span>
                   </span>
                   <span className="relative col-span-4 text-gray-400">
-                    {order.isSelling ? `${order.sellToken} → ${order.buyToken}` : `${order.buyToken} → ${order.sellToken}`}
+                    {order.isSelling ? `${formatTokenTicker(order.sellToken)} → ${formatTokenTicker(order.buyToken)}` : `${formatTokenTicker(order.buyToken)} → ${formatTokenTicker(order.sellToken)}`}
                     <span className={`ml-2 text-xs ${isOwnOrder ? 'text-gray-500' : 'text-white'}`}>{isOwnOrder ? 'Manage' : actionLabel}</span>
                   </span>
                   <span className="relative col-span-4 text-white text-right">{formatUSD(order.valueUSD)}</span>
@@ -393,7 +393,7 @@ export default function OrderbookChart({ orders, tokenPrices, whitelist }: Order
                     <span className={`ml-1 ${order.isSelling ? 'text-pink-400/60' : 'text-green-400/60'}`}>({vsMarket > 0 ? '+' : ''}{vsMarket.toFixed(1)}%)</span>
                   </span>
                   <span className="relative col-span-4 text-gray-400">
-                    {order.isSelling ? `${order.sellToken} → ${order.buyToken}` : `${order.buyToken} → ${order.sellToken}`}
+                    {order.isSelling ? `${formatTokenTicker(order.sellToken)} → ${formatTokenTicker(order.buyToken)}` : `${formatTokenTicker(order.buyToken)} → ${formatTokenTicker(order.sellToken)}`}
                     <span className={`ml-2 text-xs ${isOwnOrder ? 'text-gray-500' : 'text-white'}`}>{isOwnOrder ? 'Manage' : actionLabel}</span>
                   </span>
                   <span className="relative col-span-4 text-white text-right">{formatUSD(order.valueUSD)}</span>

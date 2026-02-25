@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useAccount } from 'wagmi';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 import { formatUSD, formatPriceSigFig, getTokenPrice } from '@/utils/format';
-import { getTokenInfo, getTokenInfoByIndex } from '@/utils/tokenUtils';
+import { getTokenInfo, getTokenInfoByIndex, formatTokenTicker } from '@/utils/tokenUtils';
 import { CompleteOrderDetails } from '@/hooks/contracts/useOpenPositions';
 
 interface OrderbookDepthChartProps {
@@ -253,7 +253,7 @@ export default function OrderbookDepthChart({ orders, tokenPrices, whitelist, se
                     <span className="text-pink-400/60 ml-1">(+{vsMarket.toFixed(1)}%)</span>
                   </span>
                   <span className="relative col-span-4 text-gray-400">
-                    {order.sellToken} → {order.buyToken}
+                    {formatTokenTicker(order.sellToken)} → {formatTokenTicker(order.buyToken)}
                     <span className="text-gray-500 ml-2 text-xs">{isOwnOrder ? 'Manage' : 'Buy'}</span>
                   </span>
                   <span className="relative col-span-4 text-white text-right">{formatUSD(order.valueUSD)}</span>
@@ -299,7 +299,7 @@ export default function OrderbookDepthChart({ orders, tokenPrices, whitelist, se
                     <span className="text-green-400/60 ml-1">({vsMarket.toFixed(1)}%)</span>
                   </span>
                   <span className="relative col-span-4 text-gray-400">
-                    {order.sellToken} → {order.buyToken}
+                    {formatTokenTicker(order.sellToken)} → {formatTokenTicker(order.buyToken)}
                     <span className="text-gray-500 ml-2 text-xs">{isOwnOrder ? 'Manage' : 'Sell'}</span>
                   </span>
                   <span className="relative col-span-4 text-white text-right">{formatUSD(order.valueUSD)}</span>
