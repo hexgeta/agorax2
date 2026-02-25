@@ -1187,6 +1187,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     // Find the maximum allowed amount for this token
     const buyTokensIndex = order.orderDetailsWithID.orderDetails.buyTokensIndex;
     const buyAmounts = order.orderDetailsWithID.orderDetails.buyAmounts;
+    const hasMultipleTokens = buyTokensIndex.length > 1;
 
     let maxAllowedAmount = '';
     let tokenIndex = -1;
@@ -1220,22 +1221,24 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
         [tokenAddress]: value
       };
 
-      // If we have a valid percentage, apply it to all other tokens
-      if (percentage > 0 && tokenIndex !== -1) {
-        buyTokensIndex.forEach((idx: bigint, idxNum: number) => {
-          if (idxNum !== tokenIndex) {
+      // Only auto-fill other tokens for single-token orders (all tokens move together).
+      // For multi-token orders, the user selects which tokens to fill independently.
+      if (!hasMultipleTokens) {
+        if (percentage > 0 && tokenIndex !== -1) {
+          buyTokensIndex.forEach((idx: bigint, idxNum: number) => {
+            if (idxNum !== tokenIndex) {
+              const otherTokenInfo = getTokenInfoByIndex(Number(idx));
+              const otherMaxAmount = parseFloat(formatTokenAmount(buyAmounts[idxNum], otherTokenInfo.decimals));
+              const otherAmount = (otherMaxAmount * percentage).toString();
+              newInputs[otherTokenInfo.address] = otherAmount;
+            }
+          });
+        } else if (value === '') {
+          buyTokensIndex.forEach((idx: bigint) => {
             const otherTokenInfo = getTokenInfoByIndex(Number(idx));
-            const otherMaxAmount = parseFloat(formatTokenAmount(buyAmounts[idxNum], otherTokenInfo.decimals));
-            const otherAmount = (otherMaxAmount * percentage).toString();
-            newInputs[otherTokenInfo.address] = otherAmount;
-          }
-        });
-      } else if (value === '') {
-        // If clearing this input, clear all others too
-        buyTokensIndex.forEach((idx: bigint) => {
-          const otherTokenInfo = getTokenInfoByIndex(Number(idx));
-          newInputs[otherTokenInfo.address] = '';
-        });
+            newInputs[otherTokenInfo.address] = '';
+          });
+        }
       }
 
       setOfferInputs(prev => ({
