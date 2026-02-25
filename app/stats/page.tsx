@@ -17,7 +17,7 @@ import OrderbookChart from '@/components/stats/OrderbookChart';
 import { useTokenPrices } from '@/hooks/crypto/useTokenPrices';
 import { useOpenPositions, CompleteOrderDetails } from '@/hooks/contracts/useOpenPositions';
 import { useContractWhitelistRead } from '@/hooks/contracts/useContractWhitelistRead';
-import { getContractAddress } from '@/config/testing';
+import { getContractAddress, PULSECHAIN_CHAIN_ID } from '@/config/testing';
 import { getTokenInfo, getTokenInfoByIndex, formatTokenAmount, formatTokenTicker } from '@/utils/tokenUtils';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 import { CoinLogo } from '@/components/ui/CoinLogo';
@@ -88,8 +88,10 @@ function formatTimestamp(timestamp: number | bigint): string {
 
 export default function StatsPage() {
   const [showDisclaimer, setShowDisclaimer] = useState(false);
-  const { chainId, address: connectedAddress } = useAccount();
-  const publicClient = usePublicClient();
+  const { chainId: walletChainId, address: connectedAddress } = useAccount();
+  // Default to PulseChain mainnet when wallet not connected (stats should work without wallet)
+  const chainId = walletChainId ?? PULSECHAIN_CHAIN_ID;
+  const publicClient = usePublicClient({ chainId });
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [orders, setOrders] = useState<OrderPlaced[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -155,7 +157,7 @@ export default function StatsPage() {
 
   // Fetch all orders placed
   const fetchAllOrders = useCallback(async () => {
-    if (!publicClient) return;
+    if (!publicClient || !OTC_CONTRACT_ADDRESS) return;
 
     setLoadingProgress('Fetching order events...');
 
@@ -168,6 +170,7 @@ export default function StatsPage() {
       });
 
       const placedOrders: OrderPlaced[] = [];
+      const blockCache: Record<string, number> = {};
       const total = logs.length;
 
       for (let i = 0; i < logs.length; i++) {
@@ -180,9 +183,12 @@ export default function StatsPage() {
         if (!orderId || !orderOwner || !sellToken) continue;
 
         try {
-          const block = await publicClient.getBlock({
-            blockNumber: log.blockNumber
-          });
+          // Cache block timestamps to avoid duplicate RPC calls
+          const blockKey = log.blockNumber.toString();
+          if (!blockCache[blockKey]) {
+            const block = await publicClient.getBlock({ blockNumber: log.blockNumber });
+            blockCache[blockKey] = Number(block.timestamp);
+          }
 
           const tokenInfo = getTokenInfo(sellToken);
           const sellAmountFormatted = tokenInfo
@@ -195,7 +201,7 @@ export default function StatsPage() {
             sellToken: sellToken.toLowerCase(),
             sellAmount: sellAmountFormatted,
             blockNumber: log.blockNumber,
-            timestamp: Number(block.timestamp),
+            timestamp: blockCache[blockKey],
             orderOwner
           });
 
