@@ -25,6 +25,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 import { isNativeToken, useTokenApproval } from '@/utils/tokenApproval';
 import { useContractWhitelist } from '@/hooks/contracts/useContractWhitelist';
+import { CONTRACT_ABI } from '@/config/abis';
 import { useContractWhitelistRead } from '@/hooks/contracts/useContractWhitelistRead';
 import { waitForTransactionWithTimeout, TRANSACTION_TIMEOUTS } from '@/utils/transactionTimeout';
 import useToast from '@/hooks/use-toast';
@@ -2200,14 +2201,21 @@ export function LimitOrderForm({
           description: `Approving ${sellToken.ticker} for trading...`,
         });
 
-        const approvalResult = await approveToken();
+        const approvalTxHash = await approveToken();
 
-        if (!approvalResult) {
+        if (!approvalTxHash) {
           throw new Error('Token approval failed');
         }
 
+        // Wait for approval transaction to be confirmed on-chain before proceeding
+        await waitForTransactionWithTimeout(
+          publicClient,
+          approvalTxHash as `0x${string}`,
+          TRANSACTION_TIMEOUTS.APPROVAL
+        );
+
         toast({
-          title: "Approval Successful",
+          title: "Approval Confirmed",
           description: `${sellToken.ticker} approved for trading`,
           variant: "success",
         });
@@ -2321,12 +2329,14 @@ export function LimitOrderForm({
       // so we'll fetch the latest order count to estimate it
       let orderId: number | undefined;
       try {
-        const totalOrders = await publicClient.readContract({
-          address: AGORAX_CONTRACT_ADDRESS,
-          abi: AGORAX_ABI,
-          functionName: 'getTotalOrderCount',
-        }) as bigint;
-        orderId = Number(totalOrders);
+        if (contractAddress) {
+          const totalOrders = await publicClient.readContract({
+            address: contractAddress as `0x${string}`,
+            abi: CONTRACT_ABI,
+            functionName: 'getTotalOrderCount',
+          }) as bigint;
+          orderId = Number(totalOrders);
+        }
       } catch {
         // If we can't get the order ID, continue without it
       }
