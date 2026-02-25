@@ -38,7 +38,7 @@ import { useEventTracking } from '@/hooks/useEventTracking';
 import { useFavorites } from '@/hooks/useFavorites';
 
 // Sorting types
-type SortField = 'sellAmount' | 'askingFor' | 'progress' | 'owner' | 'status' | 'date' | 'backingPrice' | 'currentPrice' | 'otcVsMarket';
+type SortField = 'sellAmount' | 'askingFor' | 'progress' | 'owner' | 'status' | 'date' | 'backingPrice' | 'currentPrice' | 'otcVsMarket' | 'orderID';
 type SortDirection = 'asc' | 'desc';
 
 // Helper function to get remaining sell amount (AgoraX_final.sol)
@@ -2578,6 +2578,9 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
 
           comparison = aLimitPercentage - bLimitPercentage;
           break;
+        case 'orderID':
+          comparison = Number(a.orderDetailsWithID.orderID) - Number(b.orderDetailsWithID.orderID);
+          break;
       }
 
       // For expired orders sorted by date, reverse the default direction so most recent expired appear first
@@ -3776,9 +3779,13 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                 </button>
 
                 {/* COLUMN 8: Order ID */}
-                <div className="text-sm font-medium text-center text-white/60">
-                  Order ID
-                </div>
+                <button
+                  onClick={() => handleSort('orderID')}
+                  className={`text-sm font-medium text-center hover:text-white transition-colors ${sortField === 'orderID' ? 'text-white' : 'text-white/60'
+                    }`}
+                >
+                  Order ID {sortField === 'orderID' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                </button>
 
                 {/* COLUMN 8: Actions - hide completely in compact mode */}
                 {!compactMode && (
