@@ -324,6 +324,7 @@ export function LimitOrderForm({
   const [individualPriceInputFocused, setIndividualPriceInputFocused] = useState<boolean[]>([]);
   const [expirationError, setExpirationError] = useState<string | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [pendingCalendarDate, setPendingCalendarDate] = useState<Date | undefined>(undefined);
 
   // Basket state - tracks if current buy tokens came from a basket selection
   // Initialize from localStorage to avoid flash of individual tokens before effect runs
@@ -6166,10 +6167,9 @@ export function LimitOrderForm({
                 onClick={() => {
                   const opening = !showDatePicker;
                   setShowDatePicker(opening);
-                  // Default to today + 10 minutes when opening if no date selected
-                  if (opening && !selectedDate) {
-                    const defaultDate = new Date(Date.now() + 10 * 60 * 1000);
-                    setSelectedDate(defaultDate);
+                  if (opening) {
+                    // Initialize pending date from current selection, or default to now + 10 min
+                    setPendingCalendarDate(selectedDate || new Date(Date.now() + 10 * 60 * 1000));
                   }
                 }}
                 className="py-2 px-3 text-[10px] sm:text-xs bg-black/40 text-white border border-white/10 hover:bg-white/10 hover:border-white/30 transition-all flex items-center justify-center rounded-full"
@@ -6192,10 +6192,26 @@ export function LimitOrderForm({
                   >
                     <Calendar
                       mode="single"
-                      selected={selectedDate}
-                      onSelect={handleDateSelect}
+                      selected={pendingCalendarDate}
+                      onSelect={(date) => {
+                        if (!date) return;
+                        // Preserve time from pending date
+                        if (pendingCalendarDate) {
+                          date.setUTCHours(pendingCalendarDate.getUTCHours(), pendingCalendarDate.getUTCMinutes(), pendingCalendarDate.getUTCSeconds());
+                        } else {
+                          const now = new Date();
+                          const isToday = date.toUTCString().slice(0, 16) === now.toUTCString().slice(0, 16);
+                          if (isToday) {
+                            const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000);
+                            date.setUTCHours(oneHourLater.getUTCHours(), oneHourLater.getUTCMinutes(), oneHourLater.getUTCSeconds());
+                          } else {
+                            date.setUTCHours(12, 0, 0);
+                          }
+                        }
+                        setPendingCalendarDate(date);
+                      }}
                       captionLayout="dropdown"
-                      defaultMonth={selectedDate || new Date()}
+                      defaultMonth={pendingCalendarDate || new Date()}
                       disabled={(date: Date) => {
                         const today = new Date();
                         today.setUTCHours(0, 0, 0, 0);
@@ -6211,10 +6227,42 @@ export function LimitOrderForm({
                       <input
                         type="time"
                         step="1"
-                        value={selectedDate ? `${String(selectedDate.getUTCHours()).padStart(2, '0')}:${String(selectedDate.getUTCMinutes()).padStart(2, '0')}:${String(selectedDate.getUTCSeconds()).padStart(2, '0')}` : ''}
-                        onChange={handleTimeChange}
+                        value={pendingCalendarDate ? `${String(pendingCalendarDate.getUTCHours()).padStart(2, '0')}:${String(pendingCalendarDate.getUTCMinutes()).padStart(2, '0')}:${String(pendingCalendarDate.getUTCSeconds()).padStart(2, '0')}` : ''}
+                        onChange={(e) => {
+                          const timeValue = e.target.value;
+                          if (!timeValue) return;
+                          const [hours, minutes, seconds] = timeValue.split(':').map(Number);
+                          const newDate = pendingCalendarDate ? new Date(pendingCalendarDate) : new Date();
+                          newDate.setUTCHours(hours, minutes, seconds || 0);
+                          setPendingCalendarDate(newDate);
+                        }}
                         className="w-full bg-black text-white border border-white/20 rounded-md px-3 py-2 text-sm appearance-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none focus:outline-none focus:border-white/50 selection:bg-white/30 selection:text-white [&::-webkit-datetime-edit-hour-field:focus]:bg-white/30 [&::-webkit-datetime-edit-minute-field:focus]:bg-white/30 [&::-webkit-datetime-edit-second-field:focus]:bg-white/30 [&::-webkit-datetime-edit-hour-field:focus]:text-white [&::-webkit-datetime-edit-minute-field:focus]:text-white [&::-webkit-datetime-edit-second-field:focus]:text-white"
                       />
+                    </div>
+                    <div className="flex gap-3 mt-4">
+                      <button
+                        onClick={() => setShowDatePicker(false)}
+                        className="flex-1 px-4 py-2 bg-black text-white rounded-lg hover:bg-white/10 transition-colors border border-white/20 text-sm"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (pendingCalendarDate) {
+                            handleDateSelect(pendingCalendarDate);
+                          }
+                          setShowDatePicker(false);
+                        }}
+                        disabled={!pendingCalendarDate || (() => {
+                          if (!pendingCalendarDate) return true;
+                          const now = new Date();
+                          const diffSeconds = (pendingCalendarDate.getTime() - now.getTime()) / 1000;
+                          return diffSeconds < 10;
+                        })()}
+                        className="flex-1 px-4 py-2 bg-white text-black rounded-lg hover:bg-white/90 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                      >
+                        Apply
+                      </button>
                     </div>
                   </div>
                 </div>,
