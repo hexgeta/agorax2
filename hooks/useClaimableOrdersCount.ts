@@ -31,11 +31,8 @@ export function useClaimableOrdersCount() {
       // Only count active orders (status 0)
       if (order.orderDetailsWithID.status !== 0) return false;
 
-      const sellAmount = order.orderDetailsWithID.orderDetails.sellAmount;
-      const filled = sellAmount - order.orderDetailsWithID.remainingSellAmount;
-      const hasProceeds = filled > order.orderDetailsWithID.redeemedSellAmount;
-
-      return hasProceeds;
+      const proceeds = order.collectableProceeds;
+      return proceeds && proceeds.buyTokens.length > 0;
     }).length;
   }, [isConnected, address, data?.allOrders, pathname]);
 
