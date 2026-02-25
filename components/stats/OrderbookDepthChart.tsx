@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useAccount } from 'wagmi';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 import { formatUSD, formatPriceSigFig, getTokenPrice } from '@/utils/format';
-import { getTokenInfo, getTokenInfoByIndex } from '@/utils/tokenUtils';
+import { getTokenInfo, getTokenInfoByIndex, formatTokenTicker } from '@/utils/tokenUtils';
 import { CompleteOrderDetails } from '@/hooks/contracts/useOpenPositions';
 
 interface OrderbookDepthChartProps {
@@ -52,7 +52,7 @@ export default function OrderbookDepthChart({ orders, tokenPrices, whitelist, se
       const sellAmount = Number(remainingSellAmount) / Math.pow(10, sellTokenInfo.decimals);
       const sellTokenMarketPrice = getTokenPrice(sellTokenAddr, tokenPrices);
 
-      if (sellTokenMarketPrice <= 0 || sellAmount <= 0) return;
+      if (sellAmount <= 0) return;
 
       const orderId = order.orderDetailsWithID.orderID.toString();
       const buyTokenIndices = order.orderDetailsWithID.orderDetails.buyTokensIndex;
@@ -66,7 +66,9 @@ export default function OrderbookDepthChart({ orders, tokenPrices, whitelist, se
 
         const buyTokenInfo = getTokenInfoByIndex(buyTokenIndex);
         const buyTokenMarketPrice = getTokenPrice(buyTokenAddr, tokenPrices);
-        if (buyTokenMarketPrice <= 0) return;
+
+        // Skip only if NEITHER side has a price
+        if (sellTokenMarketPrice <= 0 && buyTokenMarketPrice <= 0) return;
 
         const fullBuyAmount = buyAmounts[i];
         const remainingRatio = Number(remainingSellAmount) / Number(originalSellAmount);
@@ -74,8 +76,24 @@ export default function OrderbookDepthChart({ orders, tokenPrices, whitelist, se
 
         if (proportionalBuyAmount <= 0) return;
 
-        const sellValueUSD = sellAmount * sellTokenMarketPrice;
-        const askingValueUSD = proportionalBuyAmount * buyTokenMarketPrice;
+        // Derive missing price from order ratio
+        let effectiveSellPrice = sellTokenMarketPrice;
+        let effectiveBuyPrice = buyTokenMarketPrice;
+        let sellValueUSD: number;
+        let askingValueUSD: number;
+
+        if (sellTokenMarketPrice > 0 && buyTokenMarketPrice > 0) {
+          sellValueUSD = sellAmount * sellTokenMarketPrice;
+          askingValueUSD = proportionalBuyAmount * buyTokenMarketPrice;
+        } else if (sellTokenMarketPrice > 0) {
+          sellValueUSD = sellAmount * sellTokenMarketPrice;
+          effectiveBuyPrice = sellValueUSD / proportionalBuyAmount;
+          askingValueUSD = sellValueUSD;
+        } else {
+          askingValueUSD = proportionalBuyAmount * buyTokenMarketPrice;
+          effectiveSellPrice = askingValueUSD / sellAmount;
+          sellValueUSD = askingValueUSD;
+        }
 
         const orderOwner = order.userDetails.orderOwner?.toLowerCase() || '';
 
@@ -83,7 +101,7 @@ export default function OrderbookDepthChart({ orders, tokenPrices, whitelist, se
         if (sellTokenAddr === selectedToken) {
           // This is an ASK (selling the selected token)
           const impliedPrice = askingValueUSD / sellAmount;
-          marketPrice = sellTokenMarketPrice;
+          marketPrice = effectiveSellPrice;
           tokenTicker = sellTokenInfo.ticker;
 
           // Round price to create levels (4 significant figures)
@@ -112,7 +130,7 @@ export default function OrderbookDepthChart({ orders, tokenPrices, whitelist, se
         if (buyTokenAddr === selectedToken) {
           // This is a BID (wanting to buy the selected token)
           const impliedPrice = sellValueUSD / proportionalBuyAmount;
-          marketPrice = buyTokenMarketPrice;
+          marketPrice = effectiveBuyPrice;
           tokenTicker = buyTokenInfo.ticker;
 
           const priceKey = impliedPrice.toPrecision(4);
@@ -253,7 +271,7 @@ export default function OrderbookDepthChart({ orders, tokenPrices, whitelist, se
                     <span className="text-pink-400/60 ml-1">(+{vsMarket.toFixed(1)}%)</span>
                   </span>
                   <span className="relative col-span-4 text-gray-400">
-                    {order.sellToken} → {order.buyToken}
+                    {formatTokenTicker(order.sellToken)} → {formatTokenTicker(order.buyToken)}
                     <span className="text-gray-500 ml-2 text-xs">{isOwnOrder ? 'Manage' : 'Buy'}</span>
                   </span>
                   <span className="relative col-span-4 text-white text-right">{formatUSD(order.valueUSD)}</span>
@@ -299,7 +317,7 @@ export default function OrderbookDepthChart({ orders, tokenPrices, whitelist, se
                     <span className="text-green-400/60 ml-1">({vsMarket.toFixed(1)}%)</span>
                   </span>
                   <span className="relative col-span-4 text-gray-400">
-                    {order.sellToken} → {order.buyToken}
+                    {formatTokenTicker(order.sellToken)} → {formatTokenTicker(order.buyToken)}
                     <span className="text-gray-500 ml-2 text-xs">{isOwnOrder ? 'Manage' : 'Sell'}</span>
                   </span>
                   <span className="relative col-span-4 text-white text-right">{formatUSD(order.valueUSD)}</span>

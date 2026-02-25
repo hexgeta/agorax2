@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useAccount } from 'wagmi';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 import { formatUSD, formatPriceSigFig, getTokenPrice } from '@/utils/format';
-import { getTokenInfo, getTokenInfoByIndex } from '@/utils/tokenUtils';
+import { getTokenInfo, getTokenInfoByIndex, formatTokenTicker } from '@/utils/tokenUtils';
 import { CoinLogo } from '@/components/ui/CoinLogo';
 import { CompleteOrderDetails } from '@/hooks/contracts/useOpenPositions';
 import TokenOrderPricesChart from './TokenOrderPricesChart';
@@ -56,32 +56,16 @@ export default function OrderbookChart({ orders, tokenPrices, whitelist }: Order
 
       const sellTokenAddr = order.orderDetailsWithID.orderDetails.sellToken.toLowerCase();
       const sellTokenInfo = getTokenInfo(sellTokenAddr);
+      const sellAmount = Number(remainingSellAmount) / Math.pow(10, sellTokenInfo.decimals);
       const sellTokenMarketPrice = getTokenPrice(sellTokenAddr, tokenPrices);
+      const originalSellAmount = order.orderDetailsWithID.orderDetails.sellAmount;
+
+      if (sellAmount <= 0) return;
 
       const buyTokenIndices = order.orderDetailsWithID.orderDetails.buyTokensIndex;
-      const validBuyTokenCount = buyTokenIndices.filter((indexBigInt) => {
-        const buyTokenIndex = Number(indexBigInt);
-        const buyTokenAddr = whitelist[buyTokenIndex]?.toLowerCase();
-        if (!buyTokenAddr) return false;
-        const buyTokenMarketPrice = getTokenPrice(buyTokenAddr, tokenPrices);
-        return buyTokenMarketPrice > 0;
-      }).length;
+      const buyAmounts = order.orderDetailsWithID.orderDetails.buyAmounts;
 
-      if (sellTokenMarketPrice > 0 && validBuyTokenCount > 0) {
-        if (!tokenMap[sellTokenAddr]) {
-          tokenMap[sellTokenAddr] = {
-            address: sellTokenAddr,
-            ticker: sellTokenInfo.ticker,
-            marketPrice: sellTokenMarketPrice,
-            orderCount: 0
-          };
-        }
-        // Count each order-buyToken pair as a separate entry
-        tokenMap[sellTokenAddr].orderCount += validBuyTokenCount;
-      }
-
-      // Also count buy tokens
-      buyTokenIndices.forEach((indexBigInt) => {
+      buyTokenIndices.forEach((indexBigInt, i) => {
         const buyTokenIndex = Number(indexBigInt);
         const buyTokenAddr = whitelist[buyTokenIndex]?.toLowerCase();
         if (!buyTokenAddr) return;
@@ -89,17 +73,45 @@ export default function OrderbookChart({ orders, tokenPrices, whitelist }: Order
         const buyTokenInfo = getTokenInfoByIndex(buyTokenIndex);
         const buyTokenMarketPrice = getTokenPrice(buyTokenAddr, tokenPrices);
 
-        if (buyTokenMarketPrice > 0) {
-          if (!tokenMap[buyTokenAddr]) {
-            tokenMap[buyTokenAddr] = {
-              address: buyTokenAddr,
-              ticker: buyTokenInfo.ticker,
-              marketPrice: buyTokenMarketPrice,
-              orderCount: 0
-            };
-          }
-          tokenMap[buyTokenAddr].orderCount += 1;
+        // Skip only if NEITHER side has a price
+        if (sellTokenMarketPrice <= 0 && buyTokenMarketPrice <= 0) return;
+
+        // Calculate proportional buy amount
+        const fullBuyAmount = buyAmounts[i];
+        const remainingRatio = Number(remainingSellAmount) / Number(originalSellAmount);
+        const proportionalBuyAmount = Number(fullBuyAmount) * remainingRatio / Math.pow(10, buyTokenInfo.decimals);
+        if (proportionalBuyAmount <= 0) return;
+
+        // Derive missing prices from order ratio
+        let effectiveSellPrice = sellTokenMarketPrice;
+        let effectiveBuyPrice = buyTokenMarketPrice;
+        if (sellTokenMarketPrice > 0 && buyTokenMarketPrice <= 0) {
+          effectiveBuyPrice = (sellAmount * sellTokenMarketPrice) / proportionalBuyAmount;
+        } else if (buyTokenMarketPrice > 0 && sellTokenMarketPrice <= 0) {
+          effectiveSellPrice = (proportionalBuyAmount * buyTokenMarketPrice) / sellAmount;
         }
+
+        // Add sell token
+        if (!tokenMap[sellTokenAddr]) {
+          tokenMap[sellTokenAddr] = {
+            address: sellTokenAddr,
+            ticker: sellTokenInfo.ticker,
+            marketPrice: effectiveSellPrice,
+            orderCount: 0
+          };
+        }
+        tokenMap[sellTokenAddr].orderCount += 1;
+
+        // Add buy token
+        if (!tokenMap[buyTokenAddr]) {
+          tokenMap[buyTokenAddr] = {
+            address: buyTokenAddr,
+            ticker: buyTokenInfo.ticker,
+            marketPrice: effectiveBuyPrice,
+            orderCount: 0
+          };
+        }
+        tokenMap[buyTokenAddr].orderCount += 1;
       });
     });
 
@@ -129,7 +141,7 @@ export default function OrderbookChart({ orders, tokenPrices, whitelist }: Order
       const sellAmount = Number(remainingSellAmount) / Math.pow(10, sellTokenInfo.decimals);
       const sellTokenMarketPrice = getTokenPrice(sellTokenAddr, tokenPrices);
 
-      if (sellTokenMarketPrice <= 0 || sellAmount <= 0) return;
+      if (sellAmount <= 0) return;
 
       const orderId = order.orderDetailsWithID.orderID.toString();
       const buyTokenIndices = order.orderDetailsWithID.orderDetails.buyTokensIndex;
@@ -143,7 +155,9 @@ export default function OrderbookChart({ orders, tokenPrices, whitelist }: Order
 
         const buyTokenInfo = getTokenInfoByIndex(buyTokenIndex);
         const buyTokenMarketPrice = getTokenPrice(buyTokenAddr, tokenPrices);
-        if (buyTokenMarketPrice <= 0) return;
+
+        // Skip only if NEITHER side has a price
+        if (sellTokenMarketPrice <= 0 && buyTokenMarketPrice <= 0) return;
 
         const fullBuyAmount = buyAmounts[i];
         const remainingRatio = Number(remainingSellAmount) / Number(originalSellAmount);
@@ -151,8 +165,24 @@ export default function OrderbookChart({ orders, tokenPrices, whitelist }: Order
 
         if (proportionalBuyAmount <= 0) return;
 
-        const sellValueUSD = sellAmount * sellTokenMarketPrice;
-        const askingValueUSD = proportionalBuyAmount * buyTokenMarketPrice;
+        // Derive missing price from order ratio
+        let effectiveSellPrice = sellTokenMarketPrice;
+        let effectiveBuyPrice = buyTokenMarketPrice;
+        let sellValueUSD: number;
+        let askingValueUSD: number;
+
+        if (sellTokenMarketPrice > 0 && buyTokenMarketPrice > 0) {
+          sellValueUSD = sellAmount * sellTokenMarketPrice;
+          askingValueUSD = proportionalBuyAmount * buyTokenMarketPrice;
+        } else if (sellTokenMarketPrice > 0) {
+          sellValueUSD = sellAmount * sellTokenMarketPrice;
+          effectiveBuyPrice = sellValueUSD / proportionalBuyAmount;
+          askingValueUSD = sellValueUSD;
+        } else {
+          askingValueUSD = proportionalBuyAmount * buyTokenMarketPrice;
+          effectiveSellPrice = askingValueUSD / sellAmount;
+          sellValueUSD = askingValueUSD;
+        }
 
         const orderOwner = order.userDetails.orderOwner?.toLowerCase() || '';
 
@@ -170,7 +200,7 @@ export default function OrderbookChart({ orders, tokenPrices, whitelist }: Order
           if (isSellingSelectedToken) {
             // Order is selling the selected token - implied price = what they want / what they're selling
             impliedPrice = askingValueUSD / sellAmount;
-            marketPrice = sellTokenMarketPrice;
+            marketPrice = effectiveSellPrice;
             tokenTicker = sellTokenInfo.ticker;
             valueUSD = sellValueUSD;
             uniqueKey = `${orderId}-sell-${buyTokenInfo.ticker}`;
@@ -178,7 +208,7 @@ export default function OrderbookChart({ orders, tokenPrices, whitelist }: Order
           } else {
             // Order is buying the selected token - implied price = what they're offering / what they want
             impliedPrice = sellValueUSD / proportionalBuyAmount;
-            marketPrice = buyTokenMarketPrice;
+            marketPrice = effectiveBuyPrice;
             tokenTicker = buyTokenInfo.ticker;
             valueUSD = askingValueUSD;
             uniqueKey = `${orderId}-buy-${sellTokenInfo.ticker}`;
@@ -294,8 +324,8 @@ export default function OrderbookChart({ orders, tokenPrices, whitelist }: Order
                 : 'bg-white/5 text-white border-white/20 hover:bg-white/10'
             }`}
           >
-            <CoinLogo symbol={token.ticker} size="sm" />
-            <span className="text-sm font-medium">{token.ticker}</span>
+            <CoinLogo symbol={formatTokenTicker(token.ticker)} size="sm" />
+            <span className="text-sm font-medium">{formatTokenTicker(token.ticker)}</span>
             <span className="text-xs opacity-60">({token.orderCount})</span>
           </button>
         ))}
@@ -348,7 +378,7 @@ export default function OrderbookChart({ orders, tokenPrices, whitelist }: Order
                     <span className={`ml-1 ${order.isSelling ? 'text-pink-400/60' : 'text-green-400/60'}`}>({vsMarket > 0 ? '+' : ''}{vsMarket.toFixed(1)}%)</span>
                   </span>
                   <span className="relative col-span-4 text-gray-400">
-                    {order.isSelling ? `${order.sellToken} → ${order.buyToken}` : `${order.buyToken} → ${order.sellToken}`}
+                    {order.isSelling ? `${formatTokenTicker(order.sellToken)} → ${formatTokenTicker(order.buyToken)}` : `${formatTokenTicker(order.buyToken)} → ${formatTokenTicker(order.sellToken)}`}
                     <span className={`ml-2 text-xs ${isOwnOrder ? 'text-gray-500' : 'text-white'}`}>{isOwnOrder ? 'Manage' : actionLabel}</span>
                   </span>
                   <span className="relative col-span-4 text-white text-right">{formatUSD(order.valueUSD)}</span>
@@ -393,7 +423,7 @@ export default function OrderbookChart({ orders, tokenPrices, whitelist }: Order
                     <span className={`ml-1 ${order.isSelling ? 'text-pink-400/60' : 'text-green-400/60'}`}>({vsMarket > 0 ? '+' : ''}{vsMarket.toFixed(1)}%)</span>
                   </span>
                   <span className="relative col-span-4 text-gray-400">
-                    {order.isSelling ? `${order.sellToken} → ${order.buyToken}` : `${order.buyToken} → ${order.sellToken}`}
+                    {order.isSelling ? `${formatTokenTicker(order.sellToken)} → ${formatTokenTicker(order.buyToken)}` : `${formatTokenTicker(order.buyToken)} → ${formatTokenTicker(order.sellToken)}`}
                     <span className={`ml-2 text-xs ${isOwnOrder ? 'text-gray-500' : 'text-white'}`}>{isOwnOrder ? 'Manage' : actionLabel}</span>
                   </span>
                   <span className="relative col-span-4 text-white text-right">{formatUSD(order.valueUSD)}</span>

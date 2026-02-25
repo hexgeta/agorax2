@@ -18,7 +18,7 @@ import { useTokenPrices } from '@/hooks/crypto/useTokenPrices';
 import { useOpenPositions, CompleteOrderDetails } from '@/hooks/contracts/useOpenPositions';
 import { useContractWhitelistRead } from '@/hooks/contracts/useContractWhitelistRead';
 import { getContractAddress } from '@/config/testing';
-import { getTokenInfo, getTokenInfoByIndex, formatTokenAmount } from '@/utils/tokenUtils';
+import { getTokenInfo, getTokenInfoByIndex, formatTokenAmount, formatTokenTicker } from '@/utils/tokenUtils';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 import { CoinLogo } from '@/components/ui/CoinLogo';
 
@@ -94,6 +94,18 @@ export default function StatsPage() {
   const [orders, setOrders] = useState<OrderPlaced[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadingProgress, setLoadingProgress] = useState<string>('Initializing...');
+
+  // Raw fill event data from blockchain (processed into transactions via useMemo)
+  interface FillEvent {
+    transactionHash: string;
+    orderId: string;
+    buyer: string;
+    buyTokenIndex: number;
+    buyAmount: bigint;
+    blockNumber: bigint;
+    timestamp: number;
+  }
+  const [fillEvents, setFillEvents] = useState<FillEvent[]>([]);
   const [selectedTokenFilter, setSelectedTokenFilter] = useState<{ address: string; ticker: string } | null>(null);
   const [selectedTraderFilter, setSelectedTraderFilter] = useState<string | null>(null);
   const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | 'active' | 'completed' | 'cancelled'>('all');
@@ -200,22 +212,22 @@ export default function StatsPage() {
     }
   }, [publicClient, OTC_CONTRACT_ADDRESS]);
 
-  // Fetch all transactions
-  const fetchAllTransactions = useCallback(async () => {
-    if (!publicClient) return;
+  // Fetch raw fill events from blockchain (lightweight - no receipt parsing)
+  const fetchFillEvents = useCallback(async () => {
+    if (!publicClient || !OTC_CONTRACT_ADDRESS) return;
 
     setIsLoading(true);
     setLoadingProgress('Fetching fill events...');
 
     try {
-      // Query ALL OrderFilled events
       const logs = await publicClient.getLogs({
         address: OTC_CONTRACT_ADDRESS as any,
         event: parseAbiItem('event OrderFilled(address indexed buyer, uint256 indexed orderID, uint256 indexed buyTokenIndex, uint256 buyAmount)') as any,
         fromBlock: 'earliest'
       });
 
-      const txs: Transaction[] = [];
+      const events: FillEvent[] = [];
+      const blockCache: Record<string, number> = {};
       const total = logs.length;
 
       for (let i = 0; i < logs.length; i++) {
@@ -225,81 +237,103 @@ export default function StatsPage() {
         if (!orderId) continue;
 
         try {
-          const receipt = await publicClient.getTransactionReceipt({
-            hash: log.transactionHash
-          });
-
-          const transferLogs = receipt.logs.filter(transferLog => {
-            return transferLog.topics[0] === '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
-          });
-
-          let sellAmount = 0;
-          let sellToken = '';
-          const buyTokens: Record<string, number> = {};
-
-          for (const transferLog of transferLogs) {
-            const tokenAddress = transferLog.address.toLowerCase();
-            const from = `0x${transferLog.topics[1]?.slice(26)}`.toLowerCase();
-            const to = `0x${transferLog.topics[2]?.slice(26)}`.toLowerCase();
-            const value = transferLog.data ? BigInt(transferLog.data) : BigInt(0);
-
-            if (OTC_CONTRACT_ADDRESS && from === OTC_CONTRACT_ADDRESS.toLowerCase()) {
-              const tokenInfo = getTokenInfo(tokenAddress);
-              if (tokenInfo && tokenInfo.address !== '0x0000000000000000000000000000000000000000') {
-                sellAmount = parseFloat(formatTokenAmount(value, tokenInfo.decimals));
-                sellToken = tokenAddress;
-              }
-            }
-
-            if (OTC_CONTRACT_ADDRESS && to === OTC_CONTRACT_ADDRESS.toLowerCase()) {
-              const tokenInfo = getTokenInfo(tokenAddress);
-              if (tokenInfo && tokenInfo.address !== '0x0000000000000000000000000000000000000000') {
-                buyTokens[tokenAddress] = parseFloat(formatTokenAmount(value, tokenInfo.decimals));
-              }
-            }
+          // Cache block timestamps to avoid duplicate RPC calls
+          const blockKey = log.blockNumber.toString();
+          if (!blockCache[blockKey]) {
+            const block = await publicClient.getBlock({ blockNumber: log.blockNumber });
+            blockCache[blockKey] = Number(block.timestamp);
           }
 
-          if (sellAmount > 0 || Object.keys(buyTokens).length > 0) {
-            const block = await publicClient.getBlock({
-              blockNumber: log.blockNumber
-            });
-
-            txs.push({
-              transactionHash: log.transactionHash,
-              orderId,
-              sellToken,
-              sellAmount,
-              buyTokens,
-              blockNumber: log.blockNumber,
-              timestamp: Number(block.timestamp),
-              buyer
-            });
-          }
+          events.push({
+            transactionHash: log.transactionHash,
+            orderId,
+            buyer,
+            buyTokenIndex: Number(log.args.buyTokenIndex),
+            buyAmount: log.args.buyAmount as bigint,
+            blockNumber: log.blockNumber,
+            timestamp: blockCache[blockKey],
+          });
 
           if (i % 5 === 0) {
             setLoadingProgress(`Processing fills: ${i + 1}/${total}`);
           }
-        } catch {
-          // Skip failed transactions
+        } catch (error) {
+          console.warn(`Failed to process fill event for order ${orderId}:`, error);
         }
       }
 
-      setTransactions(txs);
+      setFillEvents(events);
     } catch (error) {
+      console.warn('Failed to fetch OrderFilled events:', error);
     } finally {
       setIsLoading(false);
     }
   }, [publicClient, OTC_CONTRACT_ADDRESS]);
 
+  // Process fill events into transaction data by joining with contract orders + whitelist
+  // This runs automatically when fill events, contract orders, or whitelist update
+  useEffect(() => {
+    if (fillEvents.length === 0) {
+      setTransactions([]);
+      return;
+    }
+    if (contractOrders.length === 0 || whitelist.length === 0) return;
+
+    const orderMap = new Map<string, CompleteOrderDetails>();
+    contractOrders.forEach(order => {
+      orderMap.set(order.orderDetailsWithID.orderID.toString(), order);
+    });
+
+    const txs: Transaction[] = [];
+
+    for (const event of fillEvents) {
+      const order = orderMap.get(event.orderId);
+      if (!order) continue;
+
+      const sellTokenAddr = order.orderDetailsWithID.orderDetails.sellToken.toLowerCase();
+      const sellTokenInfo = getTokenInfo(sellTokenAddr);
+      const buyTokenAddr = whitelist[event.buyTokenIndex]?.toLowerCase();
+      if (!buyTokenAddr) continue;
+      const buyTokenInfo = getTokenInfoByIndex(event.buyTokenIndex);
+
+      // Calculate proportional sell amount from order's price ratio
+      const originalSellAmount = order.orderDetailsWithID.orderDetails.sellAmount;
+      const buyTokensIndex = order.orderDetailsWithID.orderDetails.buyTokensIndex;
+      const buyAmounts = order.orderDetailsWithID.orderDetails.buyAmounts;
+      const matchIdx = buyTokensIndex.findIndex(idx => Number(idx) === event.buyTokenIndex);
+
+      let sellAmount = 0;
+      if (matchIdx >= 0 && buyAmounts[matchIdx] && Number(buyAmounts[matchIdx]) > 0) {
+        const ratio = Number(event.buyAmount) / Number(buyAmounts[matchIdx]);
+        sellAmount = (Number(originalSellAmount) * ratio) / Math.pow(10, sellTokenInfo.decimals);
+      }
+
+      const buyAmount = Number(event.buyAmount) / Math.pow(10, buyTokenInfo.decimals);
+
+      txs.push({
+        transactionHash: event.transactionHash,
+        orderId: event.orderId,
+        sellToken: sellTokenAddr,
+        sellAmount,
+        buyTokens: { [buyTokenAddr]: buyAmount },
+        blockNumber: event.blockNumber,
+        timestamp: event.timestamp,
+        buyer: event.buyer,
+      });
+    }
+
+    setTransactions(txs);
+  }, [fillEvents, contractOrders, whitelist]);
+
   useEffect(() => {
     const fetchData = async () => {
       await Promise.all([
-        fetchAllTransactions(),
+        fetchFillEvents(),
         fetchAllOrders()
       ]);
     };
     fetchData();
-  }, [fetchAllTransactions, fetchAllOrders]);
+  }, [fetchFillEvents, fetchAllOrders]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -520,8 +554,8 @@ export default function StatsPage() {
                     <span className="text-gray-400 text-sm">Filtering by:</span>
                     {selectedTokenFilter && (
                       <div className="flex items-center gap-2 px-2 py-1 bg-white/10 rounded">
-                        <CoinLogo symbol={selectedTokenFilter.ticker} size="sm" />
-                        <span className="text-white font-medium">{selectedTokenFilter.ticker}</span>
+                        <CoinLogo symbol={formatTokenTicker(selectedTokenFilter.ticker)} size="sm" />
+                        <span className="text-white font-medium">{formatTokenTicker(selectedTokenFilter.ticker)}</span>
                         <button
                           onClick={() => setSelectedTokenFilter(null)}
                           className="text-gray-400 hover:text-white transition-colors"
@@ -694,17 +728,17 @@ export default function StatsPage() {
                                   </td>
                                   <td className="py-4 px-2">
                                     <span className="text-white text-sm">
-                                      {order.sellToken}/{order.buyToken}
+                                      {formatTokenTicker(order.sellToken)}/{formatTokenTicker(order.buyToken)}
                                     </span>
                                   </td>
                                   <td className="py-4 px-2 text-right">
                                     <span className="text-gray-300 text-sm whitespace-nowrap">
-                                      {formatDisplayAmount(order.sellAmount)} {order.sellToken}
+                                      {formatDisplayAmount(order.sellAmount)} {formatTokenTicker(order.sellToken)}
                                     </span>
                                   </td>
                                   <td className="py-4 px-2 text-right">
                                     <span className="text-gray-300 text-sm whitespace-nowrap">
-                                      {formatDisplayAmount(order.buyAmount)} {order.buyToken}
+                                      {formatDisplayAmount(order.buyAmount)} {formatTokenTicker(order.buyToken)}
                                     </span>
                                   </td>
                                   <td className="py-4 px-2 text-center">
