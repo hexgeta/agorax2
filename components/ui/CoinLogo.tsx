@@ -54,6 +54,14 @@ export function CoinLogo({
       return `/coin-logos/${logoSymbol}.${format}`
     }
 
+    // If base symbol not found, try the original symbol (e.g. pDAI has its own logo)
+    if (logoSymbol !== symbol) {
+      const originalFormat = (logoManifest as Record<string, string>)[symbol]
+      if (originalFormat) {
+        return `/coin-logos/${symbol}.${originalFormat}`
+      }
+    }
+
     // Fallback to default if not in manifest
     return '/coin-logos/default.svg'
   }
