@@ -52,7 +52,7 @@ export default function OrderbookDepthChart({ orders, tokenPrices, whitelist, se
       const sellAmount = Number(remainingSellAmount) / Math.pow(10, sellTokenInfo.decimals);
       const sellTokenMarketPrice = getTokenPrice(sellTokenAddr, tokenPrices);
 
-      if (sellTokenMarketPrice <= 0 || sellAmount <= 0) return;
+      if (sellAmount <= 0) return;
 
       const orderId = order.orderDetailsWithID.orderID.toString();
       const buyTokenIndices = order.orderDetailsWithID.orderDetails.buyTokensIndex;
@@ -66,7 +66,9 @@ export default function OrderbookDepthChart({ orders, tokenPrices, whitelist, se
 
         const buyTokenInfo = getTokenInfoByIndex(buyTokenIndex);
         const buyTokenMarketPrice = getTokenPrice(buyTokenAddr, tokenPrices);
-        if (buyTokenMarketPrice <= 0) return;
+
+        // Skip only if NEITHER side has a price
+        if (sellTokenMarketPrice <= 0 && buyTokenMarketPrice <= 0) return;
 
         const fullBuyAmount = buyAmounts[i];
         const remainingRatio = Number(remainingSellAmount) / Number(originalSellAmount);
@@ -74,8 +76,24 @@ export default function OrderbookDepthChart({ orders, tokenPrices, whitelist, se
 
         if (proportionalBuyAmount <= 0) return;
 
-        const sellValueUSD = sellAmount * sellTokenMarketPrice;
-        const askingValueUSD = proportionalBuyAmount * buyTokenMarketPrice;
+        // Derive missing price from order ratio
+        let effectiveSellPrice = sellTokenMarketPrice;
+        let effectiveBuyPrice = buyTokenMarketPrice;
+        let sellValueUSD: number;
+        let askingValueUSD: number;
+
+        if (sellTokenMarketPrice > 0 && buyTokenMarketPrice > 0) {
+          sellValueUSD = sellAmount * sellTokenMarketPrice;
+          askingValueUSD = proportionalBuyAmount * buyTokenMarketPrice;
+        } else if (sellTokenMarketPrice > 0) {
+          sellValueUSD = sellAmount * sellTokenMarketPrice;
+          effectiveBuyPrice = sellValueUSD / proportionalBuyAmount;
+          askingValueUSD = sellValueUSD;
+        } else {
+          askingValueUSD = proportionalBuyAmount * buyTokenMarketPrice;
+          effectiveSellPrice = askingValueUSD / sellAmount;
+          sellValueUSD = askingValueUSD;
+        }
 
         const orderOwner = order.userDetails.orderOwner?.toLowerCase() || '';
 
@@ -83,7 +101,7 @@ export default function OrderbookDepthChart({ orders, tokenPrices, whitelist, se
         if (sellTokenAddr === selectedToken) {
           // This is an ASK (selling the selected token)
           const impliedPrice = askingValueUSD / sellAmount;
-          marketPrice = sellTokenMarketPrice;
+          marketPrice = effectiveSellPrice;
           tokenTicker = sellTokenInfo.ticker;
 
           // Round price to create levels (4 significant figures)
@@ -112,7 +130,7 @@ export default function OrderbookDepthChart({ orders, tokenPrices, whitelist, se
         if (buyTokenAddr === selectedToken) {
           // This is a BID (wanting to buy the selected token)
           const impliedPrice = sellValueUSD / proportionalBuyAmount;
-          marketPrice = buyTokenMarketPrice;
+          marketPrice = effectiveBuyPrice;
           tokenTicker = buyTokenInfo.ticker;
 
           const priceKey = impliedPrice.toPrecision(4);

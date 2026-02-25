@@ -88,7 +88,7 @@ export default function TokenOrderPricesChart({ orders, tokenPrices, whitelist, 
       const sellAmount = Number(remainingSellAmount) / Math.pow(10, sellTokenInfo.decimals);
       const sellTokenMarketPrice = getTokenPrice(sellTokenAddr, tokenPrices);
 
-      if (sellTokenMarketPrice <= 0 || sellAmount <= 0) return;
+      if (sellAmount <= 0) return;
 
       const orderId = order.orderDetailsWithID.orderID.toString();
       const timestamp = Number(order.orderDetailsWithID.lastUpdateTime) * 1000; // Convert to ms
@@ -105,7 +105,9 @@ export default function TokenOrderPricesChart({ orders, tokenPrices, whitelist, 
 
         const buyTokenInfo = getTokenInfoByIndex(buyTokenIndex);
         const buyTokenMarketPrice = getTokenPrice(buyTokenAddr, tokenPrices);
-        if (buyTokenMarketPrice <= 0) return;
+
+        // Skip only if NEITHER side has a price
+        if (sellTokenMarketPrice <= 0 && buyTokenMarketPrice <= 0) return;
 
         // Calculate proportional buy amount based on remaining sell amount
         const fullBuyAmount = buyAmounts[i];
@@ -114,21 +116,38 @@ export default function TokenOrderPricesChart({ orders, tokenPrices, whitelist, 
 
         if (proportionalBuyAmount <= 0) return;
 
-        // Calculate USD values
-        const sellValueUSD = sellAmount * sellTokenMarketPrice;
-        const askingValueUSD = proportionalBuyAmount * buyTokenMarketPrice;
+        // Derive missing price from order ratio
+        let effectiveSellPrice = sellTokenMarketPrice;
+        let effectiveBuyPrice = buyTokenMarketPrice;
+        let sellValueUSD: number;
+        let askingValueUSD: number;
+
+        if (sellTokenMarketPrice > 0 && buyTokenMarketPrice > 0) {
+          sellValueUSD = sellAmount * sellTokenMarketPrice;
+          askingValueUSD = proportionalBuyAmount * buyTokenMarketPrice;
+        } else if (sellTokenMarketPrice > 0) {
+          sellValueUSD = sellAmount * sellTokenMarketPrice;
+          effectiveBuyPrice = sellValueUSD / proportionalBuyAmount;
+          askingValueUSD = sellValueUSD;
+        } else {
+          askingValueUSD = proportionalBuyAmount * buyTokenMarketPrice;
+          effectiveSellPrice = askingValueUSD / sellAmount;
+          sellValueUSD = askingValueUSD;
+        }
 
         // === Add price point for SELL TOKEN ===
         // The sell token is being sold - implied price = what seller is asking per token
         const impliedSellTokenPrice = askingValueUSD / sellAmount;
-        const sellTokenPositionPercent = ((impliedSellTokenPrice - sellTokenMarketPrice) / sellTokenMarketPrice) * 100;
+        const sellTokenPositionPercent = effectiveSellPrice > 0
+          ? ((impliedSellTokenPrice - effectiveSellPrice) / effectiveSellPrice) * 100
+          : 0;
 
-        ensureToken(sellTokenAddr, sellTokenInfo.ticker, sellTokenMarketPrice);
+        ensureToken(sellTokenAddr, sellTokenInfo.ticker, effectiveSellPrice);
 
         const sellTokenOrder: OrderPriceLevel = {
           orderId,
           impliedPrice: impliedSellTokenPrice,
-          marketPrice: sellTokenMarketPrice,
+          marketPrice: effectiveSellPrice,
           positionPercent: sellTokenPositionPercent,
           valueUSD: sellValueUSD,
           counterToken: buyTokenInfo.ticker,
@@ -150,14 +169,16 @@ export default function TokenOrderPricesChart({ orders, tokenPrices, whitelist, 
         // === Add price point for BUY TOKEN ===
         // The buy token is being bought - implied price = what seller values it at
         const impliedBuyTokenPrice = sellValueUSD / proportionalBuyAmount;
-        const buyTokenPositionPercent = ((impliedBuyTokenPrice - buyTokenMarketPrice) / buyTokenMarketPrice) * 100;
+        const buyTokenPositionPercent = effectiveBuyPrice > 0
+          ? ((impliedBuyTokenPrice - effectiveBuyPrice) / effectiveBuyPrice) * 100
+          : 0;
 
-        ensureToken(buyTokenAddr, buyTokenInfo.ticker, buyTokenMarketPrice);
+        ensureToken(buyTokenAddr, buyTokenInfo.ticker, effectiveBuyPrice);
 
         const buyTokenOrder: OrderPriceLevel = {
           orderId,
           impliedPrice: impliedBuyTokenPrice,
-          marketPrice: buyTokenMarketPrice,
+          marketPrice: effectiveBuyPrice,
           positionPercent: buyTokenPositionPercent,
           valueUSD: askingValueUSD,
           counterToken: sellTokenInfo.ticker,
