@@ -353,7 +353,9 @@ export const TOKEN_CONSTANTS = [{
   dexs: "0x2cb92b1e8B2fC53b5A9165E765488e17B38C26D3",
   ticker: "INCD",
   decimals: 18,
-  name: "INCD"
+  name: "INCD",
+  type: "stable",
+  baskets: ["stable"]
 }, {
   chain: 369,
   a: "0x9c6fa17d92898b684676993828143596894aa2a6",

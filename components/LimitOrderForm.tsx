@@ -1141,31 +1141,31 @@ export function LimitOrderForm({
     return tokenStats[tokenKey] && token.ticker !== 'HEX';
   };
 
-  // Check if combination is pHEX + PulseChain MAXI tokens (p* variants)
-  const isValidPulseChainCombo = () => {
+  // Check if combination involves MAXI tokens that have stats data
+  // Supports PulseChain native (MAXI, DECI, etc.), eHEX variants, and wrapped Ethereum variants (weMAXI, etc.)
+  const isValidStatsCombo = () => {
     if (!sellToken || buyTokens.length === 0 || !buyTokens[0]) return false;
 
-    const isPulseChainMaxi = (token: TokenOption) => {
-      // Check if it's a PulseChain MAXI token (pMAXI, pDECI, pLUCKY, pTRIO, pBASE)
-      return token.ticker === 'MAXI' || token.ticker === 'DECI' ||
-        token.ticker === 'LUCKY' || token.ticker === 'TRIO' || token.ticker === 'BASE';
+    const isHexVariant = (token: TokenOption) => {
+      return token.ticker === 'HEX' || token.ticker === 'eHEX' || token.ticker === 'pHEX' || token.ticker === 'weHEX';
     };
 
-    const isPHex = (token: TokenOption) => {
-      return token.ticker === 'HEX'; // PulseChain HEX
+    const isMaxiToken = (token: TokenOption) => {
+      return MAXI_TOKENS.includes(token.a.toLowerCase());
     };
 
-    // Check if one token is pHEX and the other is a PulseChain MAXI token
-    const sellIsPHex = isPHex(sellToken);
-    const buyIsPHex = buyTokens.some(token => token && isPHex(token));
-    const sellIsMaxi = isPulseChainMaxi(sellToken);
-    const buyIsMaxi = buyTokens.some(token => token && isPulseChainMaxi(token));
+    // Show stats when any MAXI token is involved with a HEX variant or any other token
+    const sellIsHex = isHexVariant(sellToken);
+    const buyIsHex = buyTokens.some(token => token && isHexVariant(token));
+    const sellIsMaxi = isMaxiToken(sellToken);
+    const buyIsMaxi = buyTokens.some(token => token && isMaxiToken(token));
 
-    return (sellIsPHex && buyIsMaxi) || (buyIsPHex && sellIsMaxi);
+    // Valid if HEX ↔ MAXI, or if any MAXI token is on either side (paired with anything)
+    return (sellIsHex && buyIsMaxi) || (buyIsHex && sellIsMaxi) || sellIsMaxi || buyIsMaxi;
   };
 
-  const showSellStats = isValidPulseChainCombo() && shouldShowTokenStats(sellToken);
-  const showBuyStats = isValidPulseChainCombo() && buyTokens.some(token => shouldShowTokenStats(token));
+  const showSellStats = isValidStatsCombo() && shouldShowTokenStats(sellToken);
+  const showBuyStats = isValidStatsCombo() && buyTokens.some(token => shouldShowTokenStats(token));
 
   // Helper function to get token price in HEX terms
   const getTokenPriceInHex = (tokenAddress: string): number | null => {
@@ -6647,8 +6647,7 @@ export function LimitOrderForm({
       {maxiStats && (
         // Show if user doesn't have access (blurred teaser) OR if user has access and MAXI tokens are involved
         (PAYWALL_ENABLED && !hasTokenAccess) ||
-        (hasTokenAccess && sellToken && buyTokens.length > 0 && buyTokens[0] && (showSellStats || showBuyStats || (isTokenEligibleForStats(sellToken) || buyTokens.some(t => isTokenEligibleForStats(t)))) && !duplicateTokenError &&
-          !(MAXI_TOKENS.includes(sellToken.a.toLowerCase()) && buyTokens.every(t => t && MAXI_TOKENS.includes(t.a.toLowerCase()))))
+        (hasTokenAccess && sellToken && buyTokens.length > 0 && buyTokens[0] && (showSellStats || showBuyStats || (isTokenEligibleForStats(sellToken) || buyTokens.some(t => isTokenEligibleForStats(t)))) && !duplicateTokenError)
       ) && proStatsContainerRef?.current && createPortal(
         <LiquidGlassCard
           className="p-4 bg-white/5 border-white/10"
