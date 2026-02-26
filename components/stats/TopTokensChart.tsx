@@ -205,7 +205,7 @@ export default function TopTokensChart({ transactions, orders, tokenPrices, cont
                 </div>
                 <div className="col-span-2 text-right">
                   <Link
-                    href={`/marketplace?token=${token.address}`}
+                    href={`/marketplace?ticker=${formatTokenTicker(token.ticker)}`}
                     onClick={(e) => e.stopPropagation()}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-black text-white border border-white text-xs font-medium rounded-full hover:bg-white/10 transition-colors"
                   >

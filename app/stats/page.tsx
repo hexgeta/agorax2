@@ -19,6 +19,7 @@ import { useOpenPositions, CompleteOrderDetails } from '@/hooks/contracts/useOpe
 import { useContractWhitelistRead } from '@/hooks/contracts/useContractWhitelistRead';
 import { getContractAddress, PULSECHAIN_CHAIN_ID } from '@/config/testing';
 import { getTokenInfo, getTokenInfoByIndex, formatTokenAmount, formatTokenTicker } from '@/utils/tokenUtils';
+import Link from 'next/link';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 import { CoinLogo } from '@/components/ui/CoinLogo';
 
@@ -704,12 +705,17 @@ export default function StatsPage() {
                               const isCurrentUser = connectedAddress?.toLowerCase() === order.maker.toLowerCase();
                               const statusColors = getStatusColor(order.status);
 
+                              const href = isCurrentUser
+                                ? `/my-orders?orderId=${order.id}`
+                                : `/marketplace?order-id=${order.id}`;
+
                               return (
                                 <tr
                                   key={order.id}
-                                  className={`border-b border-white/5 transition-colors ${
-                                    isCurrentUser ? 'bg-white/5' : 'hover:bg-white/5'
+                                  className={`border-b border-white/5 transition-colors cursor-pointer ${
+                                    isCurrentUser ? 'bg-white/5 hover:bg-white/10' : 'hover:bg-white/5'
                                   }`}
+                                  onClick={() => window.location.href = href}
                                 >
                                   <td className="py-4 px-2">
                                     <span className="text-gray-500 text-sm">#{order.id}</span>
