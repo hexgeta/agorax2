@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { createPublicClient, http } from 'viem';
 import { Address } from 'viem';
 import { useAccount } from 'wagmi';
@@ -402,17 +402,25 @@ export function useOpenPositions(userAddress?: Address | null, fetchAllOrders?: 
     }
   }, [isClient, fetchData]);
 
+  // Memoize order arrays to prevent new empty array references on every render
+  // (which would cause infinite re-render loops in consumers that use these as useEffect deps)
+  const allOrders = useMemo(() => data?.allOrders ?? [], [data]);
+  const activeOrders = useMemo(() => data?.activeOrders ?? [], [data]);
+  const completedOrders = useMemo(() => data?.completedOrders ?? [], [data]);
+  const cancelledOrders = useMemo(() => data?.cancelledOrders ?? [], [data]);
+  const expiredOrders = useMemo(() => data?.expiredOrders ?? [], [data]);
+
   return {
     contractName: data?.contractName,
     contractOwner: data?.contractOwner,
     contractSymbol: data?.contractSymbol,
     totalSupply: data?.totalSupply,
     orderCounter: data?.orderCounter,
-    allOrders: data?.allOrders || [],
-    activeOrders: data?.activeOrders || [],
-    completedOrders: data?.completedOrders || [],
-    cancelledOrders: data?.cancelledOrders || [],
-    expiredOrders: data?.expiredOrders || [],
+    allOrders,
+    activeOrders,
+    completedOrders,
+    cancelledOrders,
+    expiredOrders,
     isLoading: !isClient || isLoading,
     error,
     refetch: fetchData,
