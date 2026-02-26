@@ -6323,7 +6323,7 @@ export function LimitOrderForm({
 
               {/* Calendar Popup - portaled to body, fixed overlay */}
               {showDatePicker && typeof document !== 'undefined' && createPortal(
-                <div className="fixed inset-0 z-[200] flex items-center justify-center px-4">
+                <div className="fixed inset-0 z-[200] flex items-start justify-center pt-[20vh] px-4">
                   <div
                     className="fixed inset-0 bg-black/80"
                     onClick={() => setShowDatePicker(false)}
