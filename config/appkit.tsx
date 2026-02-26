@@ -1,6 +1,7 @@
 import { WagmiAdapter } from '@reown/appkit-adapter-wagmi'
 import { mainnet, arbitrum } from '@reown/appkit/networks'
 import type { AppKitNetwork } from '@reown/appkit/networks'
+import { http, fallback } from 'viem'
 import { TESTING_MODE, PULSECHAIN_TESTNET_CONFIG } from './testing'
 
 // Get projectId from https://dashboard.reown.com
@@ -21,8 +22,8 @@ const pulsechain: AppKitNetwork = {
     symbol: 'PLS',
   },
   rpcUrls: {
-    default: { http: ['https://rpc.pulsechain.com'] },
-    public: { http: ['https://rpc.pulsechain.com'] },
+    default: { http: ['https://rpc-pulsechain.g4mm4.io', 'https://rpc.pulsechain.com'] },
+    public: { http: ['https://rpc-pulsechain.g4mm4.io', 'https://rpc.pulsechain.com'] },
   },
   blockExplorers: {
     default: { name: 'PulseScan', url: 'https://scan.pulsechain.com' },
@@ -76,7 +77,14 @@ export const wagmiAdapter = new WagmiAdapter({
   projectId,
   networks,
   transports: {
-    // Explicitly configure transports if needed
+    [369]: fallback([
+      http('https://rpc-pulsechain.g4mm4.io'),
+      http('https://rpc.pulsechain.com'),
+    ]),
+    [943]: fallback([
+      http('https://rpc.v4.testnet.pulsechain.com'),
+      http('https://pulsechain-testnet-rpc.publicnode.com'),
+    ]),
   }
 })
 

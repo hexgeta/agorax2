@@ -2,7 +2,7 @@ import { useContractRead, useAccount } from 'wagmi'
 import { Address } from 'viem'
 import { getContractAddress } from '@/config/testing'
 import { CONTRACT_ABI } from '@/config/abis'
-import { useEffect, useMemo } from 'react'
+import { useMemo } from 'react'
 import { setWhitelistCache } from '@/utils/tokenUtils'
 
 export interface WhitelistedToken {
@@ -28,25 +28,23 @@ export function useContractWhitelistRead() {
     },
   })
 
-  // Update the whitelist cache - preserves indices so getTokenInfoByIndex works
-  useEffect(() => {
+  // Filter to only active tokens for dropdowns, preserving original indices
+  // Also populate the whitelist cache synchronously during render so getTokenInfoByIndex
+  // has data available before any component reads from it (useEffect would run too late)
+  const activeTokens: WhitelistedToken[] = useMemo(() => {
     if (whitelistData?.[0] && whitelistData[0].length > 0) {
       const addresses = whitelistData[0].map((t: { tokenAddress: Address }) => t.tokenAddress as string);
       setWhitelistCache(addresses);
     }
-  }, [whitelistData]);
 
-  // Filter to only active tokens for dropdowns, preserving original indices
-  // Memoized to prevent new array references on every render (causes infinite loops in consumers)
-  const activeTokens: WhitelistedToken[] = useMemo(() =>
-    whitelistData?.[0]
+    return whitelistData?.[0]
       ?.map((t: { tokenAddress: Address; isActive: boolean }, index: number) => ({
         tokenAddress: t.tokenAddress as Address,
         index: index,
         isActive: t.isActive
       }))
-      .filter((t: { isActive: boolean }) => t.isActive) ?? []
-  , [whitelistData]);
+      .filter((t: { isActive: boolean }) => t.isActive) ?? [];
+  }, [whitelistData]);
 
   return {
     activeTokens,

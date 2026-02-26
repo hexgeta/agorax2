@@ -145,7 +145,7 @@ export default function StatsPage() {
     return Array.from(addresses);
   }, [transactions, orders, activeOrders, whitelist]);
 
-  const { prices: tokenPrices } = useTokenPrices(allTokenAddresses);
+  const { prices: tokenPrices, isLoading: pricesLoading } = useTokenPrices(allTokenAddresses);
 
   // Fetch all orders placed
   const fetchAllOrders = useCallback(async () => {
@@ -341,6 +341,8 @@ export default function StatsPage() {
     }
   }, []);
 
+  // All data sources must be loaded before showing content
+  const dataReady = !isLoading && !ordersLoading && !pricesLoading;
   const hasData = transactions.length > 0 || orders.length > 0 || contractOrders.length > 0;
 
   // Filter data based on selected token and/or trader
@@ -511,7 +513,7 @@ export default function StatsPage() {
         {/* Animated background effect */}
         <motion.div
           initial={{ opacity: 0 }}
-          animate={{ opacity: !isLoading ? 1 : 0 }}
+          animate={{ opacity: dataReady ? 1 : 0 }}
           transition={{ duration: 1.2, delay: 0.3, ease: [0.23, 1, 0.32, 1] }}
           className="fixed inset-0 z-0"
         >
@@ -521,7 +523,7 @@ export default function StatsPage() {
         {/* Main Content */}
         <div className="w-full px-2 md:px-8 mt-2 pb-12 relative z-10">
           <div className="max-w-[1200px] mx-auto">
-            {isLoading ? (
+            {!dataReady ? (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -529,7 +531,9 @@ export default function StatsPage() {
               >
                 <PixelSpinner size={48} className="mb-6" />
                 <p className="text-white text-lg mb-2">Loading Protocol Data</p>
-                <p className="text-gray-400 text-sm">{loadingProgress}</p>
+                <p className="text-gray-400 text-sm">
+                  {isLoading ? loadingProgress : ordersLoading ? 'Loading orders...' : pricesLoading ? 'Fetching token prices...' : 'Finalizing...'}
+                </p>
               </motion.div>
             ) : !hasData ? (
               <motion.div

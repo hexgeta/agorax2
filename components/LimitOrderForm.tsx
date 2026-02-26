@@ -2280,7 +2280,11 @@ export function LimitOrderForm({
       });
 
       const sellAmountForOrder = parseTokenAmount(removeCommas(sellAmount), sellToken.decimals);
-      const expirationTime = BigInt(Math.floor(Date.now() / 1000 + expirationDays * 24 * 60 * 60));
+      // Use the exact selectedDate timestamp if the user picked a specific date+time via the calendar,
+      // otherwise fall back to days-based calculation (when user typed a number of days directly)
+      const expirationTime = selectedDate
+        ? BigInt(Math.floor(selectedDate.getTime() / 1000))
+        : BigInt(Math.floor(Date.now() / 1000 + expirationDays * 24 * 60 * 60));
 
       toast({
         title: "Creating Order",
@@ -2338,18 +2342,103 @@ export function LimitOrderForm({
         description: "Waiting for confirmation...",
       });
 
-      // Wait for transaction confirmation
-      await waitForTransactionWithTimeout(
-        publicClient,
-        txHash,
-        TRANSACTION_TIMEOUTS.TRANSACTION
-      );
+      // Wait for transaction confirmation with background retry
+      // Once we have a txHash, the tx is submitted — if initial confirmation
+      // fails, retry in the background rather than showing an error
+      let confirmed = false;
+      try {
+        await waitForTransactionWithTimeout(
+          publicClient,
+          txHash,
+          TRANSACTION_TIMEOUTS.TRANSACTION
+        );
+        confirmed = true;
+      } catch (confirmError: any) {
+        const isRevert = confirmError?.message?.includes('reverted');
+        if (isRevert) throw confirmError;
+
+        const isUserRejection = confirmError?.message?.includes('rejected') || confirmError?.message?.includes('denied');
+        if (isUserRejection) throw confirmError;
+
+        // RPC timeout/network error — tx was submitted, retry in background
+        toast({
+          title: "Confirming Transaction...",
+          description: "Taking longer than usual. Still checking...",
+          action: (
+            <a
+              href={getBlockExplorerTxUrl(chainId, txHash)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-white hover:underline font-medium"
+            >
+              View Tx
+            </a>
+          ),
+        });
+
+        // Background retry loop — keep polling until confirmed or reverted
+        const bgRetry = async () => {
+          for (let i = 0; i < 10; i++) {
+            await new Promise(r => setTimeout(r, 10000)); // 10s between retries
+            try {
+              const receipt = await publicClient.getTransactionReceipt({ hash: txHash as `0x${string}` });
+              if (receipt) {
+                if (receipt.status === 'reverted') {
+                  toast({ title: "Order Failed", description: "Transaction reverted on-chain.", variant: "destructive" });
+                  return;
+                }
+                // Success!
+                toast({
+                  title: "Order Created!",
+                  description: "Successfully created limit order",
+                  variant: "success",
+                  action: (
+                    <a href={getBlockExplorerTxUrl(chainId, txHash)} target="_blank" rel="noopener noreferrer" className="text-white hover:underline font-medium">
+                      View Tx
+                    </a>
+                  ),
+                });
+                if (onOrderCreated) onOrderCreated();
+                return;
+              }
+            } catch {
+              // RPC error — keep retrying
+            }
+          }
+          // Exhausted retries — point user to block explorer
+          toast({
+            title: "Could Not Confirm",
+            description: "Please check the block explorer to verify your transaction.",
+            action: (
+              <a href={getBlockExplorerTxUrl(chainId, txHash)} target="_blank" rel="noopener noreferrer" className="text-white hover:underline font-medium">
+                View Tx
+              </a>
+            ),
+          });
+        };
+        bgRetry(); // Fire and forget
+
+        // Clear form and refresh — tx was submitted regardless
+        setSellAmount('');
+        setBuyAmounts(['']);
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('limitOrderSellAmount');
+          localStorage.removeItem('limitOrderBuyAmount');
+          localStorage.removeItem('limitOrderBuyAmounts');
+        }
+        setShowConfirmation(false);
+        if (onOrderCreated) {
+          onOrderCreated();
+          setTimeout(() => onOrderCreated(), 5000);
+        }
+        return;
+      }
 
       toast({
         title: "Order Created!",
         description: `Successfully created limit order`,
         variant: "success",
-        action: txHash ? (
+        action: (
           <a
             href={getBlockExplorerTxUrl(chainId, txHash)}
             target="_blank"
@@ -2358,7 +2447,7 @@ export function LimitOrderForm({
           >
             View Tx
           </a>
-        ) : undefined,
+        ),
       });
 
       // Track order creation event
@@ -2420,9 +2509,10 @@ export function LimitOrderForm({
         localStorage.removeItem('limitOrderBuyAmounts');
       }
 
-      // Trigger table refresh
+      // Trigger table refresh (immediate + delayed to catch slower indexing)
       if (onOrderCreated) {
         onOrderCreated();
+        setTimeout(() => onOrderCreated(), 5000);
       }
 
       // Reset confirmation step
@@ -2582,24 +2672,30 @@ export function LimitOrderForm({
   const handleDateSelect = (date: Date | undefined) => {
     if (!date) return;
 
+    // Build a UTC date from the local calendar day so the UTC date matches what the user clicked
+    // (react-day-picker creates dates at midnight local time, which can be the previous day in UTC)
+    const utcDate = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+
     // Preserve the current time from selectedDate if it exists
     if (selectedDate) {
-      date.setUTCHours(selectedDate.getUTCHours(), selectedDate.getUTCMinutes(), selectedDate.getUTCSeconds());
+      utcDate.setUTCHours(selectedDate.getUTCHours(), selectedDate.getUTCMinutes(), selectedDate.getUTCSeconds());
     } else {
       // For new selection, default to 1 hour from now if selecting today
       const now = new Date();
-      const isToday = date.toUTCString().slice(0, 16) === now.toUTCString().slice(0, 16);
+      const isToday = utcDate.getUTCFullYear() === now.getUTCFullYear() &&
+        utcDate.getUTCMonth() === now.getUTCMonth() &&
+        utcDate.getUTCDate() === now.getUTCDate();
       if (isToday) {
         const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000);
-        date.setUTCHours(oneHourLater.getUTCHours(), oneHourLater.getUTCMinutes(), oneHourLater.getUTCSeconds());
+        utcDate.setUTCHours(oneHourLater.getUTCHours(), oneHourLater.getUTCMinutes(), oneHourLater.getUTCSeconds());
       } else {
         // For future dates, default to noon UTC
-        date.setUTCHours(12, 0, 0);
+        utcDate.setUTCHours(12, 0, 0);
       }
     }
 
     const now = new Date();
-    const diffTime = date.getTime() - now.getTime();
+    const diffTime = utcDate.getTime() - now.getTime();
     const diffSeconds = diffTime / 1000;
     const MIN_EXPIRATION_SECONDS = 10;
 
@@ -2609,7 +2705,7 @@ export function LimitOrderForm({
     }
 
     setExpirationError(null);
-    setSelectedDate(date);
+    setSelectedDate(utcDate);
     const diffDays = diffTime / (1000 * 60 * 60 * 24);
 
     if (diffDays > 0) {
@@ -6242,27 +6338,33 @@ export function LimitOrderForm({
                       selected={pendingCalendarDate}
                       onSelect={(date) => {
                         if (!date) return;
+                        // Build UTC date from local calendar day to avoid timezone offset issues
+                        const utcDate = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
                         // Preserve time from pending date
                         if (pendingCalendarDate) {
-                          date.setUTCHours(pendingCalendarDate.getUTCHours(), pendingCalendarDate.getUTCMinutes(), pendingCalendarDate.getUTCSeconds());
+                          utcDate.setUTCHours(pendingCalendarDate.getUTCHours(), pendingCalendarDate.getUTCMinutes(), pendingCalendarDate.getUTCSeconds());
                         } else {
                           const now = new Date();
-                          const isToday = date.toUTCString().slice(0, 16) === now.toUTCString().slice(0, 16);
+                          const isToday = utcDate.getUTCFullYear() === now.getUTCFullYear() &&
+                            utcDate.getUTCMonth() === now.getUTCMonth() &&
+                            utcDate.getUTCDate() === now.getUTCDate();
                           if (isToday) {
                             const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000);
-                            date.setUTCHours(oneHourLater.getUTCHours(), oneHourLater.getUTCMinutes(), oneHourLater.getUTCSeconds());
+                            utcDate.setUTCHours(oneHourLater.getUTCHours(), oneHourLater.getUTCMinutes(), oneHourLater.getUTCSeconds());
                           } else {
-                            date.setUTCHours(12, 0, 0);
+                            utcDate.setUTCHours(12, 0, 0);
                           }
                         }
-                        setPendingCalendarDate(date);
+                        setPendingCalendarDate(utcDate);
                       }}
                       captionLayout="dropdown"
                       defaultMonth={pendingCalendarDate || new Date()}
                       disabled={(date: Date) => {
-                        const today = new Date();
-                        today.setUTCHours(0, 0, 0, 0);
-                        return date < today;
+                        const now = new Date();
+                        // Compare local calendar days (react-day-picker uses local time)
+                        const todayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                        const dateLocal = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+                        return dateLocal < todayLocal;
                       }}
                       classNames={{
                         root: "w-full",

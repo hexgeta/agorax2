@@ -6,6 +6,7 @@ import { DisclaimerDialog } from '@/components/DisclaimerDialog';
 import { LogoPreloader } from '@/components/LogoPreloader';
 import { OpenPositionsTable } from '@/components/OpenPositionsTable';
 import PixelBlastBackground from '@/components/ui/PixelBlastBackground';
+import { PixelSpinner } from '@/components/ui/PixelSpinner';
 import { TOKEN_CONSTANTS } from '@/constants/crypto';
 import { useEventTracking } from '@/hooks/useEventTracking';
 
@@ -218,6 +219,10 @@ export default function MarketplacePage() {
       <main className="flex min-h-screen flex-col items-center relative overflow-hidden">
         <div className="fixed inset-0 z-0">
           <PixelBlastBackground />
+        </div>
+        <div className="flex flex-col items-center justify-center py-20 relative z-10">
+          <PixelSpinner size={48} className="mb-6" />
+          <p className="text-white text-lg">Loading Marketplace</p>
         </div>
       </main>
     }>

@@ -1511,18 +1511,87 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
           ) : undefined,
         });
 
-        // Wait for transaction confirmation
-        await waitForTransactionWithTimeout(
-          publicClient,
-          txHash as `0x${string}`,
-          TRANSACTION_TIMEOUTS.TRANSACTION
-        );
+        // Wait for transaction confirmation with background retry
+        let fillConfirmed = false;
+        try {
+          await waitForTransactionWithTimeout(
+            publicClient,
+            txHash as `0x${string}`,
+            TRANSACTION_TIMEOUTS.TRANSACTION
+          );
+          fillConfirmed = true;
+        } catch (confirmError: any) {
+          const isRevert = confirmError?.message?.includes('reverted');
+          if (isRevert) throw confirmError;
+
+          const isUserRejection = confirmError?.message?.includes('rejected') || confirmError?.message?.includes('denied');
+          if (isUserRejection) throw confirmError;
+
+          // RPC timeout/network error — retry in background
+          toast({
+            title: `Confirming Fill${txLabel}...`,
+            description: "Taking longer than usual. Still checking...",
+            action: (
+              <a
+                href={getBlockExplorerTxUrl(chainId, txHash)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-white hover:underline font-medium"
+              >
+                View Tx
+              </a>
+            ),
+          });
+
+          // Background retry
+          const bgRetry = async () => {
+            for (let i = 0; i < 10; i++) {
+              await new Promise(r => setTimeout(r, 10000));
+              try {
+                const receipt = await publicClient.getTransactionReceipt({ hash: txHash as `0x${string}` });
+                if (receipt) {
+                  if (receipt.status === 'reverted') {
+                    toast({ title: "Fill Failed", description: "Transaction reverted on-chain.", variant: "destructive" });
+                    return;
+                  }
+                  toast({
+                    title: `Order Filled${txLabel}`,
+                    description: `Transaction confirmed successfully.`,
+                    variant: "success",
+                    action: (
+                      <a href={getBlockExplorerTxUrl(chainId, txHash)} target="_blank" rel="noopener noreferrer" className="text-white hover:underline font-medium">
+                        View Tx
+                      </a>
+                    ),
+                  });
+                  // Navigate to my-orders on confirmed fill
+                  window.location.href = '/my-orders';
+                  return;
+                }
+              } catch {
+                // Keep retrying
+              }
+            }
+            toast({
+              title: "Could Not Confirm",
+              description: "Please check the block explorer to verify your transaction.",
+              action: (
+                <a href={getBlockExplorerTxUrl(chainId, txHash)} target="_blank" rel="noopener noreferrer" className="text-white hover:underline font-medium">
+                  View Tx
+                </a>
+              ),
+            });
+          };
+          bgRetry();
+          fillConfirmed = true; // Count as success for the loop to continue
+        }
 
         successCount++;
 
+        if (fillConfirmed) {
         // Show success toast only after confirmation
         toast({
-          title: `✅ Order Filled${txLabel}`,
+          title: `Order Filled${txLabel}`,
           description: totalTransactions > 1
             ? `Transaction ${txNum + 1} of ${totalTransactions} confirmed successfully.`
             : `Transaction for ${formatTokenTicker(buyTokenInfo.ticker)} confirmed successfully.`,
@@ -1560,6 +1629,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
           is_full_fill: false, // Partial fill tracking
           fill_time_seconds: fillTimeSeconds,
         });
+        } // end if (fillConfirmed)
       }
 
       // Track trade completed event for the overall transaction
@@ -2889,17 +2959,10 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
   // Loading state - only for initial load when connected
   if (isTableLoading) {
     return (
-      <div className="bg-black text-white relative overflow-hidden">
-        <div className="max-w-[1000px] mx-auto w-full relative">
-          <div
-            className="bg-black border-0 border-white/10 rounded-full p-6 text-center max-w-[660px] w-full mx-auto"
-          >
-            <div className="flex items-center justify-center gap-3 text-gray-400 text-base md:text-lg">
-              <PixelSpinner size={20} />
-              <span>Loading data</span>
-            </div>
-          </div>
-        </div>
+      <div className="flex flex-col items-center justify-center py-20">
+        <PixelSpinner size={48} className="mb-6" />
+        <p className="text-white text-lg mb-2">Loading Orders</p>
+        <p className="text-gray-400 text-sm">Fetching on-chain data...</p>
       </div>
     );
   }
