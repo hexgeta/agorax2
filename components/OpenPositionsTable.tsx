@@ -1602,16 +1602,9 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
       // Clear the inputs for this order
       handleClearInputs(order);
 
-      // Refresh the data after short delays to show updated amounts
-      setTimeout(() => {
-        refetch();
-        fetchPurchaseHistory();
-      }, 3000); // First refresh after 3 seconds
+      // Navigate to my-orders after successful fill
+      window.location.href = '/my-orders';
 
-      setTimeout(() => {
-        refetch();
-        fetchPurchaseHistory();
-      }, 8000); // Second refresh after 8 seconds to catch slower confirmations
 
     } catch (error: any) {
       const errorMsg = simplifyErrorMessage(error) || 'Failed to execute order. Please try again.';

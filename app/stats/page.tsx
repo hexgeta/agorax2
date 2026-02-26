@@ -552,7 +552,7 @@ export default function StatsPage() {
                     <span className="text-gray-400 text-sm">Filtering by:</span>
                     {selectedTokenFilter && (
                       <div className="flex items-center gap-2 px-2 py-1 bg-white/10 rounded">
-                        <CoinLogo symbol={formatTokenTicker(selectedTokenFilter.ticker)} size="sm" />
+                        <CoinLogo symbol={selectedTokenFilter.ticker} size="sm" />
                         <span className="text-white font-medium">{formatTokenTicker(selectedTokenFilter.ticker)}</span>
                         <button
                           onClick={() => setSelectedTokenFilter(null)}

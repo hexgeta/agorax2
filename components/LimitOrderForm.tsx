@@ -1140,6 +1140,10 @@ export function LimitOrderForm({
         tokenKey = `p${token.ticker}`;
       }
     }
+    // Hide BASE and TRIO stats temporarily while numbers are being verified
+    const baseTicker = token.ticker.replace(/^(we|p|e)/, '');
+    if (baseTicker === 'BASE' || baseTicker === 'TRIO') return false;
+
     return tokenStats[tokenKey] && token.ticker !== 'HEX';
   };
 
@@ -1156,6 +1160,13 @@ export function LimitOrderForm({
       return MAXI_TOKENS.includes(token.a.toLowerCase());
     };
 
+    const isWrappedEth = (token: TokenOption) => token.ticker.startsWith('we');
+
+    // Don't show stats for mixed ecosystem pairs (e.g., weHEX ↔ MAXI, or weMAXI ↔ HEX)
+    const sellIsWrapped = isWrappedEth(sellToken);
+    const firstBuyToken = buyTokens[0];
+    if (firstBuyToken && sellIsWrapped !== isWrappedEth(firstBuyToken)) return false;
+
     // Show stats when any MAXI token is involved with a HEX variant or any other token
     const sellIsHex = isHexVariant(sellToken);
     const buyIsHex = buyTokens.some(token => token && isHexVariant(token));
@@ -1165,6 +1176,32 @@ export function LimitOrderForm({
     // Valid if HEX ↔ MAXI, or if any MAXI token is on either side (paired with anything)
     return (sellIsHex && buyIsMaxi) || (buyIsHex && sellIsMaxi) || sellIsMaxi || buyIsMaxi;
   };
+
+  // Detect mixed ecosystem (e.g., weHEX paired with native MAXI)
+  const isMixedEcosystem = (() => {
+    if (!sellToken || buyTokens.length === 0 || !buyTokens[0]) return false;
+    const isWrappedEth = (token: TokenOption) => token.ticker.startsWith('we');
+    return isWrappedEth(sellToken) !== isWrappedEth(buyTokens[0]);
+  })();
+
+  // Check if MAXI tokens are involved at all (for showing the card with a message)
+  const hasMaxiTokenInvolved = (() => {
+    if (!sellToken || buyTokens.length === 0 || !buyTokens[0]) return false;
+    const isMaxiToken = (token: TokenOption) => MAXI_TOKENS.includes(token.a.toLowerCase());
+    const isHexVariant = (token: TokenOption) =>
+      token.ticker === 'HEX' || token.ticker === 'eHEX' || token.ticker === 'pHEX' || token.ticker === 'weHEX';
+    return isMaxiToken(sellToken) || isMaxiToken(buyTokens[0]) || isHexVariant(sellToken) || isHexVariant(buyTokens[0]);
+  })();
+
+  // Detect if a temporarily disabled token (BASE, TRIO) is involved
+  const hasTemporarilyDisabledToken = (() => {
+    if (!sellToken || buyTokens.length === 0 || !buyTokens[0]) return false;
+    const isDisabled = (token: TokenOption) => {
+      const base = token.ticker.replace(/^(we|p|e)/, '');
+      return base === 'BASE' || base === 'TRIO';
+    };
+    return isDisabled(sellToken) || buyTokens.some(t => t && isDisabled(t));
+  })();
 
   const showSellStats = isValidStatsCombo() && shouldShowTokenStats(sellToken);
   const showBuyStats = isValidStatsCombo() && buyTokens.some(token => shouldShowTokenStats(token));
@@ -6705,7 +6742,11 @@ export function LimitOrderForm({
       {maxiStats && (
         // Show if user doesn't have access (blurred teaser) OR if user has access and MAXI tokens are involved
         (PAYWALL_ENABLED && !hasTokenAccess) ||
-        (hasTokenAccess && sellToken && buyTokens.length > 0 && buyTokens[0] && (showSellStats || showBuyStats || (isTokenEligibleForStats(sellToken) || buyTokens.some(t => isTokenEligibleForStats(t)))) && !duplicateTokenError)
+        (hasTokenAccess && sellToken && buyTokens.length > 0 && buyTokens[0] && !duplicateTokenError && (
+          (isValidStatsCombo() && (showSellStats || showBuyStats)) ||
+          (isMixedEcosystem && hasMaxiTokenInvolved) ||
+          (isValidStatsCombo() && hasTemporarilyDisabledToken)
+        ))
       ) && proStatsContainerRef?.current && createPortal(
         <LiquidGlassCard
           className="p-4 bg-white/5 border-white/10"
@@ -6743,6 +6784,23 @@ export function LimitOrderForm({
                   <span className="text-white/70">Your OTC Price:</span>
                   <span className="text-white">1.0000 HEX</span>
                 </div>
+              </div>
+            ) : isMixedEcosystem && hasMaxiTokenInvolved ? (
+              <div className="text-center py-4">
+                <p className="text-yellow-400 text-sm font-medium mb-2">Cross-chain pair detected</p>
+                <p className="text-white/60 text-xs leading-relaxed">
+                  Stats are not available for mixed-chain pairs. Use tokens from the same chain
+                  {sellToken?.ticker.startsWith('we') || buyTokens[0]?.ticker.startsWith('we')
+                    ? ' — e.g. eHEX with eMAXI, eDECI, eLUCKY, eTRIO, or eBASE.'
+                    : ' — e.g. HEX with MAXI, DECI, LUCKY, TRIO, or BASE.'}
+                </p>
+              </div>
+            ) : hasTemporarilyDisabledToken && !showSellStats && !showBuyStats ? (
+              <div className="text-center py-4">
+                <p className="text-yellow-400 text-sm font-medium mb-2">Stats temporarily unavailable</p>
+                <p className="text-white/60 text-xs leading-relaxed">
+                  Stats for BASE and TRIO are temporarily disabled while we verify the data. They will be back soon.
+                </p>
               </div>
             ) : (
               <div className="space-y-6">

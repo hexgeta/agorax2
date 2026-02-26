@@ -313,8 +313,8 @@ export default function OrderbookChart({ orders, tokenPrices, whitelist }: Order
       </div>
 
       {/* Token selector */}
-      <div className="flex flex-wrap gap-2 mb-6">
-        {tokenList.slice(0, 10).map(token => (
+      <div className="flex flex-wrap gap-2 mb-6 max-h-[120px] overflow-y-auto modern-scrollbar">
+        {tokenList.map(token => (
           <button
             key={token.address}
             onClick={() => setSelectedToken(token.address)}
@@ -324,7 +324,7 @@ export default function OrderbookChart({ orders, tokenPrices, whitelist }: Order
                 : 'bg-white/5 text-white border-white/20 hover:bg-white/10'
             }`}
           >
-            <CoinLogo symbol={formatTokenTicker(token.ticker)} size="sm" />
+            <CoinLogo symbol={token.ticker} size="sm" />
             <span className="text-sm font-medium">{formatTokenTicker(token.ticker)}</span>
             <span className="text-xs opacity-60">({token.orderCount})</span>
           </button>

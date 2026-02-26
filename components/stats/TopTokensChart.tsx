@@ -173,7 +173,7 @@ export default function TopTokensChart({ transactions, orders, tokenPrices, cont
                 </div>
                 <div className="col-span-2">
                   <div className="flex items-center gap-2">
-                    <CoinLogo symbol={formatTokenTicker(token.ticker)} size="sm" />
+                    <CoinLogo symbol={token.ticker} size="sm" />
                     <span className="text-white font-medium text-sm">{formatTokenTicker(token.ticker)}</span>
                     {isSelected && (
                       <span className="text-[10px] px-1.5 py-0.5 bg-white/20 text-white rounded">FILTERED</span>
