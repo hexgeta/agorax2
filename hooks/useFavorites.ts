@@ -29,8 +29,11 @@ export function useFavorites() {
           if (data.success && Array.isArray(data.favorites)) {
             setFavoriteOrderIds(new Set(data.favorites));
           }
+        } else {
+          console.warn('[Favorites] Failed to fetch favorites:', res.status, await res.text().catch(() => ''));
         }
-      } catch {
+      } catch (err) {
+        console.warn('[Favorites] Error fetching favorites:', err);
       } finally {
         setIsLoading(false);
         fetchedRef.current = address.toLowerCase();
@@ -76,6 +79,7 @@ export function useFavorites() {
         });
 
         if (!res.ok) {
+          console.warn('[Favorites] Failed to toggle favorite:', res.status, await res.text().catch(() => ''));
           // Revert optimistic update on failure
           setFavoriteOrderIds((prev: Set<number>) => {
             const next = new Set(prev);
@@ -87,7 +91,8 @@ export function useFavorites() {
             return next;
           });
         }
-      } catch {
+      } catch (err) {
+        console.warn('[Favorites] Error toggling favorite:', err);
         // Revert optimistic update on error
         setFavoriteOrderIds((prev: Set<number>) => {
           const next = new Set(prev);
