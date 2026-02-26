@@ -126,21 +126,14 @@ export default function StatsPage() {
     [activeTokens]
   );
 
-  // Get all token addresses from transactions and orders
-  const transactionTokenAddresses = transactions ? [
-    ...new Set([
-      ...transactions.map(tx => tx.sellToken),
-      ...transactions.flatMap(tx => Object.keys(tx.buyTokens))
-    ])
-  ] : [];
-
-  const orderTokenAddresses = orders ? [
-    ...new Set(orders.map(order => order.sellToken))
-  ] : [];
-
-  // Also include tokens from active orders for price chart
-  const activeOrderTokenAddresses = useMemo(() => {
+  // Get all token addresses from transactions, orders, and active orders (memoized to prevent re-renders)
+  const allTokenAddresses = useMemo(() => {
     const addresses = new Set<string>();
+    transactions.forEach(tx => {
+      addresses.add(tx.sellToken);
+      Object.keys(tx.buyTokens).forEach(addr => addresses.add(addr));
+    });
+    orders.forEach(order => addresses.add(order.sellToken));
     activeOrders.forEach(order => {
       addresses.add(order.orderDetailsWithID.orderDetails.sellToken.toLowerCase());
       order.orderDetailsWithID.orderDetails.buyTokensIndex.forEach((idx) => {
@@ -149,9 +142,7 @@ export default function StatsPage() {
       });
     });
     return Array.from(addresses);
-  }, [activeOrders, whitelist]);
-
-  const allTokenAddresses = [...new Set([...transactionTokenAddresses, ...orderTokenAddresses, ...activeOrderTokenAddresses])];
+  }, [transactions, orders, activeOrders, whitelist]);
 
   const { prices: tokenPrices } = useTokenPrices(allTokenAddresses);
 
@@ -280,7 +271,8 @@ export default function StatsPage() {
   // This runs automatically when fill events, contract orders, or whitelist update
   useEffect(() => {
     if (fillEvents.length === 0) {
-      setTransactions([]);
+      // Use functional updater to avoid creating a new [] reference on every render
+      setTransactions(prev => prev.length === 0 ? prev : []);
       return;
     }
     if (contractOrders.length === 0 || whitelist.length === 0) return;
