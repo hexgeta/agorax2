@@ -2,7 +2,7 @@ import { useContractRead, useAccount } from 'wagmi'
 import { Address } from 'viem'
 import { getContractAddress } from '@/config/testing'
 import { CONTRACT_ABI } from '@/config/abis'
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { setWhitelistCache } from '@/utils/tokenUtils'
 
 export interface WhitelistedToken {
@@ -37,13 +37,16 @@ export function useContractWhitelistRead() {
   }, [whitelistData]);
 
   // Filter to only active tokens for dropdowns, preserving original indices
-  const activeTokens: WhitelistedToken[] = whitelistData?.[0]
-    ?.map((t: { tokenAddress: Address; isActive: boolean }, index: number) => ({
-      tokenAddress: t.tokenAddress as Address,
-      index: index,
-      isActive: t.isActive
-    }))
-    .filter((t: { isActive: boolean }) => t.isActive) || []
+  // Memoized to prevent new array references on every render (causes infinite loops in consumers)
+  const activeTokens: WhitelistedToken[] = useMemo(() =>
+    whitelistData?.[0]
+      ?.map((t: { tokenAddress: Address; isActive: boolean }, index: number) => ({
+        tokenAddress: t.tokenAddress as Address,
+        index: index,
+        isActive: t.isActive
+      }))
+      .filter((t: { isActive: boolean }) => t.isActive) ?? []
+  , [whitelistData]);
 
   return {
     activeTokens,
