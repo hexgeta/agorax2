@@ -3773,7 +3773,7 @@ export function LimitOrderForm({
                         setCustomToken(null);
                         toast({
                           title: "Unverified token",
-                          description: "This token is not on the AgoráX whitelist. Trade at your own risk.",
+                          description: "This token is not on the AgoráX whitelist. Trade at your own risk. If this is a tax token the tx will fail.",
                         });
                       }}
                       className="w-full p-3 flex items-center space-x-3 hover:bg-white/5 transition-all text-left border-b border-white/5 bg-amber-900/20"
@@ -3811,7 +3811,7 @@ export function LimitOrderForm({
                               if (!isWhitelisted) {
                                 toast({
                                   title: "Unverified token",
-                                  description: "This token is not on the AgoráX whitelist. Trade at your own risk.",
+                                  description: "This token is not on the AgoráX whitelist. Trade at your own risk. If this is a tax token the tx will fail.",
                                 });
                               }
                             }
