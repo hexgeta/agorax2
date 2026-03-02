@@ -266,10 +266,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           return formatAmount(BigInt(a), dec);
         });
 
-        const orderStatus = onChain ? Number(onChain.status ?? 0) : 0;
+        let orderStatus = onChain ? Number(onChain.status ?? 0) : 0;
         const totalSell = orderDetails?.sellAmount ? BigInt(orderDetails.sellAmount) : 0n;
         const redeemed = onChain?.redeemedSellAmount ? BigInt(onChain.redeemedSellAmount) : 0n;
         const fillPct = totalSell > 0n ? Number((redeemed * 10000n) / totalSell) / 100 : 0;
+
+        // Mark as completed if fully filled and not cancelled
+        if (fillPct >= 100 && orderStatus !== 1) {
+          orderStatus = 2;
+        }
 
         await supabase.from('orders').upsert({
           order_id: Number(orderId),
@@ -376,6 +381,33 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         if (error && error.code !== '23505') stats.errors.push(`Fill write ${orderId}: ${error.message}`);
       } catch (err) {
         stats.errors.push(`Fill write ${orderId}: ${err}`);
+      }
+
+      // Update order status and fill percentage after each fill
+      try {
+        const onChain = onChainOrders.get(orderId);
+        if (onChain) {
+          const totalSell = onChain.orderDetails?.sellAmount ? BigInt(onChain.orderDetails.sellAmount) : 0n;
+          const redeemed = onChain.redeemedSellAmount ? BigInt(onChain.redeemedSellAmount) : 0n;
+          const fillPct = totalSell > 0n ? Number((redeemed * 10000n) / totalSell) / 100 : 0;
+          const onChainStatus = Number(onChain.status ?? 0);
+
+          const updateData: Record<string, unknown> = {
+            fill_percentage: fillPct,
+            remaining_sell_amount: onChain.remainingSellAmount?.toString() || '0',
+            redeemed_sell_amount: redeemed.toString(),
+            updated_at: new Date().toISOString(),
+          };
+
+          // Mark as completed if fully filled and not cancelled
+          if (fillPct >= 100 && onChainStatus !== 1) {
+            updateData.status = 2;
+          }
+
+          await supabase.from('orders').update(updateData).eq('order_id', Number(orderId));
+        }
+      } catch (err) {
+        stats.errors.push(`Order update after fill ${orderId}: ${err}`);
       }
 
       stats.filled++;

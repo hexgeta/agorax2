@@ -61,8 +61,8 @@ export async function GET(request: NextRequest): Promise<Response> {
     let query = supabase
       .from('orders')
       .select(
-        'order_id, maker_address, sell_token_ticker, sell_token_address, sell_amount_formatted, ' +
-        'buy_tokens_tickers, buy_tokens_addresses, buy_amounts_formatted, ' +
+        'order_id, maker_address, sell_token_ticker, sell_token_address, sell_amount_raw, ' +
+        'buy_tokens_tickers, buy_tokens_addresses, buy_amounts_raw, ' +
         'status, fill_percentage, remaining_sell_amount, redeemed_sell_amount, ' +
         'is_all_or_nothing, expiration, total_fills, unique_fillers, ' +
         'creation_tx_hash, creation_block_number, created_at, updated_at',
@@ -81,6 +81,13 @@ export async function GET(request: NextRequest): Promise<Response> {
         return apiError('Invalid status. Use: active, completed, cancelled (or 0, 1, 2)', 400);
       }
       query = query.eq('status', statusNum);
+
+      // For active orders, also exclude expired and fully filled
+      if (statusNum === 0) {
+        const nowUnix = Math.floor(Date.now() / 1000);
+        query = query.or(`expiration.eq.0,expiration.gt.${nowUnix}`);
+        query = query.lt('fill_percentage', 100);
+      }
     }
 
     if (sellToken) {
@@ -118,15 +125,43 @@ export async function GET(request: NextRequest): Promise<Response> {
       return apiError('Failed to fetch orders', 500);
     }
 
-    const statusLabels = ['active', 'cancelled', 'completed'];
+    const nowUnix = Math.floor(Date.now() / 1000);
+
+    const getStatusLabel = (o: any): string => {
+      if (o.status === 1) return 'cancelled';
+      if (o.status === 2) return 'completed';
+      // status 0 but check if effectively expired or completed
+      if (o.fill_percentage >= 100) return 'completed';
+      if (o.expiration > 0 && o.expiration <= nowUnix) return 'expired';
+      return 'active';
+    };
 
     return apiSuccess(
       {
         orders: (data || []).map((o) => ({
-          ...o,
-          status_label: statusLabels[o.status] || 'unknown',
-          sell_amount_formatted: parseFloat(o.sell_amount_formatted),
-          buy_amounts_formatted: (o.buy_amounts_formatted || []).map((a: string) => parseFloat(a)),
+          // General order details
+          order_id: o.order_id,
+          maker_address: o.maker_address,
+          status: o.status,
+          status_label: getStatusLabel(o),
+          fill_percentage: o.fill_percentage,
+          total_fills: o.total_fills,
+          unique_fillers: o.unique_fillers,
+          is_all_or_nothing: o.is_all_or_nothing,
+          expiration: o.expiration,
+          remaining_sell_amount: o.remaining_sell_amount,
+          redeemed_sell_amount: o.redeemed_sell_amount,
+          created_at: o.created_at,
+          updated_at: o.updated_at,
+          creation_tx_hash: o.creation_tx_hash,
+          creation_block_number: o.creation_block_number,
+          // Token details
+          sell_token_ticker: o.sell_token_ticker,
+          sell_token_address: o.sell_token_address,
+          sell_amount_raw: o.sell_amount_raw,
+          buy_tokens_tickers: o.buy_tokens_tickers,
+          buy_tokens_addresses: o.buy_tokens_addresses,
+          buy_amounts_raw: o.buy_amounts_raw || [],
         })),
         pagination: {
           total: count || 0,

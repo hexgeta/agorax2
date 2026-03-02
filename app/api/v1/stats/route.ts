@@ -29,7 +29,7 @@ export async function GET(request: NextRequest): Promise<Response> {
       // Total users and aggregate user stats
       supabase
         .from('users')
-        .select('total_xp, total_trades, total_volume_usd, total_orders_created, total_orders_filled, total_orders_cancelled'),
+        .select('total_xp, total_trades, total_orders_created, total_orders_filled, total_orders_cancelled'),
 
       // Order status breakdown (if orders table exists)
       supabase
@@ -39,7 +39,7 @@ export async function GET(request: NextRequest): Promise<Response> {
       // Total fills (if order_fills table exists)
       supabase
         .from('order_fills')
-        .select('volume_usd', { count: 'exact' }),
+        .select('*', { count: 'exact', head: true }),
 
       // Total completed challenges
       supabase
@@ -57,7 +57,6 @@ export async function GET(request: NextRequest): Promise<Response> {
     const totalUsers = users.length;
     const totalXpIssued = users.reduce((sum, u) => sum + (u.total_xp || 0), 0);
     const totalTrades = users.reduce((sum, u) => sum + (u.total_trades || 0), 0);
-    const totalVolumeUsd = users.reduce((sum, u) => sum + (parseFloat(u.total_volume_usd) || 0), 0);
     const totalOrdersCreated = users.reduce((sum, u) => sum + (u.total_orders_created || 0), 0);
     const totalOrdersFilled = users.reduce((sum, u) => sum + (u.total_orders_filled || 0), 0);
     const totalOrdersCancelled = users.reduce((sum, u) => sum + (u.total_orders_cancelled || 0), 0);
@@ -71,24 +70,15 @@ export async function GET(request: NextRequest): Promise<Response> {
       else if (o.status === 2) ordersByStatus.completed++;
     });
 
-    // Fill volume
-    const fills = fillsResult.data || [];
-    const totalFillVolumeUsd = fills.reduce(
-      (sum, f) => sum + (parseFloat(f.volume_usd) || 0),
-      0
-    );
-
     return apiSuccess(
       {
         protocol: {
           total_users: totalUsers,
           total_xp_issued: totalXpIssued,
           total_trades: totalTrades,
-          total_volume_usd: Math.round(totalVolumeUsd * 100) / 100,
           total_orders_created: totalOrdersCreated,
           total_orders_filled: totalOrdersFilled,
           total_orders_cancelled: totalOrdersCancelled,
-          total_fill_volume_usd: Math.round(totalFillVolumeUsd * 100) / 100,
           fill_rate_percent:
             totalOrdersCreated > 0
               ? Math.round((totalOrdersFilled / totalOrdersCreated) * 1000) / 10
@@ -99,7 +89,7 @@ export async function GET(request: NextRequest): Promise<Response> {
           by_status: ordersByStatus,
         },
         fills: {
-          total: fillsResult.count || fills.length,
+          total: fillsResult.count || 0,
         },
         achievements: {
           total_challenges_completed: challengesResult.count || 0,

@@ -19,7 +19,7 @@ const PRESTIGE_NAMES = [
  * Returns ranked users sorted by XP with full stats.
  *
  * Query params:
- *   sort=total_xp         Sort by: total_xp, total_trades, total_volume_usd, total_orders_created (default: total_xp)
+ *   sort=total_xp         Sort by: total_xp, total_trades, total_orders_created (default: total_xp)
  *   order=desc            Sort order: asc or desc (default: desc)
  *   limit=50              Results per page (max 200, default 50)
  *   offset=0              Pagination offset
@@ -38,7 +38,7 @@ export async function GET(request: NextRequest): Promise<Response> {
   const minXp = parseInt(url.searchParams.get('min_xp') || '0', 10);
   const minTrades = parseInt(url.searchParams.get('min_trades') || '0', 10);
 
-  const validSortFields = ['total_xp', 'total_trades', 'total_volume_usd', 'total_orders_created', 'total_orders_filled', 'current_prestige'];
+  const validSortFields = ['total_xp', 'total_trades', 'total_orders_created', 'total_orders_filled', 'current_prestige'];
   if (!validSortFields.includes(sortField)) {
     return apiError(`Invalid sort field. Valid options: ${validSortFields.join(', ')}`, 400);
   }
@@ -48,7 +48,7 @@ export async function GET(request: NextRequest): Promise<Response> {
       .from('users')
       .select(
         'wallet_address, total_xp, current_prestige, total_orders_created, total_orders_filled, ' +
-        'total_orders_cancelled, total_trades, total_volume_usd, unique_tokens_traded, ' +
+        'total_orders_cancelled, total_trades, unique_tokens_traded, ' +
         'current_active_orders, longest_streak_days, current_streak_days, last_trade_date, created_at',
         { count: 'exact' }
       );
@@ -76,7 +76,6 @@ export async function GET(request: NextRequest): Promise<Response> {
       total_orders_filled: user.total_orders_filled,
       total_orders_cancelled: user.total_orders_cancelled,
       total_trades: user.total_trades,
-      total_volume_usd: parseFloat(user.total_volume_usd) || 0,
       unique_tokens_traded: user.unique_tokens_traded,
       current_active_orders: user.current_active_orders,
       longest_streak_days: user.longest_streak_days,

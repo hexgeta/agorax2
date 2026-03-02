@@ -65,16 +65,19 @@ export async function GET(
       return apiError('Failed to fetch order', 500);
     }
 
-    const statusLabels = ['active', 'cancelled', 'completed'];
+    const nowUnix = Math.floor(Date.now() / 1000);
+    const getStatusLabel = (o: any): string => {
+      if (o.status === 1) return 'cancelled';
+      if (o.status === 2) return 'completed';
+      if (o.fill_percentage >= 100) return 'completed';
+      if (o.expiration > 0 && o.expiration <= nowUnix) return 'expired';
+      return 'active';
+    };
 
     const result: Record<string, unknown> = {
       order: {
         ...orderData,
-        status_label: statusLabels[orderData.status] || 'unknown',
-        sell_amount_formatted: parseFloat(orderData.sell_amount_formatted),
-        buy_amounts_formatted: (orderData.buy_amounts_formatted || []).map(
-          (a: string) => parseFloat(a)
-        ),
+        status_label: getStatusLabel(orderData),
       },
     };
 
@@ -86,8 +89,8 @@ export async function GET(
         supabase
           .from('order_fills')
           .select(
-            'filler_address, buy_token_ticker, buy_amount_formatted, ' +
-            'sell_amount_released_formatted, volume_usd, tx_hash, block_number, filled_at'
+            'filler_address, buy_token_ticker, buy_amount_raw, ' +
+            'sell_amount_released_raw, tx_hash, block_number, filled_at'
           )
           .eq('order_id', orderId)
           .order('filled_at', { ascending: true })
@@ -95,21 +98,13 @@ export async function GET(
           .then(({ data, error }) => {
             if (error && error.code !== '42P01') {
             }
-            const fills = (data || []).map((f) => ({
-              ...f,
-              buy_amount_formatted: parseFloat(f.buy_amount_formatted),
-              sell_amount_released_formatted: parseFloat(f.sell_amount_released_formatted),
-              volume_usd: parseFloat(f.volume_usd),
-            }));
+            const fills = data || [];
 
-            // Aggregate fill stats
             const uniqueFillers = new Set(fills.map((f) => f.filler_address));
-            const totalVolumeUsd = fills.reduce((sum, f) => sum + f.volume_usd, 0);
 
             result.fills = {
               total: fills.length,
               unique_fillers: uniqueFillers.size,
-              total_volume_usd: Math.round(totalVolumeUsd * 100) / 100,
               list: fills,
             };
           })

@@ -2292,6 +2292,14 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     return count;
   }, [searchQuery, aonFilterEnabled, dustFilterEnabled, claimableFilterEnabled, hideMyOrders, favoritesOnly, isMarketplaceMode, fillRange, positionRange, dateFilterPreset]);
 
+  // Helper: check if an order is nearly fully filled (>99.9%) - used for tab filtering and hiding Buy button on dust orders
+  const isOrderNearlyFilled = useCallback((order: any) => {
+    const sellAmount = Number(order.orderDetailsWithID.orderDetails.sellAmount);
+    const remaining = Number(order.orderDetailsWithID.remainingSellAmount);
+    if (sellAmount <= 0) return false;
+    return ((sellAmount - remaining) / sellAmount) * 100 > 99.9;
+  }, []);
+
   // Memoize the display orders with 3-level filtering
   const displayOrders = useMemo(() => {
     if (!allOrders) return [];
@@ -2334,23 +2342,25 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
       case 'active':
         filteredOrders = orders.filter(order =>
           order.orderDetailsWithID.status === 0 &&
+          !isOrderNearlyFilled(order) &&
           Number(order.orderDetailsWithID.orderDetails.expirationTime) >= Math.floor(Date.now() / 1000)
         );
         break;
       case 'expired':
         filteredOrders = orders.filter(order =>
           order.orderDetailsWithID.status === 0 &&
+          !isOrderNearlyFilled(order) &&
           Number(order.orderDetailsWithID.orderDetails.expirationTime) < Math.floor(Date.now() / 1000)
         );
         break;
       case 'completed':
         filteredOrders = orders.filter(order =>
-          order.orderDetailsWithID.status === 2
+          order.orderDetailsWithID.status === 2 || isOrderNearlyFilled(order)
         );
         break;
       case 'cancelled':
         filteredOrders = orders.filter(order =>
-          order.orderDetailsWithID.status === 1
+          order.orderDetailsWithID.status === 1 && !isOrderNearlyFilled(order)
         );
         break;
       default:
@@ -2778,20 +2788,26 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
       case 'active':
         filteredOrders = orders.filter(order =>
           order.orderDetailsWithID.status === 0 &&
+          !isOrderNearlyFilled(order) &&
           Number(order.orderDetailsWithID.orderDetails.expirationTime) >= Math.floor(Date.now() / 1000)
         );
         break;
       case 'expired':
         filteredOrders = orders.filter(order =>
           order.orderDetailsWithID.status === 0 &&
+          !isOrderNearlyFilled(order) &&
           Number(order.orderDetailsWithID.orderDetails.expirationTime) < Math.floor(Date.now() / 1000)
         );
         break;
       case 'completed':
-        filteredOrders = orders.filter(order => order.orderDetailsWithID.status === 2);
+        filteredOrders = orders.filter(order =>
+          order.orderDetailsWithID.status === 2 || isOrderNearlyFilled(order)
+        );
         break;
       case 'cancelled':
-        filteredOrders = orders.filter(order => order.orderDetailsWithID.status === 1);
+        filteredOrders = orders.filter(order =>
+          order.orderDetailsWithID.status === 1 && !isOrderNearlyFilled(order)
+        );
         break;
       default:
         filteredOrders = orders;
@@ -4411,8 +4427,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                         /* Marketplace mode: Buy button for non-own orders, Manage for own orders */
                         <div className="flex items-center justify-center">
                           {(!address || order.userDetails.orderOwner.toLowerCase() !== address.toLowerCase()) ? (
-                            // Buy button for non-own orders in marketplace
-                            order.orderDetailsWithID.status === 0 && Number(order.orderDetailsWithID.orderDetails.expirationTime) >= Math.floor(Date.now() / 1000) ? (
+                            // Buy button for non-own orders in marketplace (hide for dust orders >99.9% filled)
+                            order.orderDetailsWithID.status === 0 && Number(order.orderDetailsWithID.orderDetails.expirationTime) >= Math.floor(Date.now() / 1000) && !isOrderNearlyFilled(order) ? (
                               <button
                                 onClick={() => togglePositionExpansion(order.orderDetailsWithID.orderID.toString(), order)}
                                 className={`flex items-center gap-1 px-3 py-1.5 text-xs rounded-full transition-colors ${expandedPositions.has(order.orderDetailsWithID.orderID.toString())
@@ -4512,7 +4528,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                 )}
                               </button>
                             </div>
-                          ) : ownershipFilter === 'non-mine' && order.orderDetailsWithID.status === 0 && statusFilter === 'active' ? (
+                          ) : ownershipFilter === 'non-mine' && order.orderDetailsWithID.status === 0 && statusFilter === 'active' && !isOrderNearlyFilled(order) ? (
                             <button
                               onClick={() => togglePositionExpansion(order.orderDetailsWithID.orderID.toString(), order)}
                               className={`flex items-center gap-1 px-3 py-1.5 text-xs rounded-full transition-colors ${expandedPositions.has(order.orderDetailsWithID.orderID.toString())

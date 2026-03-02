@@ -3,7 +3,7 @@
   "crons": [
     {
       "path": "/api/cron/sync-blockchain",
-      "schedule": "*/5 * * * *"
+      "schedule": "* * * * *"
     },
     {
       "path": "/api/cron/oa-movement-cron/",

@@ -72,9 +72,6 @@ export async function GET(
         total_orders_cancelled: userData.total_orders_cancelled,
         total_orders_expired: userData.total_orders_expired || 0,
         total_trades: userData.total_trades,
-        total_volume_usd: parseFloat(userData.total_volume_usd) || 0,
-        total_volume_as_maker_usd: parseFloat(userData.total_volume_as_maker_usd) || 0,
-        total_volume_as_taker_usd: parseFloat(userData.total_volume_as_taker_usd) || 0,
         total_fills_given: userData.total_fills_given || 0,
         total_fills_received: userData.total_fills_received || 0,
         unique_tokens_traded: userData.unique_tokens_traded,
@@ -130,7 +127,7 @@ export async function GET(
       promises.push(
         supabase
           .from('orders')
-          .select('order_id, sell_token_ticker, buy_tokens_tickers, sell_amount_formatted, buy_amounts_formatted, status, fill_percentage, total_fills, unique_fillers, is_all_or_nothing, created_at, updated_at')
+          .select('order_id, sell_token_ticker, buy_tokens_tickers, sell_amount_raw, buy_amounts_raw, status, fill_percentage, total_fills, unique_fillers, is_all_or_nothing, created_at, updated_at')
           .eq('maker_address', wallet)
           .order('created_at', { ascending: false })
           .limit(ordersLimit)
@@ -164,7 +161,7 @@ export async function GET(
       promises.push(
         supabase
           .from('daily_activity')
-          .select('activity_date, trades_count, orders_created, orders_filled, volume_usd')
+          .select('activity_date, trades_count, orders_created, orders_filled')
           .eq('wallet_address', wallet)
           .order('activity_date', { ascending: false })
           .limit(90)

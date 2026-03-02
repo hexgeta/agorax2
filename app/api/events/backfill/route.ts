@@ -392,7 +392,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           return formatAmount(a, decimals);
         });
 
-        const orderStatus = onChain ? onChain.status : 0;
+        let orderStatus = onChain ? Number(onChain.status) : 0;
         const fillPct = onChain
           ? (() => {
               const total = onChain.orderDetails.sellAmount;
@@ -401,6 +401,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
               return Number((redeemed * 10000n) / total) / 100;
             })()
           : 0;
+
+        // Mark as completed if fully filled and not cancelled
+        if (fillPct >= 100 && orderStatus !== 1) {
+          orderStatus = 2;
+        }
 
         const { error: orderErr } = await supabase.from('orders').upsert(
           {
@@ -552,7 +557,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       result.orders_filled++;
     }
 
-    // Update order fill counts from the fills we just inserted
+    // Update order fill counts and status from the fills we just inserted
     for (const oid of allOrderIds) {
       try {
         const { data: fillCount } = await supabase
@@ -562,13 +567,33 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
         const uniqueFillers = new Set(fillCount?.map((f) => f.filler_address) || []).size;
 
+        const updateData: Record<string, unknown> = {
+          total_fills: fillCount?.length || 0,
+          unique_fillers: uniqueFillers,
+          updated_at: new Date().toISOString(),
+        };
+
+        // Re-read on-chain state to update fill_percentage and status
+        const onChain = onChainOrders.get(oid);
+        if (onChain) {
+          const total = onChain.orderDetails.sellAmount;
+          const redeemed = onChain.redeemedSellAmount;
+          const fillPct = total > 0n ? Number((redeemed * 10000n) / total) / 100 : 0;
+          const onChainStatus = Number(onChain.status);
+
+          updateData.fill_percentage = fillPct;
+          updateData.remaining_sell_amount = onChain.remainingSellAmount?.toString() || '0';
+          updateData.redeemed_sell_amount = redeemed.toString();
+
+          // Mark as completed if fully filled and not cancelled
+          if (fillPct >= 100 && onChainStatus !== 1) {
+            updateData.status = 2;
+          }
+        }
+
         await supabase
           .from('orders')
-          .update({
-            total_fills: fillCount?.length || 0,
-            unique_fillers: uniqueFillers,
-            updated_at: new Date().toISOString(),
-          })
+          .update(updateData)
           .eq('order_id', Number(oid));
       } catch {
         // Non-critical - skip
