@@ -38,6 +38,10 @@ export const modal = createAppKit({
   enableExplorer: true, // Show the search bar
   enableOnramp: false, // Disable onramp/funding features
   enableSwaps: false, // Disable swap features
+  featuredWalletIds: [
+    'dd43441a6368ec9046540c46c5fdc58f79926d17ce61a176444568ca7c970dcd', // Internet Money
+    '18388be9ac2d02726dbac9777c96efaac06d744b2f6d580fccdd4127a6d01fd1', // Rabby
+  ],
   themeVariables: {
     // Colors - Black and White Theme
     '--w3m-accent': '#ffffff', // White accent for buttons and highlights
