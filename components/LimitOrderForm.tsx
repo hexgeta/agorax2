@@ -577,25 +577,23 @@ export function LimitOrderForm({
         const data = await response.json();
         const pairs = data.pairs || [];
 
-        // Filter for PulseChain pairs
-        const pulsechainPairs = pairs.filter((pair: any) => pair.chainId === 'pulsechain');
+        // Only use pairs where our token is the base token (priceUsd is the base token's price)
+        const basePairs = pairs
+          .filter((pair: any) => pair.chainId === 'pulsechain' && pair.baseToken?.address?.toLowerCase() === contractAddress)
+          .sort((a: any, b: any) => {
+            const aLiq = parseFloat(a.liquidity?.usd || '0');
+            const bLiq = parseFloat(b.liquidity?.usd || '0');
+            return bLiq - aLiq;
+          });
 
-        if (pulsechainPairs.length === 0) {
+        if (basePairs.length === 0) {
           setCustomTokenError('Token not found on PulseChain');
           setCustomToken(null);
           return;
         }
 
-        // Get the pair with highest liquidity
-        const bestPair = pulsechainPairs.sort((a: any, b: any) => {
-          const aLiq = parseFloat(a.liquidity?.usd || '0');
-          const bLiq = parseFloat(b.liquidity?.usd || '0');
-          return bLiq - aLiq;
-        })[0];
-
-        // Determine which token in the pair matches our contract address
-        const isBaseToken = bestPair.baseToken.address.toLowerCase() === contractAddress;
-        const tokenInfo = isBaseToken ? bestPair.baseToken : bestPair.quoteToken;
+        const bestPair = basePairs[0];
+        const tokenInfo = bestPair.baseToken;
 
         // Fetch decimals on-chain (DexScreener doesn't provide them)
         let decimals: number;

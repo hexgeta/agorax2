@@ -135,17 +135,17 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
       const data = await response.json();
       const pairs = data.pairs || [];
 
-      // Filter for PulseChain pairs and sort by liquidity
-      const pulsechainPairs = pairs
-        .filter((p: any) => p.chainId === 'pulsechain')
+      // Only use pairs where our token is the base token (priceUsd is the base token's price)
+      const basePairs = pairs
+        .filter((p: any) => p.chainId === 'pulsechain' && p.baseToken?.address?.toLowerCase() === contractAddress.toLowerCase())
         .sort((a: any, b: any) => {
           const aLiquidity = parseFloat(a.liquidity?.usd || '0');
           const bLiquidity = parseFloat(b.liquidity?.usd || '0');
           return bLiquidity - aLiquidity;
         });
 
-      if (pulsechainPairs.length > 0 && pulsechainPairs[0].priceUsd) {
-        return parseFloat(pulsechainPairs[0].priceUsd);
+      if (basePairs.length > 0 && basePairs[0].priceUsd) {
+        return parseFloat(basePairs[0].priceUsd);
       }
       return null;
     } catch {
@@ -175,12 +175,12 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
           // Get pair address for sell token
           const sellPairAddress = Array.isArray(sellDexs) ? sellDexs[0] : sellDexs;
 
-          // Fetch sell token price
+          // Fetch sell token price (only use if our token is the base token in the pair)
           const sellResponse = await fetch(`https://api.dexscreener.com/latest/dex/pairs/pulsechain/${sellPairAddress}`);
           if (sellResponse.ok) {
             const sellData = await sellResponse.json();
             const sellPair = sellData.pairs?.[0];
-            if (sellPair?.priceUsd) {
+            if (sellPair?.priceUsd && sellPair.baseToken?.address?.toLowerCase() === sellToken.toLowerCase()) {
               sellPriceUsd = parseFloat(sellPair.priceUsd);
             }
           }
@@ -216,7 +216,7 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
 
         let price: number | null = null;
 
-        // Try pair address first if available
+        // Try pair address first if available (only use if our token is the base token)
         if (!isNullDexs) {
           const pairAddress = Array.isArray(dexs) ? dexs[0] : dexs;
           try {
@@ -224,7 +224,7 @@ export function LimitOrderChart({ sellTokenAddress, buyTokenAddresses = [], limi
             if (response.ok) {
               const data = await response.json();
               const pair = data.pairs?.[0];
-              if (pair?.priceUsd) {
+              if (pair?.priceUsd && pair.baseToken?.address?.toLowerCase() === addr.toLowerCase()) {
                 price = parseFloat(pair.priceUsd);
               }
             }

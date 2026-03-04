@@ -276,6 +276,49 @@ const maxiTokenAddresses = [
   '0xb39490b46d02146f59e80c6061bb3e56b824d672', // pBASE
 ];
 
+// Clickable number that shows full precision in a portal popup on click
+function ClickableNumber({ value, className }: { value: number; className?: string }) {
+  const [show, setShow] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const triggerRef = useRef<HTMLSpanElement>(null);
+  const popupRef = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    if (!show) return;
+    const handleClick = (e: MouseEvent) => {
+      if (triggerRef.current?.contains(e.target as Node) || popupRef.current?.contains(e.target as Node)) return;
+      setShow(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [show]);
+
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      setPos({ top: rect.bottom + 4, left: rect.left });
+    }
+    setShow(prev => !prev);
+  };
+
+  return (
+    <span ref={triggerRef} className={`cursor-pointer ${className || ''}`} onClick={handleClick}>
+      {formatLargeNumber(value)}
+      {show && typeof document !== 'undefined' && createPortal(
+        <span
+          ref={popupRef}
+          className="fixed z-[9999] bg-gray-900 border border-white/20 rounded-md px-2 py-1 text-xs text-white whitespace-nowrap shadow-lg"
+          style={{ top: pos.top, left: pos.left }}
+        >
+          {value.toLocaleString(undefined, { maximumFractionDigits: 18 })}
+        </span>,
+        document.body
+      )}
+    </span>
+  );
+}
+
 // Track which logos have failed to load to avoid repeat 404s
 const failedLogos = new Set<string>();
 
@@ -4132,9 +4175,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                   <span className="text-white text-sm font-medium whitespace-nowrap">
                                     {formatTokenTicker(getTokenInfo(order.orderDetailsWithID.orderDetails.sellToken).ticker)}
                                   </span>
-                                  <span className="text-white/60 text-xs whitespace-nowrap">
-                                    {formatLargeNumber(tokenAmount)}
-                                  </span>
+                                  <ClickableNumber value={tokenAmount} className="text-white/60 text-xs whitespace-nowrap" />
                                   {tokenPrice > 0 && (
                                     <span className="text-gray-500 text-xs">
                                       {formatUSD(usdValue)}
@@ -4197,9 +4238,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                         <span className="text-white text-sm font-medium whitespace-nowrap">
                                           {formatTokenTicker(tokenInfo.ticker)}
                                         </span>
-                                        <span className="text-white/60 text-xs whitespace-nowrap">
-                                          {formatLargeNumber(tokenAmount)}
-                                        </span>
+                                        <ClickableNumber value={tokenAmount} className="text-white/60 text-xs whitespace-nowrap" />
                                         {tokenPrice > 0 && (
                                           <span className="text-gray-500 text-xs">
                                             {formatUSD(usdValue)}
@@ -4257,7 +4296,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                         <PixelSpinner size={12} />
                                       ) : (
                                         <span className="text-green-400 text-xs font-medium whitespace-nowrap">
-                                          Claim {formatLargeNumber(claimableBuyAmount)} {formatTokenTicker(tokenInfo.ticker)}
+                                          Claim <ClickableNumber value={claimableBuyAmount} className="text-green-400" /> {formatTokenTicker(tokenInfo.ticker)}
                                         </span>
                                       )}
                                     </button>
@@ -4350,8 +4389,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                         title="Click to switch ratio direction"
                                       >
                                         {(ratioInverted[orderId] ?? false)
-                                          ? `${formattedRatio} ${ratio.buyTokenTicker}/${sellTicker}`
-                                          : `${formattedRatio} ${sellTicker}/${ratio.buyTokenTicker}`
+                                          ? <><ClickableNumber value={(ratioInverted[orderId] ?? false) ? ratio.buyPerSell : ratio.sellPerBuy} /> {ratio.buyTokenTicker}/{sellTicker}</>
+                                          : <><ClickableNumber value={(ratioInverted[orderId] ?? false) ? ratio.buyPerSell : ratio.sellPerBuy} /> {sellTicker}/{ratio.buyTokenTicker}</>
                                         }
                                       </button>
                                     )}
@@ -4402,7 +4441,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                       <div className="flex flex-col items-center justify-start min-w-0 mt-1.5">
                         <div
                           className="text-gray-400 text-sm cursor-pointer hover:text-white transition-colors"
-                          onClick={() => { window.location.href = `/marketplace?order-id=${order.orderDetailsWithID.orderID.toString()}`; }}
+                          onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/marketplace?order-id=${order.orderDetailsWithID.orderID.toString()}`); toast({ title: 'Copied', description: 'Order link copied to clipboard', variant: 'success' }); }}
                         >{order.orderDetailsWithID.orderID.toString()}</div>
                         {isMarketplaceMode && address && order.userDetails.orderOwner.toLowerCase() !== address.toLowerCase() && (
                           <button
@@ -5248,7 +5287,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                               <div
                                 className="mt-6 text-xs text-gray-500 cursor-pointer hover:text-gray-300 transition-colors"
                                 onClick={() => {
-                                  window.location.href = `/marketplace?order-id=${order.orderDetailsWithID.orderID.toString()}`;
+                                  navigator.clipboard.writeText(`${window.location.origin}/marketplace?order-id=${order.orderDetailsWithID.orderID.toString()}`);
+                                  toast({ title: 'Copied', description: 'Order link copied to clipboard', variant: 'success' });
                                 }}
                               >
                                 Order ID: {order.orderDetailsWithID.orderID.toString()}
@@ -5492,7 +5532,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                     return (
                       <div className="flex items-center gap-2">
                         <span className="text-white text-lg font-semibold">
-                          {formatLargeNumber(claimableBuyAmount)} {formatTokenTicker(tokenInfo.ticker, chainId)}
+                          <ClickableNumber value={claimableBuyAmount} className="text-white" /> {formatTokenTicker(tokenInfo.ticker, chainId)}
                         </span>
                         {tokenPrice > 0 && (
                           <span className="text-white/50 text-sm">
@@ -5521,7 +5561,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                         return (
                           <div key={idx} className="flex items-center gap-2">
                             <span className="text-white text-lg font-semibold">
-                              {formatLargeNumber(claimableBuyAmount)} {formatTokenTicker(tokenInfo.ticker, chainId)}
+                              <ClickableNumber value={claimableBuyAmount} className="text-white" /> {formatTokenTicker(tokenInfo.ticker, chainId)}
                             </span>
                             {tokenPrice > 0 && (
                               <span className="text-white/50 text-sm">
