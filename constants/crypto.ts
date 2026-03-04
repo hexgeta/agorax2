@@ -3500,6 +3500,13 @@ export const TOKEN_CONSTANTS = [{
   ticker: "PMKR",
   decimals: 18,
   name: "PMKR"
+}, {
+  chain: 369,
+  a: "0x2806F9d083BABbDbB9a92b0722F1b5D4E6FEF6cC",
+  dexs: null,
+  ticker: "ST3",
+  decimals: 18,
+  name: "stCombo"
 }];
 
 export const API_ENDPOINTS = {

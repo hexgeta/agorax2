@@ -2293,11 +2293,10 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
   }, [searchQuery, aonFilterEnabled, dustFilterEnabled, claimableFilterEnabled, hideMyOrders, favoritesOnly, isMarketplaceMode, fillRange, positionRange, dateFilterPreset]);
 
   // Helper: check if an order is nearly fully filled (>99.9%) - used for tab filtering and hiding Buy button on dust orders
+  // Uses getRemainingPercentage for consistency with the progress bar display
   const isOrderNearlyFilled = useCallback((order: any) => {
-    const sellAmount = Number(order.orderDetailsWithID.orderDetails.sellAmount);
-    const remaining = Number(order.orderDetailsWithID.remainingSellAmount);
-    if (sellAmount <= 0) return false;
-    return ((sellAmount - remaining) / sellAmount) * 100 > 99.9;
+    const remainingPct = Number(getRemainingPercentage(order.orderDetailsWithID)) / 1e18 * 100;
+    return remainingPct < 0.1;
   }, []);
 
   // Memoize the display orders with 3-level filtering
@@ -4334,7 +4333,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                     </div>
                                     {tokenPct.percentage !== null && (
                                       <div className="text-xs text-gray-400 -mb-0.5">
-                                        {tokenPct.isBelowMarket ? 'below market' : 'above market'}
+                                        {tokenPct.isBelowMarket ? 'below est. market' : 'above est. market'}
                                       </div>
                                     )}
                                     {/* Ratio price for this token - clickable to toggle */}
@@ -4401,7 +4400,10 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
 
                       {/* COLUMN 8: Order ID */}
                       <div className="flex flex-col items-center justify-start min-w-0 mt-1.5">
-                        <div className="text-gray-400 text-sm">{order.orderDetailsWithID.orderID.toString()}</div>
+                        <div
+                          className="text-gray-400 text-sm cursor-pointer hover:text-white transition-colors"
+                          onClick={() => { window.location.href = `/marketplace?order-id=${order.orderDetailsWithID.orderID.toString()}`; }}
+                        >{order.orderDetailsWithID.orderID.toString()}</div>
                         {isMarketplaceMode && address && order.userDetails.orderOwner.toLowerCase() !== address.toLowerCase() && (
                           <button
                             onClick={(e) => {
@@ -5243,11 +5245,22 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                 </div>
                               </div>
 
-                              <div className="mt-6 text-xs text-gray-500">
+                              <div
+                                className="mt-6 text-xs text-gray-500 cursor-pointer hover:text-gray-300 transition-colors"
+                                onClick={() => {
+                                  window.location.href = `/marketplace?order-id=${order.orderDetailsWithID.orderID.toString()}`;
+                                }}
+                              >
                                 Order ID: {order.orderDetailsWithID.orderID.toString()}
                               </div>
 
-                              <div className="text-xs text-gray-500 mt-1">
+                              <div
+                                className="text-xs text-gray-500 mt-1 cursor-pointer hover:text-gray-300 transition-colors"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(order.userDetails.orderOwner);
+                                  toast({ title: 'Copied', description: 'Seller address copied to clipboard', variant: 'success' });
+                                }}
+                              >
                                 Seller: {order.userDetails.orderOwner}
                               </div>
 
