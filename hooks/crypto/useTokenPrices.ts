@@ -86,8 +86,19 @@ async function findBestPairAddress(contractAddress: string, chainId: number): Pr
       return null;
     }
 
+    // Only use pairs where our token is the base token
+    // DexScreener's priceUsd is the base token's price, so quote-side pairs give wrong prices
+    const basePairs = chainPairs.filter((pair: any) =>
+      pair.baseToken?.address?.toLowerCase() === contractAddress.toLowerCase()
+    );
+
+    if (basePairs.length === 0) {
+      pairAddressCache[cacheKey] = { pairAddress: null, timestamp: Date.now() };
+      return null;
+    }
+
     // Sort by liquidity (highest first) and return the best pair
-    const sortedPairs = chainPairs.sort((a: any, b: any) => {
+    const sortedPairs = basePairs.sort((a: any, b: any) => {
       const aLiquidity = parseFloat(a.liquidity?.usd || '0');
       const bLiquidity = parseFloat(b.liquidity?.usd || '0');
       return bLiquidity - aLiquidity;
@@ -255,6 +266,7 @@ async function fetchTokenPrices(contractAddresses: string[], customTokens: any[]
         
         if (pair && pair.priceUsd) {
           // Use contract address as key instead of ticker
+          // priceUsd is always correct since we only select pairs where our token is the base
           results[token.contractAddress] = {
       price: parseFloat(pair.priceUsd),
       priceChange: {
