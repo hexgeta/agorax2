@@ -26,7 +26,7 @@ export default function ApiReferencePage() {
       <LiquidGlassCard className="p-6">
         <h2 className="text-xl font-semibold text-white mb-3">Base URL</h2>
         <CodeBlock>https://agorax.win/api/v1</CodeBlock>
-        <p className="text-white/50 text-sm mt-3">All v1 endpoints are rate limited per IP address. See the Rate Limits section below for details.</p>
+        <p className="text-white/50 text-sm mt-3">All endpoints are rate limited to 300 req/min per IP per endpoint.</p>
       </LiquidGlassCard>
 
       {/* GET /v1/stats */}
@@ -393,36 +393,8 @@ export default function ApiReferencePage() {
       <LiquidGlassCard className="p-6">
         <h2 className="text-xl font-semibold text-white mb-4">Rate Limits</h2>
         <p className="text-white/70 mb-4">
-          All endpoints are rate limited per IP address per endpoint. Exceeding the limit returns a <code className="text-red-400">429</code> response with <code className="text-cyan-400">Retry-After</code> header.
+          All endpoints are rate limited to <code className="text-green-400 font-mono">300 requests/minute</code> per IP address per endpoint. Exceeding the limit returns a <code className="text-red-400">429</code> response with <code className="text-cyan-400">Retry-After</code> header.
         </p>
-        <div className="overflow-x-auto mb-4">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-white/10">
-                <th className="text-left py-2 text-white/60">Category</th>
-                <th className="text-left py-2 text-white/60">Limit</th>
-                <th className="text-left py-2 text-white/60">Endpoints</th>
-              </tr>
-            </thead>
-            <tbody className="text-white/70">
-              <tr className="border-b border-white/5">
-                <td className="py-2 font-medium text-white">Data (read)</td>
-                <td className="py-2 font-mono text-green-400">300 req/min</td>
-                <td className="py-2">/v1/orders, /v1/orders/:id, /v1/users/:address, /v1/stats, /v1/leaderboard</td>
-              </tr>
-              <tr className="border-b border-white/5">
-                <td className="py-2 font-medium text-white">Validation</td>
-                <td className="py-2 font-mono text-yellow-400">20 req/min</td>
-                <td className="py-2">Token access validation</td>
-              </tr>
-              <tr className="border-b border-white/5">
-                <td className="py-2 font-medium text-white">Write</td>
-                <td className="py-2 font-mono text-red-400">10 req/min</td>
-                <td className="py-2">State-mutating operations</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
         <p className="text-white/50 text-sm">
           Rate limit headers are included on every response: <code className="text-cyan-400">X-RateLimit-Limit</code>, <code className="text-cyan-400">X-RateLimit-Remaining</code>, <code className="text-cyan-400">X-RateLimit-Reset</code>.
         </p>

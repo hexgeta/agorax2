@@ -159,12 +159,7 @@ const url = getBlockExplorerTxUrl(chainId, txHash);
           <div className="space-y-4">
             <div>
               <h3 className="text-white font-medium mb-2">API Rate Limiting</h3>
-              <p className="text-white/60 text-sm">All API routes are rate limited per IP address:</p>
-              <ul className="text-white/50 text-sm mt-2 space-y-1">
-                <li>• Data endpoints (reads): 300 requests/minute</li>
-                <li>• Validation endpoints: 20 requests/minute</li>
-                <li>• Write endpoints: 10 requests/minute</li>
-              </ul>
+              <p className="text-white/60 text-sm">All API routes are rate limited to 300 requests/minute per IP address per endpoint.</p>
             </div>
             <div>
               <h3 className="text-white font-medium mb-2">Transaction Timeouts</h3>
