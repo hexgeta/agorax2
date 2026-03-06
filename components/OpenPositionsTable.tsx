@@ -4502,8 +4502,35 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                         /* My Orders mode: show action buttons */
                         <div className="flex items-center justify-center">
                           {(statusFilter === 'completed' || statusFilter === 'cancelled') ? (
-                            // No actions for completed/cancelled orders
-                            <div className="w-16 h-8"></div>
+                            // Show claim button for completed/cancelled orders if they have claimable proceeds
+                            (() => {
+                              const proceeds = order.collectableProceeds;
+                              const hasClaimable = proceeds && proceeds.buyTokens.length > 0;
+                              const isCollecting = collectingOrders.has(order.orderDetailsWithID.orderID.toString());
+
+                              if (!hasClaimable) return <div className="w-16 h-8"></div>;
+
+                              return (
+                                <button
+                                  onClick={() => {
+                                    setBatchClaimOrder(order);
+                                    setBatchClaimRecipient(address || '');
+                                    setBatchClaimCustomRecipient(false);
+                                    setBatchClaimWarningAccepted(false);
+                                    setBatchClaimTokenIndex(null);
+                                  }}
+                                  disabled={isCollecting}
+                                  className="p-2 rounded-lg bg-green-500/20 border border-green-500/40 hover:bg-green-500/30 hover:border-green-500/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title="Claim all proceeds"
+                                >
+                                  {isCollecting ? (
+                                    <PixelSpinner size={16} className="mx-auto" />
+                                  ) : (
+                                    <DollarSign className="w-4 h-4 text-green-400 hover:text-green-300 mx-auto" />
+                                  )}
+                                </button>
+                              );
+                            })()
                           ) : ownershipFilter === 'mine' && order.orderDetailsWithID.status === 0 ? (
                             <div className="flex items-center gap-1">
                               {/* Batch Claim Button - only show if there are claimable proceeds */}

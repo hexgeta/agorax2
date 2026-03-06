@@ -62,6 +62,9 @@ const ORDER_PROCEEDS_COLLECTED_EVENT = parseAbiItem(
 const PROCEEDS_COLLECTION_FAILED_EVENT = parseAbiItem(
   'event ProceedsCollectionFailed(address indexed user, uint256 indexed orderID, address failedToken)'
 );
+const ORDER_EXPIRATION_UPDATED_EVENT = parseAbiItem(
+  'event OrderExpirationUpdated(uint256 indexed orderID, uint64 newExpiration)'
+);
 
 // XP values now come from constants/xp.ts
 // ACTION_XP.ORDER_CREATED = 20
@@ -139,18 +142,52 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     // 2. Fetch events in the block range
     const logParams = { address: CONTRACT_ADDRESS, fromBlock, toBlock };
 
-    const [placedLogs, filledLogs, cancelledLogs, proceedsLogs, proceedsFailedLogs] = await Promise.all([
-      client.getLogs({ ...logParams, event: ORDER_PLACED_EVENT as any }).catch(() => [] as any[]),
-      client.getLogs({ ...logParams, event: ORDER_FILLED_EVENT as any }).catch(() => [] as any[]),
-      client.getLogs({ ...logParams, event: ORDER_CANCELLED_EVENT as any }).catch(() => [] as any[]),
-      client.getLogs({ ...logParams, event: ORDER_PROCEEDS_COLLECTED_EVENT as any }).catch(() => [] as any[]),
-      client.getLogs({ ...logParams, event: PROCEEDS_COLLECTION_FAILED_EVENT as any }).catch(() => [] as any[]),
+    // Track getLogs failures - if any fail, we must NOT advance the cursor
+    let logsFailed = false;
+    const safeLogs = (promise: Promise<any[]>) =>
+      promise.catch((err) => {
+        logsFailed = true;
+        console.error('getLogs failed:', err.message || err);
+        return [] as any[];
+      });
+
+    const [placedLogs, filledLogs, cancelledLogs, proceedsLogs, proceedsFailedLogs, expirationLogs] = await Promise.all([
+      safeLogs(client.getLogs({ ...logParams, event: ORDER_PLACED_EVENT as any })),
+      safeLogs(client.getLogs({ ...logParams, event: ORDER_FILLED_EVENT as any })),
+      safeLogs(client.getLogs({ ...logParams, event: ORDER_CANCELLED_EVENT as any })),
+      safeLogs(client.getLogs({ ...logParams, event: ORDER_PROCEEDS_COLLECTED_EVENT as any })),
+      safeLogs(client.getLogs({ ...logParams, event: PROCEEDS_COLLECTION_FAILED_EVENT as any })),
+      safeLogs(client.getLogs({ ...logParams, event: ORDER_EXPIRATION_UPDATED_EVENT as any })),
     ]);
 
-    const totalEvents = placedLogs.length + filledLogs.length + cancelledLogs.length + proceedsLogs.length + proceedsFailedLogs.length;
+    // If any getLogs call failed, do NOT advance the block cursor so we retry next run
+    if (logsFailed) {
+      return NextResponse.json({
+        success: false,
+        error: 'One or more getLogs calls failed. Block cursor NOT advanced to prevent skipping events.',
+        blocks_attempted: `${fromBlock} to ${toBlock}`,
+        partial_events: {
+          placed: placedLogs.length,
+          filled: filledLogs.length,
+          cancelled: cancelledLogs.length,
+          proceeds: proceedsLogs.length,
+          expiration_updates: expirationLogs.length,
+        },
+        duration_ms: Date.now() - startTime,
+      }, { status: 500 });
+    }
 
-    // If no events, just advance the cursor
+    const totalEvents = placedLogs.length + filledLogs.length + cancelledLogs.length + proceedsLogs.length + proceedsFailedLogs.length + expirationLogs.length;
+
+    // If no events, still run full re-sync then advance cursor
     if (totalEvents === 0) {
+      let resynced = 0;
+      try {
+        resynced = await resyncAllOrders(client, CONTRACT_ABI);
+      } catch {
+        // Non-critical
+      }
+
       await supabase
         .from('sync_state')
         .upsert({ key: 'last_synced_block', value: Number(toBlock), updated_at: new Date().toISOString() });
@@ -160,13 +197,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         message: 'No new events',
         blocks_scanned: `${fromBlock} to ${toBlock}`,
         current_block: currentBlock.toString(),
+        orders_resynced: resynced,
         duration_ms: Date.now() - startTime,
       });
     }
 
     // 3. Collect unique blocks for timestamps
     const uniqueBlocks = new Set<bigint>();
-    for (const log of [...placedLogs, ...filledLogs, ...cancelledLogs, ...proceedsLogs, ...proceedsFailedLogs]) {
+    for (const log of [...placedLogs, ...filledLogs, ...cancelledLogs, ...proceedsLogs, ...proceedsFailedLogs, ...expirationLogs]) {
       uniqueBlocks.add(log.blockNumber);
     }
 
@@ -203,6 +241,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     for (const log of cancelledLogs) { const oid = log.args.orderID?.toString(); if (oid) allOrderIds.add(oid); }
     for (const log of proceedsLogs) { const oid = log.args.orderID?.toString(); if (oid) allOrderIds.add(oid); }
     for (const log of proceedsFailedLogs) { const oid = log.args.orderID?.toString(); if (oid) allOrderIds.add(oid); }
+    for (const log of expirationLogs) { const oid = log.args.orderID?.toString(); if (oid) allOrderIds.add(oid); }
 
     const onChainOrders = new Map<string, any>();
     const orderIdArray = Array.from(allOrderIds);
@@ -229,7 +268,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     // Build order owner map from placed events
     const orderOwnerMap = new Map<string, { owner: string; sellToken: string; sellTicker: string; timestamp: number }>();
 
-    const stats = { placed: 0, filled: 0, cancelled: 0, proceeds: 0, errors: [] as string[] };
+    const stats = { placed: 0, filled: 0, cancelled: 0, proceeds: 0, expiration_updates: 0, errors: [] as string[] };
 
     // 6. Process OrderPlaced
     for (const log of placedLogs) {
@@ -503,12 +542,39 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       }, 0, timestamp);
     }
 
+    // 9c. Process OrderExpirationUpdated events
+    for (const log of expirationLogs) {
+      const orderId = log.args.orderID?.toString();
+      const newExpiration = Number(log.args.newExpiration);
+      if (!orderId) continue;
+
+      try {
+        await supabase.from('orders').update({
+          expiration: newExpiration,
+          updated_at: new Date().toISOString(),
+        }).eq('order_id', Number(orderId));
+      } catch (err) {
+        stats.errors.push(`Expiration update ${orderId}: ${err}`);
+      }
+
+      stats.expiration_updates++;
+    }
+
     // 10. Recalculate stats for affected users
     for (const wallet of allWallets) {
       await recalculateUserStats(wallet);
     }
 
-    // 11. Advance the sync cursor
+    // 11. Full re-sync: update ALL orders against on-chain state
+    // Ensures API data is never stale regardless of past event processing issues
+    let resynced = 0;
+    try {
+      resynced = await resyncAllOrders(client, CONTRACT_ABI);
+    } catch (err) {
+      stats.errors.push(`Full re-sync failed: ${err}`);
+    }
+
+    // 12. Advance the sync cursor
     await supabase
       .from('sync_state')
       .upsert({ key: 'last_synced_block', value: Number(toBlock), updated_at: new Date().toISOString() });
@@ -522,8 +588,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         filled: stats.filled,
         cancelled: stats.cancelled,
         proceeds: stats.proceeds,
+        expiration_updates: stats.expiration_updates,
         total: totalEvents,
       },
+      orders_resynced: resynced,
       wallets_affected: allWallets.size,
       errors: stats.errors.length > 0 ? stats.errors.slice(0, 10) : undefined,
       duration_ms: Date.now() - startTime,
@@ -531,6 +599,58 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   } catch (error) {
     return NextResponse.json({ success: false, error: `Sync failed: ${error}` }, { status: 500 });
   }
+}
+
+// Re-sync all orders against on-chain state to ensure API data is never stale
+async function resyncAllOrders(client: any, CONTRACT_ABI: any): Promise<number> {
+  let resynced = 0;
+  const totalOrderCount = await client.readContract({
+    address: CONTRACT_ADDRESS,
+    abi: CONTRACT_ABI,
+    functionName: 'getTotalOrderCount',
+  }) as bigint;
+
+  const total = Number(totalOrderCount);
+  for (let i = 0; i < total; i += 10) {
+    const batch = Array.from({ length: Math.min(10, total - i) }, (_, j) => i + j + 1);
+    const batchResults = await Promise.all(
+      batch.map((oid) =>
+        client.readContract({
+          address: CONTRACT_ADDRESS,
+          abi: CONTRACT_ABI,
+          functionName: 'getOrderDetails',
+          args: [BigInt(oid)],
+        }).then((res: any) => ({ oid, data: res })).catch(() => ({ oid, data: null }))
+      )
+    );
+    for (const { oid, data } of batchResults) {
+      if (!data) continue;
+      try {
+        const details = data.orderDetailsWithID || data;
+        const orderDetails = details.orderDetails;
+        const totalSell = orderDetails?.sellAmount ? BigInt(orderDetails.sellAmount) : 0n;
+        const redeemed = details.redeemedSellAmount ? BigInt(details.redeemedSellAmount) : 0n;
+        const remaining = details.remainingSellAmount ? BigInt(details.remainingSellAmount) : 0n;
+        const fillPct = totalSell > 0n ? Number((redeemed * 10000n) / totalSell) / 100 : 0;
+        let chainStatus = Number(details.status ?? 0);
+        if (fillPct >= 100 && chainStatus !== 1) chainStatus = 2;
+
+        await supabase.from('orders').update({
+          status: chainStatus,
+          fill_percentage: fillPct,
+          remaining_sell_amount: remaining.toString(),
+          redeemed_sell_amount: redeemed.toString(),
+          expiration: Number(orderDetails?.expirationTime || 0n),
+          is_all_or_nothing: Boolean(orderDetails?.allOrNothing),
+          updated_at: new Date().toISOString(),
+        }).eq('order_id', oid);
+        resynced++;
+      } catch {
+        // Skip individual order failures
+      }
+    }
+  }
+  return resynced;
 }
 
 // Record event with dedup
