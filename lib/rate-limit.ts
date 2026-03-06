@@ -251,7 +251,7 @@ export const RATE_LIMITS = {
   /** Strict limit for validation endpoints */
   validation: { limit: 20, windowSeconds: 60 } satisfies RateLimitConfig,
   /** More relaxed for data fetching */
-  data: { limit: 60, windowSeconds: 60 } satisfies RateLimitConfig,
+  data: { limit: 300, windowSeconds: 60 } satisfies RateLimitConfig,
   /** Very strict for write operations */
   write: { limit: 10, windowSeconds: 60 } satisfies RateLimitConfig,
 } as const;

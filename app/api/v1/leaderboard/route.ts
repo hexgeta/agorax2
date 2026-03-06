@@ -1,12 +1,10 @@
 import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { checkRateLimit, apiSuccess, apiError } from '@/lib/rate-limit';
+import { checkRateLimit, RATE_LIMITS, apiSuccess, apiError } from '@/lib/rate-limit';
 
 const supabaseUrl = process.env.SUPABASE_URL!;
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
-const RATE_LIMIT = { limit: 20, windowSeconds: 60 };
 
 const PRESTIGE_NAMES = [
   'Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon',
@@ -27,7 +25,7 @@ const PRESTIGE_NAMES = [
  *   min_trades=0          Minimum trades threshold
  */
 export async function GET(request: NextRequest): Promise<Response> {
-  const rateLimited = await checkRateLimit(request, RATE_LIMIT);
+  const rateLimited = await checkRateLimit(request, RATE_LIMITS.data);
   if (rateLimited) return rateLimited;
 
   const url = new URL(request.url);

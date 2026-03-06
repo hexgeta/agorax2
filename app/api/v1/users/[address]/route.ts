@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import {
   checkRateLimit,
+  RATE_LIMITS,
   isValidAddress,
   apiSuccess,
   apiError,
@@ -10,8 +11,6 @@ import {
 const supabaseUrl = process.env.SUPABASE_URL!;
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
-const RATE_LIMIT = { limit: 30, windowSeconds: 60 };
 
 /**
  * GET /api/v1/users/[address]
@@ -28,8 +27,7 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ address: string }> }
 ): Promise<Response> {
-  // Rate limit
-  const rateLimited = await checkRateLimit(request, RATE_LIMIT);
+  const rateLimited = await checkRateLimit(request, RATE_LIMITS.data);
   if (rateLimited) return rateLimited;
 
   const { address } = await params;
