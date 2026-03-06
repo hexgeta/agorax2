@@ -4502,11 +4502,35 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                         /* My Orders mode: show action buttons */
                         <div className="flex items-center justify-center">
                           {(statusFilter === 'completed' || statusFilter === 'cancelled') ? (
-                            // Show claim button for completed/cancelled orders if they have claimable proceeds
+                            // Show action buttons for completed/cancelled orders
                             (() => {
                               const proceeds = order.collectableProceeds;
                               const hasClaimable = proceeds && proceeds.buyTokens.length > 0;
                               const isCollecting = collectingOrders.has(order.orderDetailsWithID.orderID.toString());
+                              const isCanceling = cancelingOrders.has(order.orderDetailsWithID.orderID.toString());
+                              // Dust orders: status 0 (active on-chain) but >99.9% filled
+                              const isDustOrder = order.orderDetailsWithID.status === 0 && isOrderNearlyFilled(order);
+
+                              if (isDustOrder) {
+                                // Show "Cancel & Claim" button - cancelling returns dust + claims proceeds in one tx
+                                return (
+                                  <button
+                                    onClick={() => handleCancelOrder(order)}
+                                    disabled={isCanceling}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-full bg-amber-500/20 border border-amber-500/40 hover:bg-amber-500/30 hover:border-amber-500/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    title="Cancel to reclaim dust and claim proceeds in one transaction"
+                                  >
+                                    {isCanceling ? (
+                                      <PixelSpinner size={14} className="mx-auto" />
+                                    ) : (
+                                      <>
+                                        <DollarSign className="w-3.5 h-3.5 text-amber-400" />
+                                        <span className="text-amber-400 font-medium">Cancel & Claim</span>
+                                      </>
+                                    )}
+                                  </button>
+                                );
+                              }
 
                               if (!hasClaimable) return <div className="w-16 h-8"></div>;
 
