@@ -2344,24 +2344,23 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     if (details.status !== 0) return false;
     const remaining = BigInt(details.remainingSellAmount?.toString() || '0');
     if (remaining === 0n) return true;
+
+    // Practical dust check: if remaining < 0.000001 tokens, it's dust
+    const sellTokenAddress = details.orderDetails.sellToken;
+    const sellTokenInfo = getTokenInfo(sellTokenAddress);
+    const decimals = sellTokenInfo.decimals ?? 18;
+    const dustThreshold = BigInt(10 ** Math.max(0, decimals - 6));
+    if (remaining < dustThreshold) return true;
+
+    // Contract-level unfillable check
     const sellAmount = BigInt(details.orderDetails.sellAmount?.toString() || '0');
     const buyAmounts: bigint[] = (details.orderDetails.buyAmounts || []).map((a: any) => BigInt(a.toString()));
     if (buyAmounts.length === 0 || sellAmount === 0n) return false;
-    // Debug log for order 73
-    const orderId = details.orderID?.toString();
-    if (orderId === '73') {
-      console.log(`[Order 73 dust check] remaining=${remaining}, sellAmount=${sellAmount}, buyAmounts=[${buyAmounts.join(',')}]`);
-    }
     for (const buyAmount of buyAmounts) {
       if (buyAmount === 0n) continue;
-      // Minimum buy tokens needed for soldAmount > 0: ceil(buyAmount / sellAmount)
       const minBuy = (buyAmount + sellAmount - 1n) / sellAmount;
-      // Resulting sell amount from that minimum buy
       const soldAmount = (minBuy * sellAmount) / buyAmount;
-      if (orderId === '73') {
-        console.log(`[Order 73] buyAmount=${buyAmount}, minBuy=${minBuy}, soldAmount=${soldAmount}, fillable=${soldAmount > 0n && soldAmount <= remaining}`);
-      }
-      if (soldAmount > 0n && soldAmount <= remaining) return false; // fillable
+      if (soldAmount > 0n && soldAmount <= remaining) return false;
     }
     return true;
   }, []);

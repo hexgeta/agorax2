@@ -44,12 +44,20 @@ export default function HistoryPage() {
 
   const { prices: tokenPrices, isLoading: pricesLoading } = useTokenPrices(allTokenAddresses, { disableRefresh: true });
 
-  // Check if an order is unfillable (dust) — mirrors contract fillOrder logic
+  // Check if an order is unfillable (dust)
   const isUnfillable = useCallback((order: CompleteOrderDetails) => {
     const details = order.orderDetailsWithID;
     if (details.status !== 0) return false;
     const remaining = details.remainingSellAmount;
     if (remaining === 0n) return true;
+
+    // Practical dust check: if remaining < 0.000001 tokens, it's dust
+    const sellTokenInfo = getTokenInfo(details.orderDetails.sellToken);
+    const decimals = sellTokenInfo.decimals ?? 18;
+    const dustThreshold = BigInt(10 ** Math.max(0, decimals - 6));
+    if (remaining < dustThreshold) return true;
+
+    // Contract-level unfillable check
     const sellAmount = details.orderDetails.sellAmount;
     const buyAmounts = details.orderDetails.buyAmounts;
     if (buyAmounts.length === 0 || sellAmount === 0n) return false;

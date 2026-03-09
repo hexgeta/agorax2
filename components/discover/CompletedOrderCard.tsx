@@ -69,10 +69,17 @@ export function CompletedOrderCard({ order, onSwipeComplete, isTop, stackIndex, 
   // Total is remaining + redeemed (not orderDetails.sellAmount which includes protocol fees)
   const totalSellAmount = remainingAmount + redeemedAmount;
 
-  // Detect unfillable (dust) orders — mirrors contract fillOrder logic
+  // Detect unfillable (dust) orders
   const isUnfillable = (() => {
     if (order.orderDetailsWithID.status !== 0) return false;
     if (remainingAmount === 0n) return true;
+
+    // Practical dust check: if remaining < 0.000001 tokens, it's dust
+    const decimals = sellTokenInfo.decimals ?? 18;
+    const dustThreshold = BigInt(10 ** Math.max(0, decimals - 6));
+    if (remainingAmount < dustThreshold) return true;
+
+    // Contract-level unfillable check
     const sellAmt = orderDetails.sellAmount;
     if (sellAmt === 0n || orderDetails.buyAmounts.length === 0) return false;
     for (const ba of orderDetails.buyAmounts) {

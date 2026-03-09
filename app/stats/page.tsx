@@ -80,11 +80,37 @@ function formatAddress(address: string): string {
   return address;
 }
 
+// Deterministic color from address for buyer pills
+const BUYER_COLORS = [
+  { bg: 'rgba(239, 68, 68, 0.2)', text: '#fca5a5', border: 'rgba(239, 68, 68, 0.4)' },
+  { bg: 'rgba(59, 130, 246, 0.2)', text: '#93c5fd', border: 'rgba(59, 130, 246, 0.4)' },
+  { bg: 'rgba(16, 185, 129, 0.2)', text: '#6ee7b7', border: 'rgba(16, 185, 129, 0.4)' },
+  { bg: 'rgba(245, 158, 11, 0.2)', text: '#fcd34d', border: 'rgba(245, 158, 11, 0.4)' },
+  { bg: 'rgba(139, 92, 246, 0.2)', text: '#c4b5fd', border: 'rgba(139, 92, 246, 0.4)' },
+  { bg: 'rgba(236, 72, 153, 0.2)', text: '#f9a8d4', border: 'rgba(236, 72, 153, 0.4)' },
+  { bg: 'rgba(6, 182, 212, 0.2)', text: '#67e8f9', border: 'rgba(6, 182, 212, 0.4)' },
+  { bg: 'rgba(251, 146, 60, 0.2)', text: '#fdba74', border: 'rgba(251, 146, 60, 0.4)' },
+  { bg: 'rgba(52, 211, 153, 0.2)', text: '#6ee7b7', border: 'rgba(52, 211, 153, 0.4)' },
+  { bg: 'rgba(167, 139, 250, 0.2)', text: '#ddd6fe', border: 'rgba(167, 139, 250, 0.4)' },
+];
+
+function getBuyerColor(address: string) {
+  let hash = 0;
+  for (let i = 0; i < address.length; i++) {
+    hash = ((hash << 5) - hash + address.charCodeAt(i)) | 0;
+  }
+  return BUYER_COLORS[Math.abs(hash) % BUYER_COLORS.length];
+}
+
 function formatTimestamp(timestamp: number | bigint): string {
   if (!timestamp) return '-';
   const ts = typeof timestamp === 'bigint' ? Number(timestamp) : timestamp;
   const date = new Date(ts * 1000);
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+  return date.toLocaleString('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+    timeZone: 'UTC'
+  }) + ' UTC';
 }
 
 export default function StatsPage() {
@@ -480,6 +506,62 @@ export default function StatsPage() {
     return formatted.sort((a, b) => b.id - a.id);
   }, [filteredContractOrders]);
 
+  // Build formatted fills for All Fills table
+  interface FormattedFill {
+    orderId: string;
+    buyer: string;
+    sellToken: string;
+    sellTokenAddress: string;
+    sellAmountNum: number;
+    buyToken: string;
+    buyTokenAddress: string;
+    buyAmountNum: number;
+    timestamp: number;
+    txHash: string;
+  }
+  const formattedFills = useMemo(() => {
+    if (fillEvents.length === 0 || contractOrders.length === 0 || whitelist.length === 0) return [];
+    const orderMap = new Map<string, CompleteOrderDetails>();
+    contractOrders.forEach(o => orderMap.set(o.orderDetailsWithID.orderID.toString(), o));
+
+    const fills: FormattedFill[] = [];
+    for (const event of fillEvents) {
+      const order = orderMap.get(event.orderId);
+      if (!order) continue;
+      const sellTokenAddr = order.orderDetailsWithID.orderDetails.sellToken.toLowerCase();
+      const sellTokenInfo = getTokenInfo(sellTokenAddr);
+      const buyTokenAddr = whitelist[event.buyTokenIndex]?.toLowerCase();
+      if (!buyTokenAddr) continue;
+      const buyTokenInfo = getTokenInfoByIndex(event.buyTokenIndex);
+
+      const originalSellAmount = order.orderDetailsWithID.orderDetails.sellAmount;
+      const buyTokensIndex = order.orderDetailsWithID.orderDetails.buyTokensIndex;
+      const buyAmounts = order.orderDetailsWithID.orderDetails.buyAmounts;
+      const matchIdx = buyTokensIndex.findIndex(idx => Number(idx) === event.buyTokenIndex);
+
+      let sellAmountNum = 0;
+      if (matchIdx >= 0 && buyAmounts[matchIdx] && Number(buyAmounts[matchIdx]) > 0) {
+        const ratio = Number(event.buyAmount) / Number(buyAmounts[matchIdx]);
+        sellAmountNum = (Number(originalSellAmount) * ratio) / Math.pow(10, sellTokenInfo.decimals);
+      }
+      const buyAmountNum = Number(event.buyAmount) / Math.pow(10, buyTokenInfo.decimals);
+
+      fills.push({
+        orderId: event.orderId,
+        buyer: event.buyer,
+        sellToken: sellTokenInfo.ticker,
+        sellTokenAddress: sellTokenAddr,
+        sellAmountNum,
+        buyToken: buyTokenInfo.ticker,
+        buyTokenAddress: buyTokenAddr,
+        buyAmountNum,
+        timestamp: event.timestamp,
+        txHash: event.transactionHash,
+      });
+    }
+    return fills.sort((a, b) => b.timestamp - a.timestamp);
+  }, [fillEvents, contractOrders, whitelist]);
+
   const filteredOrdersByStatus = useMemo(() => {
     if (orderStatusFilter === 'all') return formattedOrders;
     return formattedOrders.filter(order => order.status === orderStatusFilter);
@@ -761,6 +843,116 @@ export default function StatsPage() {
                                     <span className="text-gray-500 text-sm whitespace-nowrap">{order.createdAt}</span>
                                   </td>
                                 </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                    )}
+                  </LiquidGlassCard>
+                </div>
+
+                {/* All Fills Table */}
+                <div>
+                  <h2 className="text-2xl font-bold text-white mb-4">All Fills</h2>
+                  <LiquidGlassCard
+                    shadowIntensity="sm"
+                    glowIntensity="sm"
+                    blurIntensity="xl"
+                    className="p-4 md:p-6 !overflow-x-auto"
+                  >
+                    {isLoading ? (
+                      <div className="flex items-center justify-center py-12">
+                        <PixelSpinner size={32} />
+                        <span className="ml-3 text-gray-400">Loading fills...</span>
+                      </div>
+                    ) : (
+                    <div className="overflow-x-auto -mx-4 md:-mx-6 px-4 md:px-6 pb-2 modern-scrollbar">
+                      <table className="w-full min-w-[800px]">
+                        <thead>
+                          <tr className="border-b border-white/10">
+                            <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Order</th>
+                            <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Buyer</th>
+                            <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Sold</th>
+                            <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Bought</th>
+                            <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Date</th>
+                            <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Tx</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {formattedFills.length === 0 ? (
+                            <tr>
+                              <td colSpan={6} className="py-8 text-center text-gray-500">
+                                No fills found.
+                              </td>
+                            </tr>
+                          ) : (
+                            formattedFills.map((fill, idx) => {
+                              const sellPrice = tokenPrices[fill.sellTokenAddress]?.price ?? 0;
+                              const buyPrice = tokenPrices[fill.buyTokenAddress]?.price ?? 0;
+                              const sellUsd = fill.sellAmountNum * sellPrice;
+                              const buyUsd = fill.buyAmountNum * buyPrice;
+                              return (
+                              <tr key={`${fill.txHash}-${idx}`} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                                <td className="py-4 px-2">
+                                  <span className="text-gray-500 text-sm">#{fill.orderId}</span>
+                                </td>
+                                <td className="py-4 px-2">
+                                  {(() => {
+                                    const color = getBuyerColor(fill.buyer);
+                                    return (
+                                      <span
+                                        className="font-mono text-xs px-2.5 py-1 rounded-full inline-block"
+                                        style={{ backgroundColor: color.bg, color: color.text, border: `1px solid ${color.border}` }}
+                                      >
+                                        {formatAddress(fill.buyer)}
+                                      </span>
+                                    );
+                                  })()}
+                                </td>
+                                <td className="py-4 px-2 text-right">
+                                  <div className="flex flex-col items-end">
+                                    <span className="text-white text-sm font-medium whitespace-nowrap">
+                                      {sellUsd > 0 ? `$${formatDisplayAmount(sellUsd.toString())}` : '--'}
+                                    </span>
+                                    <span className="text-gray-500 text-xs whitespace-nowrap">
+                                      {formatDisplayAmount(fill.sellAmountNum.toString())} {formatTokenTicker(fill.sellToken)}
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="py-4 px-2 text-right">
+                                  <div className="flex flex-col items-end">
+                                    <span className="text-white text-sm font-medium whitespace-nowrap">
+                                      {buyUsd > 0 ? `$${formatDisplayAmount(buyUsd.toString())}` : '--'}
+                                    </span>
+                                    <span className="text-gray-500 text-xs whitespace-nowrap">
+                                      {formatDisplayAmount(fill.buyAmountNum.toString())} {formatTokenTicker(fill.buyToken)}
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="py-4 px-2 text-right">
+                                  <span className="text-gray-500 text-sm whitespace-nowrap">
+                                    {fill.timestamp ? (() => {
+                                      const d = new Date(fill.timestamp * 1000);
+                                      const time = d.toLocaleString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
+                                      const date = d.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+                                      return `${time} - ${date} UTC`;
+                                    })() : '-'}
+                                  </span>
+                                </td>
+                                <td className="py-4 px-2 text-right">
+                                  <a
+                                    href={`https://otter.pulsechain.com/tx/${fill.txHash}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-blue-400 hover:text-blue-300 text-sm font-mono"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    {fill.txHash.slice(0, 8)}...
+                                  </a>
+                                </td>
+                              </tr>
                               );
                             })
                           )}
