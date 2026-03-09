@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAccount, usePublicClient } from 'wagmi';
 import { parseAbiItem } from 'viem';
 import { motion } from 'framer-motion';
@@ -145,24 +145,7 @@ export default function StatsPage() {
     return Array.from(addresses);
   }, [transactions, orders, activeOrders, whitelist]);
 
-  const { prices: rawTokenPrices, isLoading: pricesLoading } = useTokenPrices(allTokenAddresses);
-
-  // Stabilize tokenPrices reference to prevent full page re-renders on every 15s price refresh
-  // Only update when actual price values change (not just object identity)
-  const prevPriceKey = useRef('');
-  const stableTokenPrices = useRef(rawTokenPrices);
-  const tokenPriceKey = useMemo(() => {
-    return Object.entries(rawTokenPrices)
-      .map(([k, v]) => `${k}:${v.price.toFixed(6)}`)
-      .sort()
-      .join('|');
-  }, [rawTokenPrices]);
-
-  if (tokenPriceKey !== prevPriceKey.current) {
-    prevPriceKey.current = tokenPriceKey;
-    stableTokenPrices.current = rawTokenPrices;
-  }
-  const tokenPrices = stableTokenPrices.current;
+  const { prices: tokenPrices, isLoading: pricesLoading } = useTokenPrices(allTokenAddresses);
 
   // Fetch all orders placed
   const fetchAllOrders = useCallback(async () => {

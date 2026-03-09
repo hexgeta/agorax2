@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import useSWR from 'swr';
 import { TOKEN_CONSTANTS } from '@/constants/crypto'
 import { PRICE_CACHE_KEYS } from './utils/cache-keys';
@@ -321,9 +321,20 @@ async function fetchTokenPrices(contractAddresses: string[], customTokens: any[]
   return results;
 }
 
+// Build a compact fingerprint of price data to detect actual value changes
+function buildPriceFingerprint(prices: TokenPrices): string {
+  return Object.entries(prices)
+    .map(([k, v]) => `${k}:${v.price}`)
+    .sort()
+    .join('|');
+}
+
 export function useTokenPrices(contractAddresses: string[], options?: { disableRefresh?: boolean; customTokens?: any[] }) {
-  const [prices, setPrices] = useState<TokenPrices>({});
   const [error, setError] = useState<Error | null>(null);
+  // Stable prices ref — only updated when actual price values change
+  const stablePrices = useRef<TokenPrices>({});
+  const prevFingerprint = useRef('');
+  const [, forceRender] = useState(0);
 
   // Ensure WPLS is fetched when any native PLS address is in the list
   const normalizedAddresses = useMemo(() => {
@@ -357,14 +368,28 @@ export function useTokenPrices(contractAddresses: string[], options?: { disableR
     }
   );
 
-  useEffect(() => {
-    if (data) {
-      setPrices(data);
+  // Only update the stable reference and trigger re-render when prices actually change
+  const didChange = useRef(false);
+  if (data) {
+    const fingerprint = buildPriceFingerprint(data);
+    if (fingerprint !== prevFingerprint.current) {
+      prevFingerprint.current = fingerprint;
+      stablePrices.current = data;
+      didChange.current = true;
+    } else {
+      didChange.current = false;
     }
-    if (swrError) {
-      setError(swrError);
-    }
-  }, [data, swrError]);
+  }
 
-  return { prices, isLoading, error };
+  useEffect(() => {
+    if (didChange.current) {
+      forceRender(n => n + 1);
+    }
+  }, [data]);
+
+  if (swrError && swrError !== error) {
+    setError(swrError);
+  }
+
+  return { prices: stablePrices.current, isLoading, error };
 }

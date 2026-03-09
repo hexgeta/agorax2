@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useRef } from 'react';
+import { useMemo, useState } from 'react';
 import { ComposedChart, Area, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid, Legend } from 'recharts';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 import { formatUSD, getTokenPrice } from '@/utils/format';
@@ -52,24 +52,9 @@ function getTimeRangeStart(range: TimeRange): Date | null {
 export default function ProtocolActivityChart({ transactions, orders, contractOrders = [], tokenPrices }: ProtocolActivityChartProps) {
   const [timeRange, setTimeRange] = useState<TimeRange>('ALL');
 
-  // Stabilize tokenPrices reference — only recalculate chart when actual price values change
-  const prevPriceKey = useRef('');
-  const stablePrices = useRef(tokenPrices);
-  const priceKey = useMemo(() => {
-    return Object.entries(tokenPrices)
-      .map(([k, v]) => `${k}:${v.price.toFixed(6)}`)
-      .sort()
-      .join('|');
-  }, [tokenPrices]);
-
-  if (priceKey !== prevPriceKey.current) {
-    prevPriceKey.current = priceKey;
-    stablePrices.current = tokenPrices;
-  }
-
   // Calculate cumulative activity by day with volume data
   const allChartData = useMemo(() => {
-    const prices = stablePrices.current;
+    const prices = tokenPrices;
     // Track daily volumes
     const dailyData: Record<string, {
       orders: number;
@@ -220,7 +205,7 @@ export default function ProtocolActivityChart({ transactions, orders, contractOr
     }
 
     return result;
-  }, [transactions, orders, contractOrders, priceKey]);
+  }, [transactions, orders, contractOrders, tokenPrices]);
 
   // Filter chart data by time range
   const chartData = useMemo(() => {
@@ -406,16 +391,6 @@ export default function ProtocolActivityChart({ transactions, orders, contractOr
           <Area
             yAxisId="right"
             type="monotone"
-            dataKey="cumulativeFilledVolume"
-            stroke="#4ADE80"
-            strokeWidth={2}
-            strokeOpacity={0.6}
-            fill="url(#colorFilledVolume)"
-            name="Filled"
-          />
-          <Area
-            yAxisId="right"
-            type="monotone"
             dataKey="cumulativeListedVolume"
             stroke="#EC4899"
             strokeWidth={2}
@@ -423,18 +398,28 @@ export default function ProtocolActivityChart({ transactions, orders, contractOr
             fill="url(#colorListedVolume)"
             name="Listed"
           />
+          <Area
+            yAxisId="right"
+            type="monotone"
+            dataKey="cumulativeFilledVolume"
+            stroke="#4ADE80"
+            strokeWidth={2}
+            strokeOpacity={0.6}
+            fill="url(#colorFilledVolume)"
+            name="Filled"
+          />
           {/* Daily volume bars */}
           <Bar
             yAxisId="left"
-            dataKey="filledVolume"
-            fill="#4ADE80"
+            dataKey="listedVolume"
+            fill="#EC4899"
             radius={[4, 4, 0, 0]}
             legendType="none"
           />
           <Bar
             yAxisId="left"
-            dataKey="listedVolume"
-            fill="#EC4899"
+            dataKey="filledVolume"
+            fill="#4ADE80"
             radius={[4, 4, 0, 0]}
             legendType="none"
           />

@@ -502,8 +502,8 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
   const [showPaywallModal, setShowPaywallModal] = useState(false);
 
   // Sorting state
-  const [sortField, setSortField] = useState<SortField>('date');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const [sortField, setSortField] = useState<SortField>('orderID');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
   // Expanded positions state
   const [expandedPositions, setExpandedPositions] = useState<Set<string>>(new Set());
@@ -2336,32 +2336,34 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
   }, [searchQuery, aonFilterEnabled, dustFilterEnabled, claimableFilterEnabled, hideMyOrders, favoritesOnly, isMarketplaceMode, fillRange, positionRange, dateFilterPreset]);
 
   // Helper: check if an order is unfillable (dust) - used for tab filtering and hiding Buy button
-  // An order is unfillable when the remaining sell amount is too small for even 1 unit of any buy token.
-  // Formula per buy token: if (sellAmount / buyAmount) > remainingSellAmount, that token can't be filled.
-  // Order is unfillable if ALL buy tokens are unfillable.
+  // Mirrors contract: soldAmount = mulDiv(_buyAmount, sellAmount, buyAmount); require(soldAmount > 0 && soldAmount <= remaining)
+  // Minimum _buyAmount for non-zero soldAmount = ceil(buyAmount / sellAmount)
+  // Then check if the resulting soldAmount fits within remaining
   const isOrderNearlyFilled = useCallback((order: any) => {
     const details = order.orderDetailsWithID;
+    if (details.status !== 0) return false;
     const remaining = BigInt(details.remainingSellAmount?.toString() || '0');
     if (remaining === 0n) return true;
-
     const sellAmount = BigInt(details.orderDetails.sellAmount?.toString() || '0');
     const buyAmounts: bigint[] = (details.orderDetails.buyAmounts || []).map((a: any) => BigInt(a.toString()));
-
     if (buyAmounts.length === 0 || sellAmount === 0n) return false;
-
-    // Check each buy token - if ANY can still be filled, the order is not dust
+    // Debug log for order 73
+    const orderId = details.orderID?.toString();
+    if (orderId === '73') {
+      console.log(`[Order 73 dust check] remaining=${remaining}, sellAmount=${sellAmount}, buyAmounts=[${buyAmounts.join(',')}]`);
+    }
     for (const buyAmount of buyAmounts) {
       if (buyAmount === 0n) continue;
-      // Minimum sell amount needed for 1 smallest unit of this buy token
-      // = sellAmount / buyAmount (integer division, but we need ceiling so we check differently)
-      // The order is fillable for this token if: remaining * buyAmount >= sellAmount
-      // (i.e., remaining is enough to release at least 1 unit of buy token)
-      if (remaining * buyAmount >= sellAmount) {
-        return false; // Still fillable for this buy token
+      // Minimum buy tokens needed for soldAmount > 0: ceil(buyAmount / sellAmount)
+      const minBuy = (buyAmount + sellAmount - 1n) / sellAmount;
+      // Resulting sell amount from that minimum buy
+      const soldAmount = (minBuy * sellAmount) / buyAmount;
+      if (orderId === '73') {
+        console.log(`[Order 73] buyAmount=${buyAmount}, minBuy=${minBuy}, soldAmount=${soldAmount}, fillable=${soldAmount > 0n && soldAmount <= remaining}`);
       }
+      if (soldAmount > 0n && soldAmount <= remaining) return false; // fillable
     }
-
-    return true; // Unfillable for all buy tokens
+    return true;
   }, []);
 
   // Memoize the display orders with 3-level filtering
@@ -2524,7 +2526,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
         const remainingPercentage = originalSellAmount > 0n
           ? Number(remainingSellAmount * 10000n / originalSellAmount) / 10000
           : 0;
-        const isCompletedOrCancelled = order.orderDetailsWithID.status === 1 || order.orderDetailsWithID.status === 2;
+        const isCompletedOrCancelled = order.orderDetailsWithID.status === 1 || order.orderDetailsWithID.status === 2 || (order.orderDetailsWithID.status === 0 && isOrderNearlyFilled(order));
 
         const sellAmountToUse = isCompletedOrCancelled
           ? originalSellAmount
@@ -2643,7 +2645,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
             const rawRemainingPercentage = getRemainingPercentage(a.orderDetailsWithID);
             const remainingPercentage = Number(rawRemainingPercentage) / 1e18;
             const originalSellAmount = a.orderDetailsWithID.orderDetails.sellAmount;
-            const isCompletedOrCancelled = a.orderDetailsWithID.status === 2 || a.orderDetailsWithID.status === 1;
+            const isCompletedOrCancelled = a.orderDetailsWithID.status === 2 || a.orderDetailsWithID.status === 1 || (a.orderDetailsWithID.status === 0 && isOrderNearlyFilled(a));
             const sellAmountToUse = isCompletedOrCancelled
               ? originalSellAmount
               : (originalSellAmount * BigInt(Math.floor(remainingPercentage * 1e18))) / BigInt(1e18);
@@ -2683,7 +2685,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
             const rawRemainingPercentage = getRemainingPercentage(b.orderDetailsWithID);
             const remainingPercentage = Number(rawRemainingPercentage) / 1e18;
             const originalSellAmount = b.orderDetailsWithID.orderDetails.sellAmount;
-            const isCompletedOrCancelled = b.orderDetailsWithID.status === 2 || b.orderDetailsWithID.status === 1;
+            const isCompletedOrCancelled = b.orderDetailsWithID.status === 2 || b.orderDetailsWithID.status === 1 || (b.orderDetailsWithID.status === 0 && isOrderNearlyFilled(b));
             const sellAmountToUse = isCompletedOrCancelled
               ? originalSellAmount
               : (originalSellAmount * BigInt(Math.floor(remainingPercentage * 1e18))) / BigInt(1e18);
@@ -3952,15 +3954,23 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                   const remainingPercentage = Number(rawRemainingPercentage) / 1e18;
                   const originalSellAmount = order.orderDetailsWithID.orderDetails.sellAmount;
 
-                  // For completed/cancelled orders, use original amounts; for active, use remaining
+                  // For completed/cancelled/unfillable orders, use filled amounts; for active, use remaining
                   const isCompletedOrCancelled = order.orderDetailsWithID.status === 2 || order.orderDetailsWithID.status === 1;
-                  const sellAmountToUse = isCompletedOrCancelled
-                    ? originalSellAmount
+                  const isUnfillable = order.orderDetailsWithID.status === 0 && isOrderNearlyFilled(order);
+                  const isDone = isCompletedOrCancelled || isUnfillable;
+                  // Filled = original minus what's remaining (redeemedSellAmount is only what's been claimed, not what's been filled)
+                  const filledSellAmount = originalSellAmount - order.orderDetailsWithID.remainingSellAmount;
+                  const sellAmountToUse = isDone
+                    ? filledSellAmount
                     : (originalSellAmount * BigInt(Math.floor(remainingPercentage * 1e18))) / BigInt(1e18);
 
                   const sellTokenAmount = parseFloat(formatTokenAmount(sellAmountToUse, sellTokenInfo.decimals));
                   const sellTokenPrice = getTokenPrice(sellTokenAddress, tokenPrices);
                   const sellUsdValue = sellTokenAmount * sellTokenPrice;
+                  // For OTC % calculation, always use original amounts (rate is the same regardless of fill)
+                  const sellUsdValueForOtc = isDone
+                    ? parseFloat(formatTokenAmount(originalSellAmount, sellTokenInfo.decimals)) * sellTokenPrice
+                    : sellUsdValue;
 
                   // Calculate minimum asking USD value (buyer can choose any token, so use the cheapest)
                   let askingUsdValue = 0;
@@ -3973,9 +3983,9 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                       const tokenInfo = getTokenInfoByIndex(Number(tokenIndex));
                       const originalAmount = buyAmounts[idx];
 
-                      // For completed/cancelled orders, use original amounts; for active, use remaining
-                      const buyAmountToUse = isCompletedOrCancelled
-                        ? originalAmount
+                      // For done orders, use filled proportion; for active, use remaining
+                      const buyAmountToUse = isDone
+                        ? (originalSellAmount > 0n ? (originalAmount * filledSellAmount) / originalSellAmount : 0n)
                         : (originalAmount * BigInt(Math.floor(remainingPercentage * 1e18))) / BigInt(1e18);
 
                       const tokenAmount = parseFloat(formatTokenAmount(buyAmountToUse, tokenInfo.decimals));
@@ -4005,20 +4015,20 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                       const buyTokenInfo = getTokenInfoByIndex(Number(tokenIndex));
                       const buyAmount = buyAmounts[idx];
 
-                      const buyAmountToUse = isCompletedOrCancelled
+                      const buyAmountToUse = isDone
                         ? buyAmount
                         : (buyAmount * BigInt(Math.floor(remainingPercentage * 1e18))) / BigInt(1e18);
 
                       const buyTokenAmount = parseFloat(formatTokenAmount(buyAmountToUse, buyTokenInfo.decimals));
                       const buyTokenMarketPrice = getTokenPrice(buyTokenInfo.address, tokenPrices);
 
-                      if (sellUsdValue > 0 && buyTokenAmount > 0 && buyTokenMarketPrice > 0) {
+                      if (sellUsdValueForOtc > 0 && buyTokenAmount > 0 && buyTokenMarketPrice > 0) {
                         // What the seller is ASKING for in USD (value of buy tokens at market price)
                         const askingUsdValue = buyTokenAmount * buyTokenMarketPrice;
                         // Compare asking value vs what their sell token is worth
                         // Positive = asking for more than market (premium/above market)
                         // Negative = asking for less than market (discount/below market)
-                        const percentageDiff = ((askingUsdValue - sellUsdValue) / sellUsdValue) * 100;
+                        const percentageDiff = ((askingUsdValue - sellUsdValueForOtc) / sellUsdValueForOtc) * 100;
                         tokenPercentages.push({
                           percentage: percentageDiff,
                           isBelowMarket: percentageDiff < 0,
@@ -4162,27 +4172,17 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                       <div className="flex flex-col items-start space-y-1 min-w-0 overflow-hidden">
                         {(() => {
                           const formattedAmount = formatTokenAmount(order.orderDetailsWithID.orderDetails.sellAmount, sellTokenInfo.decimals);
-                          // For completed orders, show original amounts; for others, show remaining amounts
-                          const isCompleted = statusFilter === 'completed' || order.orderDetailsWithID.status === 1;
+                          // For done orders (completed/cancelled/unfillable), show filled amounts; for active, show remaining
+                          const isDoneCol1 = statusFilter === 'completed' || order.orderDetailsWithID.status === 1 || order.orderDetailsWithID.status === 2 || (order.orderDetailsWithID.status === 0 && isOrderNearlyFilled(order));
+                          // Filled = original minus remaining
+                          const filledSellCol1 = order.orderDetailsWithID.orderDetails.sellAmount - order.orderDetailsWithID.remainingSellAmount;
 
-                          let tokenAmount: number;
-                          if (isCompleted) {
-                            // Use original amount for completed orders
-                            tokenAmount = parseFloat(formatTokenAmount(order.orderDetailsWithID.orderDetails.sellAmount, sellTokenInfo.decimals));
-                          } else {
-                            // Use remaining amount for active orders
-                            tokenAmount = sellTokenAmount;
-                          }
+                          const tokenAmount = isDoneCol1
+                            ? parseFloat(formatTokenAmount(filledSellCol1, sellTokenInfo.decimals))
+                            : sellTokenAmount;
 
-                          const tokenPrice = sellTokenPrice; // Use pre-calculated value
-                          let usdValue: number;
-                          if (isCompleted) {
-                            // Recalculate USD for completed orders
-                            usdValue = tokenAmount * tokenPrice;
-                          } else {
-                            // Use pre-calculated value for active orders
-                            usdValue = sellUsdValue;
-                          }
+                          const tokenPrice = sellTokenPrice;
+                          const usdValue = tokenAmount * tokenPrice;
 
 
                           return (
@@ -4213,17 +4213,23 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                       {/* COLUMN 2: Asking For Content */}
                       <div className="flex flex-col items-start space-y-1 min-w-0 overflow-hidden">
                         {(() => {
-                          // For completed orders, recalculate total USD using original amounts
-                          const isCompleted = statusFilter === 'completed' || order.orderDetailsWithID.status === 1;
+                          // For done orders, use filled proportions; for active, use pre-calculated
+                          const isDoneCol2 = statusFilter === 'completed' || order.orderDetailsWithID.status === 1 || order.orderDetailsWithID.status === 2 || (order.orderDetailsWithID.status === 0 && isOrderNearlyFilled(order));
                           let totalUsdValue = askingUsdValue; // Default to pre-calculated value
 
-                          if (isCompleted) {
-                            // Recalculate minimum USD value using original amounts for completed orders
+                          if (isDoneCol2) {
                             const tokenValues: number[] = [];
+                            const origSellAmt = order.orderDetailsWithID.orderDetails.sellAmount;
+                            // Filled = original minus remaining
+                            const filledSellCol2 = origSellAmt - order.orderDetailsWithID.remainingSellAmount;
                             buyTokensIndex.forEach((tokenIndex: bigint, idx: number) => {
                               const tokenInfo = getTokenInfoByIndex(Number(tokenIndex));
                               const originalAmount = buyAmounts[idx];
-                              const tokenAmount = parseFloat(formatTokenAmount(originalAmount, tokenInfo.decimals));
+                              // Scale buy amount by filled proportion
+                              const amountToUse = origSellAmt > 0n
+                                ? (originalAmount * filledSellCol2) / origSellAmt
+                                : 0n;
+                              const tokenAmount = parseFloat(formatTokenAmount(amountToUse, tokenInfo.decimals));
                               const tokenPrice = getTokenPrice(tokenInfo.address, tokenPrices);
                               const usdValue = tokenAmount * tokenPrice;
                               tokenValues.push(usdValue);
@@ -4239,13 +4245,19 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                 return buyTokensIndex.map((tokenIndex: bigint, idx: number) => {
                                   const tokenInfo = getTokenInfoByIndex(Number(tokenIndex));
                                   const originalAmount = buyAmounts[idx];
-                                  // For completed orders, show original amounts; for others, show remaining amounts
-                                  const isCompleted = statusFilter === 'completed' || order.orderDetailsWithID.status === 1;
+                                  // For done orders, show filled proportion; for active, show remaining
+                                  const isDoneInner = statusFilter === 'completed' || order.orderDetailsWithID.status === 1 || order.orderDetailsWithID.status === 2 || (order.orderDetailsWithID.status === 0 && isOrderNearlyFilled(order));
+                                  const origSellAmt = order.orderDetailsWithID.orderDetails.sellAmount;
+                                  // Filled = original minus remaining
+                                  const filledSellInner = origSellAmt - order.orderDetailsWithID.remainingSellAmount;
+                                  const filledBuyAmount = origSellAmt > 0n
+                                    ? (originalAmount * filledSellInner) / origSellAmt
+                                    : 0n;
                                   const remainingPercentage = Number(getRemainingPercentage(order.orderDetailsWithID)) / 1e18;
                                   const remainingAmount = (originalAmount * BigInt(Math.floor(remainingPercentage * 1e18))) / BigInt(1e18);
-                                  const tokenAmount = isCompleted ?
-                                    parseFloat(formatTokenAmount(originalAmount, tokenInfo.decimals)) :
-                                    parseFloat(formatTokenAmount(remainingAmount, tokenInfo.decimals));
+                                  const tokenAmount = isDoneInner
+                                    ? parseFloat(formatTokenAmount(filledBuyAmount, tokenInfo.decimals))
+                                    : parseFloat(formatTokenAmount(remainingAmount, tokenInfo.decimals));
                                   const tokenPrice = getTokenPrice(tokenInfo.address, tokenPrices);
                                   const usdValue = tokenAmount * tokenPrice;
 
