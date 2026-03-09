@@ -2335,11 +2335,33 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     return count;
   }, [searchQuery, aonFilterEnabled, dustFilterEnabled, claimableFilterEnabled, hideMyOrders, favoritesOnly, isMarketplaceMode, fillRange, positionRange, dateFilterPreset]);
 
-  // Helper: check if an order is nearly fully filled (>99.9%) - used for tab filtering and hiding Buy button on dust orders
-  // Uses getRemainingPercentage for consistency with the progress bar display
+  // Helper: check if an order is unfillable (dust) - used for tab filtering and hiding Buy button
+  // An order is unfillable when the remaining sell amount is too small for even 1 unit of any buy token.
+  // Formula per buy token: if (sellAmount / buyAmount) > remainingSellAmount, that token can't be filled.
+  // Order is unfillable if ALL buy tokens are unfillable.
   const isOrderNearlyFilled = useCallback((order: any) => {
-    const remainingPct = Number(getRemainingPercentage(order.orderDetailsWithID)) / 1e18 * 100;
-    return remainingPct < 0.1;
+    const details = order.orderDetailsWithID;
+    const remaining = BigInt(details.remainingSellAmount?.toString() || '0');
+    if (remaining === 0n) return true;
+
+    const sellAmount = BigInt(details.orderDetails.sellAmount?.toString() || '0');
+    const buyAmounts: bigint[] = (details.orderDetails.buyAmounts || []).map((a: any) => BigInt(a.toString()));
+
+    if (buyAmounts.length === 0 || sellAmount === 0n) return false;
+
+    // Check each buy token - if ANY can still be filled, the order is not dust
+    for (const buyAmount of buyAmounts) {
+      if (buyAmount === 0n) continue;
+      // Minimum sell amount needed for 1 smallest unit of this buy token
+      // = sellAmount / buyAmount (integer division, but we need ceiling so we check differently)
+      // The order is fillable for this token if: remaining * buyAmount >= sellAmount
+      // (i.e., remaining is enough to release at least 1 unit of buy token)
+      if (remaining * buyAmount >= sellAmount) {
+        return false; // Still fillable for this buy token
+      }
+    }
+
+    return true; // Unfillable for all buy tokens
   }, []);
 
   // Memoize the display orders with 3-level filtering

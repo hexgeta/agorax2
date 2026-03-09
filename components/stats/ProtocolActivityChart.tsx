@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState, useRef } from 'react';
 import { ComposedChart, Area, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid, Legend } from 'recharts';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 import { formatUSD, getTokenPrice } from '@/utils/format';
@@ -35,9 +35,41 @@ interface ProtocolActivityChartProps {
   tokenPrices: Record<string, { price: number }>;
 }
 
+type TimeRange = '1D' | '1W' | '1M' | '1Y' | 'ALL';
+
+function getTimeRangeStart(range: TimeRange): Date | null {
+  if (range === 'ALL') return null;
+  const now = new Date();
+  switch (range) {
+    case '1D': now.setDate(now.getDate() - 1); break;
+    case '1W': now.setDate(now.getDate() - 7); break;
+    case '1M': now.setMonth(now.getMonth() - 1); break;
+    case '1Y': now.setFullYear(now.getFullYear() - 1); break;
+  }
+  return now;
+}
+
 export default function ProtocolActivityChart({ transactions, orders, contractOrders = [], tokenPrices }: ProtocolActivityChartProps) {
+  const [timeRange, setTimeRange] = useState<TimeRange>('ALL');
+
+  // Stabilize tokenPrices reference — only recalculate chart when actual price values change
+  const prevPriceKey = useRef('');
+  const stablePrices = useRef(tokenPrices);
+  const priceKey = useMemo(() => {
+    return Object.entries(tokenPrices)
+      .map(([k, v]) => `${k}:${v.price.toFixed(6)}`)
+      .sort()
+      .join('|');
+  }, [tokenPrices]);
+
+  if (priceKey !== prevPriceKey.current) {
+    prevPriceKey.current = priceKey;
+    stablePrices.current = tokenPrices;
+  }
+
   // Calculate cumulative activity by day with volume data
-  const chartData = useMemo(() => {
+  const allChartData = useMemo(() => {
+    const prices = stablePrices.current;
     // Track daily volumes
     const dailyData: Record<string, {
       orders: number;
@@ -48,7 +80,32 @@ export default function ProtocolActivityChart({ transactions, orders, contractOr
     }> = {};
 
     // Process orders for listed volume
-    if (contractOrders.length > 0) {
+    // Always prefer event-based orders (from OrderPlaced events) since they have
+    // the real creation timestamp. contractOrders use lastUpdateTime which shifts
+    // listed volume to the fill/update date instead of the original listing date.
+    if (orders.length > 0) {
+      orders.forEach(order => {
+        if (!order.timestamp) return;
+
+        const date = new Date(order.timestamp * 1000);
+        const dateStr = date.toISOString().split('T')[0];
+
+        if (!dailyData[dateStr]) {
+          dailyData[dateStr] = { orders: 0, fills: 0, uniqueUsers: new Set(), listedVolume: 0, filledVolume: 0 };
+        }
+
+        const tokenPrice = getTokenPrice(order.sellToken, prices);
+        const orderValueUSD = order.sellAmount * tokenPrice;
+
+        dailyData[dateStr].orders += 1;
+        dailyData[dateStr].listedVolume += orderValueUSD;
+
+        if (order.orderOwner) {
+          dailyData[dateStr].uniqueUsers.add(order.orderOwner.toLowerCase());
+        }
+      });
+    } else if (contractOrders.length > 0) {
+      // Fallback: use contract orders if event data isn't available yet
       contractOrders.forEach(order => {
         const timestamp = Number(order.orderDetailsWithID.lastUpdateTime);
         if (!timestamp || timestamp <= 0) return;
@@ -60,11 +117,10 @@ export default function ProtocolActivityChart({ transactions, orders, contractOr
           dailyData[dateStr] = { orders: 0, fills: 0, uniqueUsers: new Set(), listedVolume: 0, filledVolume: 0 };
         }
 
-        // Calculate order value in USD
         const sellTokenAddr = order.orderDetailsWithID.orderDetails.sellToken;
         const tokenInfo = getTokenInfo(sellTokenAddr);
         const sellAmount = Number(order.orderDetailsWithID.orderDetails.sellAmount) / Math.pow(10, tokenInfo.decimals);
-        const tokenPrice = getTokenPrice(sellTokenAddr, tokenPrices);
+        const tokenPrice = getTokenPrice(sellTokenAddr, prices);
         const orderValueUSD = sellAmount * tokenPrice;
 
         dailyData[dateStr].orders += 1;
@@ -73,27 +129,6 @@ export default function ProtocolActivityChart({ transactions, orders, contractOr
         const owner = order.userDetails.orderOwner;
         if (owner) {
           dailyData[dateStr].uniqueUsers.add(owner.toLowerCase());
-        }
-      });
-    } else {
-      orders.forEach(order => {
-        if (!order.timestamp) return;
-
-        const date = new Date(order.timestamp * 1000);
-        const dateStr = date.toISOString().split('T')[0];
-
-        if (!dailyData[dateStr]) {
-          dailyData[dateStr] = { orders: 0, fills: 0, uniqueUsers: new Set(), listedVolume: 0, filledVolume: 0 };
-        }
-
-        const tokenPrice = getTokenPrice(order.sellToken, tokenPrices);
-        const orderValueUSD = order.sellAmount * tokenPrice;
-
-        dailyData[dateStr].orders += 1;
-        dailyData[dateStr].listedVolume += orderValueUSD;
-
-        if (order.orderOwner) {
-          dailyData[dateStr].uniqueUsers.add(order.orderOwner.toLowerCase());
         }
       });
     }
@@ -110,11 +145,11 @@ export default function ProtocolActivityChart({ transactions, orders, contractOr
       }
 
       // Calculate transaction volume in USD
-      const sellPrice = getTokenPrice(tx.sellToken, tokenPrices);
+      const sellPrice = getTokenPrice(tx.sellToken, prices);
       const sellVolumeUSD = tx.sellAmount * sellPrice;
 
       const buyVolumesUSD = Object.entries(tx.buyTokens).map(([addr, amount]) => {
-        const price = getTokenPrice(addr, tokenPrices);
+        const price = getTokenPrice(addr, prices);
         return amount * price;
       });
       const buyVolumeUSD = buyVolumesUSD.length > 0 ? Math.max(...buyVolumesUSD) : 0;
@@ -185,28 +220,42 @@ export default function ProtocolActivityChart({ transactions, orders, contractOr
     }
 
     return result;
-  }, [transactions, orders, contractOrders, tokenPrices]);
+  }, [transactions, orders, contractOrders, priceKey]);
 
-  // Calculate totals for header
-  const totalListedVolume = useMemo(() => {
-    return chartData.length > 0 ? chartData[chartData.length - 1].cumulativeListedVolume : 0;
-  }, [chartData]);
+  // Filter chart data by time range
+  const chartData = useMemo(() => {
+    const rangeStart = getTimeRangeStart(timeRange);
+    if (!rangeStart || allChartData.length === 0) return allChartData;
 
-  const totalFilledVolume = useMemo(() => {
-    return chartData.length > 0 ? chartData[chartData.length - 1].cumulativeFilledVolume : 0;
-  }, [chartData]);
+    const startStr = rangeStart.toISOString().split('T')[0];
+    return allChartData.filter(d => d.date >= startStr);
+  }, [allChartData, timeRange]);
 
-  const totalOrders = useMemo(() => {
-    return chartData.length > 0 ? chartData[chartData.length - 1].cumulativeOrders : 0;
-  }, [chartData]);
+  // Calculate totals for the visible range
+  const { totalListedVolume, totalFilledVolume, totalOrders, totalFills } = useMemo(() => {
+    if (timeRange === 'ALL' && chartData.length > 0) {
+      const last = chartData[chartData.length - 1];
+      return {
+        totalListedVolume: last.cumulativeListedVolume,
+        totalFilledVolume: last.cumulativeFilledVolume,
+        totalOrders: last.cumulativeOrders,
+        totalFills: last.cumulativeFills,
+      };
+    }
+    // For filtered ranges, sum the visible daily data
+    return chartData.reduce((acc, d) => ({
+      totalListedVolume: acc.totalListedVolume + d.listedVolume,
+      totalFilledVolume: acc.totalFilledVolume + d.filledVolume,
+      totalOrders: acc.totalOrders + d.dailyOrders,
+      totalFills: acc.totalFills + d.dailyFills,
+    }), { totalListedVolume: 0, totalFilledVolume: 0, totalOrders: 0, totalFills: 0 });
+  }, [chartData, timeRange]);
 
-  const totalFills = useMemo(() => {
-    return chartData.length > 0 ? chartData[chartData.length - 1].cumulativeFills : 0;
-  }, [chartData]);
-
-  if (chartData.length === 0) {
+  if (allChartData.length === 0) {
     return null;
   }
+
+  const timeRanges: TimeRange[] = ['1D', '1W', '1M', '1Y', 'ALL'];
 
   return (
     <LiquidGlassCard
@@ -215,7 +264,24 @@ export default function ProtocolActivityChart({ transactions, orders, contractOr
       glowIntensity="none"
     >
       <div className="mb-4 md:mb-6">
-        <h3 className="text-xl md:text-2xl font-bold text-white mb-2">Protocol Volume</h3>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-xl md:text-2xl font-bold text-white">Protocol Volume</h3>
+          <div className="flex gap-1 bg-white/5 rounded-lg p-0.5">
+            {timeRanges.map(range => (
+              <button
+                key={range}
+                onClick={() => setTimeRange(range)}
+                className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
+                  timeRange === range
+                    ? 'bg-white/15 text-white'
+                    : 'text-white/40 hover:text-white/70'
+                }`}
+              >
+                {range}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="flex flex-wrap gap-3 md:gap-6">
           <div>
             <p className="text-gray-400 text-sm">Listed Volume</p>

@@ -3507,6 +3507,13 @@ export const TOKEN_CONSTANTS = [{
   ticker: "ST3",
   decimals: 18,
   name: "stCombo"
+}, {
+  chain: 369,
+  a: "0xc40c58afFf0A8908c392a752F4951EfF381AA0b2",
+  dexs: null,
+  ticker: "PAI",
+  decimals: 18,
+  name: "Pulse Dai"
 }];
 
 export const API_ENDPOINTS = {
