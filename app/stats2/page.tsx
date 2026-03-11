@@ -1,171 +1,121 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useAccount } from 'wagmi';
 import { motion } from 'framer-motion';
-import useSWR from 'swr';
-import {
-  ComposedChart,
-  Area,
-  Bar,
-  XAxis,
-  YAxis,
-  ResponsiveContainer,
-  Tooltip,
-  CartesianGrid,
-  Legend,
-  PieChart,
-  Pie,
-  Cell,
-} from 'recharts';
 import { DisclaimerDialog } from '@/components/DisclaimerDialog';
 import { PixelSpinner } from '@/components/ui/PixelSpinner';
 import { LogoPreloader } from '@/components/LogoPreloader';
 import PixelBlastBackground from '@/components/ui/PixelBlastBackground';
+import StatsOverviewCards from '@/components/stats/StatsOverviewCards';
+import TopTokensChart from '@/components/stats/TopTokensChart';
+import ProtocolActivityChart from '@/components/stats/ProtocolActivityChart';
+import HourlyActivityChart from '@/components/stats/HourlyActivityChart';
+import OrderbookChart from '@/components/stats/OrderbookChart';
+import TopTradersLeaderboard from '@/components/stats/TopTradersLeaderboard';
+import { useTokenPrices } from '@/hooks/crypto/useTokenPrices';
+import { useContractWhitelistRead } from '@/hooks/contracts/useContractWhitelistRead';
+import { getTokenInfo, getTokenInfoByIndex, formatTokenAmount, formatTokenTicker } from '@/utils/tokenUtils';
+import { useOpenPositions, CompleteOrderDetails } from '@/hooks/contracts/useOpenPositions';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 import { CoinLogo } from '@/components/ui/CoinLogo';
-import { formatUSD } from '@/utils/format';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Types
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Shared interfaces matching existing components ──────────────────────────
 
-interface ProtocolStats {
-  protocol: {
-    total_users: number;
-    total_xp_issued: number;
-    total_trades: number;
-    total_volume_usd: number;
-    total_orders_created: number;
-    total_orders_filled: number;
-    total_orders_cancelled: number;
-    total_fill_volume_usd: number;
-    fill_rate_percent: number;
-  };
-  orders: {
-    total: number;
-    by_status: {
-      active: number;
-      cancelled: number;
-      completed: number;
-    };
-  };
-  fills: {
-    total: number;
-  };
-  achievements: {
-    total_challenges_completed: number;
-    total_xp_from_challenges: number;
-  };
-  events: {
-    total_recorded: number;
-  };
+interface Transaction {
+  transactionHash: string;
+  orderId: string;
+  sellToken: string;
+  sellAmount: number;
+  buyTokens: Record<string, number>;
+  blockNumber: bigint;
+  timestamp?: number;
+  buyer?: string;
 }
 
-interface LeaderboardUser {
-  rank: number;
-  wallet_address: string;
-  total_xp: number;
-  prestige_level: number;
-  prestige_name: string;
-  total_orders_created: number;
-  total_orders_filled: number;
-  total_orders_cancelled: number;
-  total_trades: number;
-  total_volume_usd: number;
-  unique_tokens_traded: number;
-  current_active_orders: number;
-  longest_streak_days: number;
-  current_streak_days: number;
-  last_trade_date: string | null;
-  total_proceeds_claimed: number;
-  fill_rate_percent: number;
-  member_since: string;
+interface OrderPlaced {
+  transactionHash: string;
+  orderId: string;
+  sellToken: string;
+  sellAmount: number;
+  blockNumber: bigint;
+  timestamp?: number;
+  orderOwner: string;
 }
 
-interface Order {
+// ── Supabase row types ──────────────────────────────────────────────────────
+
+interface DbOrder {
   order_id: number;
   maker_address: string;
-  sell_token_ticker: string;
   sell_token_address: string;
+  sell_token_ticker: string;
+  sell_amount_raw: string;
   sell_amount_formatted: number;
-  buy_tokens_tickers: string[];
   buy_tokens_addresses: string[];
+  buy_tokens_tickers: string[];
+  buy_amounts_raw: string[];
   buy_amounts_formatted: number[];
   status: number;
-  status_label: string;
   fill_percentage: number;
   remaining_sell_amount: string;
   redeemed_sell_amount: string;
   is_all_or_nothing: boolean;
   expiration: number;
-  total_fills: number;
-  unique_fillers: number;
+  creation_tx_hash: string;
+  creation_block_number: number;
   created_at: string;
-  updated_at: string;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Fetcher
-// ─────────────────────────────────────────────────────────────────────────────
-
-const fetcher = async (url: string) => {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error('Failed to fetch');
-  const json = await res.json();
-  return json.data;
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Helper Components
-// ─────────────────────────────────────────────────────────────────────────────
-
-interface StatCardProps {
-  label: string;
-  value: string;
-  subValue?: string;
-  dotColor?: 'green' | 'yellow' | 'red' | 'blue';
+interface DbFill {
+  order_id: number;
+  filler_address: string;
+  buy_token_index: number;
+  buy_token_address: string;
+  buy_token_ticker: string;
+  buy_amount_raw: string;
+  buy_amount_formatted: number;
+  tx_hash: string;
+  block_number: number;
+  filled_at: string;
 }
 
-function StatCard({ label, value, subValue, dotColor }: StatCardProps) {
-  const dotColorClasses: Record<string, string> = {
-    green: 'bg-green-500',
-    yellow: 'bg-yellow-500',
-    red: 'bg-red-500',
-    blue: 'bg-blue-500',
-  };
-  const dotColorClass = dotColor ? dotColorClasses[dotColor] : '';
+// ── All Orders table types ──────────────────────────────────────────────────
 
-  return (
-    <LiquidGlassCard
-      className="p-5 bg-black/40 flex flex-col justify-between min-h-[120px]"
-      shadowIntensity="none"
-      glowIntensity="none"
-    >
-      <div className="flex items-center gap-2">
-        {dotColor && <div className={`w-2.5 h-2.5 rounded-full ${dotColorClass}`} />}
-        <p className="text-gray-400 text-sm font-medium">{label}</p>
-      </div>
-      <div>
-        <p className="text-white text-2xl md:text-3xl font-bold">{value}</p>
-        {subValue && (
-          <p className="text-gray-500 text-xs mt-1">{subValue}</p>
-        )}
-      </div>
-    </LiquidGlassCard>
-  );
+interface FormattedOrder {
+  id: number;
+  maker: string;
+  sellToken: string;
+  buyToken: string;
+  sellAmount: string;
+  buyAmount: string;
+  status: 'active' | 'completed' | 'cancelled';
+  filled: number;
+  createdAt: string;
 }
 
-function formatAddress(address: string): string {
-  if (address.length > 10) return `${address.slice(0, 6)}...${address.slice(-4)}`;
-  return address;
+interface FormattedFill {
+  orderId: string;
+  buyer: string;
+  sellToken: string;
+  sellTokenAddress: string;
+  sellAmountNum: number;
+  buyToken: string;
+  buyTokenAddress: string;
+  buyAmountNum: number;
+  timestamp: number;
+  txHash: string;
 }
 
-function formatDisplayAmount(amount: number): string {
-  if (isNaN(amount)) return '0';
-  if (amount >= 1000000000) return `${(amount / 1000000000).toFixed(2)}B`;
-  if (amount >= 1000000) return `${(amount / 1000000).toFixed(2)}M`;
-  if (amount >= 1000) return `${(amount / 1000).toFixed(1)}K`;
-  return amount.toLocaleString(undefined, { maximumFractionDigits: 2 });
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+function formatDisplayAmount(amount: string): string {
+  const num = parseFloat(amount);
+  if (isNaN(num)) return amount;
+  if (num >= 1000000000) return `${(num / 1000000000).toFixed(2)}B`;
+  if (num >= 1000000) return `${(num / 1000000).toFixed(2)}M`;
+  if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
+  return num.toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
 function getStatusColor(status: string) {
@@ -177,54 +127,215 @@ function getStatusColor(status: string) {
   }
 }
 
-const PRESTIGE_COLORS: Record<string, string> = {
-  Alpha: 'text-rose-400',
-  Beta: 'text-orange-400',
-  Gamma: 'text-lime-400',
-  Delta: 'text-emerald-400',
-  Epsilon: 'text-cyan-400',
-  Zeta: 'text-blue-400',
-  Eta: 'text-violet-400',
-  Theta: 'text-fuchsia-400',
-  Omega: 'text-yellow-400',
-};
+function formatAddress(address: string): string {
+  if (address.length > 10) return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  return address;
+}
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Main Component
-// ─────────────────────────────────────────────────────────────────────────────
+const BUYER_COLORS = [
+  { bg: 'rgba(239, 68, 68, 0.2)', text: '#fca5a5', border: 'rgba(239, 68, 68, 0.4)' },
+  { bg: 'rgba(59, 130, 246, 0.2)', text: '#93c5fd', border: 'rgba(59, 130, 246, 0.4)' },
+  { bg: 'rgba(16, 185, 129, 0.2)', text: '#6ee7b7', border: 'rgba(16, 185, 129, 0.4)' },
+  { bg: 'rgba(245, 158, 11, 0.2)', text: '#fcd34d', border: 'rgba(245, 158, 11, 0.4)' },
+  { bg: 'rgba(139, 92, 246, 0.2)', text: '#c4b5fd', border: 'rgba(139, 92, 246, 0.4)' },
+  { bg: 'rgba(236, 72, 153, 0.2)', text: '#f9a8d4', border: 'rgba(236, 72, 153, 0.4)' },
+  { bg: 'rgba(6, 182, 212, 0.2)', text: '#67e8f9', border: 'rgba(6, 182, 212, 0.4)' },
+  { bg: 'rgba(251, 146, 60, 0.2)', text: '#fdba74', border: 'rgba(251, 146, 60, 0.4)' },
+  { bg: 'rgba(52, 211, 153, 0.2)', text: '#6ee7b7', border: 'rgba(52, 211, 153, 0.4)' },
+  { bg: 'rgba(167, 139, 250, 0.2)', text: '#ddd6fe', border: 'rgba(167, 139, 250, 0.4)' },
+];
+
+function getBuyerColor(address: string) {
+  let hash = 0;
+  for (let i = 0; i < address.length; i++) {
+    hash = ((hash << 5) - hash + address.charCodeAt(i)) | 0;
+  }
+  return BUYER_COLORS[Math.abs(hash) % BUYER_COLORS.length];
+}
+
+function formatTimestampDisplay(ts: string | number): string {
+  if (!ts) return '-';
+  const date = typeof ts === 'string' ? new Date(ts) : new Date(ts * 1000);
+  const time = date.toLocaleString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
+  const day = date.toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+  return `${time} UTC, ${day}`;
+}
+
+// ── Transform Supabase data to component shapes ────────────────────────────
+
+function dbOrdersToOrderPlaced(dbOrders: DbOrder[]): OrderPlaced[] {
+  return dbOrders.map(o => ({
+    transactionHash: o.creation_tx_hash || '',
+    orderId: o.order_id.toString(),
+    sellToken: o.sell_token_address?.toLowerCase() || '',
+    sellAmount: o.sell_amount_formatted || 0,
+    blockNumber: BigInt(o.creation_block_number || 0),
+    timestamp: o.created_at ? Math.floor(new Date(o.created_at).getTime() / 1000) : undefined,
+    orderOwner: o.maker_address || '',
+  }));
+}
+
+function dbOrdersToCompleteOrderDetails(dbOrders: DbOrder[], whitelist: string[]): CompleteOrderDetails[] {
+  return dbOrders.map(o => {
+    const sellAmountBigInt = BigInt(o.sell_amount_raw || '0');
+    const remainingBigInt = BigInt(o.remaining_sell_amount || '0');
+    const redeemedBigInt = BigInt(o.redeemed_sell_amount || '0');
+
+    // Map buy token addresses to whitelist indices
+    const buyTokensIndex: bigint[] = (o.buy_tokens_addresses || []).map(addr => {
+      const idx = whitelist.findIndex(w => w.toLowerCase() === addr?.toLowerCase());
+      return BigInt(idx >= 0 ? idx : 0);
+    });
+
+    const buyAmounts: bigint[] = (o.buy_amounts_raw || []).map(a => BigInt(a || '0'));
+
+    return {
+      userDetails: {
+        orderIndex: BigInt(0),
+        orderOwner: o.maker_address as `0x${string}`,
+      },
+      orderDetailsWithID: {
+        orderID: BigInt(o.order_id),
+        remainingSellAmount: remainingBigInt,
+        redeemedSellAmount: redeemedBigInt,
+        lastUpdateTime: o.created_at ? Math.floor(new Date(o.created_at).getTime() / 1000) : 0,
+        status: o.status,
+        creationProtocolFee: BigInt(0),
+        orderDetails: {
+          sellToken: o.sell_token_address as `0x${string}`,
+          sellAmount: sellAmountBigInt,
+          buyTokensIndex,
+          buyAmounts,
+          expirationTime: BigInt(o.expiration || 0),
+          allOrNothing: o.is_all_or_nothing || false,
+        },
+      },
+    } as CompleteOrderDetails;
+  });
+}
+
+function dbFillsToTransactions(dbFills: DbFill[], dbOrders: DbOrder[]): Transaction[] {
+  const orderMap = new Map<number, DbOrder>();
+  dbOrders.forEach(o => orderMap.set(o.order_id, o));
+
+  return dbFills.map(fill => {
+    const order = orderMap.get(fill.order_id);
+    const sellTokenAddr = order?.sell_token_address?.toLowerCase() || '';
+    const buyTokenAddr = fill.buy_token_address?.toLowerCase() || '';
+    const sellTokenInfo = getTokenInfo(sellTokenAddr);
+
+    // Calculate proportional sell amount
+    let sellAmount = 0;
+    if (order) {
+      const matchIdx = (order.buy_tokens_addresses || []).findIndex(
+        addr => addr?.toLowerCase() === buyTokenAddr
+      );
+      if (matchIdx >= 0 && order.buy_amounts_raw?.[matchIdx]) {
+        const originalBuyAmountRaw = Number(order.buy_amounts_raw[matchIdx]);
+        if (originalBuyAmountRaw > 0) {
+          const ratio = Number(fill.buy_amount_raw) / originalBuyAmountRaw;
+          sellAmount = (Number(order.sell_amount_raw) * ratio) / Math.pow(10, sellTokenInfo.decimals);
+        }
+      }
+    }
+
+    return {
+      transactionHash: fill.tx_hash || '',
+      orderId: fill.order_id.toString(),
+      sellToken: sellTokenAddr,
+      sellAmount,
+      buyTokens: { [buyTokenAddr]: fill.buy_amount_formatted || 0 },
+      blockNumber: BigInt(fill.block_number || 0),
+      timestamp: fill.filled_at ? Math.floor(new Date(fill.filled_at).getTime() / 1000) : undefined,
+      buyer: fill.filler_address || '',
+    };
+  });
+}
+
+function dbFillsToFormattedFills(dbFills: DbFill[], dbOrders: DbOrder[]): FormattedFill[] {
+  const orderMap = new Map<number, DbOrder>();
+  dbOrders.forEach(o => orderMap.set(o.order_id, o));
+
+  return dbFills.map(fill => {
+    const order = orderMap.get(fill.order_id);
+    const sellTokenAddr = order?.sell_token_address?.toLowerCase() || '';
+    const buyTokenAddr = fill.buy_token_address?.toLowerCase() || '';
+    const sellTokenInfo = getTokenInfo(sellTokenAddr);
+
+    let sellAmountNum = 0;
+    if (order) {
+      const matchIdx = (order.buy_tokens_addresses || []).findIndex(
+        addr => addr?.toLowerCase() === buyTokenAddr
+      );
+      if (matchIdx >= 0 && order.buy_amounts_raw?.[matchIdx]) {
+        const originalBuyAmountRaw = Number(order.buy_amounts_raw[matchIdx]);
+        if (originalBuyAmountRaw > 0) {
+          const ratio = Number(fill.buy_amount_raw) / originalBuyAmountRaw;
+          sellAmountNum = (Number(order.sell_amount_raw) * ratio) / Math.pow(10, sellTokenInfo.decimals);
+        }
+      }
+    }
+
+    return {
+      orderId: fill.order_id.toString(),
+      buyer: fill.filler_address || '',
+      sellToken: order?.sell_token_ticker || 'UNKNOWN',
+      sellTokenAddress: sellTokenAddr,
+      sellAmountNum,
+      buyToken: fill.buy_token_ticker || 'UNKNOWN',
+      buyTokenAddress: buyTokenAddr,
+      buyAmountNum: fill.buy_amount_formatted || 0,
+      timestamp: fill.filled_at ? Math.floor(new Date(fill.filled_at).getTime() / 1000) : 0,
+      txHash: fill.tx_hash || '',
+    };
+  }).sort((a, b) => b.timestamp - a.timestamp);
+}
+
+// ── Page Component ──────────────────────────────────────────────────────────
 
 export default function Stats2Page() {
   const [showDisclaimer, setShowDisclaimer] = useState(false);
+  const { address: connectedAddress } = useAccount();
+
+  const [dbOrders, setDbOrders] = useState<DbOrder[]>([]);
+  const [dbFills, setDbFills] = useState<DbFill[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const [selectedTokenFilter, setSelectedTokenFilter] = useState<{ address: string; ticker: string } | null>(null);
+  const [selectedTraderFilter, setSelectedTraderFilter] = useState<string | null>(null);
   const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | 'active' | 'completed' | 'cancelled'>('all');
-  const [leaderboardSort, setLeaderboardSort] = useState<'total_xp' | 'total_volume_usd' | 'total_trades'>('total_xp');
 
-  // Fetch protocol stats
-  const { data: stats, isLoading: statsLoading } = useSWR<ProtocolStats>(
-    '/api/v1/stats',
-    fetcher,
-    { refreshInterval: 30000 }
+  // Live active orders from contract for accurate TVL and orderbook
+  const { activeOrders: liveActiveOrders } = useOpenPositions();
+
+  // Get whitelist for token index lookups
+  const { activeTokens } = useContractWhitelistRead();
+  const whitelist = useMemo(() =>
+    activeTokens.map(t => t.tokenAddress.toLowerCase()),
+    [activeTokens]
   );
 
-  // Fetch leaderboard
-  const { data: leaderboardData, isLoading: leaderboardLoading } = useSWR<{
-    leaderboard: LeaderboardUser[];
-    pagination: { total: number; limit: number; offset: number; has_more: boolean };
-  }>(
-    `/api/v1/leaderboard?sort=${leaderboardSort}&limit=50`,
-    fetcher,
-    { refreshInterval: 60000 }
-  );
+  // ── Fetch data from Supabase API ────────────────────────────────────────
 
-  // Fetch orders
-  const orderStatusParam = orderStatusFilter === 'all' ? '' : `&status=${orderStatusFilter}`;
-  const { data: ordersData, isLoading: ordersLoading } = useSWR<{
-    orders: Order[];
-    pagination: { total: number; limit: number; offset: number; has_more: boolean };
-  }>(
-    `/api/v1/orders?limit=100${orderStatusParam}`,
-    fetcher,
-    { refreshInterval: 30000 }
-  );
+  const fetchData = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const res = await fetch('/api/v1/stats/protocol-data');
+      if (!res.ok) throw new Error(`API error: ${res.status}`);
+      const json = await res.json();
+      if (!json.success) throw new Error(json.message || 'API returned error');
+      setDbOrders(json.data.orders || []);
+      setDbFills(json.data.fills || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load data');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -233,92 +344,191 @@ export default function Stats2Page() {
     }
   }, []);
 
-  const isLoading = statsLoading;
-  const hasData = stats !== undefined;
+  // ── Transform DB data to component shapes ───────────────────────────────
 
-  // Calculate derived stats
-  const avgOrderSize = useMemo(() => {
-    if (!stats || stats.protocol.total_orders_created === 0) return 0;
-    return stats.protocol.total_volume_usd / stats.protocol.total_orders_created;
-  }, [stats]);
+  const orders: OrderPlaced[] = useMemo(
+    () => dbOrdersToOrderPlaced(dbOrders),
+    [dbOrders]
+  );
 
-  const avgTradeSize = useMemo(() => {
-    if (!stats || stats.protocol.total_trades === 0) return 0;
-    return stats.protocol.total_volume_usd / stats.protocol.total_trades;
-  }, [stats]);
+  const contractOrders: CompleteOrderDetails[] = useMemo(
+    () => dbOrdersToCompleteOrderDetails(dbOrders, whitelist),
+    [dbOrders, whitelist]
+  );
 
-  const cancelRate = useMemo(() => {
-    if (!stats || stats.protocol.total_orders_created === 0) return 0;
-    return (stats.protocol.total_orders_cancelled / stats.protocol.total_orders_created) * 100;
-  }, [stats]);
+  // Use live contract data for active orders (accurate TVL + orderbook)
+  // Fall back to DB-derived active orders if contract hasn't loaded yet
+  const activeOrders: CompleteOrderDetails[] = useMemo(
+    () => liveActiveOrders.length > 0
+      ? liveActiveOrders
+      : contractOrders.filter(o => o.orderDetailsWithID.status === 0),
+    [liveActiveOrders, contractOrders]
+  );
 
-  // Compute daily activity chart data from orders
-  const activityChartData = useMemo(() => {
-    if (!ordersData?.orders) return [];
+  const transactions: Transaction[] = useMemo(
+    () => dbFillsToTransactions(dbFills, dbOrders),
+    [dbFills, dbOrders]
+  );
 
-    const dailyData: Record<string, { orders: number; fills: number }> = {};
+  // ── Token prices ────────────────────────────────────────────────────────
 
-    ordersData.orders.forEach((order) => {
-      if (!order.created_at) return;
-      const dateStr = order.created_at.split('T')[0];
-      if (!dailyData[dateStr]) {
-        dailyData[dateStr] = { orders: 0, fills: 0 };
-      }
-      dailyData[dateStr].orders += 1;
-      dailyData[dateStr].fills += order.total_fills;
+  const allTokenAddresses = useMemo(() => {
+    const addresses = new Set<string>();
+    dbOrders.forEach(o => {
+      if (o.sell_token_address) addresses.add(o.sell_token_address.toLowerCase());
+      (o.buy_tokens_addresses || []).forEach(addr => {
+        if (addr) addresses.add(addr.toLowerCase());
+      });
     });
+    return Array.from(addresses);
+  }, [dbOrders]);
 
-    const dates = Object.keys(dailyData).sort();
-    if (dates.length === 0) return [];
+  const { prices: tokenPrices, isLoading: pricesLoading } = useTokenPrices(allTokenAddresses);
 
-    let cumulativeOrders = 0;
-    let cumulativeFills = 0;
+  // ── Filters ─────────────────────────────────────────────────────────────
 
-    return dates.map((dateStr) => {
-      const dayData = dailyData[dateStr];
-      cumulativeOrders += dayData.orders;
-      cumulativeFills += dayData.fills;
-      const displayDate = new Date(dateStr).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+  const filteredTransactions = useMemo(() => {
+    let result = transactions;
+    if (selectedTokenFilter) {
+      const tokenAddr = selectedTokenFilter.address.toLowerCase();
+      result = result.filter(tx =>
+        tx.sellToken.toLowerCase() === tokenAddr ||
+        Object.keys(tx.buyTokens).some(addr => addr.toLowerCase() === tokenAddr)
+      );
+    }
+    if (selectedTraderFilter) {
+      const traderAddr = selectedTraderFilter.toLowerCase();
+      result = result.filter(tx => tx.buyer?.toLowerCase() === traderAddr);
+    }
+    return result;
+  }, [transactions, selectedTokenFilter, selectedTraderFilter]);
+
+  const filteredOrders = useMemo(() => {
+    let result = orders;
+    if (selectedTokenFilter) {
+      const tokenAddr = selectedTokenFilter.address.toLowerCase();
+      result = result.filter(order => order.sellToken.toLowerCase() === tokenAddr);
+    }
+    if (selectedTraderFilter) {
+      const traderAddr = selectedTraderFilter.toLowerCase();
+      result = result.filter(order => order.orderOwner.toLowerCase() === traderAddr);
+    }
+    return result;
+  }, [orders, selectedTokenFilter, selectedTraderFilter]);
+
+  const filteredContractOrders = useMemo(() => {
+    let result = contractOrders;
+    if (selectedTokenFilter) {
+      const tokenAddr = selectedTokenFilter.address.toLowerCase();
+      result = result.filter(order =>
+        order.orderDetailsWithID.orderDetails.sellToken.toLowerCase() === tokenAddr ||
+        order.orderDetailsWithID.orderDetails.buyTokensIndex.some((idx) => {
+          const addr = whitelist[Number(idx)];
+          return addr && addr.toLowerCase() === tokenAddr;
+        })
+      );
+    }
+    if (selectedTraderFilter) {
+      const traderAddr = selectedTraderFilter.toLowerCase();
+      result = result.filter(order =>
+        order.userDetails.orderOwner?.toLowerCase() === traderAddr
+      );
+    }
+    return result;
+  }, [contractOrders, selectedTokenFilter, selectedTraderFilter, whitelist]);
+
+  const filteredActiveOrders = useMemo(() => {
+    let result = activeOrders;
+    if (selectedTokenFilter) {
+      const tokenAddr = selectedTokenFilter.address.toLowerCase();
+      result = result.filter(order =>
+        order.orderDetailsWithID.orderDetails.sellToken.toLowerCase() === tokenAddr ||
+        order.orderDetailsWithID.orderDetails.buyTokensIndex.some((idx) => {
+          const addr = whitelist[Number(idx)];
+          return addr && addr.toLowerCase() === tokenAddr;
+        })
+      );
+    }
+    if (selectedTraderFilter) {
+      const traderAddr = selectedTraderFilter.toLowerCase();
+      result = result.filter(order =>
+        order.userDetails.orderOwner?.toLowerCase() === traderAddr
+      );
+    }
+    return result;
+  }, [activeOrders, selectedTokenFilter, selectedTraderFilter, whitelist]);
+
+  // ── Formatted data for tables ───────────────────────────────────────────
+
+  const formattedOrders: FormattedOrder[] = useMemo(() => {
+    return filteredContractOrders.map(order => {
+      const orderDetails = order.orderDetailsWithID;
+      const sellTokenInfo = getTokenInfo(orderDetails.orderDetails.sellToken);
+
+      let buyTokenTicker = 'UNKNOWN';
+      if (orderDetails.orderDetails.buyTokensIndex.length > 0) {
+        const buyTokenInfo = getTokenInfoByIndex(Number(orderDetails.orderDetails.buyTokensIndex[0]));
+        buyTokenTicker = buyTokenInfo.ticker;
+      }
+
+      const originalSellAmount = orderDetails.remainingSellAmount + orderDetails.redeemedSellAmount;
+      const filledPercent = originalSellAmount > 0n
+        ? Number((orderDetails.redeemedSellAmount * 100n) / originalSellAmount)
+        : 0;
+
+      let status: 'active' | 'completed' | 'cancelled' = 'active';
+      if (orderDetails.status === 1) status = 'cancelled';
+      if (orderDetails.status === 2) status = 'completed';
+
+      const sellAmount = formatTokenAmount(
+        orderDetails.remainingSellAmount + orderDetails.redeemedSellAmount,
+        sellTokenInfo.decimals
+      );
+
+      let buyAmount = '0';
+      if (orderDetails.orderDetails.buyAmounts.length > 0 && orderDetails.orderDetails.buyTokensIndex.length > 0) {
+        const buyTokenInfo = getTokenInfoByIndex(Number(orderDetails.orderDetails.buyTokensIndex[0]));
+        buyAmount = formatTokenAmount(orderDetails.orderDetails.buyAmounts[0], buyTokenInfo.decimals);
+      }
+
       return {
-        date: dateStr,
-        displayDate,
-        dailyOrders: dayData.orders,
-        dailyFills: dayData.fills,
-        cumulativeOrders,
-        cumulativeFills,
+        id: Number(orderDetails.orderID),
+        maker: order.userDetails.orderOwner,
+        sellToken: sellTokenInfo.ticker,
+        buyToken: buyTokenTicker,
+        sellAmount,
+        buyAmount,
+        status,
+        filled: filledPercent,
+        createdAt: formatTimestampDisplay(orderDetails.lastUpdateTime),
       };
-    });
-  }, [ordersData]);
+    }).sort((a, b) => b.id - a.id);
+  }, [filteredContractOrders]);
 
-  // Compute top tokens from orders
-  const topTokensData = useMemo(() => {
-    if (!ordersData?.orders) return [];
+  const formattedFills: FormattedFill[] = useMemo(
+    () => dbFillsToFormattedFills(dbFills, dbOrders),
+    [dbFills, dbOrders]
+  );
 
-    const tokenStats: Record<string, { ticker: string; orderCount: number; fillCount: number }> = {};
+  const filteredOrdersByStatus = useMemo(() => {
+    if (orderStatusFilter === 'all') return formattedOrders;
+    return formattedOrders.filter(order => order.status === orderStatusFilter);
+  }, [formattedOrders, orderStatusFilter]);
 
-    ordersData.orders.forEach((order) => {
-      const ticker = order.sell_token_ticker;
-      if (!tokenStats[ticker]) {
-        tokenStats[ticker] = { ticker, orderCount: 0, fillCount: 0 };
-      }
-      tokenStats[ticker].orderCount += 1;
-      tokenStats[ticker].fillCount += order.total_fills;
-    });
+  // ── Event handlers ──────────────────────────────────────────────────────
 
-    return Object.values(tokenStats)
-      .sort((a, b) => b.orderCount - a.orderCount)
-      .slice(0, 10);
-  }, [ordersData]);
+  const handleTokenFilterSelect = useCallback((address: string, ticker: string) => {
+    if (selectedTokenFilter?.address.toLowerCase() === address.toLowerCase()) {
+      setSelectedTokenFilter(null);
+    } else {
+      setSelectedTokenFilter({ address, ticker });
+    }
+  }, [selectedTokenFilter]);
 
-  // Order status breakdown for pie chart
-  const orderStatusData = useMemo(() => {
-    if (!stats) return [];
-    return [
-      { name: 'Active', value: stats.orders.by_status.active, color: '#4ADE80' },
-      { name: 'Completed', value: stats.orders.by_status.completed, color: '#60A5FA' },
-      { name: 'Cancelled', value: stats.orders.by_status.cancelled, color: '#F87171' },
-    ].filter((d) => d.value > 0);
-  }, [stats]);
+  // ── Ready state ─────────────────────────────────────────────────────────
+
+  const dataReady = !isLoading && !pricesLoading;
+  const hasData = dbOrders.length > 0 || dbFills.length > 0;
 
   return (
     <>
@@ -328,7 +538,7 @@ export default function Stats2Page() {
         {/* Animated background effect */}
         <motion.div
           initial={{ opacity: 0 }}
-          animate={{ opacity: !isLoading ? 1 : 0 }}
+          animate={{ opacity: dataReady ? 1 : 0 }}
           transition={{ duration: 1.2, delay: 0.3, ease: [0.23, 1, 0.32, 1] }}
           className="fixed inset-0 z-0"
         >
@@ -338,7 +548,7 @@ export default function Stats2Page() {
         {/* Main Content */}
         <div className="w-full px-2 md:px-8 mt-2 pb-12 relative z-10">
           <div className="max-w-[1200px] mx-auto">
-            {isLoading ? (
+            {!dataReady ? (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -346,7 +556,24 @@ export default function Stats2Page() {
               >
                 <PixelSpinner size={48} className="mb-6" />
                 <p className="text-white text-lg mb-2">Loading Protocol Data</p>
-                <p className="text-gray-400 text-sm">Fetching from API...</p>
+                <p className="text-gray-400 text-sm">
+                  {isLoading ? 'Fetching from database...' : pricesLoading ? 'Fetching token prices...' : 'Finalizing...'}
+                </p>
+              </motion.div>
+            ) : error ? (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="text-center py-20"
+              >
+                <p className="text-red-400 text-lg">Failed to load data</p>
+                <p className="text-gray-500 text-sm mt-2">{error}</p>
+                <button
+                  onClick={fetchData}
+                  className="mt-4 px-4 py-2 bg-white/10 text-white rounded hover:bg-white/20 transition-colors"
+                >
+                  Retry
+                </button>
               </motion.div>
             ) : !hasData ? (
               <motion.div
@@ -354,8 +581,8 @@ export default function Stats2Page() {
                 animate={{ opacity: 1 }}
                 className="text-center py-20"
               >
-                <p className="text-gray-400 text-lg">No data available</p>
-                <p className="text-gray-500 text-sm mt-2">Stats will appear once data is recorded</p>
+                <p className="text-gray-400 text-lg">No trading data available yet</p>
+                <p className="text-gray-500 text-sm mt-2">Stats will appear once orders are placed and filled</p>
               </motion.div>
             ) : (
               <motion.div
@@ -364,476 +591,108 @@ export default function Stats2Page() {
                 transition={{ duration: 0.5, delay: 0.2 }}
                 className="space-y-6"
               >
-                {/* Page Header */}
-                <div className="flex items-center justify-between mb-2">
-                  <h1 className="text-2xl md:text-3xl font-bold text-white">Protocol Stats (API)</h1>
-                  <span className="text-xs text-gray-500 bg-white/5 px-3 py-1 rounded-full">
-                    Auto-refreshes every 30s
-                  </span>
-                </div>
-
-                {/* Stats Cards - Row 1: Volume & Overview */}
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                  <StatCard
-                    label="Total Listed Volume"
-                    value={formatUSD(stats.protocol.total_volume_usd)}
-                    subValue="All orders all time"
-                  />
-                  <StatCard
-                    label="Total Filled Volume"
-                    value={formatUSD(stats.protocol.total_fill_volume_usd)}
-                    subValue={`${stats.fills.total.toLocaleString()} fills`}
-                  />
-                  <StatCard
-                    label="Unique Traders"
-                    value={stats.protocol.total_users.toLocaleString()}
-                    subValue="Buyers & sellers"
-                  />
-                </div>
-
-                {/* Stats Cards - Row 2: Averages & Rates */}
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                  <StatCard
-                    label="Avg Placement Size"
-                    value={formatUSD(avgOrderSize)}
-                    subValue="Per order created"
-                  />
-                  <StatCard
-                    label="Avg Fill Size"
-                    value={formatUSD(avgTradeSize)}
-                    subValue="Per fill"
-                  />
-                  <StatCard
-                    label="Cancel Rate"
-                    value={`${cancelRate.toFixed(1)}%`}
-                    subValue="Orders cancelled"
-                    dotColor={cancelRate > 50 ? 'red' : cancelRate > 25 ? 'yellow' : 'green'}
-                  />
-                </div>
-
-                {/* Stats Cards - Row 3: Order Status */}
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                  <StatCard
-                    label="Total Orders"
-                    value={stats.orders.total.toLocaleString()}
-                    subValue="All time"
-                  />
-                  <StatCard
-                    label="Active Orders"
-                    value={stats.orders.by_status.active.toLocaleString()}
-                    subValue="Currently open"
-                    dotColor="green"
-                  />
-                  <StatCard
-                    label="Completed Orders"
-                    value={stats.orders.by_status.completed.toLocaleString()}
-                    subValue="Fully filled"
-                    dotColor="blue"
-                  />
-                  <StatCard
-                    label="Cancelled Orders"
-                    value={stats.orders.by_status.cancelled.toLocaleString()}
-                    subValue="By owner"
-                    dotColor="red"
-                  />
-                </div>
-
-                {/* Stats Cards - Row 4: Per-User Averages */}
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                  <StatCard
-                    label="Avg Orders/Trader"
-                    value={stats.protocol.total_users > 0 ? (stats.orders.total / stats.protocol.total_users).toFixed(1) : '0'}
-                    subValue="Orders per address"
-                  />
-                  <StatCard
-                    label="Avg Volume/Trader"
-                    value={formatUSD(stats.protocol.total_users > 0 ? stats.protocol.total_volume_usd / stats.protocol.total_users : 0)}
-                    subValue="Listed per address"
-                  />
-                  <StatCard
-                    label="Avg Fills/Trader"
-                    value={stats.protocol.total_users > 0 ? (stats.fills.total / stats.protocol.total_users).toFixed(1) : '0'}
-                    subValue="Fills per address"
-                  />
-                  <StatCard
-                    label="Maker/Taker Ratio"
-                    value={stats.fills.total > 0 && stats.orders.total > 0
-                      ? `${(stats.orders.total / stats.fills.total).toFixed(1)}x`
-                      : '-'}
-                    subValue="Orders to fills"
-                  />
-                  <StatCard
-                    label="Fill Rate"
-                    value={`${stats.protocol.fill_rate_percent.toFixed(1)}%`}
-                    subValue="Orders filled"
-                  />
-                </div>
-
-                {/* Protocol Activity Chart */}
-                {activityChartData.length > 0 && (
-                  <LiquidGlassCard
-                    className="p-6 bg-black/40"
-                    shadowIntensity="none"
-                    glowIntensity="none"
-                  >
-                    <div className="mb-6">
-                      <h3 className="text-2xl font-bold text-white mb-2">Protocol Activity</h3>
-                      <div className="flex flex-wrap gap-6">
-                        <div>
-                          <p className="text-gray-400 text-sm">Total Orders</p>
-                          <p className="text-pink-400 text-xl font-bold">{stats.orders.total.toLocaleString()}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-400 text-sm">Total Fills</p>
-                          <p className="text-green-400 text-xl font-bold">{stats.fills.total.toLocaleString()}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <ResponsiveContainer width="100%" height={300}>
-                      <ComposedChart
-                        data={activityChartData}
-                        margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
-                        barGap={0}
-                        barCategoryGap="20%"
-                      >
-                        <defs>
-                          <linearGradient id="colorCumulativeOrders" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#EC4899" stopOpacity={0.3} />
-                            <stop offset="95%" stopColor="#EC4899" stopOpacity={0.05} />
-                          </linearGradient>
-                          <linearGradient id="colorCumulativeFills" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#4ADE80" stopOpacity={0.3} />
-                            <stop offset="95%" stopColor="#4ADE80" stopOpacity={0.05} />
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#FFFFFF20" />
-                        <XAxis
-                          dataKey="displayDate"
-                          stroke="#FFFFFF40"
-                          tick={{ fill: '#9CA3AF', fontSize: 12 }}
-                          tickLine={{ stroke: '#FFFFFF20' }}
-                          axisLine={{ stroke: '#FFFFFF20' }}
-                        />
-                        <YAxis
-                          yAxisId="left"
-                          stroke="#FFFFFF20"
-                          tick={{ fill: '#9CA3AF', fontSize: 12 }}
-                          tickLine={{ stroke: '#FFFFFF20' }}
-                          axisLine={{ stroke: '#FFFFFF20' }}
-                        />
-                        <YAxis
-                          yAxisId="right"
-                          orientation="right"
-                          stroke="#FFFFFF20"
-                          tick={{ fill: '#6B7280', fontSize: 12 }}
-                          tickLine={{ stroke: '#FFFFFF20' }}
-                          axisLine={{ stroke: '#FFFFFF20' }}
-                        />
-                        <Tooltip
-                          content={({ active, payload }) => {
-                            if (!active || !payload || !payload[0]) return null;
-                            const data = payload[0].payload;
-                            return (
-                              <div style={{
-                                backgroundColor: 'rgba(0, 0, 0, 0.85)',
-                                border: '1px solid rgba(255, 255, 255, 0.1)',
-                                borderRadius: '8px',
-                                padding: '12px',
-                                color: '#fff',
-                                backdropFilter: 'blur(8px)',
-                              }}>
-                                <p style={{ fontWeight: 'bold', marginBottom: '8px' }}>{data.displayDate}</p>
-                                <p style={{ margin: '4px 0', fontSize: '14px' }}>
-                                  <span style={{ color: '#EC4899' }}>Orders:</span>{' '}
-                                  <span style={{ fontWeight: 'bold' }}>{data.dailyOrders}</span>
-                                </p>
-                                <p style={{ margin: '4px 0', fontSize: '14px' }}>
-                                  <span style={{ color: '#4ADE80' }}>Fills:</span>{' '}
-                                  <span style={{ fontWeight: 'bold' }}>{data.dailyFills}</span>
-                                </p>
-                                <hr style={{ margin: '8px 0', borderColor: 'rgba(255, 255, 255, 0.1)' }} />
-                                <p style={{ margin: '4px 0', fontSize: '14px' }}>
-                                  <span style={{ color: '#EC489980' }}>Cumulative Orders:</span>{' '}
-                                  <span style={{ fontWeight: 'bold' }}>{data.cumulativeOrders}</span>
-                                </p>
-                                <p style={{ margin: '4px 0', fontSize: '14px' }}>
-                                  <span style={{ color: '#4ADE8080' }}>Cumulative Fills:</span>{' '}
-                                  <span style={{ fontWeight: 'bold' }}>{data.cumulativeFills}</span>
-                                </p>
-                              </div>
-                            );
-                          }}
-                        />
-                        <Legend wrapperStyle={{ color: '#FFFFFF' }} iconType="circle" />
-                        <Area
-                          yAxisId="right"
-                          type="monotone"
-                          dataKey="cumulativeFills"
-                          stroke="#4ADE80"
-                          strokeWidth={2}
-                          strokeOpacity={0.6}
-                          fill="url(#colorCumulativeFills)"
-                          name="Cumulative Fills"
-                        />
-                        <Area
-                          yAxisId="right"
-                          type="monotone"
-                          dataKey="cumulativeOrders"
-                          stroke="#EC4899"
-                          strokeWidth={2}
-                          strokeOpacity={0.6}
-                          fill="url(#colorCumulativeOrders)"
-                          name="Cumulative Orders"
-                        />
-                        <Bar
-                          yAxisId="left"
-                          dataKey="dailyFills"
-                          fill="#4ADE80"
-                          radius={[4, 4, 0, 0]}
-                          legendType="none"
-                        />
-                        <Bar
-                          yAxisId="left"
-                          dataKey="dailyOrders"
-                          fill="#EC4899"
-                          radius={[4, 4, 0, 0]}
-                          legendType="none"
-                        />
-                      </ComposedChart>
-                    </ResponsiveContainer>
-                  </LiquidGlassCard>
-                )}
-
-                {/* Top Tokens & Order Status Charts */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Top Tokens */}
-                  {topTokensData.length > 0 && (
-                    <LiquidGlassCard
-                      className="p-6 bg-black/40"
-                      shadowIntensity="none"
-                      glowIntensity="none"
-                    >
-                      <h3 className="text-2xl font-bold text-white mb-6">Top Tokens</h3>
-                      <div className="space-y-3">
-                        {topTokensData.map((token, index) => {
-                          const maxOrders = topTokensData[0]?.orderCount || 1;
-                          const barWidth = (token.orderCount / maxOrders) * 100;
-                          return (
-                            <div key={token.ticker} className="relative">
-                              <div
-                                className="absolute inset-0 rounded bg-white/5"
-                                style={{ width: `${barWidth}%` }}
-                              />
-                              <div className="relative flex items-center justify-between py-2.5 px-3">
-                                <div className="flex items-center gap-3">
-                                  <span className={`text-sm font-bold w-5 ${index < 3 ? 'text-white' : 'text-gray-500'}`}>
-                                    {index + 1}
-                                  </span>
-                                  <CoinLogo symbol={token.ticker} size="sm" />
-                                  <span className="text-white font-medium">{token.ticker}</span>
-                                </div>
-                                <div className="flex items-center gap-4 text-sm">
-                                  <span className="text-pink-400">{token.orderCount} orders</span>
-                                  <span className="text-green-400">{token.fillCount} fills</span>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </LiquidGlassCard>
-                  )}
-
-                  {/* Order Status Breakdown */}
-                  {orderStatusData.length > 0 && (
-                    <LiquidGlassCard
-                      className="p-6 bg-black/40"
-                      shadowIntensity="none"
-                      glowIntensity="none"
-                    >
-                      <h3 className="text-2xl font-bold text-white mb-6">Order Status Breakdown</h3>
-                      <div className="flex items-center justify-center">
-                        <ResponsiveContainer width="100%" height={250}>
-                          <PieChart>
-                            <Pie
-                              data={orderStatusData}
-                              cx="50%"
-                              cy="50%"
-                              innerRadius={60}
-                              outerRadius={100}
-                              paddingAngle={2}
-                              dataKey="value"
-                              label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                              labelLine={{ stroke: '#FFFFFF40' }}
-                            >
-                              {orderStatusData.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={entry.color} />
-                              ))}
-                            </Pie>
-                            <Tooltip
-                              content={({ active, payload }) => {
-                                if (!active || !payload || !payload[0]) return null;
-                                const data = payload[0].payload;
-                                return (
-                                  <div style={{
-                                    backgroundColor: 'rgba(0, 0, 0, 0.85)',
-                                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                                    borderRadius: '8px',
-                                    padding: '12px',
-                                    color: '#fff',
-                                    backdropFilter: 'blur(8px)',
-                                  }}>
-                                    <p style={{ fontWeight: 'bold', color: data.color }}>{data.name}</p>
-                                    <p style={{ fontSize: '14px' }}>{data.value.toLocaleString()} orders</p>
-                                  </div>
-                                );
-                              }}
-                            />
-                          </PieChart>
-                        </ResponsiveContainer>
-                      </div>
-                      <div className="flex justify-center gap-6 mt-4">
-                        {orderStatusData.map((entry) => (
-                          <div key={entry.name} className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.color }} />
-                            <span className="text-gray-400 text-sm">{entry.name}: {entry.value.toLocaleString()}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </LiquidGlassCard>
-                  )}
-                </div>
-
-                {/* Leaderboard */}
-                <div>
-                  <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
-                    <h2 className="text-2xl font-bold text-white">Leaderboard</h2>
-                    <div className="flex gap-2">
-                      {(['total_xp', 'total_volume_usd', 'total_trades'] as const).map((sort) => (
+                {/* Filter Indicator */}
+                {(selectedTokenFilter || selectedTraderFilter) && (
+                  <div className="flex flex-wrap items-center gap-3 p-3 bg-white/5 border border-white/10 rounded-lg">
+                    <span className="text-gray-400 text-sm">Filtering by:</span>
+                    {selectedTokenFilter && (
+                      <div className="flex items-center gap-2 px-2 py-1 bg-white/10 rounded">
+                        <CoinLogo symbol={selectedTokenFilter.ticker} size="sm" />
+                        <span className="text-white font-medium">{formatTokenTicker(selectedTokenFilter.ticker)}</span>
                         <button
-                          key={sort}
-                          onClick={() => setLeaderboardSort(sort)}
-                          className={`px-4 py-2 rounded-lg font-medium transition-all text-sm ${
-                            leaderboardSort === sort
-                              ? 'bg-white/10 text-white border border-white/20'
-                              : 'bg-white/5 text-gray-400 border border-transparent hover:bg-white/10 hover:text-white'
-                          }`}
+                          onClick={() => setSelectedTokenFilter(null)}
+                          className="text-gray-400 hover:text-white transition-colors"
                         >
-                          {sort === 'total_xp' ? 'XP' : sort === 'total_volume_usd' ? 'Volume' : 'Trades'}
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
                         </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <LiquidGlassCard
-                    shadowIntensity="sm"
-                    glowIntensity="sm"
-                    blurIntensity="xl"
-                    className="p-4 md:p-6 !overflow-x-auto"
-                  >
-                    {leaderboardLoading ? (
-                      <div className="flex items-center justify-center py-12">
-                        <PixelSpinner size={32} />
-                        <span className="ml-3 text-gray-400">Loading leaderboard...</span>
-                      </div>
-                    ) : (
-                      <div className="overflow-x-auto -mx-4 md:-mx-6 px-4 md:px-6 pb-2 modern-scrollbar">
-                        <table className="w-full min-w-[800px]">
-                          <thead>
-                            <tr className="border-b border-white/10">
-                              <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Rank</th>
-                              <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Wallet</th>
-                              <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Legion</th>
-                              <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm">XP</th>
-                              <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm">Volume</th>
-                              <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm">Trades</th>
-                              <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm">Orders</th>
-                              <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm">Tokens</th>
-                              <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm">Streak</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {(leaderboardData?.leaderboard || []).length === 0 ? (
-                              <tr>
-                                <td colSpan={9} className="py-8 text-center text-gray-500">
-                                  No users on leaderboard yet.
-                                </td>
-                              </tr>
-                            ) : (
-                              (leaderboardData?.leaderboard || []).map((user) => (
-                                <tr
-                                  key={user.wallet_address}
-                                  className="border-b border-white/5 hover:bg-white/5 transition-colors"
-                                >
-                                  <td className="py-4 px-2">
-                                    <span className={`font-bold ${
-                                      user.rank === 1 ? 'text-yellow-400' :
-                                      user.rank === 2 ? 'text-gray-300' :
-                                      user.rank === 3 ? 'text-orange-400' :
-                                      'text-gray-500'
-                                    }`}>
-                                      #{user.rank}
-                                    </span>
-                                  </td>
-                                  <td className="py-4 px-2">
-                                    <span className="font-mono text-sm text-gray-300">
-                                      {formatAddress(user.wallet_address)}
-                                    </span>
-                                  </td>
-                                  <td className="py-4 px-2">
-                                    <span className={`font-semibold ${PRESTIGE_COLORS[user.prestige_name] || 'text-gray-400'}`}>
-                                      {user.prestige_name}
-                                    </span>
-                                  </td>
-                                  <td className="py-4 px-2 text-right">
-                                    <span className="text-white font-medium">
-                                      {user.total_xp.toLocaleString()}
-                                    </span>
-                                  </td>
-                                  <td className="py-4 px-2 text-right">
-                                    <span className="text-gray-300">
-                                      {formatUSD(user.total_volume_usd)}
-                                    </span>
-                                  </td>
-                                  <td className="py-4 px-2 text-right">
-                                    <span className="text-gray-300">
-                                      {user.total_trades.toLocaleString()}
-                                    </span>
-                                  </td>
-                                  <td className="py-4 px-2 text-right">
-                                    <span className="text-gray-400">
-                                      {user.total_orders_created}
-                                    </span>
-                                  </td>
-                                  <td className="py-4 px-2 text-right">
-                                    <span className="text-gray-400">
-                                      {user.unique_tokens_traded}
-                                    </span>
-                                  </td>
-                                  <td className="py-4 px-2 text-right">
-                                    <span className={`${user.current_streak_days > 0 ? 'text-green-400' : 'text-gray-500'}`}>
-                                      {user.current_streak_days}d
-                                    </span>
-                                  </td>
-                                </tr>
-                              ))
-                            )}
-                          </tbody>
-                        </table>
-                        {leaderboardData?.pagination && (
-                          <div className="mt-4 text-center text-gray-500 text-sm">
-                            Showing {leaderboardData.leaderboard.length} of {leaderboardData.pagination.total} traders
-                          </div>
-                        )}
                       </div>
                     )}
-                  </LiquidGlassCard>
-                </div>
+                    {selectedTraderFilter && (
+                      <div className="flex items-center gap-2 px-2 py-1 bg-white/10 rounded">
+                        <span className="text-white font-mono text-sm">
+                          {selectedTraderFilter.slice(0, 6)}...{selectedTraderFilter.slice(-4)}
+                        </span>
+                        <button
+                          onClick={() => setSelectedTraderFilter(null)}
+                          className="text-gray-400 hover:text-white transition-colors"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    )}
+                    <button
+                      onClick={() => {
+                        setSelectedTokenFilter(null);
+                        setSelectedTraderFilter(null);
+                      }}
+                      className="ml-auto flex items-center gap-1 px-3 py-1 text-sm text-gray-400 hover:text-white hover:bg-white/10 rounded transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      Clear all
+                    </button>
+                  </div>
+                )}
+
+                {/* Overview Stats Cards */}
+                <StatsOverviewCards
+                  transactions={filteredTransactions}
+                  orders={filteredOrders}
+                  tokenPrices={tokenPrices}
+                  contractOrders={filteredContractOrders}
+                  activeOrders={filteredActiveOrders}
+                />
+
+                {/* Protocol Activity Chart */}
+                <ProtocolActivityChart
+                  transactions={filteredTransactions}
+                  orders={filteredOrders}
+                  contractOrders={filteredContractOrders}
+                  tokenPrices={tokenPrices}
+                />
+
+                {/* Top Tokens Chart */}
+                <TopTokensChart
+                  transactions={transactions}
+                  orders={orders}
+                  tokenPrices={tokenPrices}
+                  contractOrders={contractOrders}
+                  onTokenSelect={handleTokenFilterSelect}
+                  selectedToken={selectedTokenFilter?.address}
+                />
+
+                {/* Leaderboard */}
+                <TopTradersLeaderboard
+                  transactions={transactions}
+                  orders={orders}
+                  tokenPrices={tokenPrices}
+                  contractOrders={contractOrders}
+                />
+
+                {/* Order Book */}
+                {filteredActiveOrders.length > 0 && whitelist.length > 0 && (
+                  <OrderbookChart
+                    orders={filteredActiveOrders}
+                    tokenPrices={tokenPrices}
+                    whitelist={whitelist}
+                  />
+                )}
+
+                {/* Hourly Activity Heatmap */}
+                <HourlyActivityChart
+                  transactions={filteredTransactions}
+                  orders={filteredOrders}
+                  contractOrders={filteredContractOrders}
+                />
 
                 {/* All Orders Table */}
                 <div>
-                  <h2 className="text-2xl font-bold text-white mb-4">Recent Orders</h2>
+                  <h2 className="text-2xl font-bold text-white mb-4">All Orders</h2>
 
                   {/* Order Status Filters */}
                   <div className="flex flex-wrap gap-2 mb-4">
@@ -858,101 +717,207 @@ export default function Stats2Page() {
                     blurIntensity="xl"
                     className="p-4 md:p-6 !overflow-x-auto"
                   >
-                    {ordersLoading ? (
-                      <div className="flex items-center justify-center py-12">
-                        <PixelSpinner size={32} />
-                        <span className="ml-3 text-gray-400">Loading orders...</span>
-                      </div>
-                    ) : (
-                      <div className="overflow-x-auto -mx-4 md:-mx-6 px-4 md:px-6 pb-2 modern-scrollbar">
-                        <table className="w-full min-w-[700px]">
-                          <thead>
-                            <tr className="border-b border-white/10">
-                              <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">ID</th>
-                              <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Maker</th>
-                              <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Pair</th>
-                              <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Sell Amount</th>
-                              <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Buy Amount</th>
-                              <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Filled</th>
-                              <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Status</th>
-                              <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Fills</th>
+                    <div className="overflow-x-auto -mx-4 md:-mx-6 px-4 md:px-6 pb-2 modern-scrollbar">
+                      <table className="w-full min-w-[700px]">
+                        <thead>
+                          <tr className="border-b border-white/10">
+                            <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">ID</th>
+                            <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Seller</th>
+                            <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Pair</th>
+                            <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Sell Amount</th>
+                            <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Buy Amount</th>
+                            <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Filled</th>
+                            <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Status</th>
+                            <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Created Date</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredOrdersByStatus.length === 0 ? (
+                            <tr>
+                              <td colSpan={8} className="py-8 text-center text-gray-500">
+                                No orders found with this filter.
+                              </td>
                             </tr>
-                          </thead>
-                          <tbody>
-                            {(ordersData?.orders || []).length === 0 ? (
-                              <tr>
-                                <td colSpan={8} className="py-8 text-center text-gray-500">
-                                  No orders found with this filter.
+                          ) : (
+                            filteredOrdersByStatus.map((order) => {
+                              const isCurrentUser = connectedAddress?.toLowerCase() === order.maker.toLowerCase();
+                              const statusColors = getStatusColor(order.status);
+
+                              const href = isCurrentUser
+                                ? `/my-orders?orderId=${order.id}`
+                                : `/marketplace?order-id=${order.id}`;
+
+                              return (
+                                <tr
+                                  key={order.id}
+                                  className={`border-b border-white/5 transition-colors cursor-pointer ${
+                                    isCurrentUser ? 'bg-white/5 hover:bg-white/10' : 'hover:bg-white/5'
+                                  }`}
+                                  onClick={() => window.location.href = href}
+                                >
+                                  <td className="py-4 px-2">
+                                    <span className="text-gray-500 text-sm">#{order.id}</span>
+                                  </td>
+                                  <td className="py-4 px-2">
+                                    {(() => {
+                                      const color = getBuyerColor(order.maker);
+                                      return (
+                                        <div className="flex items-center gap-2">
+                                          <span
+                                            className="font-mono text-xs px-2.5 py-1 rounded-full inline-block"
+                                            style={{ backgroundColor: color.bg, color: color.text, border: `1px solid ${color.border}` }}
+                                          >
+                                            {formatAddress(order.maker)}
+                                          </span>
+                                          {isCurrentUser && (
+                                            <span className="text-xs bg-white/10 px-2 py-0.5 rounded text-gray-300">You</span>
+                                          )}
+                                        </div>
+                                      );
+                                    })()}
+                                  </td>
+                                  <td className="py-4 px-2">
+                                    <span className="text-white text-sm">
+                                      {formatTokenTicker(order.sellToken)}/{formatTokenTicker(order.buyToken)}
+                                    </span>
+                                  </td>
+                                  <td className="py-4 px-2 text-right">
+                                    <span className="text-gray-300 text-sm whitespace-nowrap">
+                                      {formatDisplayAmount(order.sellAmount)} {formatTokenTicker(order.sellToken)}
+                                    </span>
+                                  </td>
+                                  <td className="py-4 px-2 text-right">
+                                    <span className="text-gray-300 text-sm whitespace-nowrap">
+                                      {formatDisplayAmount(order.buyAmount)} {formatTokenTicker(order.buyToken)}
+                                    </span>
+                                  </td>
+                                  <td className="py-4 px-2 text-center">
+                                    <span className="text-gray-400 text-sm">{order.filled}%</span>
+                                  </td>
+                                  <td className="py-4 px-2 text-center">
+                                    <span className={`text-xs px-2 py-1 rounded capitalize ${statusColors}`}>
+                                      {order.status}
+                                    </span>
+                                  </td>
+                                  <td className="py-4 px-2 text-right">
+                                    <span className="text-gray-500 text-sm whitespace-nowrap">{order.createdAt}</span>
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </LiquidGlassCard>
+                </div>
+
+                {/* All Fills Table */}
+                <div>
+                  <h2 className="text-2xl font-bold text-white mb-4">All Fills</h2>
+                  <LiquidGlassCard
+                    shadowIntensity="sm"
+                    glowIntensity="sm"
+                    blurIntensity="xl"
+                    className="p-4 md:p-6 !overflow-x-auto"
+                  >
+                    <div className="overflow-x-auto -mx-4 md:-mx-6 px-4 md:px-6 pb-2 modern-scrollbar">
+                      <table className="w-full min-w-[800px]">
+                        <thead>
+                          <tr className="border-b border-white/10">
+                            <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Order</th>
+                            <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Buyer</th>
+                            <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Sold</th>
+                            <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Bought</th>
+                            <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Date</th>
+                            <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Tx</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {formattedFills.length === 0 ? (
+                            <tr>
+                              <td colSpan={6} className="py-8 text-center text-gray-500">
+                                No fills found.
+                              </td>
+                            </tr>
+                          ) : (
+                            formattedFills.map((fill, idx) => {
+                              const sellPrice = tokenPrices[fill.sellTokenAddress]?.price ?? 0;
+                              const buyPrice = tokenPrices[fill.buyTokenAddress]?.price ?? 0;
+                              const sellUsd = fill.sellAmountNum * sellPrice;
+                              const buyUsd = fill.buyAmountNum * buyPrice;
+                              return (
+                              <tr key={`${fill.txHash}-${idx}`} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                                <td className="py-4 px-2">
+                                  <span className="text-gray-500 text-sm">#{fill.orderId}</span>
+                                </td>
+                                <td className="py-4 px-2">
+                                  {(() => {
+                                    const color = getBuyerColor(fill.buyer);
+                                    return (
+                                      <span
+                                        className="font-mono text-xs px-2.5 py-1 rounded-full inline-block"
+                                        style={{ backgroundColor: color.bg, color: color.text, border: `1px solid ${color.border}` }}
+                                      >
+                                        {formatAddress(fill.buyer)}
+                                      </span>
+                                    );
+                                  })()}
+                                </td>
+                                <td className="py-4 px-2 text-right">
+                                  <div className="flex flex-col items-end">
+                                    <span className="text-white text-sm font-medium whitespace-nowrap">
+                                      {sellUsd > 0 ? `$${formatDisplayAmount(sellUsd.toString())}` : '--'}
+                                    </span>
+                                    <span className="text-gray-500 text-xs whitespace-nowrap">
+                                      {formatDisplayAmount(fill.sellAmountNum.toString())} {formatTokenTicker(fill.sellToken)}
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="py-4 px-2 text-right">
+                                  <div className="flex flex-col items-end">
+                                    <span className="text-white text-sm font-medium whitespace-nowrap">
+                                      {buyUsd > 0 ? `$${formatDisplayAmount(buyUsd.toString())}` : '--'}
+                                    </span>
+                                    <span className="text-gray-500 text-xs whitespace-nowrap">
+                                      {formatDisplayAmount(fill.buyAmountNum.toString())} {formatTokenTicker(fill.buyToken)}
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="py-4 px-2 text-right">
+                                  <span className="text-gray-500 text-sm whitespace-nowrap">
+                                    {fill.timestamp ? (() => {
+                                      const d = new Date(fill.timestamp * 1000);
+                                      const time = d.toLocaleString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
+                                      const date = d.toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+                                      return `${time} UTC, ${date}`;
+                                    })() : '-'}
+                                  </span>
+                                </td>
+                                <td className="py-4 px-2 text-right">
+                                  <a
+                                    href={`https://otter.pulsechain.com/tx/${fill.txHash}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-blue-400 hover:text-blue-300 text-sm font-mono"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    {fill.txHash.slice(0, 8)}...
+                                  </a>
                                 </td>
                               </tr>
-                            ) : (
-                              (ordersData?.orders || []).map((order) => {
-                                const statusColors = getStatusColor(order.status_label);
-                                const buyTokenDisplay = order.buy_tokens_tickers.length > 0
-                                  ? order.buy_tokens_tickers[0]
-                                  : 'UNKNOWN';
-                                const buyAmountDisplay = order.buy_amounts_formatted.length > 0
-                                  ? order.buy_amounts_formatted[0]
-                                  : 0;
-
-                                return (
-                                  <tr
-                                    key={order.order_id}
-                                    className="border-b border-white/5 hover:bg-white/5 transition-colors"
-                                  >
-                                    <td className="py-4 px-2">
-                                      <span className="text-gray-500 text-sm">#{order.order_id}</span>
-                                    </td>
-                                    <td className="py-4 px-2">
-                                      <span className="font-mono text-sm text-gray-300">
-                                        {formatAddress(order.maker_address)}
-                                      </span>
-                                    </td>
-                                    <td className="py-4 px-2">
-                                      <span className="text-white text-sm">
-                                        {order.sell_token_ticker}/{buyTokenDisplay}
-                                      </span>
-                                    </td>
-                                    <td className="py-4 px-2 text-right">
-                                      <span className="text-gray-300 text-sm whitespace-nowrap">
-                                        {formatDisplayAmount(order.sell_amount_formatted)} {order.sell_token_ticker}
-                                      </span>
-                                    </td>
-                                    <td className="py-4 px-2 text-right">
-                                      <span className="text-gray-300 text-sm whitespace-nowrap">
-                                        {formatDisplayAmount(buyAmountDisplay)} {buyTokenDisplay}
-                                      </span>
-                                    </td>
-                                    <td className="py-4 px-2 text-center">
-                                      <span className="text-gray-400 text-sm">{order.fill_percentage}%</span>
-                                    </td>
-                                    <td className="py-4 px-2 text-center">
-                                      <span className={`text-xs px-2 py-1 rounded capitalize ${statusColors}`}>
-                                        {order.status_label}
-                                      </span>
-                                    </td>
-                                    <td className="py-4 px-2 text-center">
-                                      <span className="text-gray-400 text-sm">{order.total_fills}</span>
-                                    </td>
-                                  </tr>
-                                );
-                              })
-                            )}
-                          </tbody>
-                        </table>
-                        {ordersData?.pagination && (
-                          <div className="mt-4 text-center text-gray-500 text-sm">
-                            Showing {ordersData.orders.length} of {ordersData.pagination.total} orders
-                          </div>
-                        )}
-                      </div>
-                    )}
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                   </LiquidGlassCard>
                 </div>
 
                 {/* Footer note */}
                 <div className="text-center text-gray-500 text-sm pt-4">
-                  <p>Data sourced from AgoráX API. Auto-refreshes periodically.</p>
+                  <p>Data sourced from protocol database. Synced every minute from PulseChain.</p>
                 </div>
               </motion.div>
             )}

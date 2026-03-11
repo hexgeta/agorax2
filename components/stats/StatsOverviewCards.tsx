@@ -113,23 +113,23 @@ export default function StatsOverviewCards({ transactions, orders, tokenPrices, 
     }, 0);
   }, [orders, contractOrders, tokenPrices]);
 
-  // Calculate unique traders (both buyers and sellers)
+  // Calculate unique traders (both buyers and sellers from all sources)
   const uniqueTraders = useMemo(() => {
     const traders = new Set<string>();
     transactions.forEach(tx => {
       if (tx.buyer) traders.add(tx.buyer.toLowerCase());
     });
-    // Use contract orders if available
+    // Include makers from contract orders
     if (contractOrders.length > 0) {
       contractOrders.forEach(order => {
         const owner = order.userDetails.orderOwner;
         if (owner) traders.add(owner.toLowerCase());
       });
-    } else {
-      orders.forEach(order => {
-        if (order.orderOwner) traders.add(order.orderOwner.toLowerCase());
-      });
     }
+    // Also include makers from event-based orders (may have addresses not in contractOrders)
+    orders.forEach(order => {
+      if (order.orderOwner) traders.add(order.orderOwner.toLowerCase());
+    });
     return traders.size;
   }, [transactions, orders, contractOrders]);
 

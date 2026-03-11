@@ -277,18 +277,16 @@ export default function TopTradersLeaderboard({ transactions, orders, tokenPrice
               <tr className="border-b border-white/10">
                 <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Rank</th>
                 <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Trader</th>
-                <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Legion</th>
                 <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">XP</th>
                 <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Listed</th>
                 <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Filled</th>
                 <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Total</th>
-                <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Fill Rate</th>
               </tr>
             </thead>
             <tbody>
               {rankedUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-gray-500">
+                  <td colSpan={6} className="py-8 text-center text-gray-500">
                     No traders found yet.
                   </td>
                 </tr>
@@ -324,18 +322,6 @@ export default function TopTradersLeaderboard({ transactions, orders, tokenPrice
                           )}
                         </div>
                       </td>
-                      <td className="py-4 px-2">
-                        <div className="flex justify-center">
-                          <div
-                            className={`w-8 h-8 rounded-full flex items-center justify-center ${hasCompletedFirstLegion ? prestige.bgColor : 'bg-gray-500/20'}`}
-                            title={hasCompletedFirstLegion ? prestige.name : 'Alpha (In Progress)'}
-                          >
-                            <span className={`text-sm font-bold ${hasCompletedFirstLegion ? prestige.color : 'text-gray-500'}`}>
-                              {prestige.symbol}
-                            </span>
-                          </div>
-                        </div>
-                      </td>
                       <td className="py-4 px-2 text-right">
                         <span className={`font-medium ${user.totalXp > 0 ? 'text-amber-400' : 'text-gray-600'}`}>
                           {formatXp(user.totalXp)}
@@ -364,16 +350,6 @@ export default function TopTradersLeaderboard({ transactions, orders, tokenPrice
                       <td className="py-4 px-2 text-right">
                         <span className="text-white font-bold text-sm">
                           {totalVolume > 0 ? formatUSD(totalVolume) : '-'}
-                        </span>
-                      </td>
-                      <td className="py-4 px-2 text-right">
-                        <span className={`text-sm whitespace-nowrap ${
-                          user.fillRate >= 80 ? 'text-green-400' :
-                          user.fillRate >= 50 ? 'text-yellow-400' :
-                          user.fillRate > 0 ? 'text-orange-400' :
-                          'text-gray-600'
-                        }`}>
-                          {user.fillRate > 0 ? `${user.fillRate}%` : '-'}
                         </span>
                       </td>
                     </tr>

@@ -65,10 +65,11 @@ export default function ProtocolActivityChart({ transactions, orders, contractOr
     }> = {};
 
     // Process orders for listed volume
-    // Always prefer event-based orders (from OrderPlaced events) since they have
-    // the real creation timestamp. contractOrders use lastUpdateTime which shifts
-    // listed volume to the fill/update date instead of the original listing date.
-    if (orders.length > 0) {
+    // Prefer event-based orders (from OrderPlaced events) since they have
+    // the real creation timestamp. But only use them if we got a complete set —
+    // some RPC nodes return partial getLogs results, causing lower totals.
+    // contractOrders use lastUpdateTime which can shift dates but are always complete.
+    if (orders.length > 0 && orders.length >= contractOrders.length) {
       orders.forEach(order => {
         if (!order.timestamp) return;
 

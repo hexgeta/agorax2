@@ -106,11 +106,9 @@ function formatTimestamp(timestamp: number | bigint): string {
   if (!timestamp) return '-';
   const ts = typeof timestamp === 'bigint' ? Number(timestamp) : timestamp;
   const date = new Date(ts * 1000);
-  return date.toLocaleString('en-US', {
-    month: 'short', day: 'numeric', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-    timeZone: 'UTC'
-  }) + ' UTC';
+  const time = date.toLocaleString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
+  const day = date.toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+  return `${time} UTC, ${day}`;
 }
 
 export default function StatsPage() {
@@ -770,13 +768,13 @@ export default function StatsPage() {
                         <thead>
                           <tr className="border-b border-white/10">
                             <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">ID</th>
-                            <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Maker</th>
+                            <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Seller</th>
                             <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Pair</th>
                             <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Sell Amount</th>
                             <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Buy Amount</th>
                             <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Filled</th>
                             <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Status</th>
-                            <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Date</th>
+                            <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Created Date</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -807,14 +805,22 @@ export default function StatsPage() {
                                     <span className="text-gray-500 text-sm">#{order.id}</span>
                                   </td>
                                   <td className="py-4 px-2">
-                                    <div className="flex items-center gap-2">
-                                      <span className={`font-mono text-sm ${isCurrentUser ? 'text-white' : 'text-gray-300'}`}>
-                                        {formatAddress(order.maker)}
-                                      </span>
-                                      {isCurrentUser && (
-                                        <span className="text-xs bg-white/10 px-2 py-0.5 rounded text-gray-300">You</span>
-                                      )}
-                                    </div>
+                                    {(() => {
+                                      const color = getBuyerColor(order.maker);
+                                      return (
+                                        <div className="flex items-center gap-2">
+                                          <span
+                                            className="font-mono text-xs px-2.5 py-1 rounded-full inline-block"
+                                            style={{ backgroundColor: color.bg, color: color.text, border: `1px solid ${color.border}` }}
+                                          >
+                                            {formatAddress(order.maker)}
+                                          </span>
+                                          {isCurrentUser && (
+                                            <span className="text-xs bg-white/10 px-2 py-0.5 rounded text-gray-300">You</span>
+                                          )}
+                                        </div>
+                                      );
+                                    })()}
                                   </td>
                                   <td className="py-4 px-2">
                                     <span className="text-white text-sm">
@@ -936,8 +942,8 @@ export default function StatsPage() {
                                     {fill.timestamp ? (() => {
                                       const d = new Date(fill.timestamp * 1000);
                                       const time = d.toLocaleString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
-                                      const date = d.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
-                                      return `${time} - ${date} UTC`;
+                                      const date = d.toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+                                      return `${time} UTC, ${date}`;
                                     })() : '-'}
                                   </span>
                                 </td>
