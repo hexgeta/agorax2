@@ -50,7 +50,7 @@ function getTimeRangeStart(range: TimeRange): Date | null {
 }
 
 export default function ProtocolActivityChart({ transactions, orders, contractOrders = [], tokenPrices }: ProtocolActivityChartProps) {
-  const [timeRange, setTimeRange] = useState<TimeRange>('ALL');
+  const [timeRange, setTimeRange] = useState<TimeRange>('1M');
 
   // Calculate cumulative activity by day with volume data
   const allChartData = useMemo(() => {

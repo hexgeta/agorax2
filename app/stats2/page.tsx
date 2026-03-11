@@ -300,6 +300,7 @@ export default function Stats2Page() {
   const [dbOrders, setDbOrders] = useState<DbOrder[]>([]);
   const [dbFills, setDbFills] = useState<DbFill[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [selectedTokenFilter, setSelectedTokenFilter] = useState<{ address: string; ticker: string } | null>(null);
@@ -328,6 +329,7 @@ export default function Stats2Page() {
       if (!json.success) throw new Error(json.message || 'API returned error');
       setDbOrders(json.data.orders || []);
       setDbFills(json.data.fills || []);
+      setHasLoadedOnce(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load data');
     } finally {
@@ -527,7 +529,7 @@ export default function Stats2Page() {
 
   // ── Ready state ─────────────────────────────────────────────────────────
 
-  const dataReady = !isLoading && !pricesLoading;
+  const dataReady = hasLoadedOnce || (!isLoading && !pricesLoading);
   const hasData = dbOrders.length > 0 || dbFills.length > 0;
 
   return (
