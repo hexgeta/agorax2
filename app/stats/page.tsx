@@ -297,6 +297,7 @@ function dbFillsToFormattedFills(dbFills: DbFill[], dbOrders: DbOrder[]): Format
 
 export default function Stats2Page() {
   const [showDisclaimer, setShowDisclaimer] = useState(false);
+  const [pageVisible, setPageVisible] = useState(false);
   const { address: connectedAddress } = useAccount();
 
   // Use pre-fetched data from context (loaded on any page, polled every 60s)
@@ -510,20 +511,22 @@ export default function Stats2Page() {
   const dataReady = !isLoading && (hasPrices || !pricesLoading);
   const hasData = dbOrders.length > 0 || dbFills.length > 0;
 
+  // Trigger fade-in after data is ready (works even if data was preloaded)
+  useEffect(() => {
+    if (dataReady && hasData) {
+      requestAnimationFrame(() => setPageVisible(true));
+    }
+  }, [dataReady, hasData]);
+
   return (
     <>
       <DisclaimerDialog open={showDisclaimer} onAccept={() => setShowDisclaimer(false)} />
       <LogoPreloader />
       <main className="flex min-h-screen flex-col items-center relative">
         {/* Animated background effect */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: dataReady ? 1 : 0 }}
-          transition={{ duration: 1.2, delay: 0.3, ease: [0.23, 1, 0.32, 1] }}
-          className="fixed inset-0 z-0"
-        >
+        <div className="fixed inset-0 z-0">
           <PixelBlastBackground />
-        </motion.div>
+        </div>
 
         {/* Main Content */}
         <div className="w-full px-2 md:px-8 mt-2 pb-12 relative z-10">
@@ -565,10 +568,8 @@ export default function Stats2Page() {
                 <p className="text-gray-500 text-sm mt-2">Stats will appear once orders are placed and filled</p>
               </motion.div>
             ) : (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.5, delay: 0.2 }}
+              <div
+                style={{ opacity: pageVisible ? 1 : 0, transition: 'opacity 0.6s ease-out' }}
                 className="space-y-6"
               >
                 {/* Filter Indicator */}
@@ -899,7 +900,7 @@ export default function Stats2Page() {
                 <div className="text-center text-gray-500 text-sm pt-4">
                   <p>Data sourced from protocol database. Synced every minute from PulseChain.</p>
                 </div>
-              </motion.div>
+              </div>
             )}
           </div>
         </div>

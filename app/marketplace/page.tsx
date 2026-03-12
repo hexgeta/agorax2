@@ -12,6 +12,7 @@ import { useEventTracking } from '@/hooks/useEventTracking';
 
 function MarketplaceContent() {
   const [showDisclaimer, setShowDisclaimer] = useState(false);
+  const [pageVisible, setPageVisible] = useState(false);
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const { trackMarketplaceVisited, walletAddress } = useEventTracking();
@@ -180,6 +181,10 @@ function MarketplaceContent() {
     }
   }, []);
 
+  useEffect(() => {
+    requestAnimationFrame(() => setPageVisible(true));
+  }, []);
+
   return (
     <>
       <DisclaimerDialog open={showDisclaimer} onAccept={() => setShowDisclaimer(false)} />
@@ -191,7 +196,10 @@ function MarketplaceContent() {
         </div>
 
         {/* Main Content */}
-        <div className="w-full px-2 md:px-8 mt-2 relative z-10">
+        <div
+          style={{ opacity: pageVisible ? 1 : 0, transition: 'opacity 0.6s ease-out' }}
+          className="w-full px-2 md:px-8 mt-2 relative z-10"
+        >
           <div className="max-w-[1200px] mx-auto">
             <OpenPositionsTable
               isMarketplaceMode={true}

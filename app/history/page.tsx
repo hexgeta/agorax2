@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef, useMemo } from 'react';
+import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { CompletedOrderCard, CompletedCardRef } from '@/components/discover/CompletedOrderCard';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
@@ -18,6 +18,7 @@ type StatusFilter = 'all' | 'completed' | 'cancelled';
 
 export default function HistoryPage() {
   const [showDisclaimer, setShowDisclaimer] = useState(false);
+  const [pageVisible, setPageVisible] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const topCardRef = useRef<CompletedCardRef | null>(null);
@@ -115,21 +116,23 @@ export default function HistoryPage() {
     }
   });
 
+  useEffect(() => {
+    requestAnimationFrame(() => setPageVisible(true));
+  }, []);
+
   return (
     <>
       <DisclaimerDialog open={showDisclaimer} onAccept={() => setShowDisclaimer(false)} />
       <LogoPreloader />
       <main className="flex min-h-screen flex-col items-center relative">
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: dataReady ? 1 : 0 }}
-          transition={{ duration: 1.2, delay: 0.3 }}
-          className="fixed inset-0 z-0"
-        >
+        <div className="fixed inset-0 z-0">
           <PixelBlastBackground />
-        </motion.div>
+        </div>
 
-        <div className="w-full px-4 mt-4 pb-12 relative z-10">
+        <div
+          style={{ opacity: pageVisible ? 1 : 0, transition: 'opacity 0.6s ease-out' }}
+          className="w-full px-4 mt-4 pb-12 relative z-10"
+        >
           <div className="max-w-md mx-auto">
             {/* Header */}
             <motion.div

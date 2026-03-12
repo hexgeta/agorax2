@@ -55,6 +55,7 @@ function FAQItem({ question, answer, isOpen, onToggle }: { question: string; ans
 export default function Home() {
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
+  const [pageVisible, setPageVisible] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -63,27 +64,25 @@ export default function Home() {
     }
   }, []);
 
+  useEffect(() => {
+    requestAnimationFrame(() => setPageVisible(true));
+  }, []);
+
   return (
     <>
       <DisclaimerDialog open={showDisclaimer} onAccept={() => setShowDisclaimer(false)} />
       <LogoPreloader />
       <main className="flex min-h-screen flex-col items-center relative">
         {/* Animated background effect */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{
-            duration: 1.2,
-            delay: 0.3,
-            ease: [0.23, 1, 0.32, 1]
-          }}
-          className="fixed inset-0 z-0"
-        >
+        <div className="fixed inset-0 z-0">
           <PixelBlastBackground />
-        </motion.div>
+        </div>
 
         {/* Hero Section */}
-        <div className="w-full px-2 md:px-8 mt-2 mb-0 relative z-10">
+        <div
+          style={{ opacity: pageVisible ? 1 : 0, transition: 'opacity 0.6s ease-out' }}
+          className="w-full px-2 md:px-8 mt-2 mb-0 relative z-10"
+        >
           <div className="max-w-[1200px] mx-auto">
             <div className="pt-12 md:pt-20 pb-16 px-4 md:px-6">
               {/* Hero Section */}

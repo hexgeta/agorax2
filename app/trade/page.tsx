@@ -140,27 +140,29 @@ export default function MyOrdersPage() {
     }
   }, [showUsdPrices]);
 
+  const [pageVisible, setPageVisible] = useState(false);
+
+  useEffect(() => {
+    if (!isInitializing && !isConnecting) {
+      requestAnimationFrame(() => setPageVisible(true));
+    }
+  }, [isInitializing, isConnecting]);
+
   return (
     <>
       <DisclaimerDialog open={showDisclaimer} onAccept={() => setShowDisclaimer(false)} />
       <LogoPreloader />
       <main className="flex min-h-screen flex-col items-center relative">
         {/* Animated background effect */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: !isInitializing && !isConnecting ? 1 : 0 }}
-          transition={{
-            duration: 1.2,
-            delay: 0.3,
-            ease: [0.23, 1, 0.32, 1]
-          }}
-          className="fixed inset-0 z-0"
-        >
+        <div className="fixed inset-0 z-0">
           <PixelBlastBackground />
-        </motion.div>
+        </div>
 
         {/* Main Content */}
-        <div className="w-full px-2 md:px-8 mt-2 mb-0 relative z-10">
+        <div
+          style={{ opacity: pageVisible ? 1 : 0, transition: 'opacity 0.6s ease-out' }}
+          className="w-full px-2 md:px-8 mt-2 mb-0 relative z-10"
+        >
           <div className="max-w-[1200px] mx-auto">
             {/* Loading State */}
             {(isInitializing || isConnecting) && (

@@ -498,6 +498,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
   const [initialAnimationComplete, setInitialAnimationComplete] = useState(false);
   const animationCompleteRef = useRef(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const hasOrdersLoaded = useRef(false);
 
   const [showPaywallModal, setShowPaywallModal] = useState(false);
 
@@ -645,7 +646,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
   }, [tokenPrices, allTokenAddresses]);
 
   // Overall loading state - only for initial load
-  const isTableLoading = (pricesLoading || !hasValidPriceData) && isInitialLoad;
+  const isTableLoading = (isLoading || pricesLoading || !hasValidPriceData) && isInitialLoad;
 
   // Handle animation completion without state updates that cause re-renders
   const handleAnimationComplete = useCallback(() => {
@@ -720,12 +721,19 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     }
   }, [searchQuery, allOrders, statusFilter]);
 
+  // Track when orders have loaded at least once
+  useEffect(() => {
+    if (!isLoading && allOrders.length > 0) {
+      hasOrdersLoaded.current = true;
+    }
+  }, [isLoading, allOrders]);
+
   // Effect to handle initial load completion
   useEffect(() => {
-    if (hasValidPriceData && !pricesLoading && isInitialLoad) {
+    if (hasOrdersLoaded.current && hasValidPriceData && !pricesLoading && isInitialLoad) {
       setIsInitialLoad(false);
     }
-  }, [hasValidPriceData, pricesLoading, isInitialLoad]);
+  }, [isLoading, hasValidPriceData, pricesLoading, isInitialLoad]);
 
   // Fallback: Force initial load complete after max timeout to prevent stuck spinner
   useEffect(() => {

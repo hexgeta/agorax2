@@ -409,6 +409,12 @@ export default function RanksPage() {
     ? activePrestigeChallenges.challenges.filter((c) => completedInActivePrestige.includes(c.name)).length
     : 0;
 
+  const [pageVisible, setPageVisible] = useState(false);
+
+  useEffect(() => {
+    requestAnimationFrame(() => setPageVisible(true));
+  }, []);
+
   return (
     <main className="flex min-h-screen flex-col items-center relative overflow-hidden">
       {/* Animated background */}
@@ -417,7 +423,10 @@ export default function RanksPage() {
       </div>
 
       {/* Main Content */}
-      <div className="w-full px-2 md:px-8 mt-2 pb-12 relative z-10">
+      <div
+        style={{ opacity: pageVisible ? 1 : 0, transition: 'opacity 0.6s ease-out' }}
+        className="w-full px-2 md:px-8 mt-2 pb-12 relative z-10"
+      >
         <div className="max-w-[1200px] mx-auto space-y-6">
           {/* Prestige Icons - Clickable */}
           <motion.div
