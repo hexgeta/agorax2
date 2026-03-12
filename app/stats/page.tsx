@@ -1,27 +1,27 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useAccount, usePublicClient } from 'wagmi';
-import { parseAbiItem } from 'viem';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useStatsData } from '@/context/StatsDataContext';
+import { useAccount } from 'wagmi';
 import { motion } from 'framer-motion';
 import { DisclaimerDialog } from '@/components/DisclaimerDialog';
 import { PixelSpinner } from '@/components/ui/PixelSpinner';
 import { LogoPreloader } from '@/components/LogoPreloader';
 import PixelBlastBackground from '@/components/ui/PixelBlastBackground';
 import StatsOverviewCards from '@/components/stats/StatsOverviewCards';
-import TopTradersLeaderboard from '@/components/stats/TopTradersLeaderboard';
 import TopTokensChart from '@/components/stats/TopTokensChart';
 import ProtocolActivityChart from '@/components/stats/ProtocolActivityChart';
 import HourlyActivityChart from '@/components/stats/HourlyActivityChart';
 import OrderbookChart from '@/components/stats/OrderbookChart';
+import TopTradersLeaderboard from '@/components/stats/TopTradersLeaderboard';
 import { useTokenPrices } from '@/hooks/crypto/useTokenPrices';
-import { useOpenPositions, CompleteOrderDetails } from '@/hooks/contracts/useOpenPositions';
 import { useContractWhitelistRead } from '@/hooks/contracts/useContractWhitelistRead';
-import { getContractAddress, PULSECHAIN_CHAIN_ID } from '@/config/testing';
 import { getTokenInfo, getTokenInfoByIndex, formatTokenAmount, formatTokenTicker } from '@/utils/tokenUtils';
-import Link from 'next/link';
+import { useOpenPositions, CompleteOrderDetails } from '@/hooks/contracts/useOpenPositions';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 import { CoinLogo } from '@/components/ui/CoinLogo';
+
+// ── Shared interfaces matching existing components ──────────────────────────
 
 interface Transaction {
   transactionHash: string;
@@ -44,7 +44,45 @@ interface OrderPlaced {
   orderOwner: string;
 }
 
-// All Orders table types and helpers
+// ── Supabase row types ──────────────────────────────────────────────────────
+
+interface DbOrder {
+  order_id: number;
+  maker_address: string;
+  sell_token_address: string;
+  sell_token_ticker: string;
+  sell_amount_raw: string;
+  sell_amount_formatted: number;
+  buy_tokens_addresses: string[];
+  buy_tokens_tickers: string[];
+  buy_amounts_raw: string[];
+  buy_amounts_formatted: number[];
+  status: number;
+  fill_percentage: number;
+  remaining_sell_amount: string;
+  redeemed_sell_amount: string;
+  is_all_or_nothing: boolean;
+  expiration: number;
+  creation_tx_hash: string;
+  creation_block_number: number;
+  created_at: string;
+}
+
+interface DbFill {
+  order_id: number;
+  filler_address: string;
+  buy_token_index: number;
+  buy_token_address: string;
+  buy_token_ticker: string;
+  buy_amount_raw: string;
+  buy_amount_formatted: number;
+  tx_hash: string;
+  block_number: number;
+  filled_at: string;
+}
+
+// ── All Orders table types ──────────────────────────────────────────────────
+
 interface FormattedOrder {
   id: number;
   maker: string;
@@ -56,6 +94,21 @@ interface FormattedOrder {
   filled: number;
   createdAt: string;
 }
+
+interface FormattedFill {
+  orderId: string;
+  buyer: string;
+  sellToken: string;
+  sellTokenAddress: string;
+  sellAmountNum: number;
+  buyToken: string;
+  buyTokenAddress: string;
+  buyAmountNum: number;
+  timestamp: number;
+  txHash: string;
+}
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
 
 function formatDisplayAmount(amount: string): string {
   const num = parseFloat(amount);
@@ -80,7 +133,6 @@ function formatAddress(address: string): string {
   return address;
 }
 
-// Deterministic color from address for buyer pills
 const BUYER_COLORS = [
   { bg: 'rgba(239, 68, 68, 0.2)', text: '#fca5a5', border: 'rgba(239, 68, 68, 0.4)' },
   { bg: 'rgba(59, 130, 246, 0.2)', text: '#93c5fd', border: 'rgba(59, 130, 246, 0.4)' },
@@ -95,54 +147,167 @@ const BUYER_COLORS = [
 ];
 
 function getBuyerColor(address: string) {
+  const addr = address.toLowerCase();
   let hash = 0;
-  for (let i = 0; i < address.length; i++) {
-    hash = ((hash << 5) - hash + address.charCodeAt(i)) | 0;
+  for (let i = 0; i < addr.length; i++) {
+    hash = ((hash << 5) - hash + addr.charCodeAt(i)) | 0;
   }
   return BUYER_COLORS[Math.abs(hash) % BUYER_COLORS.length];
 }
 
-function formatTimestamp(timestamp: number | bigint): string {
-  if (!timestamp) return '-';
-  const ts = typeof timestamp === 'bigint' ? Number(timestamp) : timestamp;
-  const date = new Date(ts * 1000);
+function formatTimestampDisplay(ts: string | number): string {
+  if (!ts) return '-';
+  const date = typeof ts === 'string' ? new Date(ts) : new Date(ts * 1000);
   const time = date.toLocaleString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
   const day = date.toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
   return `${time} UTC, ${day}`;
 }
 
-export default function StatsPage() {
-  const [showDisclaimer, setShowDisclaimer] = useState(false);
-  const { chainId: walletChainId, address: connectedAddress } = useAccount();
-  // Default to PulseChain mainnet when wallet not connected (stats should work without wallet)
-  const chainId = walletChainId ?? PULSECHAIN_CHAIN_ID;
-  const publicClient = usePublicClient({ chainId });
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [orders, setOrders] = useState<OrderPlaced[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadingProgress, setLoadingProgress] = useState<string>('Initializing...');
+// ── Transform Supabase data to component shapes ────────────────────────────
 
-  // Raw fill event data from blockchain (processed into transactions via useMemo)
-  interface FillEvent {
-    transactionHash: string;
-    orderId: string;
-    buyer: string;
-    buyTokenIndex: number;
-    buyAmount: bigint;
-    blockNumber: bigint;
-    timestamp: number;
-  }
-  const [fillEvents, setFillEvents] = useState<FillEvent[]>([]);
+function dbOrdersToOrderPlaced(dbOrders: DbOrder[]): OrderPlaced[] {
+  return dbOrders.map(o => ({
+    transactionHash: o.creation_tx_hash || '',
+    orderId: o.order_id.toString(),
+    sellToken: o.sell_token_address?.toLowerCase() || '',
+    sellAmount: o.sell_amount_formatted || 0,
+    blockNumber: BigInt(o.creation_block_number || 0),
+    timestamp: o.created_at ? Math.floor(new Date(o.created_at).getTime() / 1000) : undefined,
+    orderOwner: o.maker_address || '',
+  }));
+}
+
+function dbOrdersToCompleteOrderDetails(dbOrders: DbOrder[], whitelist: string[]): CompleteOrderDetails[] {
+  return dbOrders.map(o => {
+    const sellAmountBigInt = BigInt(o.sell_amount_raw || '0');
+    const remainingBigInt = BigInt(o.remaining_sell_amount || '0');
+    const redeemedBigInt = BigInt(o.redeemed_sell_amount || '0');
+
+    // Map buy token addresses to whitelist indices
+    const buyTokensIndex: bigint[] = (o.buy_tokens_addresses || []).map(addr => {
+      const idx = whitelist.findIndex(w => w.toLowerCase() === addr?.toLowerCase());
+      return BigInt(idx >= 0 ? idx : 0);
+    });
+
+    const buyAmounts: bigint[] = (o.buy_amounts_raw || []).map(a => BigInt(a || '0'));
+
+    return {
+      userDetails: {
+        orderIndex: BigInt(0),
+        orderOwner: o.maker_address as `0x${string}`,
+      },
+      orderDetailsWithID: {
+        orderID: BigInt(o.order_id),
+        remainingSellAmount: remainingBigInt,
+        redeemedSellAmount: redeemedBigInt,
+        lastUpdateTime: o.created_at ? Math.floor(new Date(o.created_at).getTime() / 1000) : 0,
+        status: o.status,
+        creationProtocolFee: BigInt(0),
+        orderDetails: {
+          sellToken: o.sell_token_address as `0x${string}`,
+          sellAmount: sellAmountBigInt,
+          buyTokensIndex,
+          buyAmounts,
+          expirationTime: BigInt(o.expiration || 0),
+          allOrNothing: o.is_all_or_nothing || false,
+        },
+      },
+    } as CompleteOrderDetails;
+  });
+}
+
+function dbFillsToTransactions(dbFills: DbFill[], dbOrders: DbOrder[]): Transaction[] {
+  const orderMap = new Map<number, DbOrder>();
+  dbOrders.forEach(o => orderMap.set(o.order_id, o));
+
+  return dbFills.map(fill => {
+    const order = orderMap.get(fill.order_id);
+    const sellTokenAddr = order?.sell_token_address?.toLowerCase() || '';
+    const buyTokenAddr = fill.buy_token_address?.toLowerCase() || '';
+    const sellTokenInfo = getTokenInfo(sellTokenAddr);
+
+    // Calculate proportional sell amount
+    let sellAmount = 0;
+    if (order) {
+      const matchIdx = (order.buy_tokens_addresses || []).findIndex(
+        addr => addr?.toLowerCase() === buyTokenAddr
+      );
+      if (matchIdx >= 0 && order.buy_amounts_raw?.[matchIdx]) {
+        const originalBuyAmountRaw = Number(order.buy_amounts_raw[matchIdx]);
+        if (originalBuyAmountRaw > 0) {
+          const ratio = Number(fill.buy_amount_raw) / originalBuyAmountRaw;
+          sellAmount = (Number(order.sell_amount_raw) * ratio) / Math.pow(10, sellTokenInfo.decimals);
+        }
+      }
+    }
+
+    return {
+      transactionHash: fill.tx_hash || '',
+      orderId: fill.order_id.toString(),
+      sellToken: sellTokenAddr,
+      sellAmount,
+      buyTokens: { [buyTokenAddr]: fill.buy_amount_formatted || 0 },
+      blockNumber: BigInt(fill.block_number || 0),
+      timestamp: fill.filled_at ? Math.floor(new Date(fill.filled_at).getTime() / 1000) : undefined,
+      buyer: fill.filler_address || '',
+    };
+  });
+}
+
+function dbFillsToFormattedFills(dbFills: DbFill[], dbOrders: DbOrder[]): FormattedFill[] {
+  const orderMap = new Map<number, DbOrder>();
+  dbOrders.forEach(o => orderMap.set(o.order_id, o));
+
+  return dbFills.map(fill => {
+    const order = orderMap.get(fill.order_id);
+    const sellTokenAddr = order?.sell_token_address?.toLowerCase() || '';
+    const buyTokenAddr = fill.buy_token_address?.toLowerCase() || '';
+    const sellTokenInfo = getTokenInfo(sellTokenAddr);
+
+    let sellAmountNum = 0;
+    if (order) {
+      const matchIdx = (order.buy_tokens_addresses || []).findIndex(
+        addr => addr?.toLowerCase() === buyTokenAddr
+      );
+      if (matchIdx >= 0 && order.buy_amounts_raw?.[matchIdx]) {
+        const originalBuyAmountRaw = Number(order.buy_amounts_raw[matchIdx]);
+        if (originalBuyAmountRaw > 0) {
+          const ratio = Number(fill.buy_amount_raw) / originalBuyAmountRaw;
+          sellAmountNum = (Number(order.sell_amount_raw) * ratio) / Math.pow(10, sellTokenInfo.decimals);
+        }
+      }
+    }
+
+    return {
+      orderId: fill.order_id.toString(),
+      buyer: fill.filler_address || '',
+      sellToken: order?.sell_token_ticker || 'UNKNOWN',
+      sellTokenAddress: sellTokenAddr,
+      sellAmountNum,
+      buyToken: fill.buy_token_ticker || 'UNKNOWN',
+      buyTokenAddress: buyTokenAddr,
+      buyAmountNum: fill.buy_amount_formatted || 0,
+      timestamp: fill.filled_at ? Math.floor(new Date(fill.filled_at).getTime() / 1000) : 0,
+      txHash: fill.tx_hash || '',
+    };
+  }).sort((a, b) => b.timestamp - a.timestamp);
+}
+
+// ── Page Component ──────────────────────────────────────────────────────────
+
+export default function Stats2Page() {
+  const [showDisclaimer, setShowDisclaimer] = useState(false);
+  const { address: connectedAddress } = useAccount();
+
+  // Use pre-fetched data from context (loaded on any page, polled every 60s)
+  const { dbOrders, dbFills, isLoading, error, refetch: fetchData } = useStatsData();
+
   const [selectedTokenFilter, setSelectedTokenFilter] = useState<{ address: string; ticker: string } | null>(null);
   const [selectedTraderFilter, setSelectedTraderFilter] = useState<string | null>(null);
   const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | 'active' | 'completed' | 'cancelled'>('all');
 
-  const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-
-  const OTC_CONTRACT_ADDRESS = getContractAddress(chainId);
-
-  // Fetch all orders for stats and price levels chart
-  const { activeOrders, allOrders: contractOrders, isLoading: ordersLoading } = useOpenPositions(undefined, true);
+  // Live active orders from contract for accurate TVL and orderbook
+  const { activeOrders: liveActiveOrders } = useOpenPositions();
 
   // Get whitelist for token index lookups
   const { activeTokens } = useContractWhitelistRead();
@@ -151,213 +316,6 @@ export default function StatsPage() {
     [activeTokens]
   );
 
-  // Get all token addresses from transactions, orders, and active orders (memoized to prevent re-renders)
-  const allTokenAddresses = useMemo(() => {
-    const addresses = new Set<string>();
-    transactions.forEach(tx => {
-      addresses.add(tx.sellToken);
-      Object.keys(tx.buyTokens).forEach(addr => addresses.add(addr));
-    });
-    orders.forEach(order => addresses.add(order.sellToken));
-    activeOrders.forEach(order => {
-      addresses.add(order.orderDetailsWithID.orderDetails.sellToken.toLowerCase());
-      order.orderDetailsWithID.orderDetails.buyTokensIndex.forEach((idx) => {
-        const addr = whitelist[Number(idx)];
-        if (addr) addresses.add(addr);
-      });
-    });
-    return Array.from(addresses);
-  }, [transactions, orders, activeOrders, whitelist]);
-
-  const { prices: tokenPrices, isLoading: pricesLoading } = useTokenPrices(allTokenAddresses);
-
-  // Fetch all orders placed
-  const fetchAllOrders = useCallback(async () => {
-    if (!publicClient || !OTC_CONTRACT_ADDRESS) return;
-
-    setLoadingProgress('Fetching order events...');
-
-    try {
-      // Query ALL OrderPlaced events
-      const logs = await publicClient.getLogs({
-        address: OTC_CONTRACT_ADDRESS as any,
-        event: parseAbiItem('event OrderPlaced(address indexed user, uint256 indexed orderID, address indexed sellToken, uint256 sellAmount)') as any,
-        fromBlock: 'earliest'
-      });
-
-      const placedOrders: OrderPlaced[] = [];
-      const blockCache: Record<string, number> = {};
-      const total = logs.length;
-
-      for (let i = 0; i < logs.length; i++) {
-        const log = logs[i];
-        const orderId = log.args.orderID?.toString();
-        const orderOwner = log.args.user as string;
-        const sellToken = log.args.sellToken as string;
-        const sellAmount = log.args.sellAmount as bigint;
-
-        if (!orderId || !orderOwner || !sellToken) continue;
-
-        try {
-          // Cache block timestamps to avoid duplicate RPC calls
-          const blockKey = log.blockNumber.toString();
-          if (!blockCache[blockKey]) {
-            const block = await publicClient.getBlock({ blockNumber: log.blockNumber });
-            blockCache[blockKey] = Number(block.timestamp);
-          }
-
-          const tokenInfo = getTokenInfo(sellToken);
-          const sellAmountFormatted = tokenInfo
-            ? parseFloat(formatTokenAmount(sellAmount, tokenInfo.decimals))
-            : 0;
-
-          placedOrders.push({
-            transactionHash: log.transactionHash,
-            orderId,
-            sellToken: sellToken.toLowerCase(),
-            sellAmount: sellAmountFormatted,
-            blockNumber: log.blockNumber,
-            timestamp: blockCache[blockKey],
-            orderOwner
-          });
-
-          if (i % 10 === 0) {
-            setLoadingProgress(`Processing orders: ${i + 1}/${total}`);
-          }
-        } catch {
-          // Skip failed orders
-        }
-      }
-
-      setOrders(placedOrders);
-    } catch (error) {
-    }
-  }, [publicClient, OTC_CONTRACT_ADDRESS]);
-
-  // Fetch raw fill events from blockchain (lightweight - no receipt parsing)
-  const fetchFillEvents = useCallback(async () => {
-    if (!publicClient || !OTC_CONTRACT_ADDRESS) return;
-
-    setIsLoading(true);
-    setLoadingProgress('Fetching fill events...');
-
-    try {
-      const logs = await publicClient.getLogs({
-        address: OTC_CONTRACT_ADDRESS as any,
-        event: parseAbiItem('event OrderFilled(address indexed buyer, uint256 indexed orderID, uint256 indexed buyTokenIndex, uint256 buyAmount)') as any,
-        fromBlock: 'earliest'
-      });
-
-      const events: FillEvent[] = [];
-      const blockCache: Record<string, number> = {};
-      const total = logs.length;
-
-      for (let i = 0; i < logs.length; i++) {
-        const log = logs[i];
-        const orderId = log.args.orderID?.toString();
-        const buyer = log.args.buyer as string;
-        if (!orderId) continue;
-
-        try {
-          // Cache block timestamps to avoid duplicate RPC calls
-          const blockKey = log.blockNumber.toString();
-          if (!blockCache[blockKey]) {
-            const block = await publicClient.getBlock({ blockNumber: log.blockNumber });
-            blockCache[blockKey] = Number(block.timestamp);
-          }
-
-          events.push({
-            transactionHash: log.transactionHash,
-            orderId,
-            buyer,
-            buyTokenIndex: Number(log.args.buyTokenIndex),
-            buyAmount: log.args.buyAmount as bigint,
-            blockNumber: log.blockNumber,
-            timestamp: blockCache[blockKey],
-          });
-
-          if (i % 5 === 0) {
-            setLoadingProgress(`Processing fills: ${i + 1}/${total}`);
-          }
-        } catch (error) {
-          console.warn(`Failed to process fill event for order ${orderId}:`, error);
-        }
-      }
-
-      setFillEvents(events);
-    } catch (error) {
-      console.warn('Failed to fetch OrderFilled events:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [publicClient, OTC_CONTRACT_ADDRESS]);
-
-  // Process fill events into transaction data by joining with contract orders + whitelist
-  // This runs automatically when fill events, contract orders, or whitelist update
-  useEffect(() => {
-    if (fillEvents.length === 0) {
-      // Use functional updater to avoid creating a new [] reference on every render
-      setTransactions(prev => prev.length === 0 ? prev : []);
-      return;
-    }
-    if (contractOrders.length === 0 || whitelist.length === 0) return;
-
-    const orderMap = new Map<string, CompleteOrderDetails>();
-    contractOrders.forEach(order => {
-      orderMap.set(order.orderDetailsWithID.orderID.toString(), order);
-    });
-
-    const txs: Transaction[] = [];
-
-    for (const event of fillEvents) {
-      const order = orderMap.get(event.orderId);
-      if (!order) continue;
-
-      const sellTokenAddr = order.orderDetailsWithID.orderDetails.sellToken.toLowerCase();
-      const sellTokenInfo = getTokenInfo(sellTokenAddr);
-      const buyTokenAddr = whitelist[event.buyTokenIndex]?.toLowerCase();
-      if (!buyTokenAddr) continue;
-      const buyTokenInfo = getTokenInfoByIndex(event.buyTokenIndex);
-
-      // Calculate proportional sell amount from order's price ratio
-      const originalSellAmount = order.orderDetailsWithID.orderDetails.sellAmount;
-      const buyTokensIndex = order.orderDetailsWithID.orderDetails.buyTokensIndex;
-      const buyAmounts = order.orderDetailsWithID.orderDetails.buyAmounts;
-      const matchIdx = buyTokensIndex.findIndex(idx => Number(idx) === event.buyTokenIndex);
-
-      let sellAmount = 0;
-      if (matchIdx >= 0 && buyAmounts[matchIdx] && Number(buyAmounts[matchIdx]) > 0) {
-        const ratio = Number(event.buyAmount) / Number(buyAmounts[matchIdx]);
-        sellAmount = (Number(originalSellAmount) * ratio) / Math.pow(10, sellTokenInfo.decimals);
-      }
-
-      const buyAmount = Number(event.buyAmount) / Math.pow(10, buyTokenInfo.decimals);
-
-      txs.push({
-        transactionHash: event.transactionHash,
-        orderId: event.orderId,
-        sellToken: sellTokenAddr,
-        sellAmount,
-        buyTokens: { [buyTokenAddr]: buyAmount },
-        blockNumber: event.blockNumber,
-        timestamp: event.timestamp,
-        buyer: event.buyer,
-      });
-    }
-
-    setTransactions(txs);
-  }, [fillEvents, contractOrders, whitelist]);
-
-  useEffect(() => {
-    const fetchData = async () => {
-      await Promise.all([
-        fetchFillEvents(),
-        fetchAllOrders()
-      ]);
-    };
-    fetchData();
-  }, [fetchFillEvents, fetchAllOrders]);
-
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const accepted = localStorage.getItem('disclaimer-accepted');
@@ -365,14 +323,51 @@ export default function StatsPage() {
     }
   }, []);
 
-  // All data sources must be loaded before showing content
-  const dataReady = !isLoading && !ordersLoading && !pricesLoading;
-  const hasData = transactions.length > 0 || orders.length > 0 || contractOrders.length > 0;
+  // ── Transform DB data to component shapes ───────────────────────────────
 
-  // Filter data based on selected token and/or trader
+  const orders: OrderPlaced[] = useMemo(
+    () => dbOrdersToOrderPlaced(dbOrders),
+    [dbOrders]
+  );
+
+  const contractOrders: CompleteOrderDetails[] = useMemo(
+    () => dbOrdersToCompleteOrderDetails(dbOrders, whitelist),
+    [dbOrders, whitelist]
+  );
+
+  // Use live contract data for active orders (accurate TVL + orderbook)
+  // Fall back to DB-derived active orders if contract hasn't loaded yet
+  const activeOrders: CompleteOrderDetails[] = useMemo(
+    () => liveActiveOrders.length > 0
+      ? liveActiveOrders
+      : contractOrders.filter(o => o.orderDetailsWithID.status === 0),
+    [liveActiveOrders, contractOrders]
+  );
+
+  const transactions: Transaction[] = useMemo(
+    () => dbFillsToTransactions(dbFills, dbOrders),
+    [dbFills, dbOrders]
+  );
+
+  // ── Token prices ────────────────────────────────────────────────────────
+
+  const allTokenAddresses = useMemo(() => {
+    const addresses = new Set<string>();
+    dbOrders.forEach(o => {
+      if (o.sell_token_address) addresses.add(o.sell_token_address.toLowerCase());
+      (o.buy_tokens_addresses || []).forEach(addr => {
+        if (addr) addresses.add(addr.toLowerCase());
+      });
+    });
+    return Array.from(addresses);
+  }, [dbOrders]);
+
+  const { prices: tokenPrices, isLoading: pricesLoading } = useTokenPrices(allTokenAddresses);
+
+  // ── Filters ─────────────────────────────────────────────────────────────
+
   const filteredTransactions = useMemo(() => {
     let result = transactions;
-
     if (selectedTokenFilter) {
       const tokenAddr = selectedTokenFilter.address.toLowerCase();
       result = result.filter(tx =>
@@ -380,34 +375,28 @@ export default function StatsPage() {
         Object.keys(tx.buyTokens).some(addr => addr.toLowerCase() === tokenAddr)
       );
     }
-
     if (selectedTraderFilter) {
       const traderAddr = selectedTraderFilter.toLowerCase();
       result = result.filter(tx => tx.buyer?.toLowerCase() === traderAddr);
     }
-
     return result;
   }, [transactions, selectedTokenFilter, selectedTraderFilter]);
 
   const filteredOrders = useMemo(() => {
     let result = orders;
-
     if (selectedTokenFilter) {
       const tokenAddr = selectedTokenFilter.address.toLowerCase();
       result = result.filter(order => order.sellToken.toLowerCase() === tokenAddr);
     }
-
     if (selectedTraderFilter) {
       const traderAddr = selectedTraderFilter.toLowerCase();
       result = result.filter(order => order.orderOwner.toLowerCase() === traderAddr);
     }
-
     return result;
   }, [orders, selectedTokenFilter, selectedTraderFilter]);
 
   const filteredContractOrders = useMemo(() => {
     let result = contractOrders;
-
     if (selectedTokenFilter) {
       const tokenAddr = selectedTokenFilter.address.toLowerCase();
       result = result.filter(order =>
@@ -418,20 +407,17 @@ export default function StatsPage() {
         })
       );
     }
-
     if (selectedTraderFilter) {
       const traderAddr = selectedTraderFilter.toLowerCase();
       result = result.filter(order =>
         order.userDetails.orderOwner?.toLowerCase() === traderAddr
       );
     }
-
     return result;
   }, [contractOrders, selectedTokenFilter, selectedTraderFilter, whitelist]);
 
   const filteredActiveOrders = useMemo(() => {
     let result = activeOrders;
-
     if (selectedTokenFilter) {
       const tokenAddr = selectedTokenFilter.address.toLowerCase();
       result = result.filter(order =>
@@ -442,23 +428,19 @@ export default function StatsPage() {
         })
       );
     }
-
     if (selectedTraderFilter) {
       const traderAddr = selectedTraderFilter.toLowerCase();
       result = result.filter(order =>
         order.userDetails.orderOwner?.toLowerCase() === traderAddr
       );
     }
-
     return result;
   }, [activeOrders, selectedTokenFilter, selectedTraderFilter, whitelist]);
 
-  // Build formatted orders for All Orders table (respects token/trader filters)
-  const formattedOrders = useMemo(() => {
-    const formatted: FormattedOrder[] = [];
+  // ── Formatted data for tables ───────────────────────────────────────────
 
-    filteredContractOrders.forEach((order: CompleteOrderDetails) => {
-      const maker = order.userDetails.orderOwner;
+  const formattedOrders: FormattedOrder[] = useMemo(() => {
+    return filteredContractOrders.map(order => {
       const orderDetails = order.orderDetailsWithID;
       const sellTokenInfo = getTokenInfo(orderDetails.orderDetails.sellToken);
 
@@ -488,102 +470,45 @@ export default function StatsPage() {
         buyAmount = formatTokenAmount(orderDetails.orderDetails.buyAmounts[0], buyTokenInfo.decimals);
       }
 
-      formatted.push({
+      return {
         id: Number(orderDetails.orderID),
-        maker,
+        maker: order.userDetails.orderOwner,
         sellToken: sellTokenInfo.ticker,
         buyToken: buyTokenTicker,
         sellAmount,
         buyAmount,
         status,
         filled: filledPercent,
-        createdAt: formatTimestamp(orderDetails.lastUpdateTime),
-      });
-    });
-
-    return formatted.sort((a, b) => b.id - a.id);
+        createdAt: formatTimestampDisplay(orderDetails.lastUpdateTime),
+      };
+    }).sort((a, b) => b.id - a.id);
   }, [filteredContractOrders]);
 
-  // Build formatted fills for All Fills table
-  interface FormattedFill {
-    orderId: string;
-    buyer: string;
-    sellToken: string;
-    sellTokenAddress: string;
-    sellAmountNum: number;
-    buyToken: string;
-    buyTokenAddress: string;
-    buyAmountNum: number;
-    timestamp: number;
-    txHash: string;
-  }
-  const formattedFills = useMemo(() => {
-    if (fillEvents.length === 0 || contractOrders.length === 0 || whitelist.length === 0) return [];
-    const orderMap = new Map<string, CompleteOrderDetails>();
-    contractOrders.forEach(o => orderMap.set(o.orderDetailsWithID.orderID.toString(), o));
-
-    const fills: FormattedFill[] = [];
-    for (const event of fillEvents) {
-      const order = orderMap.get(event.orderId);
-      if (!order) continue;
-      const sellTokenAddr = order.orderDetailsWithID.orderDetails.sellToken.toLowerCase();
-      const sellTokenInfo = getTokenInfo(sellTokenAddr);
-      const buyTokenAddr = whitelist[event.buyTokenIndex]?.toLowerCase();
-      if (!buyTokenAddr) continue;
-      const buyTokenInfo = getTokenInfoByIndex(event.buyTokenIndex);
-
-      const originalSellAmount = order.orderDetailsWithID.orderDetails.sellAmount;
-      const buyTokensIndex = order.orderDetailsWithID.orderDetails.buyTokensIndex;
-      const buyAmounts = order.orderDetailsWithID.orderDetails.buyAmounts;
-      const matchIdx = buyTokensIndex.findIndex(idx => Number(idx) === event.buyTokenIndex);
-
-      let sellAmountNum = 0;
-      if (matchIdx >= 0 && buyAmounts[matchIdx] && Number(buyAmounts[matchIdx]) > 0) {
-        const ratio = Number(event.buyAmount) / Number(buyAmounts[matchIdx]);
-        sellAmountNum = (Number(originalSellAmount) * ratio) / Math.pow(10, sellTokenInfo.decimals);
-      }
-      const buyAmountNum = Number(event.buyAmount) / Math.pow(10, buyTokenInfo.decimals);
-
-      fills.push({
-        orderId: event.orderId,
-        buyer: event.buyer,
-        sellToken: sellTokenInfo.ticker,
-        sellTokenAddress: sellTokenAddr,
-        sellAmountNum,
-        buyToken: buyTokenInfo.ticker,
-        buyTokenAddress: buyTokenAddr,
-        buyAmountNum,
-        timestamp: event.timestamp,
-        txHash: event.transactionHash,
-      });
-    }
-    return fills.sort((a, b) => b.timestamp - a.timestamp);
-  }, [fillEvents, contractOrders, whitelist]);
+  const formattedFills: FormattedFill[] = useMemo(
+    () => dbFillsToFormattedFills(dbFills, dbOrders),
+    [dbFills, dbOrders]
+  );
 
   const filteredOrdersByStatus = useMemo(() => {
     if (orderStatusFilter === 'all') return formattedOrders;
     return formattedOrders.filter(order => order.status === orderStatusFilter);
   }, [formattedOrders, orderStatusFilter]);
 
-  // Handle token filter selection
+  // ── Event handlers ──────────────────────────────────────────────────────
+
   const handleTokenFilterSelect = useCallback((address: string, ticker: string) => {
     if (selectedTokenFilter?.address.toLowerCase() === address.toLowerCase()) {
-      // Clicking the same token clears the filter
       setSelectedTokenFilter(null);
     } else {
       setSelectedTokenFilter({ address, ticker });
     }
   }, [selectedTokenFilter]);
 
-  // Handle trader filter selection
-  const handleTraderFilterSelect = useCallback((address: string) => {
-    if (selectedTraderFilter?.toLowerCase() === address.toLowerCase()) {
-      // Clicking the same trader clears the filter
-      setSelectedTraderFilter(null);
-    } else {
-      setSelectedTraderFilter(address);
-    }
-  }, [selectedTraderFilter]);
+  // ── Ready state ─────────────────────────────────────────────────────────
+
+  const hasPrices = Object.keys(tokenPrices).length > 0;
+  const dataReady = !isLoading && (hasPrices || !pricesLoading);
+  const hasData = dbOrders.length > 0 || dbFills.length > 0;
 
   return (
     <>
@@ -612,8 +537,23 @@ export default function StatsPage() {
                 <PixelSpinner size={48} className="mb-6" />
                 <p className="text-white text-lg mb-2">Loading Protocol Data</p>
                 <p className="text-gray-400 text-sm">
-                  {isLoading ? loadingProgress : ordersLoading ? 'Loading orders...' : pricesLoading ? 'Fetching token prices...' : 'Finalizing...'}
+                  {isLoading ? 'Fetching from database...' : pricesLoading ? 'Fetching token prices...' : 'Finalizing...'}
                 </p>
+              </motion.div>
+            ) : error ? (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="text-center py-20"
+              >
+                <p className="text-red-400 text-lg">Failed to load data</p>
+                <p className="text-gray-500 text-sm mt-2">{error}</p>
+                <button
+                  onClick={fetchData}
+                  className="mt-4 px-4 py-2 bg-white/10 text-white rounded hover:bg-white/20 transition-colors"
+                >
+                  Retry
+                </button>
               </motion.div>
             ) : !hasData ? (
               <motion.div
@@ -688,7 +628,7 @@ export default function StatsPage() {
                   activeOrders={filteredActiveOrders}
                 />
 
-                {/* Protocol Activity Chart - Combined volume bars and cumulative lines */}
+                {/* Protocol Activity Chart */}
                 <ProtocolActivityChart
                   transactions={filteredTransactions}
                   orders={filteredOrders}
@@ -706,13 +646,13 @@ export default function StatsPage() {
                   selectedToken={selectedTokenFilter?.address}
                 />
 
-                {/* Leaderboard - hidden for now */}
-                {/* <TopTradersLeaderboard
+                {/* Leaderboard */}
+                <TopTradersLeaderboard
                   transactions={transactions}
                   orders={orders}
                   tokenPrices={tokenPrices}
                   contractOrders={contractOrders}
-                /> */}
+                />
 
                 {/* Order Book */}
                 {filteredActiveOrders.length > 0 && whitelist.length > 0 && (
@@ -757,12 +697,6 @@ export default function StatsPage() {
                     blurIntensity="xl"
                     className="p-4 md:p-6 !overflow-x-auto"
                   >
-                    {ordersLoading ? (
-                      <div className="flex items-center justify-center py-12">
-                        <PixelSpinner size={32} />
-                        <span className="ml-3 text-gray-400">Loading orders...</span>
-                      </div>
-                    ) : (
                     <div className="overflow-x-auto -mx-4 md:-mx-6 px-4 md:px-6 pb-2 modern-scrollbar">
                       <table className="w-full min-w-[700px]">
                         <thead>
@@ -855,7 +789,6 @@ export default function StatsPage() {
                         </tbody>
                       </table>
                     </div>
-                    )}
                   </LiquidGlassCard>
                 </div>
 
@@ -868,12 +801,6 @@ export default function StatsPage() {
                     blurIntensity="xl"
                     className="p-4 md:p-6 !overflow-x-auto"
                   >
-                    {isLoading ? (
-                      <div className="flex items-center justify-center py-12">
-                        <PixelSpinner size={32} />
-                        <span className="ml-3 text-gray-400">Loading fills...</span>
-                      </div>
-                    ) : (
                     <div className="overflow-x-auto -mx-4 md:-mx-6 px-4 md:px-6 pb-2 modern-scrollbar">
                       <table className="w-full min-w-[800px]">
                         <thead>
@@ -965,13 +892,12 @@ export default function StatsPage() {
                         </tbody>
                       </table>
                     </div>
-                    )}
                   </LiquidGlassCard>
                 </div>
 
                 {/* Footer note */}
                 <div className="text-center text-gray-500 text-sm pt-4">
-                  <p>Data sourced directly from PulseChain. Updates on page refresh.</p>
+                  <p>Data sourced from protocol database. Synced every minute from PulseChain.</p>
                 </div>
               </motion.div>
             )}
