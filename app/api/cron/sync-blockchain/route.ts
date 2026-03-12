@@ -118,8 +118,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       });
     }
 
-    // Cap at 10000 blocks per run to stay within Vercel timeout (max ~10s for hobby, 60s for pro)
-    const maxBlocksPerRun = 10000n;
+    // Cap blocks per run to stay within Vercel Pro timeout (60s)
+    // 200k blocks for catch-up; reduce to 10000n once synced if needed
+    const maxBlocksPerRun = 200000n;
     const toBlock = fromBlock + maxBlocksPerRun < currentBlock
       ? fromBlock + maxBlocksPerRun
       : currentBlock;
