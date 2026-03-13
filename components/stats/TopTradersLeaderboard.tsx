@@ -1,9 +1,17 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationPrevious,
+  PaginationNext,
+} from '@/components/ui/pagination';
 import { useAccount } from 'wagmi';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
-import { useOpenPositions, CompleteOrderDetails } from '@/hooks/contracts/useOpenPositions';
+import { CompleteOrderDetails } from '@/hooks/contracts/useOpenPositions';
 import { useLeaderboard } from '@/hooks/useUserAchievements';
 import { PixelSpinner } from '@/components/ui/PixelSpinner';
 import { formatUSD, getTokenPrice } from '@/utils/format';
@@ -43,11 +51,36 @@ interface OrderPlaced {
   orderOwner: string;
 }
 
+const BUYER_COLORS = [
+  { bg: 'rgba(239, 68, 68, 0.2)', text: '#fca5a5', border: 'rgba(239, 68, 68, 0.4)' },
+  { bg: 'rgba(59, 130, 246, 0.2)', text: '#93c5fd', border: 'rgba(59, 130, 246, 0.4)' },
+  { bg: 'rgba(16, 185, 129, 0.2)', text: '#6ee7b7', border: 'rgba(16, 185, 129, 0.4)' },
+  { bg: 'rgba(245, 158, 11, 0.2)', text: '#fcd34d', border: 'rgba(245, 158, 11, 0.4)' },
+  { bg: 'rgba(139, 92, 246, 0.2)', text: '#c4b5fd', border: 'rgba(139, 92, 246, 0.4)' },
+  { bg: 'rgba(236, 72, 153, 0.2)', text: '#f9a8d4', border: 'rgba(236, 72, 153, 0.4)' },
+  { bg: 'rgba(6, 182, 212, 0.2)', text: '#67e8f9', border: 'rgba(6, 182, 212, 0.4)' },
+  { bg: 'rgba(251, 146, 60, 0.2)', text: '#fdba74', border: 'rgba(251, 146, 60, 0.4)' },
+  { bg: 'rgba(52, 211, 153, 0.2)', text: '#6ee7b7', border: 'rgba(52, 211, 153, 0.4)' },
+  { bg: 'rgba(167, 139, 250, 0.2)', text: '#ddd6fe', border: 'rgba(167, 139, 250, 0.4)' },
+];
+
+function getAddressColor(address: string) {
+  const addr = address.toLowerCase();
+  let hash = 0;
+  for (let i = 0; i < addr.length; i++) {
+    hash = ((hash << 5) - hash + addr.charCodeAt(i)) | 0;
+  }
+  return BUYER_COLORS[Math.abs(hash) % BUYER_COLORS.length];
+}
+
 interface TopTradersLeaderboardProps {
   transactions: Transaction[];
   orders: OrderPlaced[];
   tokenPrices: Record<string, { price: number }>;
   contractOrders?: CompleteOrderDetails[];
+  onTraderClick?: (address: string) => void;
+  searchQuery?: string;
+  onSearchChange?: (query: string) => void;
 }
 
 // Interface for merged user stats
@@ -67,6 +100,8 @@ interface MergedUserStats {
   listedOrderCount: number;
   filledVolumeUsd: number;
   filledCount: number;
+  gotFilledVolumeUsd: number;
+  gotFilledCount: number;
 }
 
 function getRankDisplay(rank: number) {
@@ -90,20 +125,15 @@ function formatXp(xp: number): string {
   return '-';
 }
 
-export default function TopTradersLeaderboard({ transactions, orders, tokenPrices, contractOrders = [] }: TopTradersLeaderboardProps) {
+export default function TopTradersLeaderboard({ transactions, orders, tokenPrices, contractOrders = [], onTraderClick, searchQuery = '', onSearchChange }: TopTradersLeaderboardProps) {
   const { address: connectedAddress } = useAccount();
 
-  // Fetch all orders from the contract (fetchAllOrders = true)
-  const { allOrders, isLoading: ordersLoading } = useOpenPositions(undefined, true);
-
   // Fetch Supabase leaderboard data for XP, volume, prestige
-  const { leaderboard, isLoading: leaderboardLoading } = useLeaderboard(500);
+  const { leaderboard, isLoading } = useLeaderboard(500);
 
-  const isLoading = ordersLoading;
-
-  // Merge on-chain data with Supabase leaderboard data
+  // Merge API data with Supabase leaderboard data
   const mergedUsers = useMemo(() => {
-    // Build on-chain stats map
+    // Build order stats map from contractOrders prop (API data)
     const onChainMap = new Map<string, {
       address: string;
       totalOrders: number;
@@ -112,7 +142,7 @@ export default function TopTradersLeaderboard({ transactions, orders, tokenPrice
       cancelledOrders: number;
     }>();
 
-    allOrders.forEach((order: CompleteOrderDetails) => {
+    contractOrders.forEach((order: CompleteOrderDetails) => {
       const maker = order.userDetails.orderOwner;
       const orderDetails = order.orderDetailsWithID;
       const makerLower = maker.toLowerCase();
@@ -208,12 +238,47 @@ export default function TopTradersLeaderboard({ transactions, orders, tokenPrice
       filled.count += 1;
     });
 
+    // Build Got Filled map: volume of a maker's orders that were filled by others
+    const gotFilledMap = new Map<string, { volume: number; count: number }>();
+
+    // Build order owner lookup from contractOrders or orders prop
+    const orderOwnerMap = new Map<string, string>();
+    if (contractOrders.length > 0) {
+      contractOrders.forEach(order => {
+        const oid = order.orderDetailsWithID.orderID.toString();
+        const owner = order.userDetails.orderOwner?.toLowerCase();
+        if (owner) orderOwnerMap.set(oid, owner);
+      });
+    } else {
+      orders.forEach(order => {
+        const owner = order.orderOwner?.toLowerCase();
+        if (owner) orderOwnerMap.set(order.orderId, owner);
+      });
+    }
+
+    // For each fill transaction, credit the order maker
+    transactions.forEach(tx => {
+      const maker = orderOwnerMap.get(tx.orderId);
+      if (!maker) return;
+
+      const price = getTokenPrice(tx.sellToken, tokenPrices);
+      const volume = tx.sellAmount * price;
+
+      if (!gotFilledMap.has(maker)) {
+        gotFilledMap.set(maker, { volume: 0, count: 0 });
+      }
+      const gf = gotFilledMap.get(maker)!;
+      gf.volume += volume;
+      gf.count += 1;
+    });
+
     // Collect all unique addresses
     const allAddresses = new Set<string>();
     onChainMap.forEach((_, addr) => allAddresses.add(addr));
     supabaseMap.forEach((_, addr) => allAddresses.add(addr));
     listedMap.forEach((_, addr) => allAddresses.add(addr));
     filledMap.forEach((_, addr) => allAddresses.add(addr));
+    gotFilledMap.forEach((_, addr) => allAddresses.add(addr));
 
     // Merge
     const merged: MergedUserStats[] = [];
@@ -222,6 +287,7 @@ export default function TopTradersLeaderboard({ transactions, orders, tokenPrice
       const supabase = supabaseMap.get(addr);
       const listed = listedMap.get(addr);
       const filled = filledMap.get(addr);
+      const gotFilled = gotFilledMap.get(addr);
 
       merged.push({
         address: onChain?.address || addr,
@@ -238,6 +304,8 @@ export default function TopTradersLeaderboard({ transactions, orders, tokenPrice
         listedOrderCount: listed?.count || 0,
         filledVolumeUsd: filled?.volume || 0,
         filledCount: filled?.count || 0,
+        gotFilledVolumeUsd: gotFilled?.volume || 0,
+        gotFilledCount: gotFilled?.count || 0,
       });
     });
 
@@ -246,7 +314,7 @@ export default function TopTradersLeaderboard({ transactions, orders, tokenPrice
       if (b.totalXp !== a.totalXp) return b.totalXp - a.totalXp;
       return b.totalOrders - a.totalOrders;
     });
-  }, [allOrders, leaderboard, transactions, orders, tokenPrices, contractOrders]);
+  }, [contractOrders, leaderboard, transactions, orders, tokenPrices]);
 
   // Add rank
   const rankedUsers = mergedUsers.map((user, idx) => ({
@@ -257,13 +325,60 @@ export default function TopTradersLeaderboard({ transactions, orders, tokenPrice
       : 0,
   }));
 
+  // Filter by search query (from cross-table filtering)
+  const filteredUsers = useMemo(() => {
+    if (!searchQuery.trim()) return rankedUsers;
+    const q = searchQuery.trim().toLowerCase();
+    const isNumeric = /^\d+$/.test(q);
+
+    if (isNumeric) {
+      // Filter by order ID: find all addresses that participated in this order
+      const participants = new Set<string>();
+      // Maker of the order
+      contractOrders.forEach(order => {
+        if (order.orderDetailsWithID.orderID.toString() === q) {
+          participants.add(order.userDetails.orderOwner.toLowerCase());
+        }
+      });
+      orders.forEach(order => {
+        if (order.orderId === q) {
+          participants.add(order.orderOwner.toLowerCase());
+        }
+      });
+      // Fillers of the order
+      transactions.forEach(tx => {
+        if (tx.orderId === q && tx.buyer) {
+          participants.add(tx.buyer.toLowerCase());
+        }
+      });
+      return rankedUsers.filter(user => participants.has(user.address.toLowerCase()));
+    }
+
+    return rankedUsers.filter(user => user.address.toLowerCase().includes(q));
+  }, [rankedUsers, searchQuery, contractOrders, orders, transactions]);
+
+  const PAGE_SIZE = 20;
+  const [page, setPage] = useState(1);
+  useEffect(() => { setPage(1); }, [searchQuery]);
+  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / PAGE_SIZE));
+  const paginatedUsers = filteredUsers.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
   return (
     <LiquidGlassCard
       className="p-4 md:p-6 bg-black/40"
       shadowIntensity="none"
       glowIntensity="none"
     >
-      <h3 className="text-2xl font-bold text-white mb-6">Leaderboard</h3>
+      <div className="flex flex-wrap items-center gap-2 mb-6">
+        <h3 className="text-2xl font-bold text-white">Trader Leaderboard</h3>
+        <input
+          type="text"
+          placeholder="Search by address..."
+          value={searchQuery}
+          onChange={(e) => onSearchChange?.(e.target.value)}
+          className="ml-auto px-4 py-2 bg-black/70 border border-white/10 rounded-full text-white text-sm placeholder-gray-500 focus:outline-none focus:border-white/30 transition-colors w-64"
+        />
+      </div>
 
       {isLoading ? (
         <div className="flex items-center justify-center py-12">
@@ -271,34 +386,36 @@ export default function TopTradersLeaderboard({ transactions, orders, tokenPrice
           <span className="ml-3 text-gray-400">Loading leaderboard...</span>
         </div>
       ) : (
+        <>
         <div className="overflow-x-auto pb-2 modern-scrollbar">
           <table className="w-full min-w-[1000px]">
             <thead>
               <tr className="border-b border-white/10">
-                <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Rank</th>
-                <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Trader</th>
-                <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">XP</th>
-                <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Listed</th>
-                <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Filled</th>
-                <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Total</th>
+                <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Rank</th>
+                <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Trader</th>
+                <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">XP</th>
+                <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Listed</th>
+                <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Got Filled</th>
+                <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">They Filled</th>
+                <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Total Vol. Traded</th>
               </tr>
             </thead>
             <tbody>
-              {rankedUsers.length === 0 ? (
+              {paginatedUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-gray-500">
+                  <td colSpan={7} className="py-8 text-center text-gray-500">
                     No traders found yet.
                   </td>
                 </tr>
               ) : (
-                rankedUsers.map((user) => {
+                paginatedUsers.map((user) => {
                   const isCurrentUser = connectedAddress?.toLowerCase() === user.address.toLowerCase();
                   // Show grey if user hasn't completed first legion, otherwise show completed level
                   const hasCompletedFirstLegion = user.prestigeLevel >= 1;
                   const displayLevel = hasCompletedFirstLegion ? user.prestigeLevel - 1 : 0;
                   const prestige = PRESTIGE_LEVELS[displayLevel] || PRESTIGE_LEVELS[0];
                   const rankDisplay = getRankDisplay(user.rank);
-                  const totalVolume = user.listedVolumeUsd + user.filledVolumeUsd;
+                  const totalVolume = user.filledVolumeUsd + user.gotFilledVolumeUsd;
 
                   return (
                     <tr
@@ -307,27 +424,36 @@ export default function TopTradersLeaderboard({ transactions, orders, tokenPrice
                         isCurrentUser ? 'bg-white/5' : 'hover:bg-white/5'
                       }`}
                     >
-                      <td className="py-4 px-2">
+                      <td className="py-4 px-2 text-center">
                         <span className={`font-bold ${rankDisplay.color}`}>
                           {rankDisplay.text}
                         </span>
                       </td>
-                      <td className="py-4 px-2">
-                        <div className="flex items-center gap-2">
-                          <span className={`font-mono ${isCurrentUser ? 'text-white' : 'text-gray-300'}`}>
-                            {formatAddress(user.address)}
-                          </span>
-                          {isCurrentUser && (
-                            <span className="text-xs bg-white/10 px-2 py-0.5 rounded text-gray-300">You</span>
-                          )}
-                        </div>
+                      <td className="py-4 px-2 text-center">
+                        {(() => {
+                          const color = getAddressColor(user.address);
+                          return (
+                            <div className="flex items-center justify-center gap-2">
+                              <span
+                                className="font-mono text-xs px-2.5 py-1 rounded-full inline-block cursor-pointer hover:opacity-80 transition-opacity"
+                                style={{ backgroundColor: color.bg, color: color.text, border: `1px solid ${color.border}` }}
+                                onClick={() => onTraderClick?.(user.address)}
+                              >
+                                {formatAddress(user.address)}
+                              </span>
+                              {isCurrentUser && (
+                                <span className="text-xs bg-white/10 px-2 py-0.5 rounded text-gray-300">You</span>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </td>
-                      <td className="py-4 px-2 text-right">
+                      <td className="py-4 px-2 text-center">
                         <span className={`font-medium ${user.totalXp > 0 ? 'text-amber-400' : 'text-gray-600'}`}>
                           {formatXp(user.totalXp)}
                         </span>
                       </td>
-                      <td className="py-4 px-2 text-right">
+                      <td className="py-4 px-2 text-center">
                         {user.listedVolumeUsd > 0 ? (
                           <>
                             <span className="text-pink-400 text-sm">{formatUSD(user.listedVolumeUsd)}</span>
@@ -337,7 +463,17 @@ export default function TopTradersLeaderboard({ transactions, orders, tokenPrice
                           <span className="text-gray-600 text-sm">-</span>
                         )}
                       </td>
-                      <td className="py-4 px-2 text-right">
+                      <td className="py-4 px-2 text-center">
+                        {user.gotFilledVolumeUsd > 0 ? (
+                          <>
+                            <span className="text-blue-400 text-sm">{formatUSD(user.gotFilledVolumeUsd)}</span>
+                            <span className="text-gray-500 text-xs ml-1">({user.gotFilledCount})</span>
+                          </>
+                        ) : (
+                          <span className="text-gray-600 text-sm">-</span>
+                        )}
+                      </td>
+                      <td className="py-4 px-2 text-center">
                         {user.filledVolumeUsd > 0 ? (
                           <>
                             <span className="text-green-400 text-sm">{formatUSD(user.filledVolumeUsd)}</span>
@@ -347,7 +483,7 @@ export default function TopTradersLeaderboard({ transactions, orders, tokenPrice
                           <span className="text-gray-600 text-sm">-</span>
                         )}
                       </td>
-                      <td className="py-4 px-2 text-right">
+                      <td className="py-4 px-2 text-center">
                         <span className="text-white font-bold text-sm">
                           {totalVolume > 0 ? formatUSD(totalVolume) : '-'}
                         </span>
@@ -359,6 +495,50 @@ export default function TopTradersLeaderboard({ transactions, orders, tokenPrice
             </tbody>
           </table>
         </div>
+        {totalPages > 1 && (
+          <div className="flex items-center justify-end mt-4">
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    className={page <= 1 ? 'pointer-events-none opacity-40' : 'cursor-pointer'}
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                  />
+                </PaginationItem>
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pg: number;
+                  if (totalPages <= 5) {
+                    pg = i + 1;
+                  } else if (page <= 3) {
+                    pg = i + 1;
+                  } else if (page >= totalPages - 2) {
+                    pg = totalPages - 4 + i;
+                  } else {
+                    pg = page - 2 + i;
+                  }
+                  return (
+                    <PaginationItem key={pg}>
+                      <PaginationLink
+                        isActive={pg === page}
+                        className="cursor-pointer"
+                        onClick={() => setPage(pg)}
+                      >
+                        {pg}
+                      </PaginationLink>
+                    </PaginationItem>
+                  );
+                })}
+                <PaginationItem>
+                  <PaginationNext
+                    className={page >= totalPages ? 'pointer-events-none opacity-40' : 'cursor-pointer'}
+                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          </div>
+        )}
+        </>
       )}
 
     </LiquidGlassCard>

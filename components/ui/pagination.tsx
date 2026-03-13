@@ -1,6 +1,6 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
-import { ButtonProps, buttonVariants } from "@/components/ui/button"
+import { ButtonProps } from "@/components/ui/button"
 import { ChevronLeftIcon, ChevronRightIcon, DotsHorizontalIcon } from "@radix-ui/react-icons"
 
 const Pagination = ({ className, ...props }: React.ComponentProps<"nav">) => (
@@ -47,10 +47,11 @@ const PaginationLink = ({
   <a
     aria-current={isActive ? "page" : undefined}
     className={cn(
-      buttonVariants({
-        variant: isActive ? "outline" : "ghost",
-        size,
-      }),
+      "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors",
+      size === "icon" ? "h-9 w-9" : "h-9 px-4 py-2",
+      isActive
+        ? "bg-white text-black border border-white"
+        : "text-white/60 hover:bg-white/10 hover:text-white",
       className
     )}
     {...props}
@@ -65,7 +66,7 @@ const PaginationPrevious = ({
   <PaginationLink
     aria-label="Go to previous page"
     size="default"
-    className={cn("gap-1 pl-2.5", className)}
+    className={cn("gap-1 pl-2.5 text-white/60 hover:text-white", className)}
     {...props}
   >
     <ChevronLeftIcon className="h-4 w-4" />
@@ -81,7 +82,7 @@ const PaginationNext = ({
   <PaginationLink
     aria-label="Go to next page"
     size="default"
-    className={cn("gap-1 pr-2.5", className)}
+    className={cn("gap-1 pr-2.5 text-white/60 hover:text-white", className)}
     {...props}
   >
     <span>Next</span>

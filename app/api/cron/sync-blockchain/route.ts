@@ -67,11 +67,11 @@ const ORDER_EXPIRATION_UPDATED_EVENT = parseAbiItem(
 );
 
 // XP values now come from constants/xp.ts
-// ACTION_XP.ORDER_CREATED = 20
-// ACTION_XP.ORDER_FILLED = 25
-// ACTION_XP.ORDER_FILLED_AS_MAKER = 30
-// ACTION_XP.PROCEEDS_CLAIMED = 10
+// Only filled orders earn XP:
+// ACTION_XP.ORDER_FILLED = 25 (taker fills someone's order)
+// ACTION_XP.ORDER_FILLED_AS_MAKER = 30 (someone fills your order)
 // Plus volume bonus: +1 XP per $10 USD (capped at 100)
+// ORDER_CREATED and PROCEEDS_CLAIMED = 0 XP
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {

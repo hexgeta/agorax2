@@ -11,7 +11,7 @@ import PixelBlastBackground from '@/components/ui/PixelBlastBackground';
 import StatsOverviewCards from '@/components/stats/StatsOverviewCards';
 import TopTokensChart from '@/components/stats/TopTokensChart';
 import ProtocolActivityChart from '@/components/stats/ProtocolActivityChart';
-import HourlyActivityChart from '@/components/stats/HourlyActivityChart';
+// import HourlyActivityChart from '@/components/stats/HourlyActivityChart';
 import OrderbookChart from '@/components/stats/OrderbookChart';
 import TopTradersLeaderboard from '@/components/stats/TopTradersLeaderboard';
 import { useTokenPrices } from '@/hooks/crypto/useTokenPrices';
@@ -19,6 +19,15 @@ import { useContractWhitelistRead } from '@/hooks/contracts/useContractWhitelist
 import { getTokenInfo, getTokenInfoByIndex, formatTokenAmount, formatTokenTicker } from '@/utils/tokenUtils';
 import { useOpenPositions, CompleteOrderDetails } from '@/hooks/contracts/useOpenPositions';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationPrevious,
+  PaginationNext,
+  PaginationEllipsis,
+} from '@/components/ui/pagination';
 import { CoinLogo } from '@/components/ui/CoinLogo';
 
 // ── Shared interfaces matching existing components ──────────────────────────
@@ -87,7 +96,13 @@ interface FormattedOrder {
   id: number;
   maker: string;
   sellToken: string;
+  sellTokenAddress: string;
+  sellAmountNum: number;
+  sellUsd: number;
   buyToken: string;
+  buyTokenAddress: string;
+  buyAmountNum: number;
+  buyUsd: number;
   sellAmount: string;
   buyAmount: string;
   status: 'active' | 'completed' | 'cancelled';
@@ -101,11 +116,15 @@ interface FormattedFill {
   sellToken: string;
   sellTokenAddress: string;
   sellAmountNum: number;
+  sellUsd: number;
   buyToken: string;
   buyTokenAddress: string;
   buyAmountNum: number;
+  buyUsd: number;
   timestamp: number;
   txHash: string;
+  fillPercentage: number;
+  orderStatus: string;
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -254,7 +273,7 @@ function dbFillsToTransactions(dbFills: DbFill[], dbOrders: DbOrder[]): Transact
   });
 }
 
-function dbFillsToFormattedFills(dbFills: DbFill[], dbOrders: DbOrder[]): FormattedFill[] {
+function dbFillsToFormattedFills(dbFills: DbFill[], dbOrders: DbOrder[], tokenPrices: Record<string, { price: number }>): FormattedFill[] {
   const orderMap = new Map<number, DbOrder>();
   dbOrders.forEach(o => orderMap.set(o.order_id, o));
 
@@ -265,6 +284,7 @@ function dbFillsToFormattedFills(dbFills: DbFill[], dbOrders: DbOrder[]): Format
     const sellTokenInfo = getTokenInfo(sellTokenAddr);
 
     let sellAmountNum = 0;
+    let fillPercentage = 0;
     if (order) {
       const matchIdx = (order.buy_tokens_addresses || []).findIndex(
         addr => addr?.toLowerCase() === buyTokenAddr
@@ -274,9 +294,13 @@ function dbFillsToFormattedFills(dbFills: DbFill[], dbOrders: DbOrder[]): Format
         if (originalBuyAmountRaw > 0) {
           const ratio = Number(fill.buy_amount_raw) / originalBuyAmountRaw;
           sellAmountNum = (Number(order.sell_amount_raw) * ratio) / Math.pow(10, sellTokenInfo.decimals);
+          fillPercentage = Math.round(ratio * 100);
         }
       }
     }
+
+    const statusMap: Record<number, string> = { 0: 'active', 1: 'cancelled', 2: 'completed' };
+    const orderStatus = order ? (statusMap[order.status] || 'unknown') : 'unknown';
 
     return {
       orderId: fill.order_id.toString(),
@@ -284,11 +308,15 @@ function dbFillsToFormattedFills(dbFills: DbFill[], dbOrders: DbOrder[]): Format
       sellToken: order?.sell_token_ticker || 'UNKNOWN',
       sellTokenAddress: sellTokenAddr,
       sellAmountNum,
+      sellUsd: sellAmountNum * (tokenPrices[sellTokenAddr]?.price ?? 0),
       buyToken: fill.buy_token_ticker || 'UNKNOWN',
       buyTokenAddress: buyTokenAddr,
       buyAmountNum: fill.buy_amount_formatted || 0,
+      buyUsd: (fill.buy_amount_formatted || 0) * (tokenPrices[buyTokenAddr]?.price ?? 0),
       timestamp: fill.filled_at ? Math.floor(new Date(fill.filled_at).getTime() / 1000) : 0,
       txHash: fill.tx_hash || '',
+      fillPercentage,
+      orderStatus,
     };
   }).sort((a, b) => b.timestamp - a.timestamp);
 }
@@ -306,9 +334,42 @@ export default function Stats2Page() {
   const [selectedTokenFilter, setSelectedTokenFilter] = useState<{ address: string; ticker: string } | null>(null);
   const [selectedTraderFilter, setSelectedTraderFilter] = useState<string | null>(null);
   const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | 'active' | 'completed' | 'cancelled'>('all');
+  const [orderSearchQuery, setOrderSearchQuery] = useState('');
+  const [fillSearchQuery, setFillSearchQuery] = useState('');
+  const [orderPage, setOrderPage] = useState(1);
+  const [fillPage, setFillPage] = useState(1);
+  const PAGE_SIZE = 20;
+
+  // Sort state for orders table
+  const [orderSortKey, setOrderSortKey] = useState<'id' | 'maker' | 'sellUsd' | 'buyUsd' | 'filled' | 'status' | 'createdAt'>('id');
+  const [orderSortDir, setOrderSortDir] = useState<'asc' | 'desc'>('desc');
+
+  // Sort state for fills table
+  const [fillSortKey, setFillSortKey] = useState<'orderId' | 'buyer' | 'sellUsd' | 'buyUsd' | 'fillPercentage' | 'orderStatus' | 'timestamp'>('timestamp');
+  const [fillSortDir, setFillSortDir] = useState<'asc' | 'desc'>('desc');
+
+  function toggleOrderSort(key: typeof orderSortKey) {
+    if (orderSortKey === key) {
+      setOrderSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setOrderSortKey(key);
+      setOrderSortDir('desc');
+    }
+    setOrderPage(1);
+  }
+
+  function toggleFillSort(key: typeof fillSortKey) {
+    if (fillSortKey === key) {
+      setFillSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setFillSortKey(key);
+      setFillSortDir('desc');
+    }
+    setFillPage(1);
+  }
 
   // Live active orders from contract for accurate TVL and orderbook
-  const { activeOrders: liveActiveOrders } = useOpenPositions();
+  const { activeOrders: liveActiveOrders, isLoading: liveOrdersLoading } = useOpenPositions();
 
   // Get whitelist for token index lookups
   const { activeTokens } = useContractWhitelistRead();
@@ -339,10 +400,10 @@ export default function Stats2Page() {
   // Use live contract data for active orders (accurate TVL + orderbook)
   // Fall back to DB-derived active orders if contract hasn't loaded yet
   const activeOrders: CompleteOrderDetails[] = useMemo(
-    () => liveActiveOrders.length > 0
+    () => !liveOrdersLoading && liveActiveOrders.length > 0
       ? liveActiveOrders
       : contractOrders.filter(o => o.orderDetailsWithID.status === 0),
-    [liveActiveOrders, contractOrders]
+    [liveActiveOrders, liveOrdersLoading, contractOrders]
   );
 
   const transactions: Transaction[] = useMemo(
@@ -364,6 +425,18 @@ export default function Stats2Page() {
   }, [dbOrders]);
 
   const { prices: tokenPrices, isLoading: pricesLoading } = useTokenPrices(allTokenAddresses);
+
+  // Calculate TVL directly from DB data using remaining_sell_amount (accurate, no contract read needed)
+  const dbTvl = useMemo(() => {
+    return dbOrders
+      .filter(o => o.status === 0) // active orders only
+      .reduce((sum, o) => {
+        const tokenInfo = getTokenInfo(o.sell_token_address);
+        const remaining = Number(BigInt(o.remaining_sell_amount || '0')) / Math.pow(10, tokenInfo.decimals);
+        const price = tokenPrices[o.sell_token_address?.toLowerCase()]?.price ?? 0;
+        return sum + (remaining * price);
+      }, 0);
+  }, [dbOrders, tokenPrices]);
 
   // ── Filters ─────────────────────────────────────────────────────────────
 
@@ -466,16 +539,31 @@ export default function Stats2Page() {
       );
 
       let buyAmount = '0';
+      let buyTokenAddress = '';
+      let buyAmountNum = 0;
       if (orderDetails.orderDetails.buyAmounts.length > 0 && orderDetails.orderDetails.buyTokensIndex.length > 0) {
         const buyTokenInfo = getTokenInfoByIndex(Number(orderDetails.orderDetails.buyTokensIndex[0]));
         buyAmount = formatTokenAmount(orderDetails.orderDetails.buyAmounts[0], buyTokenInfo.decimals);
+        buyTokenAddress = buyTokenInfo.address?.toLowerCase() || '';
+        buyAmountNum = parseFloat(buyAmount);
       }
+
+      const sellTokenAddress = orderDetails.orderDetails.sellToken.toLowerCase();
+      const sellAmountNum = parseFloat(sellAmount);
+      const sellUsd = sellAmountNum * (tokenPrices[sellTokenAddress]?.price ?? 0);
+      const buyUsd = buyAmountNum * (tokenPrices[buyTokenAddress]?.price ?? 0);
 
       return {
         id: Number(orderDetails.orderID),
         maker: order.userDetails.orderOwner,
         sellToken: sellTokenInfo.ticker,
+        sellTokenAddress,
+        sellAmountNum,
+        sellUsd,
         buyToken: buyTokenTicker,
+        buyTokenAddress,
+        buyAmountNum,
+        buyUsd,
         sellAmount,
         buyAmount,
         status,
@@ -483,17 +571,78 @@ export default function Stats2Page() {
         createdAt: formatTimestampDisplay(orderDetails.lastUpdateTime),
       };
     }).sort((a, b) => b.id - a.id);
-  }, [filteredContractOrders]);
+  }, [filteredContractOrders, tokenPrices]);
 
   const formattedFills: FormattedFill[] = useMemo(
-    () => dbFillsToFormattedFills(dbFills, dbOrders),
-    [dbFills, dbOrders]
+    () => dbFillsToFormattedFills(dbFills, dbOrders, tokenPrices),
+    [dbFills, dbOrders, tokenPrices]
   );
 
   const filteredOrdersByStatus = useMemo(() => {
-    if (orderStatusFilter === 'all') return formattedOrders;
-    return formattedOrders.filter(order => order.status === orderStatusFilter);
-  }, [formattedOrders, orderStatusFilter]);
+    let orders = formattedOrders;
+    if (orderStatusFilter !== 'all') {
+      orders = orders.filter(order => order.status === orderStatusFilter);
+    }
+    if (orderSearchQuery.trim()) {
+      const q = orderSearchQuery.trim().toLowerCase();
+      const isNumeric = /^\d+$/.test(q);
+      orders = orders.filter(order =>
+        order.id.toString() === q ||
+        (!isNumeric && (
+          order.maker.toLowerCase().includes(q) ||
+          order.sellToken.toLowerCase().includes(q) ||
+          order.buyToken.toLowerCase().includes(q)
+        ))
+      );
+    }
+    // Sort
+    const dir = orderSortDir === 'asc' ? 1 : -1;
+    orders = [...orders].sort((a, b) => {
+      const av = a[orderSortKey];
+      const bv = b[orderSortKey];
+      if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir;
+      return String(av).localeCompare(String(bv)) * dir;
+    });
+    return orders;
+  }, [formattedOrders, orderStatusFilter, orderSearchQuery, orderSortKey, orderSortDir]);
+
+  // Reset page when orders filter changes
+  useEffect(() => { setOrderPage(1); }, [orderStatusFilter, orderSearchQuery]);
+
+  const filteredFills = useMemo(() => {
+    let fills = formattedFills;
+    if (fillSearchQuery.trim()) {
+      const q = fillSearchQuery.trim().toLowerCase();
+      const isNumeric = /^\d+$/.test(q);
+      fills = fills.filter(fill =>
+        fill.orderId.toString() === q ||
+        (!isNumeric && (
+          fill.buyer.toLowerCase().includes(q) ||
+          fill.sellToken.toLowerCase().includes(q) ||
+          fill.buyToken.toLowerCase().includes(q) ||
+          fill.txHash.toLowerCase().includes(q)
+        ))
+      );
+    }
+    // Sort
+    const dir = fillSortDir === 'asc' ? 1 : -1;
+    fills = [...fills].sort((a, b) => {
+      const av = a[fillSortKey];
+      const bv = b[fillSortKey];
+      if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir;
+      return String(av).localeCompare(String(bv)) * dir;
+    });
+    return fills;
+  }, [formattedFills, fillSearchQuery, fillSortKey, fillSortDir]);
+
+  // Reset page when fills filter changes
+  useEffect(() => { setFillPage(1); }, [fillSearchQuery]);
+
+  const orderTotalPages = Math.max(1, Math.ceil(filteredOrdersByStatus.length / PAGE_SIZE));
+  const paginatedOrders = filteredOrdersByStatus.slice((orderPage - 1) * PAGE_SIZE, orderPage * PAGE_SIZE);
+
+  const fillTotalPages = Math.max(1, Math.ceil(filteredFills.length / PAGE_SIZE));
+  const paginatedFills = filteredFills.slice((fillPage - 1) * PAGE_SIZE, fillPage * PAGE_SIZE);
 
   // ── Event handlers ──────────────────────────────────────────────────────
 
@@ -627,6 +776,7 @@ export default function Stats2Page() {
                   tokenPrices={tokenPrices}
                   contractOrders={filteredContractOrders}
                   activeOrders={filteredActiveOrders}
+                  dbTvl={dbTvl}
                 />
 
                 {/* Protocol Activity Chart */}
@@ -653,30 +803,40 @@ export default function Stats2Page() {
                   orders={orders}
                   tokenPrices={tokenPrices}
                   contractOrders={contractOrders}
+                  searchQuery={orderSearchQuery}
+                  onSearchChange={(q) => {
+                    setOrderSearchQuery(q);
+                    setFillSearchQuery(q);
+                  }}
+                  onTraderClick={(address) => {
+                    const toggle = orderSearchQuery.toLowerCase() === address.toLowerCase() ? '' : address;
+                    setOrderSearchQuery(toggle);
+                    setFillSearchQuery(toggle);
+                  }}
                 />
 
-                {/* Order Book */}
-                {filteredActiveOrders.length > 0 && whitelist.length > 0 && (
-                  <OrderbookChart
-                    orders={filteredActiveOrders}
-                    tokenPrices={tokenPrices}
-                    whitelist={whitelist}
-                  />
-                )}
-
-                {/* Hourly Activity Heatmap */}
-                <HourlyActivityChart
+                {/* Hourly Activity Heatmap - hidden for now */}
+                {/* <HourlyActivityChart
                   transactions={filteredTransactions}
                   orders={filteredOrders}
                   contractOrders={filteredContractOrders}
-                />
+                /> */}
 
                 {/* All Orders Table */}
                 <div>
-                  <h2 className="text-2xl font-bold text-white mb-4">All Orders</h2>
+                  <div className="flex flex-wrap items-center gap-2 mb-4">
+                    <h2 className="text-2xl font-bold text-white">All Orders</h2>
+                    <input
+                      type="text"
+                      placeholder="Search by ID, address, or token..."
+                      value={orderSearchQuery}
+                      onChange={(e) => setOrderSearchQuery(e.target.value)}
+                      className="ml-auto px-4 py-2 bg-black/70 border border-white/10 rounded-full text-white text-sm placeholder-gray-500 focus:outline-none focus:border-white/30 transition-colors w-64"
+                    />
+                  </div>
 
-                  {/* Order Status Filters */}
-                  <div className="flex flex-wrap gap-2 mb-4">
+                  {/* Order Filters */}
+                  <div className="flex flex-wrap items-center gap-2 mb-4">
                     {(['all', 'active', 'completed', 'cancelled'] as const).map((filter) => (
                       <button
                         key={filter}
@@ -684,7 +844,7 @@ export default function Stats2Page() {
                         className={`px-4 py-2 rounded-lg font-medium transition-all capitalize ${
                           orderStatusFilter === filter
                             ? 'bg-white/10 text-white border border-white/20'
-                            : 'bg-white/5 text-gray-400 border border-transparent hover:bg-white/10 hover:text-white'
+                            : 'bg-transparent text-gray-400 border border-transparent hover:bg-white/10 hover:text-white'
                         }`}
                       >
                         {filter}
@@ -702,27 +862,43 @@ export default function Stats2Page() {
                       <table className="w-full min-w-[700px]">
                         <thead>
                           <tr className="border-b border-white/10">
-                            <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">ID</th>
-                            <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Seller</th>
-                            <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Pair</th>
-                            <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Sell Amount</th>
-                            <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Buy Amount</th>
-                            <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Filled</th>
-                            <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Status</th>
-                            <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Created Date</th>
+                            {([
+                              ['id', 'ID'],
+                              ['maker', 'Seller'],
+                              [null, 'Pair'],
+                              ['sellUsd', 'Sell Amount'],
+                              ['buyUsd', 'Buy Amount'],
+                              ['filled', 'Filled'],
+                              ['status', 'Status'],
+                              ['createdAt', 'Creation Date'],
+                              [null, ''],
+                            ] as const).map(([key, label], i) => (
+                              <th
+                                key={i}
+                                className={`text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap ${key ? 'cursor-pointer hover:text-white select-none' : ''}`}
+                                onClick={() => key && toggleOrderSort(key as typeof orderSortKey)}
+                              >
+                                {label}
+                                {key && orderSortKey === key && (
+                                  <span className="ml-1 text-white/60">{orderSortDir === 'asc' ? '▲' : '▼'}</span>
+                                )}
+                              </th>
+                            ))}
                           </tr>
                         </thead>
                         <tbody>
-                          {filteredOrdersByStatus.length === 0 ? (
+                          {paginatedOrders.length === 0 ? (
                             <tr>
-                              <td colSpan={8} className="py-8 text-center text-gray-500">
-                                No orders found with this filter.
+                              <td colSpan={9} className="py-8 text-center text-gray-500">
+                                {orderSearchQuery.trim() ? 'No orders match your search.' : 'No orders found with this filter.'}
                               </td>
                             </tr>
                           ) : (
-                            filteredOrdersByStatus.map((order) => {
+                            paginatedOrders.map((order) => {
                               const isCurrentUser = connectedAddress?.toLowerCase() === order.maker.toLowerCase();
                               const statusColors = getStatusColor(order.status);
+                              const sellUsd = order.sellUsd;
+                              const buyUsd = order.buyUsd;
 
                               const href = isCurrentUser
                                 ? `/my-orders?orderId=${order.id}`
@@ -736,17 +912,36 @@ export default function Stats2Page() {
                                   }`}
                                   onClick={() => window.location.href = href}
                                 >
-                                  <td className="py-4 px-2">
-                                    <span className="text-gray-500 text-sm">#{order.id}</span>
+                                  <td className="py-4 px-2 text-center">
+                                    <span
+                                      className={`text-sm px-2.5 py-1 rounded-full inline-block cursor-pointer hover:opacity-80 transition-opacity ${
+                                        orderSearchQuery === order.id.toString() ? 'bg-white text-black font-medium' : 'text-gray-400 bg-white/5 border border-white/10'
+                                      }`}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        const idStr = order.id.toString();
+                                        const toggle = orderSearchQuery === idStr ? '' : idStr;
+                                        setOrderSearchQuery(toggle);
+                                        setFillSearchQuery(toggle);
+                                      }}
+                                    >
+                                      #{order.id}
+                                    </span>
                                   </td>
-                                  <td className="py-4 px-2">
+                                  <td className="py-4 px-2 text-center">
                                     {(() => {
                                       const color = getBuyerColor(order.maker);
                                       return (
                                         <div className="flex items-center gap-2">
                                           <span
-                                            className="font-mono text-xs px-2.5 py-1 rounded-full inline-block"
+                                            className="font-mono text-xs px-2.5 py-1 rounded-full inline-block cursor-pointer hover:opacity-80 transition-opacity"
                                             style={{ backgroundColor: color.bg, color: color.text, border: `1px solid ${color.border}` }}
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              const toggle = orderSearchQuery.toLowerCase() === order.maker.toLowerCase() ? '' : order.maker;
+                                              setOrderSearchQuery(toggle);
+                                              setFillSearchQuery(toggle);
+                                            }}
                                           >
                                             {formatAddress(order.maker)}
                                           </span>
@@ -757,20 +952,36 @@ export default function Stats2Page() {
                                       );
                                     })()}
                                   </td>
-                                  <td className="py-4 px-2">
-                                    <span className="text-white text-sm">
-                                      {formatTokenTicker(order.sellToken)}/{formatTokenTicker(order.buyToken)}
-                                    </span>
+                                  <td className="py-4 px-2 text-center">
+                                    <div className="flex items-center justify-center gap-1.5">
+                                      <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center overflow-hidden">
+                                        <CoinLogo symbol={order.sellToken} size="sm" />
+                                      </div>
+                                      <span className="text-white/40 text-xs">→</span>
+                                      <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center overflow-hidden">
+                                        <CoinLogo symbol={order.buyToken} size="sm" />
+                                      </div>
+                                    </div>
                                   </td>
-                                  <td className="py-4 px-2 text-right">
-                                    <span className="text-gray-300 text-sm whitespace-nowrap">
-                                      {formatDisplayAmount(order.sellAmount)} {formatTokenTicker(order.sellToken)}
-                                    </span>
+                                  <td className="py-4 px-2 text-center">
+                                    <div className="flex flex-col items-center">
+                                      <span className="text-white text-sm font-medium whitespace-nowrap">
+                                        {sellUsd > 0 ? `$${formatDisplayAmount(sellUsd.toString())}` : '--'}
+                                      </span>
+                                      <span className="text-gray-500 text-xs whitespace-nowrap">
+                                        {formatDisplayAmount(order.sellAmount)} {formatTokenTicker(order.sellToken)}
+                                      </span>
+                                    </div>
                                   </td>
-                                  <td className="py-4 px-2 text-right">
-                                    <span className="text-gray-300 text-sm whitespace-nowrap">
-                                      {formatDisplayAmount(order.buyAmount)} {formatTokenTicker(order.buyToken)}
-                                    </span>
+                                  <td className="py-4 px-2 text-center">
+                                    <div className="flex flex-col items-center">
+                                      <span className="text-white text-sm font-medium whitespace-nowrap">
+                                        {buyUsd > 0 ? `$${formatDisplayAmount(buyUsd.toString())}` : '--'}
+                                      </span>
+                                      <span className="text-gray-500 text-xs whitespace-nowrap">
+                                        {formatDisplayAmount(order.buyAmount)} {formatTokenTicker(order.buyToken)}
+                                      </span>
+                                    </div>
                                   </td>
                                   <td className="py-4 px-2 text-center">
                                     <span className="text-gray-400 text-sm">{order.filled}%</span>
@@ -780,8 +991,20 @@ export default function Stats2Page() {
                                       {order.status}
                                     </span>
                                   </td>
-                                  <td className="py-4 px-2 text-right">
+                                  <td className="py-4 px-2 text-center">
                                     <span className="text-gray-500 text-sm whitespace-nowrap">{order.createdAt}</span>
+                                  </td>
+                                  <td className="py-4 px-2 text-center">
+                                    <a
+                                      href={href}
+                                      className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/10 hover:bg-white/20 border border-white/20 rounded-full text-white text-xs font-medium transition-colors"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      See Order
+                                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                                      </svg>
+                                    </a>
                                   </td>
                                 </tr>
                               );
@@ -791,11 +1014,63 @@ export default function Stats2Page() {
                       </table>
                     </div>
                   </LiquidGlassCard>
+                  {orderTotalPages > 1 && (
+                    <div className="flex items-center justify-end mt-4">
+                      <Pagination>
+                        <PaginationContent>
+                          <PaginationItem>
+                            <PaginationPrevious
+                              className={orderPage <= 1 ? 'pointer-events-none opacity-40' : 'cursor-pointer'}
+                              onClick={() => setOrderPage(p => Math.max(1, p - 1))}
+                            />
+                          </PaginationItem>
+                          {Array.from({ length: Math.min(5, orderTotalPages) }, (_, i) => {
+                            let page: number;
+                            if (orderTotalPages <= 5) {
+                              page = i + 1;
+                            } else if (orderPage <= 3) {
+                              page = i + 1;
+                            } else if (orderPage >= orderTotalPages - 2) {
+                              page = orderTotalPages - 4 + i;
+                            } else {
+                              page = orderPage - 2 + i;
+                            }
+                            return (
+                              <PaginationItem key={page}>
+                                <PaginationLink
+                                  isActive={page === orderPage}
+                                  className="cursor-pointer"
+                                  onClick={() => setOrderPage(page)}
+                                >
+                                  {page}
+                                </PaginationLink>
+                              </PaginationItem>
+                            );
+                          })}
+                          <PaginationItem>
+                            <PaginationNext
+                              className={orderPage >= orderTotalPages ? 'pointer-events-none opacity-40' : 'cursor-pointer'}
+                              onClick={() => setOrderPage(p => Math.min(orderTotalPages, p + 1))}
+                            />
+                          </PaginationItem>
+                        </PaginationContent>
+                      </Pagination>
+                    </div>
+                  )}
                 </div>
 
                 {/* All Fills Table */}
                 <div>
-                  <h2 className="text-2xl font-bold text-white mb-4">All Fills</h2>
+                  <div className="flex flex-wrap items-center gap-2 mb-4">
+                    <h2 className="text-2xl font-bold text-white">All Fills</h2>
+                    <input
+                      type="text"
+                      placeholder="Search by order ID, address, token, or tx..."
+                      value={fillSearchQuery}
+                      onChange={(e) => setFillSearchQuery(e.target.value)}
+                      className="ml-auto px-4 py-2 bg-black/70 border border-white/10 rounded-full text-white text-sm placeholder-gray-500 focus:outline-none focus:border-white/30 transition-colors w-64"
+                    />
+                  </div>
                   <LiquidGlassCard
                     shadowIntensity="sm"
                     glowIntensity="sm"
@@ -806,47 +1081,91 @@ export default function Stats2Page() {
                       <table className="w-full min-w-[800px]">
                         <thead>
                           <tr className="border-b border-white/10">
-                            <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Order</th>
-                            <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Buyer</th>
-                            <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Sold</th>
-                            <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Bought</th>
-                            <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Date</th>
-                            <th className="text-right py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Tx</th>
+                            {([
+                              ['orderId', 'Order'],
+                              ['buyer', 'Buyer'],
+                              [null, 'Pair'],
+                              ['sellUsd', 'Sold'],
+                              ['buyUsd', 'Bought'],
+                              ['fillPercentage', 'Filled'],
+                              ['orderStatus', 'Status'],
+                              ['timestamp', 'Fill Date'],
+                              [null, 'Tx'],
+                            ] as const).map(([key, label], i) => (
+                              <th
+                                key={i}
+                                className={`text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap ${key ? 'cursor-pointer hover:text-white select-none' : ''}`}
+                                onClick={() => key && toggleFillSort(key as typeof fillSortKey)}
+                              >
+                                {label}
+                                {key && fillSortKey === key && (
+                                  <span className="ml-1 text-white/60">{fillSortDir === 'asc' ? '▲' : '▼'}</span>
+                                )}
+                              </th>
+                            ))}
                           </tr>
                         </thead>
                         <tbody>
-                          {formattedFills.length === 0 ? (
+                          {paginatedFills.length === 0 ? (
                             <tr>
-                              <td colSpan={6} className="py-8 text-center text-gray-500">
-                                No fills found.
+                              <td colSpan={9} className="py-8 text-center text-gray-500">
+                                {fillSearchQuery.trim() ? 'No fills match your search.' : 'No fills found.'}
                               </td>
                             </tr>
                           ) : (
-                            formattedFills.map((fill, idx) => {
-                              const sellPrice = tokenPrices[fill.sellTokenAddress]?.price ?? 0;
-                              const buyPrice = tokenPrices[fill.buyTokenAddress]?.price ?? 0;
-                              const sellUsd = fill.sellAmountNum * sellPrice;
-                              const buyUsd = fill.buyAmountNum * buyPrice;
+                            paginatedFills.map((fill, idx) => {
+                              const sellUsd = fill.sellUsd;
+                              const buyUsd = fill.buyUsd;
                               return (
                               <tr key={`${fill.txHash}-${idx}`} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                                <td className="py-4 px-2">
-                                  <span className="text-gray-500 text-sm">#{fill.orderId}</span>
+                                <td className="py-4 px-2 text-center">
+                                  <span
+                                    className={`text-sm px-2.5 py-1 rounded-full inline-block cursor-pointer hover:opacity-80 transition-opacity ${
+                                      fillSearchQuery === fill.orderId.toString() ? 'bg-white text-black font-medium' : 'text-gray-400 bg-white/5 border border-white/10'
+                                    }`}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const idStr = fill.orderId.toString();
+                                      const toggle = fillSearchQuery === idStr ? '' : idStr;
+                                      setFillSearchQuery(toggle);
+                                      setOrderSearchQuery(toggle);
+                                    }}
+                                  >
+                                    #{fill.orderId}
+                                  </span>
                                 </td>
-                                <td className="py-4 px-2">
+                                <td className="py-4 px-2 text-center">
                                   {(() => {
                                     const color = getBuyerColor(fill.buyer);
                                     return (
                                       <span
-                                        className="font-mono text-xs px-2.5 py-1 rounded-full inline-block"
+                                        className="font-mono text-xs px-2.5 py-1 rounded-full inline-block cursor-pointer hover:opacity-80 transition-opacity"
                                         style={{ backgroundColor: color.bg, color: color.text, border: `1px solid ${color.border}` }}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          const toggle = fillSearchQuery.toLowerCase() === fill.buyer.toLowerCase() ? '' : fill.buyer;
+                                          setFillSearchQuery(toggle);
+                                          setOrderSearchQuery(toggle);
+                                        }}
                                       >
                                         {formatAddress(fill.buyer)}
                                       </span>
                                     );
                                   })()}
                                 </td>
-                                <td className="py-4 px-2 text-right">
-                                  <div className="flex flex-col items-end">
+                                <td className="py-4 px-2 text-center">
+                                  <div className="flex items-center justify-center gap-1.5">
+                                    <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center overflow-hidden">
+                                      <CoinLogo symbol={fill.sellToken} size="sm" />
+                                    </div>
+                                    <span className="text-white/40 text-xs">→</span>
+                                    <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center overflow-hidden">
+                                      <CoinLogo symbol={fill.buyToken} size="sm" />
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="py-4 px-2 text-center">
+                                  <div className="flex flex-col items-center">
                                     <span className="text-white text-sm font-medium whitespace-nowrap">
                                       {sellUsd > 0 ? `$${formatDisplayAmount(sellUsd.toString())}` : '--'}
                                     </span>
@@ -855,8 +1174,8 @@ export default function Stats2Page() {
                                     </span>
                                   </div>
                                 </td>
-                                <td className="py-4 px-2 text-right">
-                                  <div className="flex flex-col items-end">
+                                <td className="py-4 px-2 text-center">
+                                  <div className="flex flex-col items-center">
                                     <span className="text-white text-sm font-medium whitespace-nowrap">
                                       {buyUsd > 0 ? `$${formatDisplayAmount(buyUsd.toString())}` : '--'}
                                     </span>
@@ -865,7 +1184,17 @@ export default function Stats2Page() {
                                     </span>
                                   </div>
                                 </td>
-                                <td className="py-4 px-2 text-right">
+                                <td className="py-4 px-2 text-center">
+                                  <span className={`text-sm ${fill.fillPercentage >= 100 ? 'text-green-400' : 'text-gray-400'}`}>
+                                    {fill.fillPercentage}%
+                                  </span>
+                                </td>
+                                <td className="py-4 px-2 text-center">
+                                  <span className={`text-xs px-2 py-1 rounded capitalize ${getStatusColor(fill.orderStatus)}`}>
+                                    {fill.orderStatus}
+                                  </span>
+                                </td>
+                                <td className="py-4 px-2 text-center">
                                   <span className="text-gray-500 text-sm whitespace-nowrap">
                                     {fill.timestamp ? (() => {
                                       const d = new Date(fill.timestamp * 1000);
@@ -875,15 +1204,18 @@ export default function Stats2Page() {
                                     })() : '-'}
                                   </span>
                                 </td>
-                                <td className="py-4 px-2 text-right">
+                                <td className="py-4 px-2 text-center">
                                   <a
                                     href={`https://otter.pulsechain.com/tx/${fill.txHash}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="text-blue-400 hover:text-blue-300 text-sm font-mono"
+                                    className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/10 hover:bg-white/20 border border-white/20 rounded-full text-white text-xs font-medium transition-colors"
                                     onClick={(e) => e.stopPropagation()}
                                   >
-                                    {fill.txHash.slice(0, 8)}...
+                                    View Tx
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                                    </svg>
                                   </a>
                                 </td>
                               </tr>
@@ -894,12 +1226,60 @@ export default function Stats2Page() {
                       </table>
                     </div>
                   </LiquidGlassCard>
+                  {fillTotalPages > 1 && (
+                    <div className="flex items-center justify-end mt-4">
+                      <Pagination>
+                        <PaginationContent>
+                          <PaginationItem>
+                            <PaginationPrevious
+                              className={fillPage <= 1 ? 'pointer-events-none opacity-40' : 'cursor-pointer'}
+                              onClick={() => setFillPage(p => Math.max(1, p - 1))}
+                            />
+                          </PaginationItem>
+                          {Array.from({ length: Math.min(5, fillTotalPages) }, (_, i) => {
+                            let page: number;
+                            if (fillTotalPages <= 5) {
+                              page = i + 1;
+                            } else if (fillPage <= 3) {
+                              page = i + 1;
+                            } else if (fillPage >= fillTotalPages - 2) {
+                              page = fillTotalPages - 4 + i;
+                            } else {
+                              page = fillPage - 2 + i;
+                            }
+                            return (
+                              <PaginationItem key={page}>
+                                <PaginationLink
+                                  isActive={page === fillPage}
+                                  className="cursor-pointer"
+                                  onClick={() => setFillPage(page)}
+                                >
+                                  {page}
+                                </PaginationLink>
+                              </PaginationItem>
+                            );
+                          })}
+                          <PaginationItem>
+                            <PaginationNext
+                              className={fillPage >= fillTotalPages ? 'pointer-events-none opacity-40' : 'cursor-pointer'}
+                              onClick={() => setFillPage(p => Math.min(fillTotalPages, p + 1))}
+                            />
+                          </PaginationItem>
+                        </PaginationContent>
+                      </Pagination>
+                    </div>
+                  )}
                 </div>
 
-                {/* Footer note */}
-                <div className="text-center text-gray-500 text-sm pt-4">
-                  <p>Data sourced from protocol database. Synced every minute from PulseChain.</p>
-                </div>
+                {/* Order Book */}
+                {filteredActiveOrders.length > 0 && whitelist.length > 0 && (
+                  <OrderbookChart
+                    orders={filteredActiveOrders}
+                    tokenPrices={tokenPrices}
+                    whitelist={whitelist}
+                  />
+                )}
+
               </div>
             )}
           </div>

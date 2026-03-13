@@ -15,11 +15,11 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 function getEventXp(eventType: EventType, eventData: Record<string, unknown>): number {
   switch (eventType) {
     case 'order_created':
-      return ACTION_XP.ORDER_CREATED;       // 20 XP
+      return ACTION_XP.ORDER_CREATED;       // 0 XP (no reward until filled)
     case 'order_filled':
       return ACTION_XP.ORDER_FILLED;        // 25 XP
     case 'proceeds_claimed':
-      return ACTION_XP.PROCEEDS_CLAIMED;    // 10 XP
+      return ACTION_XP.PROCEEDS_CLAIMED;    // 0 XP (already rewarded on fill)
     case 'trade_completed': {
       // 25 XP (taker) or 30 XP (maker) + volume bonus (1 XP per $10 USD, capped at 100)
       const isMaker = (eventData.is_maker as boolean) || false;

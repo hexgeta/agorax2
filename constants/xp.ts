@@ -8,30 +8,31 @@
  */
 
 // XP rewards for on-chain actions
+// Only successfully filled orders earn XP (both maker and taker sides)
 export const ACTION_XP = {
-  // Order creation - rewarded when user creates a new limit order
-  ORDER_CREATED: 20,
+  // Order creation - no XP until it gets filled
+  ORDER_CREATED: 0,
 
-  // Order filled - rewarded when user fills someone else's order
-  ORDER_FILLED: 25,
+  // Order filled - rewarded when user fills someone else's order (taker)
+  ORDER_FILLED: 100,
 
   // Order filled as maker - rewarded when someone fills your order
-  ORDER_FILLED_AS_MAKER: 30,
+  ORDER_FILLED_AS_MAKER: 100,
 
-  // Claim proceeds - rewarded when user claims proceeds from a filled order
-  PROCEEDS_CLAIMED: 10,
+  // Claim proceeds - no XP (already rewarded on fill)
+  PROCEEDS_CLAIMED: 0,
 
-  // Order cancelled - no XP reward (or penalty)
+  // Order cancelled - no XP reward
   ORDER_CANCELLED: 0,
 
   // Wallet connected - no XP for connection
   WALLET_CONNECTED: 0,
 } as const;
 
-// Volume bonus: +1 XP per $10 USD traded, capped at this maximum
+// Volume bonus: +1 XP per $10 USD traded, uncapped
 export const VOLUME_BONUS = {
   XP_PER_USD: 0.1, // 1 XP per $10 = 0.1 XP per $1
-  MAX_BONUS_PER_TRADE: 100, // Cap bonus at 100 XP per trade
+  MAX_BONUS_PER_TRADE: Infinity, // No cap
 } as const;
 
 // Legion definitions with their symbols, names, and colors

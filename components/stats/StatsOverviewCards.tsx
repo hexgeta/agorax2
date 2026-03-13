@@ -34,6 +34,7 @@ interface StatsOverviewCardsProps {
   tokenPrices: Record<string, { price: number }>;
   contractOrders?: CompleteOrderDetails[]; // Orders from contract (more reliable)
   activeOrders?: CompleteOrderDetails[]; // Currently active unfilled orders
+  dbTvl?: number; // TVL calculated from DB remaining_sell_amount (accurate, no contract read needed)
 }
 
 interface StatCardProps {
@@ -73,7 +74,7 @@ function StatCard({ label, value, subValue, dotColor }: StatCardProps) {
   );
 }
 
-export default function StatsOverviewCards({ transactions, orders, tokenPrices, contractOrders = [], activeOrders = [] }: StatsOverviewCardsProps) {
+export default function StatsOverviewCards({ transactions, orders, tokenPrices, contractOrders = [], activeOrders = [], dbTvl }: StatsOverviewCardsProps) {
   // Use contract orders if event orders are empty (more reliable source)
   const effectiveOrderCount = contractOrders.length > 0 ? contractOrders.length : orders.length;
 
@@ -164,8 +165,10 @@ export default function StatsOverviewCards({ transactions, orders, tokenPrices, 
     return (totalTradingVolume / totalListedVolume) * 100;
   }, [totalTradingVolume, totalListedVolume]);
 
-  // Calculate Total Value Locked (TVL) - USD value of active unfilled orders
+  // Calculate Total Value Locked (TVL) - USD value of remaining sell amounts in active orders
+  // Prefer dbTvl (from DB remaining_sell_amount) as it's available instantly and accurate
   const totalValueLocked = useMemo(() => {
+    if (dbTvl !== undefined) return dbTvl;
     return activeOrders.reduce((sum, order) => {
       const sellTokenAddr = order.orderDetailsWithID.orderDetails.sellToken;
       const sellTokenInfo = getTokenInfo(sellTokenAddr);
@@ -173,7 +176,7 @@ export default function StatsOverviewCards({ transactions, orders, tokenPrices, 
       const price = getTokenPrice(sellTokenAddr, tokenPrices);
       return sum + (sellAmount * price);
     }, 0);
-  }, [activeOrders, tokenPrices]);
+  }, [activeOrders, tokenPrices, dbTvl]);
 
   // Calculate order counts by status (0 = Active/Expired, 1 = Cancelled, 2 = Filled)
   const orderCounts = useMemo(() => {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 import { formatUSD, getTokenPrice } from '@/utils/format';
@@ -120,11 +120,37 @@ export default function TopTokensChart({ transactions, orders, tokenPrices, cont
       .slice(0, 10);
   }, [transactions, orders, tokenPrices, contractOrders]);
 
+  type SortKey = 'total' | 'ticker' | 'listedVolume' | 'tradedVolume';
+  const [sortKey, setSortKey] = useState<SortKey>('total');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortKey(key);
+      setSortDir('desc');
+    }
+  }
+
+  const sortedTokenStats = useMemo(() => {
+    const dir = sortDir === 'asc' ? 1 : -1;
+    return [...tokenStats].sort((a, b) => {
+      if (sortKey === 'total') {
+        return ((a.listedVolume + a.tradedVolume) - (b.listedVolume + b.tradedVolume)) * dir;
+      }
+      if (sortKey === 'ticker') {
+        return a.ticker.localeCompare(b.ticker) * dir;
+      }
+      return (a[sortKey] - b[sortKey]) * dir;
+    });
+  }, [tokenStats, sortKey, sortDir]);
+
   if (tokenStats.length === 0) {
     return null;
   }
 
-  const maxVolume = tokenStats[0] ? tokenStats[0].listedVolume + tokenStats[0].tradedVolume : 1;
+  const maxVolume = sortedTokenStats[0] ? sortedTokenStats[0].listedVolume + sortedTokenStats[0].tradedVolume : 1;
 
   return (
     <LiquidGlassCard
@@ -139,15 +165,23 @@ export default function TopTokensChart({ transactions, orders, tokenPrices, cont
         {/* Header */}
         <div className="grid grid-cols-12 gap-2 text-gray-400 text-xs font-medium pb-2 border-b border-white/10">
           <div className="col-span-1">#</div>
-          <div className="col-span-2">Token</div>
-          <div className="col-span-3 text-right">Listed</div>
-          <div className="col-span-2 text-right">Filled</div>
-          <div className="col-span-2 text-right">Total</div>
+          <div className="col-span-2 cursor-pointer hover:text-white select-none" onClick={() => toggleSort('ticker')}>
+            Token{sortKey === 'ticker' && <span className="ml-1 text-white/60">{sortDir === 'asc' ? '▲' : '▼'}</span>}
+          </div>
+          <div className="col-span-3 text-right cursor-pointer hover:text-white select-none" onClick={() => toggleSort('listedVolume')}>
+            Listed{sortKey === 'listedVolume' && <span className="ml-1 text-white/60">{sortDir === 'asc' ? '▲' : '▼'}</span>}
+          </div>
+          <div className="col-span-2 text-right cursor-pointer hover:text-white select-none" onClick={() => toggleSort('tradedVolume')}>
+            Filled{sortKey === 'tradedVolume' && <span className="ml-1 text-white/60">{sortDir === 'asc' ? '▲' : '▼'}</span>}
+          </div>
+          <div className="col-span-2 text-right cursor-pointer hover:text-white select-none" onClick={() => toggleSort('total')}>
+            Total{sortKey === 'total' && <span className="ml-1 text-white/60">{sortDir === 'asc' ? '▲' : '▼'}</span>}
+          </div>
           <div className="col-span-2 text-right"></div>
         </div>
 
         {/* Rows */}
-        {tokenStats.map((token, index) => {
+        {sortedTokenStats.map((token, index) => {
           const totalVolume = token.listedVolume + token.tradedVolume;
           const barWidth = (totalVolume / maxVolume) * 100;
           const isSelected = selectedToken?.toLowerCase() === token.address.toLowerCase();
@@ -207,11 +241,11 @@ export default function TopTokensChart({ transactions, orders, tokenPrices, cont
                   <Link
                     href={`/marketplace?ticker=${formatTokenTicker(token.ticker)}`}
                     onClick={(e) => e.stopPropagation()}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-black text-white border border-white text-xs font-medium rounded-full hover:bg-white/10 transition-colors"
+                    className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/10 hover:bg-white/20 border border-white/20 rounded-full text-white text-xs font-medium transition-colors"
                   >
                     Marketplace
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.25 4.5l7.5 7.5-7.5 7.5" />
                     </svg>
                   </Link>
                 </div>
