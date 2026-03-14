@@ -3514,6 +3514,20 @@ export const TOKEN_CONSTANTS = [{
   ticker: "PAI",
   decimals: 18,
   name: "Pulse Dai"
+}, {
+  chain: 369,
+  a: "0xf6f8db0aba00007681f8faf16a0fda1c9b030b11",
+  dexs: null,
+  ticker: "PRVX",
+  decimals: 18,
+  name: "ProveX"
+}, {
+  chain: 369,
+  a: "0x89f5d1c22394b4761f3bf746b60d54de03b59ec6",
+  dexs: null,
+  ticker: "GIZMO",
+  decimals: 18,
+  name: "Gizmo"
 }];
 
 export const API_ENDPOINTS = {
