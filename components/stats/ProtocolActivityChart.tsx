@@ -40,9 +40,11 @@ type TimeRange = '1D' | '1W' | '1M' | '1Y' | 'ALL';
 function getTimeRangeStart(range: TimeRange): Date | null {
   if (range === 'ALL') return null;
   const now = new Date();
+  // Use start of today (UTC) as the base, so "1D" = today only
+  now.setUTCHours(0, 0, 0, 0);
   switch (range) {
-    case '1D': now.setDate(now.getDate() - 1); break;
-    case '1W': now.setDate(now.getDate() - 7); break;
+    case '1D': break; // today only
+    case '1W': now.setDate(now.getDate() - 6); break; // 7 days including today
     case '1M': now.setMonth(now.getMonth() - 1); break;
     case '1Y': now.setFullYear(now.getFullYear() - 1); break;
   }
@@ -392,16 +394,6 @@ export default function ProtocolActivityChart({ transactions, orders, contractOr
           <Area
             yAxisId="right"
             type="monotone"
-            dataKey="cumulativeListedVolume"
-            stroke="#EC4899"
-            strokeWidth={2}
-            strokeOpacity={0.6}
-            fill="url(#colorListedVolume)"
-            name="Listed"
-          />
-          <Area
-            yAxisId="right"
-            type="monotone"
             dataKey="cumulativeFilledVolume"
             stroke="#4ADE80"
             strokeWidth={2}
@@ -409,18 +401,28 @@ export default function ProtocolActivityChart({ transactions, orders, contractOr
             fill="url(#colorFilledVolume)"
             name="Filled"
           />
+          <Area
+            yAxisId="right"
+            type="monotone"
+            dataKey="cumulativeListedVolume"
+            stroke="#EC4899"
+            strokeWidth={2}
+            strokeOpacity={0.6}
+            fill="url(#colorListedVolume)"
+            name="Listed"
+          />
           {/* Daily volume bars */}
           <Bar
             yAxisId="left"
-            dataKey="listedVolume"
-            fill="#EC4899"
+            dataKey="filledVolume"
+            fill="#4ADE80"
             radius={[4, 4, 0, 0]}
             legendType="none"
           />
           <Bar
             yAxisId="left"
-            dataKey="filledVolume"
-            fill="#4ADE80"
+            dataKey="listedVolume"
+            fill="#EC4899"
             radius={[4, 4, 0, 0]}
             legendType="none"
           />
