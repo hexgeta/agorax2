@@ -396,16 +396,7 @@ export default function TopTradersLeaderboard({ transactions, orders, tokenPrice
       shadowIntensity="none"
       glowIntensity="none"
     >
-      <div className="flex flex-wrap items-center gap-2 mb-6">
-        <h3 className="text-2xl font-bold text-white">Top Traders</h3>
-        <input
-          type="text"
-          placeholder="Search by address..."
-          value={searchQuery}
-          onChange={(e) => onSearchChange?.(e.target.value)}
-          className="ml-auto px-4 py-2 bg-black/70 border border-white/10 rounded-full text-white text-sm placeholder-gray-500 focus:outline-none focus:border-white/30 transition-colors w-64"
-        />
-      </div>
+      <h3 className="text-2xl font-bold text-white mb-6">Top Traders</h3>
 
       {isLoading ? (
         <div className="flex items-center justify-center py-12">
