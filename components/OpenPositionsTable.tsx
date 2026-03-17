@@ -416,7 +416,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
   const { hasTokenAccess, partyBalance, teamBalance, isChecking: checkingTokenBalance } = useTokenAccess();
 
   // Load whitelist from contract to populate the cache for token lookups
-  useContractWhitelistRead();
+  const { activeTokens: whitelistTokens } = useContractWhitelistRead();
 
   // Expose refresh function to parent component
   useImperativeHandle(ref, () => ({
@@ -2740,8 +2740,22 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
       return effectiveDirection === 'asc' ? comparison : -comparison;
     });
 
+    // When searching, prioritize exact ticker matches over partial matches
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      sortedOrders.sort((a, b) => {
+        const aExact = getTokenInfo(a.orderDetailsWithID.orderDetails.sellToken).ticker.toLowerCase() === query ||
+          a.orderDetailsWithID.orderDetails.buyTokensIndex.some(idx => getTokenInfoByIndex(Number(idx)).ticker.toLowerCase() === query);
+        const bExact = getTokenInfo(b.orderDetailsWithID.orderDetails.sellToken).ticker.toLowerCase() === query ||
+          b.orderDetailsWithID.orderDetails.buyTokensIndex.some(idx => getTokenInfoByIndex(Number(idx)).ticker.toLowerCase() === query);
+        if (aExact && !bExact) return -1;
+        if (!aExact && bExact) return 1;
+        return 0;
+      });
+    }
+
     return sortedOrders;
-  }, [allOrders, tokenFilter, ownershipFilter, statusFilter, searchQuery, aonFilterEnabled, hideMyOrders, favoritesOnly, favoriteOrderIds, dustFilterEnabled, dustFilterMinValue, fillRange, positionRange, claimableFilterEnabled, isMarketplaceMode, getActiveDateRange, sortField, sortDirection, tokenPrices, tokenStats, address, purchasedOrderIds, purchaseTransactions]);
+  }, [allOrders, tokenFilter, ownershipFilter, statusFilter, searchQuery, aonFilterEnabled, hideMyOrders, favoritesOnly, favoriteOrderIds, dustFilterEnabled, dustFilterMinValue, fillRange, positionRange, claimableFilterEnabled, isMarketplaceMode, getActiveDateRange, sortField, sortDirection, tokenPrices, tokenStats, address, purchasedOrderIds, purchaseTransactions, whitelistTokens.length]);
 
   // Helper functions
   const formatTimestamp = (timestamp: number) => {
@@ -3846,6 +3860,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
             searchTerm={searchQuery}
             maxiTokenAddresses={maxiTokenAddresses}
             onNavigateToMarketplace={navigateToMarketplaceOrder}
+            whitelistLength={whitelistTokens.length}
           />
         </div>
       ) : (

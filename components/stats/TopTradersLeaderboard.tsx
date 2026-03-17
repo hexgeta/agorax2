@@ -357,11 +357,38 @@ export default function TopTradersLeaderboard({ transactions, orders, tokenPrice
     return rankedUsers.filter(user => user.address.toLowerCase().includes(q));
   }, [rankedUsers, searchQuery, contractOrders, orders, transactions]);
 
-  const PAGE_SIZE = 20;
+  type LeaderboardSortKey = 'rank' | 'totalXp' | 'listedVolumeUsd' | 'gotFilledVolumeUsd' | 'filledVolumeUsd' | 'totalVolume';
+  const [lbSortKey, setLbSortKey] = useState<LeaderboardSortKey>('rank');
+  const [lbSortDir, setLbSortDir] = useState<'asc' | 'desc'>('asc');
+
+  function toggleLbSort(key: LeaderboardSortKey) {
+    if (lbSortKey === key) {
+      setLbSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setLbSortKey(key);
+      setLbSortDir(key === 'rank' ? 'asc' : 'desc');
+    }
+    setPage(1);
+  }
+
+  const sortedUsers = useMemo(() => {
+    if (lbSortKey === 'rank') {
+      return lbSortDir === 'asc' ? filteredUsers : [...filteredUsers].reverse();
+    }
+    const dir = lbSortDir === 'asc' ? 1 : -1;
+    return [...filteredUsers].sort((a, b) => {
+      if (lbSortKey === 'totalVolume') {
+        return ((a.filledVolumeUsd + a.gotFilledVolumeUsd) - (b.filledVolumeUsd + b.gotFilledVolumeUsd)) * dir;
+      }
+      return (a[lbSortKey] - b[lbSortKey]) * dir;
+    });
+  }, [filteredUsers, lbSortKey, lbSortDir]);
+
+  const PAGE_SIZE = 10;
   const [page, setPage] = useState(1);
   useEffect(() => { setPage(1); }, [searchQuery]);
-  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / PAGE_SIZE));
-  const paginatedUsers = filteredUsers.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(sortedUsers.length / PAGE_SIZE));
+  const paginatedUsers = sortedUsers.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
     <LiquidGlassCard
@@ -370,7 +397,7 @@ export default function TopTradersLeaderboard({ transactions, orders, tokenPrice
       glowIntensity="none"
     >
       <div className="flex flex-wrap items-center gap-2 mb-6">
-        <h3 className="text-2xl font-bold text-white">Trader Leaderboard</h3>
+        <h3 className="text-2xl font-bold text-white">Top Traders</h3>
         <input
           type="text"
           placeholder="Search by address..."
@@ -391,13 +418,25 @@ export default function TopTradersLeaderboard({ transactions, orders, tokenPrice
           <table className="w-full min-w-[1000px]">
             <thead>
               <tr className="border-b border-white/10">
-                <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Rank</th>
+                <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap cursor-pointer hover:text-white select-none" onClick={() => toggleLbSort('rank')}>
+                  Rank{lbSortKey === 'rank' && <span className="ml-1 text-white/60">{lbSortDir === 'asc' ? '▲' : '▼'}</span>}
+                </th>
                 <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Trader</th>
-                <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">XP</th>
-                <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Listed</th>
-                <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Got Filled</th>
-                <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">They Filled</th>
-                <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Total Vol. Traded</th>
+                <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap cursor-pointer hover:text-white select-none" onClick={() => toggleLbSort('totalXp')}>
+                  XP{lbSortKey === 'totalXp' && <span className="ml-1 text-white/60">{lbSortDir === 'asc' ? '▲' : '▼'}</span>}
+                </th>
+                <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap cursor-pointer hover:text-white select-none" onClick={() => toggleLbSort('listedVolumeUsd')}>
+                  Listed{lbSortKey === 'listedVolumeUsd' && <span className="ml-1 text-white/60">{lbSortDir === 'asc' ? '▲' : '▼'}</span>}
+                </th>
+                <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap cursor-pointer hover:text-white select-none" onClick={() => toggleLbSort('gotFilledVolumeUsd')}>
+                  Got Filled{lbSortKey === 'gotFilledVolumeUsd' && <span className="ml-1 text-white/60">{lbSortDir === 'asc' ? '▲' : '▼'}</span>}
+                </th>
+                <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap cursor-pointer hover:text-white select-none" onClick={() => toggleLbSort('filledVolumeUsd')}>
+                  They Filled{lbSortKey === 'filledVolumeUsd' && <span className="ml-1 text-white/60">{lbSortDir === 'asc' ? '▲' : '▼'}</span>}
+                </th>
+                <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap cursor-pointer hover:text-white select-none" onClick={() => toggleLbSort('totalVolume')}>
+                  Total Vol. Traded{lbSortKey === 'totalVolume' && <span className="ml-1 text-white/60">{lbSortDir === 'asc' ? '▲' : '▼'}</span>}
+                </th>
               </tr>
             </thead>
             <tbody>

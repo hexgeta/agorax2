@@ -96,6 +96,7 @@ interface OrderHistoryTableProps {
   searchTerm: string;
   maxiTokenAddresses: string[];
   onNavigateToMarketplace: (order: any) => void;
+  whitelistLength?: number;
 }
 
 // Format USD amount without scientific notation
@@ -183,7 +184,8 @@ export default function OrderHistoryTable({
   tokenFilter,
   searchTerm,
   maxiTokenAddresses,
-  onNavigateToMarketplace
+  onNavigateToMarketplace,
+  whitelistLength = 0
 }: OrderHistoryTableProps) {
   const { address, chainId } = useAccount();
   const publicClient = usePublicClient();
@@ -374,7 +376,7 @@ export default function OrderHistoryTable({
     });
 
     return rows;
-  }, [purchaseTransactions, allOrders, tokenFilter, searchTerm, maxiTokenAddresses, tokenPrices, sortField, sortDirection]);
+  }, [purchaseTransactions, allOrders, tokenFilter, searchTerm, maxiTokenAddresses, tokenPrices, sortField, sortDirection, whitelistLength]);
 
   if (displayRows.length === 0) {
     return (

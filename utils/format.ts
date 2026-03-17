@@ -251,17 +251,19 @@ export function formatPriceSigFig(price: number, sigFigs = 3): string {
     return '$' + price.toFixed(2);
   }
 
-  // For small numbers, count leading zeros after decimal point
-  const str = price.toString();
-  const [, decimal = ''] = str.split('.');
-  let leadingZeros = 0;
-  for (const char of decimal) {
-    if (char === '0') leadingZeros++;
-    else break;
+  // For small numbers, calculate leading zeros from magnitude
+  const leadingZeros = Math.max(0, Math.floor(-Math.log10(price)) - 1);
+
+  // Use scientific notation for very small numbers (7+ leading zeros)
+  if (leadingZeros >= 7) {
+    return '$' + price.toExponential(sigFigs - 1);
   }
 
-  // Show all leading zeros plus 3 significant digits
-  const totalDecimals = Math.max(leadingZeros + 3, 2);
+  // Ensure we show at least leading zeros + sigFigs digits after decimal
+  const neededDecimals = leadingZeros + 1 + sigFigs;
+
+  // Show all leading zeros plus significant digits
+  const totalDecimals = Math.max(neededDecimals, 2);
   return '$' + price.toFixed(totalDecimals);
 }
 

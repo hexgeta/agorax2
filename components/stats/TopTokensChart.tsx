@@ -36,6 +36,7 @@ interface TopTokensChartProps {
   contractOrders?: CompleteOrderDetails[];
   onTokenSelect?: (address: string, ticker: string) => void;
   selectedToken?: string;
+  selectedTokens?: string[];
 }
 
 interface TokenStats {
@@ -47,7 +48,7 @@ interface TokenStats {
   fillCount: number;
 }
 
-export default function TopTokensChart({ transactions, orders, tokenPrices, contractOrders = [], onTokenSelect, selectedToken }: TopTokensChartProps) {
+export default function TopTokensChart({ transactions, orders, tokenPrices, contractOrders = [], onTokenSelect, selectedToken, selectedTokens }: TopTokensChartProps) {
   // Calculate token stats
   const tokenStats = useMemo(() => {
     const stats: Record<string, TokenStats> = {};
@@ -123,6 +124,8 @@ export default function TopTokensChart({ transactions, orders, tokenPrices, cont
   type SortKey = 'total' | 'ticker' | 'listedVolume' | 'tradedVolume';
   const [sortKey, setSortKey] = useState<SortKey>('total');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [tokenPage, setTokenPage] = useState(1);
+  const TOKEN_PAGE_SIZE = 10;
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) {
@@ -131,6 +134,7 @@ export default function TopTokensChart({ transactions, orders, tokenPrices, cont
       setSortKey(key);
       setSortDir('desc');
     }
+    setTokenPage(1);
   }
 
   const sortedTokenStats = useMemo(() => {
@@ -150,6 +154,8 @@ export default function TopTokensChart({ transactions, orders, tokenPrices, cont
     return null;
   }
 
+  const tokenTotalPages = Math.max(1, Math.ceil(sortedTokenStats.length / TOKEN_PAGE_SIZE));
+  const paginatedTokenStats = sortedTokenStats.slice((tokenPage - 1) * TOKEN_PAGE_SIZE, tokenPage * TOKEN_PAGE_SIZE);
   const maxVolume = sortedTokenStats[0] ? sortedTokenStats[0].listedVolume + sortedTokenStats[0].tradedVolume : 1;
 
   return (
@@ -181,10 +187,13 @@ export default function TopTokensChart({ transactions, orders, tokenPrices, cont
         </div>
 
         {/* Rows */}
-        {sortedTokenStats.map((token, index) => {
+        {paginatedTokenStats.map((token, index) => {
+          const globalIndex = (tokenPage - 1) * TOKEN_PAGE_SIZE + index;
           const totalVolume = token.listedVolume + token.tradedVolume;
           const barWidth = (totalVolume / maxVolume) * 100;
-          const isSelected = selectedToken?.toLowerCase() === token.address.toLowerCase();
+          const isSelected = selectedTokens
+            ? selectedTokens.some(t => t.toLowerCase() === token.address.toLowerCase())
+            : selectedToken?.toLowerCase() === token.address.toLowerCase();
 
           return (
             <div
@@ -201,8 +210,8 @@ export default function TopTokensChart({ transactions, orders, tokenPrices, cont
               {/* Content */}
               <div className="grid grid-cols-12 gap-2 items-center py-2.5 px-1 relative">
                 <div className="col-span-1">
-                  <span className={`text-sm font-bold ${index < 3 ? 'text-white' : 'text-gray-500'}`}>
-                    {index + 1}
+                  <span className={`text-sm font-bold ${globalIndex < 3 ? 'text-white' : 'text-gray-500'}`}>
+                    {globalIndex + 1}
                   </span>
                 </div>
                 <div className="col-span-2">
@@ -255,6 +264,28 @@ export default function TopTokensChart({ transactions, orders, tokenPrices, cont
         })}
       </div>
       </div>
+
+      {tokenTotalPages > 1 && (
+        <div className="flex items-center justify-center gap-3 mt-4">
+          <button
+            onClick={() => setTokenPage(p => Math.max(1, p - 1))}
+            disabled={tokenPage === 1}
+            className="px-3 py-1 text-sm rounded bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          >
+            Prev
+          </button>
+          <span className="text-gray-500 text-sm">
+            {tokenPage} / {tokenTotalPages}
+          </span>
+          <button
+            onClick={() => setTokenPage(p => Math.min(tokenTotalPages, p + 1))}
+            disabled={tokenPage === tokenTotalPages}
+            className="px-3 py-1 text-sm rounded bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          >
+            Next
+          </button>
+        </div>
+      )}
 
       <p className="text-gray-500 text-xs mt-4 text-center">
         Listed = sell token value in orders | Filled = value exchanged in fills

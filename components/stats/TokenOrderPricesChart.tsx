@@ -314,7 +314,7 @@ export default function TokenOrderPricesChart({ orders, tokenPrices, whitelist, 
               tick={{ fill: '#9CA3AF', fontSize: 12 }}
               tickLine={{ stroke: '#FFFFFF20' }}
               axisLine={{ stroke: '#FFFFFF20' }}
-              width={80}
+              width={90}
             />
             <ReferenceLine
               y={displayToken.marketPrice}

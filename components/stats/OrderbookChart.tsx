@@ -210,7 +210,7 @@ export default function OrderbookChart({ orders, tokenPrices, whitelist }: Order
             impliedPrice = sellValueUSD / proportionalBuyAmount;
             marketPrice = effectiveBuyPrice;
             tokenTicker = buyTokenInfo.ticker;
-            valueUSD = askingValueUSD;
+            valueUSD = sellValueUSD;
             uniqueKey = `${orderId}-buy-${sellTokenInfo.ticker}`;
             counterToken = sellTokenInfo.ticker;
           }
@@ -361,7 +361,7 @@ export default function OrderbookChart({ orders, tokenPrices, whitelist }: Order
               const href = isOwnOrder
                 ? `/my-orders?orderId=${order.orderId}`
                 : `/marketplace?order-id=${order.orderId}`;
-              const actionLabel = order.isSelling ? 'Buy' : 'Sell';
+              const actionLabel = order.isSelling ? 'Sell' : 'Buy';
 
               return (
                 <Link
@@ -378,7 +378,7 @@ export default function OrderbookChart({ orders, tokenPrices, whitelist }: Order
                     <span className={`ml-1 ${order.isSelling ? 'text-pink-400/60' : 'text-green-400/60'}`}>({vsMarket > 0 ? '+' : ''}{vsMarket.toFixed(1)}%)</span>
                   </span>
                   <span className="relative col-span-4 text-gray-400">
-                    {order.isSelling ? `${formatTokenTicker(order.sellToken)} → ${formatTokenTicker(order.buyToken)}` : `${formatTokenTicker(order.buyToken)} → ${formatTokenTicker(order.sellToken)}`}
+                    {`${formatTokenTicker(order.sellToken)} → ${formatTokenTicker(order.buyToken)}`}
                     <span className={`ml-2 text-xs ${isOwnOrder ? 'text-gray-500' : 'text-white'}`}>{isOwnOrder ? 'Manage' : actionLabel}</span>
                   </span>
                   <span className="relative col-span-4 text-white text-right">{formatUSD(order.valueUSD)}</span>
@@ -406,7 +406,7 @@ export default function OrderbookChart({ orders, tokenPrices, whitelist }: Order
               const href = isOwnOrder
                 ? `/my-orders?orderId=${order.orderId}`
                 : `/marketplace?order-id=${order.orderId}`;
-              const actionLabel = order.isSelling ? 'Buy' : 'Sell';
+              const actionLabel = order.isSelling ? 'Sell' : 'Buy';
 
               return (
                 <Link
@@ -423,7 +423,7 @@ export default function OrderbookChart({ orders, tokenPrices, whitelist }: Order
                     <span className={`ml-1 ${order.isSelling ? 'text-pink-400/60' : 'text-green-400/60'}`}>({vsMarket > 0 ? '+' : ''}{vsMarket.toFixed(1)}%)</span>
                   </span>
                   <span className="relative col-span-4 text-gray-400">
-                    {order.isSelling ? `${formatTokenTicker(order.sellToken)} → ${formatTokenTicker(order.buyToken)}` : `${formatTokenTicker(order.buyToken)} → ${formatTokenTicker(order.sellToken)}`}
+                    {`${formatTokenTicker(order.sellToken)} → ${formatTokenTicker(order.buyToken)}`}
                     <span className={`ml-2 text-xs ${isOwnOrder ? 'text-gray-500' : 'text-white'}`}>{isOwnOrder ? 'Manage' : actionLabel}</span>
                   </span>
                   <span className="relative col-span-4 text-white text-right">{formatUSD(order.valueUSD)}</span>

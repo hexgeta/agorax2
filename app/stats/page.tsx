@@ -331,11 +331,11 @@ export default function Stats2Page() {
   // Use pre-fetched data from context (loaded on any page, polled every 60s)
   const { dbOrders, dbFills, isLoading, error, refetch: fetchData } = useStatsData();
 
-  const [selectedTokenFilter, setSelectedTokenFilter] = useState<{ address: string; ticker: string } | null>(null);
+  const [selectedTokenFilters, setSelectedTokenFilters] = useState<{ address: string; ticker: string }[]>([]);
   const [selectedTraderFilter, setSelectedTraderFilter] = useState<string | null>(null);
   const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | 'active' | 'completed' | 'cancelled'>('all');
-  const [orderSearchQuery, setOrderSearchQuery] = useState('');
-  const [fillSearchQuery, setFillSearchQuery] = useState('');
+  const [addressSearch, setAddressSearch] = useState('');
+  const [orderIdSearch, setOrderIdSearch] = useState('');
   const [orderPage, setOrderPage] = useState(1);
   const [fillPage, setFillPage] = useState(1);
   const PAGE_SIZE = 20;
@@ -442,42 +442,58 @@ export default function Stats2Page() {
 
   const filteredTransactions = useMemo(() => {
     let result = transactions;
-    if (selectedTokenFilter) {
-      const tokenAddr = selectedTokenFilter.address.toLowerCase();
+    if (selectedTokenFilters.length > 0) {
+      const tokenAddrs = selectedTokenFilters.map(t => t.address.toLowerCase());
       result = result.filter(tx =>
-        tx.sellToken.toLowerCase() === tokenAddr ||
-        Object.keys(tx.buyTokens).some(addr => addr.toLowerCase() === tokenAddr)
+        tokenAddrs.some(addr => tx.sellToken.toLowerCase() === addr ||
+          Object.keys(tx.buyTokens).some(a => a.toLowerCase() === addr))
       );
     }
     if (selectedTraderFilter) {
       const traderAddr = selectedTraderFilter.toLowerCase();
       result = result.filter(tx => tx.buyer?.toLowerCase() === traderAddr);
     }
+    if (addressSearch.trim()) {
+      const query = addressSearch.toLowerCase().trim();
+      result = result.filter(tx => tx.buyer?.toLowerCase().includes(query));
+    }
+    if (orderIdSearch.trim()) {
+      const query = orderIdSearch.trim();
+      result = result.filter(tx => tx.orderId === query);
+    }
     return result;
-  }, [transactions, selectedTokenFilter, selectedTraderFilter]);
+  }, [transactions, selectedTokenFilters, selectedTraderFilter, addressSearch, orderIdSearch]);
 
   const filteredOrders = useMemo(() => {
     let result = orders;
-    if (selectedTokenFilter) {
-      const tokenAddr = selectedTokenFilter.address.toLowerCase();
-      result = result.filter(order => order.sellToken.toLowerCase() === tokenAddr);
+    if (selectedTokenFilters.length > 0) {
+      const tokenAddrs = selectedTokenFilters.map(t => t.address.toLowerCase());
+      result = result.filter(order => tokenAddrs.includes(order.sellToken.toLowerCase()));
     }
     if (selectedTraderFilter) {
       const traderAddr = selectedTraderFilter.toLowerCase();
       result = result.filter(order => order.orderOwner.toLowerCase() === traderAddr);
     }
+    if (addressSearch.trim()) {
+      const query = addressSearch.toLowerCase().trim();
+      result = result.filter(order => order.orderOwner.toLowerCase().includes(query));
+    }
+    if (orderIdSearch.trim()) {
+      const query = orderIdSearch.trim();
+      result = result.filter(order => order.orderId === query);
+    }
     return result;
-  }, [orders, selectedTokenFilter, selectedTraderFilter]);
+  }, [orders, selectedTokenFilters, selectedTraderFilter, addressSearch, orderIdSearch]);
 
   const filteredContractOrders = useMemo(() => {
     let result = contractOrders;
-    if (selectedTokenFilter) {
-      const tokenAddr = selectedTokenFilter.address.toLowerCase();
+    if (selectedTokenFilters.length > 0) {
+      const tokenAddrs = selectedTokenFilters.map(t => t.address.toLowerCase());
       result = result.filter(order =>
-        order.orderDetailsWithID.orderDetails.sellToken.toLowerCase() === tokenAddr ||
+        tokenAddrs.includes(order.orderDetailsWithID.orderDetails.sellToken.toLowerCase()) ||
         order.orderDetailsWithID.orderDetails.buyTokensIndex.some((idx) => {
           const addr = whitelist[Number(idx)];
-          return addr && addr.toLowerCase() === tokenAddr;
+          return addr && tokenAddrs.includes(addr.toLowerCase());
         })
       );
     }
@@ -487,18 +503,30 @@ export default function Stats2Page() {
         order.userDetails.orderOwner?.toLowerCase() === traderAddr
       );
     }
+    if (addressSearch.trim()) {
+      const query = addressSearch.toLowerCase().trim();
+      result = result.filter(order =>
+        order.userDetails.orderOwner?.toLowerCase().includes(query)
+      );
+    }
+    if (orderIdSearch.trim()) {
+      const query = orderIdSearch.trim();
+      result = result.filter(order =>
+        order.orderDetailsWithID.orderID.toString() === query
+      );
+    }
     return result;
-  }, [contractOrders, selectedTokenFilter, selectedTraderFilter, whitelist]);
+  }, [contractOrders, selectedTokenFilters, selectedTraderFilter, whitelist, addressSearch, orderIdSearch]);
 
   const filteredActiveOrders = useMemo(() => {
     let result = activeOrders;
-    if (selectedTokenFilter) {
-      const tokenAddr = selectedTokenFilter.address.toLowerCase();
+    if (selectedTokenFilters.length > 0) {
+      const tokenAddrs = selectedTokenFilters.map(t => t.address.toLowerCase());
       result = result.filter(order =>
-        order.orderDetailsWithID.orderDetails.sellToken.toLowerCase() === tokenAddr ||
+        tokenAddrs.includes(order.orderDetailsWithID.orderDetails.sellToken.toLowerCase()) ||
         order.orderDetailsWithID.orderDetails.buyTokensIndex.some((idx) => {
           const addr = whitelist[Number(idx)];
-          return addr && addr.toLowerCase() === tokenAddr;
+          return addr && tokenAddrs.includes(addr.toLowerCase());
         })
       );
     }
@@ -508,8 +536,20 @@ export default function Stats2Page() {
         order.userDetails.orderOwner?.toLowerCase() === traderAddr
       );
     }
+    if (addressSearch.trim()) {
+      const query = addressSearch.toLowerCase().trim();
+      result = result.filter(order =>
+        order.userDetails.orderOwner?.toLowerCase().includes(query)
+      );
+    }
+    if (orderIdSearch.trim()) {
+      const query = orderIdSearch.trim();
+      result = result.filter(order =>
+        order.orderDetailsWithID.orderID.toString() === query
+      );
+    }
     return result;
-  }, [activeOrders, selectedTokenFilter, selectedTraderFilter, whitelist]);
+  }, [activeOrders, selectedTokenFilters, selectedTraderFilter, whitelist, addressSearch, orderIdSearch]);
 
   // ── Formatted data for tables ───────────────────────────────────────────
 
@@ -583,18 +623,6 @@ export default function Stats2Page() {
     if (orderStatusFilter !== 'all') {
       orders = orders.filter(order => order.status === orderStatusFilter);
     }
-    if (orderSearchQuery.trim()) {
-      const q = orderSearchQuery.trim().toLowerCase();
-      const isNumeric = /^\d+$/.test(q);
-      orders = orders.filter(order =>
-        order.id.toString() === q ||
-        (!isNumeric && (
-          order.maker.toLowerCase().includes(q) ||
-          order.sellToken.toLowerCase().includes(q) ||
-          order.buyToken.toLowerCase().includes(q)
-        ))
-      );
-    }
     // Sort
     const dir = orderSortDir === 'asc' ? 1 : -1;
     orders = [...orders].sort((a, b) => {
@@ -604,26 +632,33 @@ export default function Stats2Page() {
       return String(av).localeCompare(String(bv)) * dir;
     });
     return orders;
-  }, [formattedOrders, orderStatusFilter, orderSearchQuery, orderSortKey, orderSortDir]);
+  }, [formattedOrders, orderStatusFilter, orderSortKey, orderSortDir]);
 
   // Reset page when orders filter changes
-  useEffect(() => { setOrderPage(1); }, [orderStatusFilter, orderSearchQuery]);
+  useEffect(() => { setOrderPage(1); }, [orderStatusFilter, addressSearch, orderIdSearch]);
 
   const filteredFills = useMemo(() => {
     let fills = formattedFills;
-    if (fillSearchQuery.trim()) {
-      const q = fillSearchQuery.trim().toLowerCase();
-      const isNumeric = /^\d+$/.test(q);
+
+    if (selectedTokenFilters.length > 0) {
+      const tokenAddrs = selectedTokenFilters.map(t => t.address.toLowerCase());
       fills = fills.filter(fill =>
-        fill.orderId.toString() === q ||
-        (!isNumeric && (
-          fill.buyer.toLowerCase().includes(q) ||
-          fill.sellToken.toLowerCase().includes(q) ||
-          fill.buyToken.toLowerCase().includes(q) ||
-          fill.txHash.toLowerCase().includes(q)
-        ))
+        tokenAddrs.includes(fill.sellTokenAddress.toLowerCase()) || tokenAddrs.includes(fill.buyTokenAddress.toLowerCase())
       );
     }
+    if (selectedTraderFilter) {
+      const traderAddr = selectedTraderFilter.toLowerCase();
+      fills = fills.filter(fill => fill.buyer.toLowerCase() === traderAddr);
+    }
+    if (addressSearch.trim()) {
+      const query = addressSearch.toLowerCase().trim();
+      fills = fills.filter(fill => fill.buyer.toLowerCase().includes(query));
+    }
+    if (orderIdSearch.trim()) {
+      const query = orderIdSearch.trim();
+      fills = fills.filter(fill => fill.orderId === query);
+    }
+
     // Sort
     const dir = fillSortDir === 'asc' ? 1 : -1;
     fills = [...fills].sort((a, b) => {
@@ -633,10 +668,10 @@ export default function Stats2Page() {
       return String(av).localeCompare(String(bv)) * dir;
     });
     return fills;
-  }, [formattedFills, fillSearchQuery, fillSortKey, fillSortDir]);
+  }, [formattedFills, selectedTokenFilters, selectedTraderFilter, addressSearch, orderIdSearch, fillSortKey, fillSortDir]);
 
   // Reset page when fills filter changes
-  useEffect(() => { setFillPage(1); }, [fillSearchQuery]);
+  useEffect(() => { setFillPage(1); }, [addressSearch, orderIdSearch]);
 
   const orderTotalPages = Math.max(1, Math.ceil(filteredOrdersByStatus.length / PAGE_SIZE));
   const paginatedOrders = filteredOrdersByStatus.slice((orderPage - 1) * PAGE_SIZE, orderPage * PAGE_SIZE);
@@ -647,12 +682,14 @@ export default function Stats2Page() {
   // ── Event handlers ──────────────────────────────────────────────────────
 
   const handleTokenFilterSelect = useCallback((address: string, ticker: string) => {
-    if (selectedTokenFilter?.address.toLowerCase() === address.toLowerCase()) {
-      setSelectedTokenFilter(null);
-    } else {
-      setSelectedTokenFilter({ address, ticker });
-    }
-  }, [selectedTokenFilter]);
+    setSelectedTokenFilters(prev => {
+      const exists = prev.some(t => t.address.toLowerCase() === address.toLowerCase());
+      if (exists) {
+        return prev.filter(t => t.address.toLowerCase() !== address.toLowerCase());
+      }
+      return [...prev, { address, ticker }];
+    });
+  }, []);
 
   // ── Ready state ─────────────────────────────────────────────────────────
 
@@ -721,53 +758,80 @@ export default function Stats2Page() {
                 style={{ opacity: pageVisible ? 1 : 0, transition: 'opacity 0.6s ease-out' }}
                 className="space-y-6"
               >
-                {/* Filter Indicator */}
-                {(selectedTokenFilter || selectedTraderFilter) && (
-                  <div className="flex flex-wrap items-center gap-3 p-3 bg-white/5 border border-white/10 rounded-lg">
-                    <span className="text-gray-400 text-sm">Filtering by:</span>
-                    {selectedTokenFilter && (
-                      <div className="flex items-center gap-2 px-2 py-1 bg-white/10 rounded">
-                        <CoinLogo symbol={selectedTokenFilter.ticker} size="sm" />
-                        <span className="text-white font-medium">{formatTokenTicker(selectedTokenFilter.ticker)}</span>
+                {/* Filter Bar - sticky when any filter is active */}
+                <div className={`${(selectedTokenFilters.length > 0 || selectedTraderFilter || addressSearch || orderIdSearch) ? 'md:sticky md:top-24 z-20' : ''}`}>
+                  <div className="flex flex-wrap items-center gap-3 p-3 bg-black/80 backdrop-blur-md border border-white/10 rounded-lg">
+                    {/* Active filter pills */}
+                    {(selectedTokenFilters.length > 0 || selectedTraderFilter) && (
+                      <>
+                        <span className="text-gray-400 text-sm">Filtering by:</span>
+                        {selectedTokenFilters.map(token => (
+                          <div key={token.address} className="flex items-center gap-2 px-2 py-1 bg-white/10 rounded">
+                            <CoinLogo symbol={token.ticker} size="sm" />
+                            <span className="text-white font-medium">{formatTokenTicker(token.ticker)}</span>
+                            <button
+                              onClick={() => handleTokenFilterSelect(token.address, token.ticker)}
+                              className="text-gray-400 hover:text-white transition-colors"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </div>
+                        ))}
+                        {selectedTraderFilter && (
+                          <div className="flex items-center gap-2 px-2 py-1 bg-white/10 rounded">
+                            <span className="text-white font-mono text-sm">
+                              {selectedTraderFilter.slice(0, 6)}...{selectedTraderFilter.slice(-4)}
+                            </span>
+                            <button
+                              onClick={() => setSelectedTraderFilter(null)}
+                              className="text-gray-400 hover:text-white transition-colors"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    {/* Search inputs */}
+                    <div className="flex items-center gap-2 ml-auto">
+                      <input
+                        type="text"
+                        placeholder="Address..."
+                        value={addressSearch}
+                        onChange={(e) => setAddressSearch(e.target.value)}
+                        className="bg-white/5 border border-white/10 rounded px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-white/30 font-mono w-[380px]"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Order ID..."
+                        value={orderIdSearch}
+                        onChange={(e) => setOrderIdSearch(e.target.value)}
+                        className="bg-white/5 border border-white/10 rounded px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-white/30 font-mono w-[100px]"
+                      />
+                      {(selectedTokenFilters.length > 0 || selectedTraderFilter || addressSearch || orderIdSearch) && (
                         <button
-                          onClick={() => setSelectedTokenFilter(null)}
-                          className="text-gray-400 hover:text-white transition-colors"
+                          onClick={() => {
+                            setSelectedTokenFilters([]);
+                            setSelectedTraderFilter(null);
+                            setAddressSearch('');
+                            setOrderIdSearch('');
+                          }}
+                          className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-white/10 rounded transition-colors whitespace-nowrap"
                         >
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                           </svg>
+                          Clear all
                         </button>
-                      </div>
-                    )}
-                    {selectedTraderFilter && (
-                      <div className="flex items-center gap-2 px-2 py-1 bg-white/10 rounded">
-                        <span className="text-white font-mono text-sm">
-                          {selectedTraderFilter.slice(0, 6)}...{selectedTraderFilter.slice(-4)}
-                        </span>
-                        <button
-                          onClick={() => setSelectedTraderFilter(null)}
-                          className="text-gray-400 hover:text-white transition-colors"
-                        >
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      </div>
-                    )}
-                    <button
-                      onClick={() => {
-                        setSelectedTokenFilter(null);
-                        setSelectedTraderFilter(null);
-                      }}
-                      className="ml-auto flex items-center gap-1 px-3 py-1 text-sm text-gray-400 hover:text-white hover:bg-white/10 rounded transition-colors"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                      Clear all
-                    </button>
+                      )}
+                    </div>
                   </div>
-                )}
+                </div>
 
                 {/* Overview Stats Cards */}
                 <StatsOverviewCards
@@ -776,7 +840,7 @@ export default function Stats2Page() {
                   tokenPrices={tokenPrices}
                   contractOrders={filteredContractOrders}
                   activeOrders={filteredActiveOrders}
-                  dbTvl={dbTvl}
+                  dbTvl={(selectedTokenFilters.length > 0 || selectedTraderFilter || addressSearch || orderIdSearch) ? undefined : dbTvl}
                 />
 
                 {/* Protocol Activity Chart */}
@@ -789,12 +853,12 @@ export default function Stats2Page() {
 
                 {/* Top Tokens Chart */}
                 <TopTokensChart
-                  transactions={transactions}
-                  orders={orders}
+                  transactions={(addressSearch || orderIdSearch) ? filteredTransactions : transactions}
+                  orders={(addressSearch || orderIdSearch) ? filteredOrders : orders}
                   tokenPrices={tokenPrices}
-                  contractOrders={contractOrders}
+                  contractOrders={(addressSearch || orderIdSearch) ? filteredContractOrders : contractOrders}
                   onTokenSelect={handleTokenFilterSelect}
-                  selectedToken={selectedTokenFilter?.address}
+                  selectedTokens={selectedTokenFilters.map(t => t.address)}
                 />
 
                 {/* Leaderboard */}
@@ -803,15 +867,13 @@ export default function Stats2Page() {
                   orders={orders}
                   tokenPrices={tokenPrices}
                   contractOrders={contractOrders}
-                  searchQuery={orderSearchQuery}
+                  searchQuery={addressSearch}
                   onSearchChange={(q) => {
-                    setOrderSearchQuery(q);
-                    setFillSearchQuery(q);
+                    setAddressSearch(q);
                   }}
                   onTraderClick={(address) => {
-                    const toggle = orderSearchQuery.toLowerCase() === address.toLowerCase() ? '' : address;
-                    setOrderSearchQuery(toggle);
-                    setFillSearchQuery(toggle);
+                    const toggle = addressSearch.toLowerCase() === address.toLowerCase() ? '' : address;
+                    setAddressSearch(toggle);
                   }}
                 />
 
@@ -824,16 +886,7 @@ export default function Stats2Page() {
 
                 {/* All Orders Table */}
                 <div>
-                  <div className="flex flex-wrap items-center gap-2 mb-4">
-                    <h2 className="text-2xl font-bold text-white">All Orders</h2>
-                    <input
-                      type="text"
-                      placeholder="Search by ID, address, or token..."
-                      value={orderSearchQuery}
-                      onChange={(e) => setOrderSearchQuery(e.target.value)}
-                      className="ml-auto px-4 py-2 bg-black/70 border border-white/10 rounded-full text-white text-sm placeholder-gray-500 focus:outline-none focus:border-white/30 transition-colors w-64"
-                    />
-                  </div>
+                  <h2 className="text-2xl font-bold text-white mb-4">Orders</h2>
 
                   {/* Order Filters */}
                   <div className="flex flex-wrap items-center gap-2 mb-4">
@@ -890,7 +943,7 @@ export default function Stats2Page() {
                           {paginatedOrders.length === 0 ? (
                             <tr>
                               <td colSpan={9} className="py-8 text-center text-gray-500">
-                                {orderSearchQuery.trim() ? 'No orders match your search.' : 'No orders found with this filter.'}
+                                No orders found with this filter.
                               </td>
                             </tr>
                           ) : (
@@ -915,14 +968,13 @@ export default function Stats2Page() {
                                   <td className="py-4 px-2 text-center">
                                     <span
                                       className={`text-sm px-2.5 py-1 rounded-full inline-block cursor-pointer hover:opacity-80 transition-opacity ${
-                                        orderSearchQuery === order.id.toString() ? 'bg-white text-black font-medium' : 'text-gray-400 bg-white/5 border border-white/10'
+                                        orderIdSearch === order.id.toString() ? 'bg-white text-black font-medium' : 'text-gray-400 bg-white/5 border border-white/10'
                                       }`}
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         const idStr = order.id.toString();
-                                        const toggle = orderSearchQuery === idStr ? '' : idStr;
-                                        setOrderSearchQuery(toggle);
-                                        setFillSearchQuery(toggle);
+                                        const toggle = orderIdSearch === idStr ? '' : idStr;
+                                        setOrderIdSearch(toggle);
                                       }}
                                     >
                                       #{order.id}
@@ -938,9 +990,8 @@ export default function Stats2Page() {
                                             style={{ backgroundColor: color.bg, color: color.text, border: `1px solid ${color.border}` }}
                                             onClick={(e) => {
                                               e.stopPropagation();
-                                              const toggle = orderSearchQuery.toLowerCase() === order.maker.toLowerCase() ? '' : order.maker;
-                                              setOrderSearchQuery(toggle);
-                                              setFillSearchQuery(toggle);
+                                              const toggle = addressSearch.toLowerCase() === order.maker.toLowerCase() ? '' : order.maker;
+                                              setAddressSearch(toggle);
                                             }}
                                           >
                                             {formatAddress(order.maker)}
@@ -1062,14 +1113,7 @@ export default function Stats2Page() {
                 {/* All Fills Table */}
                 <div>
                   <div className="flex flex-wrap items-center gap-2 mb-4">
-                    <h2 className="text-2xl font-bold text-white">All Fills</h2>
-                    <input
-                      type="text"
-                      placeholder="Search by order ID, address, token, or tx..."
-                      value={fillSearchQuery}
-                      onChange={(e) => setFillSearchQuery(e.target.value)}
-                      className="ml-auto px-4 py-2 bg-black/70 border border-white/10 rounded-full text-white text-sm placeholder-gray-500 focus:outline-none focus:border-white/30 transition-colors w-64"
-                    />
+                    <h2 className="text-2xl font-bold text-white">Fill Events</h2>
                   </div>
                   <LiquidGlassCard
                     shadowIntensity="sm"
@@ -1109,7 +1153,7 @@ export default function Stats2Page() {
                           {paginatedFills.length === 0 ? (
                             <tr>
                               <td colSpan={9} className="py-8 text-center text-gray-500">
-                                {fillSearchQuery.trim() ? 'No fills match your search.' : 'No fills found.'}
+                                No fills found.
                               </td>
                             </tr>
                           ) : (
@@ -1121,14 +1165,13 @@ export default function Stats2Page() {
                                 <td className="py-4 px-2 text-center">
                                   <span
                                     className={`text-sm px-2.5 py-1 rounded-full inline-block cursor-pointer hover:opacity-80 transition-opacity ${
-                                      fillSearchQuery === fill.orderId.toString() ? 'bg-white text-black font-medium' : 'text-gray-400 bg-white/5 border border-white/10'
+                                      orderIdSearch === fill.orderId.toString() ? 'bg-white text-black font-medium' : 'text-gray-400 bg-white/5 border border-white/10'
                                     }`}
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       const idStr = fill.orderId.toString();
-                                      const toggle = fillSearchQuery === idStr ? '' : idStr;
-                                      setFillSearchQuery(toggle);
-                                      setOrderSearchQuery(toggle);
+                                      const toggle = orderIdSearch === idStr ? '' : idStr;
+                                      setOrderIdSearch(toggle);
                                     }}
                                   >
                                     #{fill.orderId}
@@ -1143,9 +1186,8 @@ export default function Stats2Page() {
                                         style={{ backgroundColor: color.bg, color: color.text, border: `1px solid ${color.border}` }}
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          const toggle = fillSearchQuery.toLowerCase() === fill.buyer.toLowerCase() ? '' : fill.buyer;
-                                          setFillSearchQuery(toggle);
-                                          setOrderSearchQuery(toggle);
+                                          const toggle = addressSearch.toLowerCase() === fill.buyer.toLowerCase() ? '' : fill.buyer;
+                                          setAddressSearch(toggle);
                                         }}
                                       >
                                         {formatAddress(fill.buyer)}

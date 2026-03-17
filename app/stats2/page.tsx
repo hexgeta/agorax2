@@ -134,9 +134,11 @@ export default function StatsPage() {
     timestamp: number;
   }
   const [fillEvents, setFillEvents] = useState<FillEvent[]>([]);
-  const [selectedTokenFilter, setSelectedTokenFilter] = useState<{ address: string; ticker: string } | null>(null);
+  const [selectedTokenFilters, setSelectedTokenFilters] = useState<{ address: string; ticker: string }[]>([]);
   const [selectedTraderFilter, setSelectedTraderFilter] = useState<string | null>(null);
   const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | 'active' | 'completed' | 'cancelled'>('all');
+  const [addressSearch, setAddressSearch] = useState('');
+  const [orderIdSearch, setOrderIdSearch] = useState('');
 
   const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
@@ -381,11 +383,11 @@ export default function StatsPage() {
   const filteredTransactions = useMemo(() => {
     let result = transactions;
 
-    if (selectedTokenFilter) {
-      const tokenAddr = selectedTokenFilter.address.toLowerCase();
+    if (selectedTokenFilters.length > 0) {
+      const tokenAddrs = selectedTokenFilters.map(t => t.address.toLowerCase());
       result = result.filter(tx =>
-        tx.sellToken.toLowerCase() === tokenAddr ||
-        Object.keys(tx.buyTokens).some(addr => addr.toLowerCase() === tokenAddr)
+        tokenAddrs.some(addr => tx.sellToken.toLowerCase() === addr ||
+          Object.keys(tx.buyTokens).some(a => a.toLowerCase() === addr))
       );
     }
 
@@ -394,15 +396,25 @@ export default function StatsPage() {
       result = result.filter(tx => tx.buyer?.toLowerCase() === traderAddr);
     }
 
+    if (addressSearch.trim()) {
+      const query = addressSearch.toLowerCase().trim();
+      result = result.filter(tx => tx.buyer?.toLowerCase().includes(query));
+    }
+
+    if (orderIdSearch.trim()) {
+      const query = orderIdSearch.trim();
+      result = result.filter(tx => tx.orderId === query);
+    }
+
     return result;
-  }, [transactions, selectedTokenFilter, selectedTraderFilter]);
+  }, [transactions, selectedTokenFilters, selectedTraderFilter, addressSearch, orderIdSearch]);
 
   const filteredOrders = useMemo(() => {
     let result = orders;
 
-    if (selectedTokenFilter) {
-      const tokenAddr = selectedTokenFilter.address.toLowerCase();
-      result = result.filter(order => order.sellToken.toLowerCase() === tokenAddr);
+    if (selectedTokenFilters.length > 0) {
+      const tokenAddrs = selectedTokenFilters.map(t => t.address.toLowerCase());
+      result = result.filter(order => tokenAddrs.includes(order.sellToken.toLowerCase()));
     }
 
     if (selectedTraderFilter) {
@@ -410,19 +422,29 @@ export default function StatsPage() {
       result = result.filter(order => order.orderOwner.toLowerCase() === traderAddr);
     }
 
+    if (addressSearch.trim()) {
+      const query = addressSearch.toLowerCase().trim();
+      result = result.filter(order => order.orderOwner.toLowerCase().includes(query));
+    }
+
+    if (orderIdSearch.trim()) {
+      const query = orderIdSearch.trim();
+      result = result.filter(order => order.orderId === query);
+    }
+
     return result;
-  }, [orders, selectedTokenFilter, selectedTraderFilter]);
+  }, [orders, selectedTokenFilters, selectedTraderFilter, addressSearch, orderIdSearch]);
 
   const filteredContractOrders = useMemo(() => {
     let result = contractOrders;
 
-    if (selectedTokenFilter) {
-      const tokenAddr = selectedTokenFilter.address.toLowerCase();
+    if (selectedTokenFilters.length > 0) {
+      const tokenAddrs = selectedTokenFilters.map(t => t.address.toLowerCase());
       result = result.filter(order =>
-        order.orderDetailsWithID.orderDetails.sellToken.toLowerCase() === tokenAddr ||
+        tokenAddrs.includes(order.orderDetailsWithID.orderDetails.sellToken.toLowerCase()) ||
         order.orderDetailsWithID.orderDetails.buyTokensIndex.some((idx) => {
           const addr = whitelist[Number(idx)];
-          return addr && addr.toLowerCase() === tokenAddr;
+          return addr && tokenAddrs.includes(addr.toLowerCase());
         })
       );
     }
@@ -434,19 +456,33 @@ export default function StatsPage() {
       );
     }
 
+    if (addressSearch.trim()) {
+      const query = addressSearch.toLowerCase().trim();
+      result = result.filter(order =>
+        order.userDetails.orderOwner?.toLowerCase().includes(query)
+      );
+    }
+
+    if (orderIdSearch.trim()) {
+      const query = orderIdSearch.trim();
+      result = result.filter(order =>
+        order.orderDetailsWithID.orderID.toString() === query
+      );
+    }
+
     return result;
-  }, [contractOrders, selectedTokenFilter, selectedTraderFilter, whitelist]);
+  }, [contractOrders, selectedTokenFilters, selectedTraderFilter, whitelist, addressSearch, orderIdSearch]);
 
   const filteredActiveOrders = useMemo(() => {
     let result = activeOrders;
 
-    if (selectedTokenFilter) {
-      const tokenAddr = selectedTokenFilter.address.toLowerCase();
+    if (selectedTokenFilters.length > 0) {
+      const tokenAddrs = selectedTokenFilters.map(t => t.address.toLowerCase());
       result = result.filter(order =>
-        order.orderDetailsWithID.orderDetails.sellToken.toLowerCase() === tokenAddr ||
+        tokenAddrs.includes(order.orderDetailsWithID.orderDetails.sellToken.toLowerCase()) ||
         order.orderDetailsWithID.orderDetails.buyTokensIndex.some((idx) => {
           const addr = whitelist[Number(idx)];
-          return addr && addr.toLowerCase() === tokenAddr;
+          return addr && tokenAddrs.includes(addr.toLowerCase());
         })
       );
     }
@@ -458,8 +494,22 @@ export default function StatsPage() {
       );
     }
 
+    if (addressSearch.trim()) {
+      const query = addressSearch.toLowerCase().trim();
+      result = result.filter(order =>
+        order.userDetails.orderOwner?.toLowerCase().includes(query)
+      );
+    }
+
+    if (orderIdSearch.trim()) {
+      const query = orderIdSearch.trim();
+      result = result.filter(order =>
+        order.orderDetailsWithID.orderID.toString() === query
+      );
+    }
+
     return result;
-  }, [activeOrders, selectedTokenFilter, selectedTraderFilter, whitelist]);
+  }, [activeOrders, selectedTokenFilters, selectedTraderFilter, whitelist, addressSearch, orderIdSearch]);
 
   // Build formatted orders for All Orders table (respects token/trader filters)
   const formattedOrders = useMemo(() => {
@@ -568,6 +618,34 @@ export default function StatsPage() {
     return fills.sort((a, b) => b.timestamp - a.timestamp);
   }, [fillEvents, contractOrders, whitelist]);
 
+  const filteredFills = useMemo(() => {
+    let result = formattedFills;
+
+    if (selectedTokenFilters.length > 0) {
+      const tokenAddrs = selectedTokenFilters.map(t => t.address.toLowerCase());
+      result = result.filter(fill =>
+        tokenAddrs.includes(fill.sellTokenAddress.toLowerCase()) || tokenAddrs.includes(fill.buyTokenAddress.toLowerCase())
+      );
+    }
+
+    if (selectedTraderFilter) {
+      const traderAddr = selectedTraderFilter.toLowerCase();
+      result = result.filter(fill => fill.buyer.toLowerCase() === traderAddr);
+    }
+
+    if (addressSearch.trim()) {
+      const query = addressSearch.toLowerCase().trim();
+      result = result.filter(fill => fill.buyer.toLowerCase().includes(query));
+    }
+
+    if (orderIdSearch.trim()) {
+      const query = orderIdSearch.trim();
+      result = result.filter(fill => fill.orderId === query);
+    }
+
+    return result;
+  }, [formattedFills, selectedTokenFilters, selectedTraderFilter, addressSearch, orderIdSearch]);
+
   const filteredOrdersByStatus = useMemo(() => {
     if (orderStatusFilter === 'all') return formattedOrders;
     return formattedOrders.filter(order => order.status === orderStatusFilter);
@@ -575,13 +653,14 @@ export default function StatsPage() {
 
   // Handle token filter selection
   const handleTokenFilterSelect = useCallback((address: string, ticker: string) => {
-    if (selectedTokenFilter?.address.toLowerCase() === address.toLowerCase()) {
-      // Clicking the same token clears the filter
-      setSelectedTokenFilter(null);
-    } else {
-      setSelectedTokenFilter({ address, ticker });
-    }
-  }, [selectedTokenFilter]);
+    setSelectedTokenFilters(prev => {
+      const exists = prev.some(t => t.address.toLowerCase() === address.toLowerCase());
+      if (exists) {
+        return prev.filter(t => t.address.toLowerCase() !== address.toLowerCase());
+      }
+      return [...prev, { address, ticker }];
+    });
+  }, []);
 
   // Handle trader filter selection
   const handleTraderFilterSelect = useCallback((address: string) => {
@@ -632,53 +711,80 @@ export default function StatsPage() {
                 style={{ opacity: pageVisible ? 1 : 0, transition: 'opacity 0.6s ease-out' }}
                 className="space-y-6"
               >
-                {/* Filter Indicator */}
-                {(selectedTokenFilter || selectedTraderFilter) && (
-                  <div className="flex flex-wrap items-center gap-3 p-3 bg-white/5 border border-white/10 rounded-lg">
-                    <span className="text-gray-400 text-sm">Filtering by:</span>
-                    {selectedTokenFilter && (
-                      <div className="flex items-center gap-2 px-2 py-1 bg-white/10 rounded">
-                        <CoinLogo symbol={selectedTokenFilter.ticker} size="sm" />
-                        <span className="text-white font-medium">{formatTokenTicker(selectedTokenFilter.ticker)}</span>
+                {/* Filter Bar - sticky when any filter is active */}
+                <div className={`${(selectedTokenFilters.length > 0 || selectedTraderFilter || addressSearch || orderIdSearch) ? 'md:sticky md:top-24 z-20' : ''}`}>
+                  <div className="flex flex-wrap items-center gap-3 p-3 bg-black/80 backdrop-blur-md border border-white/10 rounded-lg">
+                    {/* Active filter pills */}
+                    {(selectedTokenFilters.length > 0 || selectedTraderFilter) && (
+                      <>
+                        <span className="text-gray-400 text-sm">Filtering by:</span>
+                        {selectedTokenFilters.map(token => (
+                          <div key={token.address} className="flex items-center gap-2 px-2 py-1 bg-white/10 rounded">
+                            <CoinLogo symbol={token.ticker} size="sm" />
+                            <span className="text-white font-medium">{formatTokenTicker(token.ticker)}</span>
+                            <button
+                              onClick={() => handleTokenFilterSelect(token.address, token.ticker)}
+                              className="text-gray-400 hover:text-white transition-colors"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </div>
+                        ))}
+                        {selectedTraderFilter && (
+                          <div className="flex items-center gap-2 px-2 py-1 bg-white/10 rounded">
+                            <span className="text-white font-mono text-sm">
+                              {selectedTraderFilter.slice(0, 6)}...{selectedTraderFilter.slice(-4)}
+                            </span>
+                            <button
+                              onClick={() => setSelectedTraderFilter(null)}
+                              className="text-gray-400 hover:text-white transition-colors"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    {/* Search inputs */}
+                    <div className="flex items-center gap-2 ml-auto">
+                      <input
+                        type="text"
+                        placeholder="Address..."
+                        value={addressSearch}
+                        onChange={(e) => setAddressSearch(e.target.value)}
+                        className="bg-white/5 border border-white/10 rounded px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-white/30 font-mono w-[380px]"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Order ID..."
+                        value={orderIdSearch}
+                        onChange={(e) => setOrderIdSearch(e.target.value)}
+                        className="bg-white/5 border border-white/10 rounded px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-white/30 font-mono w-[100px]"
+                      />
+                      {(selectedTokenFilters.length > 0 || selectedTraderFilter || addressSearch || orderIdSearch) && (
                         <button
-                          onClick={() => setSelectedTokenFilter(null)}
-                          className="text-gray-400 hover:text-white transition-colors"
+                          onClick={() => {
+                            setSelectedTokenFilters([]);
+                            setSelectedTraderFilter(null);
+                            setAddressSearch('');
+                            setOrderIdSearch('');
+                          }}
+                          className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-white/10 rounded transition-colors whitespace-nowrap"
                         >
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                           </svg>
+                          Clear all
                         </button>
-                      </div>
-                    )}
-                    {selectedTraderFilter && (
-                      <div className="flex items-center gap-2 px-2 py-1 bg-white/10 rounded">
-                        <span className="text-white font-mono text-sm">
-                          {selectedTraderFilter.slice(0, 6)}...{selectedTraderFilter.slice(-4)}
-                        </span>
-                        <button
-                          onClick={() => setSelectedTraderFilter(null)}
-                          className="text-gray-400 hover:text-white transition-colors"
-                        >
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      </div>
-                    )}
-                    <button
-                      onClick={() => {
-                        setSelectedTokenFilter(null);
-                        setSelectedTraderFilter(null);
-                      }}
-                      className="ml-auto flex items-center gap-1 px-3 py-1 text-sm text-gray-400 hover:text-white hover:bg-white/10 rounded transition-colors"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                      Clear all
-                    </button>
+                      )}
+                    </div>
                   </div>
-                )}
+                </div>
 
                 {/* Overview Stats Cards */}
                 <StatsOverviewCards
@@ -699,12 +805,12 @@ export default function StatsPage() {
 
                 {/* Top Tokens Chart */}
                 <TopTokensChart
-                  transactions={transactions}
-                  orders={orders}
+                  transactions={(addressSearch || orderIdSearch) ? filteredTransactions : transactions}
+                  orders={(addressSearch || orderIdSearch) ? filteredOrders : orders}
                   tokenPrices={tokenPrices}
-                  contractOrders={contractOrders}
+                  contractOrders={(addressSearch || orderIdSearch) ? filteredContractOrders : contractOrders}
                   onTokenSelect={handleTokenFilterSelect}
-                  selectedToken={selectedTokenFilter?.address}
+                  selectedTokens={selectedTokenFilters.map(t => t.address)}
                 />
 
                 {/* Leaderboard - hidden for now */}
@@ -888,14 +994,14 @@ export default function StatsPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {formattedFills.length === 0 ? (
+                          {filteredFills.length === 0 ? (
                             <tr>
                               <td colSpan={6} className="py-8 text-center text-gray-500">
                                 No fills found.
                               </td>
                             </tr>
                           ) : (
-                            formattedFills.map((fill, idx) => {
+                            filteredFills.map((fill, idx) => {
                               const sellPrice = tokenPrices[fill.sellTokenAddress]?.price ?? 0;
                               const buyPrice = tokenPrices[fill.buyTokenAddress]?.price ?? 0;
                               const sellUsd = fill.sellAmountNum * sellPrice;
