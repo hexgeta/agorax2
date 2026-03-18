@@ -1,0 +1,86 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.SUPABASE_URL!;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+const RATE_LIMIT_WINDOW_MS = 60000;
+const MAX_REQUESTS_PER_WINDOW = 30;
+const rateLimitCache = new Map<string, { count: number; resetTime: number }>();
+
+function checkRateLimit(key: string): boolean {
+  const now = Date.now();
+  const entry = rateLimitCache.get(key);
+  if (!entry || now > entry.resetTime) {
+    rateLimitCache.set(key, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
+    return true;
+  }
+  if (entry.count >= MAX_REQUESTS_PER_WINDOW) return false;
+  entry.count++;
+  return true;
+}
+
+function isValidWalletAddress(address: string): boolean {
+  return /^0x[a-fA-F0-9]{40}$/.test(address);
+}
+
+// POST /api/feedback/vote - Toggle vote
+// Body: { wallet_address, post_id }
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { wallet_address, post_id } = body;
+
+    if (!wallet_address || !isValidWalletAddress(wallet_address)) {
+      return NextResponse.json({ success: false, error: 'Valid wallet address required' }, { status: 400 });
+    }
+    if (!post_id || typeof post_id !== 'number') {
+      return NextResponse.json({ success: false, error: 'Valid post_id required' }, { status: 400 });
+    }
+    if (!checkRateLimit(`vote:${wallet_address.toLowerCase()}`)) {
+      return NextResponse.json({ success: false, error: 'Rate limit exceeded' }, { status: 429 });
+    }
+
+    const walletLower = wallet_address.toLowerCase();
+
+    // Check if already voted
+    const { data: existing } = await supabase
+      .from('feedback_votes')
+      .select('id')
+      .eq('post_id', post_id)
+      .eq('wallet_address', walletLower)
+      .single();
+
+    if (existing) {
+      // Remove vote
+      await supabase.from('feedback_votes').delete().eq('id', existing.id);
+      const { data: post } = await supabase.from('feedback_posts').select('vote_count').eq('id', post_id).single();
+      if (post) {
+        await supabase.from('feedback_posts').update({ vote_count: Math.max(0, post.vote_count - 1) }).eq('id', post_id);
+      }
+
+      return NextResponse.json({ success: true, voted: false });
+    } else {
+      // Add vote
+      const { error } = await supabase.from('feedback_votes').insert({
+        post_id,
+        wallet_address: walletLower,
+      });
+
+      if (error) {
+        return NextResponse.json({ success: false, error: 'Failed to vote' }, { status: 500 });
+      }
+
+      // Increment count
+      const { data: post } = await supabase.from('feedback_posts').select('vote_count').eq('id', post_id).single();
+      if (post) {
+        await supabase.from('feedback_posts').update({ vote_count: post.vote_count + 1 }).eq('id', post_id);
+      }
+
+      return NextResponse.json({ success: true, voted: true });
+    }
+  } catch {
+    return NextResponse.json({ success: false, error: 'Invalid request body' }, { status: 400 });
+  }
+}

@@ -191,6 +191,24 @@ const NavBar = () => {
                 </span>
               </Link>
               <Link
+                href="/feedback"
+                className={`transition-colors font-medium text-base px-4 py-2 cursor-pointer group ${pathname === '/feedback'
+                  ? 'text-white'
+                  : 'text-white/80 hover:text-white'
+                  }`}
+                onMouseEnter={() => setHoveredPath('/feedback')}
+                onMouseLeave={() => setHoveredPath(null)}
+              >
+                <span className="relative inline-block">
+                  Feedback
+                  <span className={`absolute bottom-[-4px] left-0 w-full h-0.5 bg-white transition-transform duration-300 ease-out ${pathname === '/feedback'
+                    ? (hoveredPath && hoveredPath !== '/feedback' ? 'scale-x-0 origin-left' : 'scale-x-100 origin-left')
+                    : 'scale-x-0 group-hover:scale-x-100 origin-left'
+                    }`}
+                  />
+                </span>
+              </Link>
+              <Link
                 href="/docs"
                 className={`transition-colors font-medium text-base px-4 py-2 cursor-pointer group flex items-center gap-1.5 ${pathname.startsWith('/docs')
                   ? 'text-white'
@@ -330,6 +348,16 @@ const NavBar = () => {
                 }`}
             >
               Stats
+            </Link>
+            <Link
+              href="/feedback"
+              onClick={() => setMobileMenuOpen(false)}
+              className={`text-xl font-medium py-3 px-6 rounded-lg transition-colors w-full text-center ${pathname === '/feedback'
+                ? 'text-white bg-white/10'
+                : 'text-white/80 hover:text-white hover:bg-white/5'
+                }`}
+            >
+              Feedback
             </Link>
             <Link
               href="/docs"
