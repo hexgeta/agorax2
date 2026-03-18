@@ -99,11 +99,11 @@ export async function GET(request: NextRequest) {
 }
 
 // POST /api/feedback
-// Body: { wallet_address, title, description?, category?, images?: string[] }
+// Body: { wallet_address, title, description?, category?, token_ticker?, token_contract_address?, is_tax_token? }
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { wallet_address, title, description, category, images, token_ticker, token_contract_address, is_tax_token } = body;
+    const { wallet_address, title, description, category, token_ticker, token_contract_address, is_tax_token } = body;
 
     if (!wallet_address || !isValidWalletAddress(wallet_address)) {
       return NextResponse.json({ success: false, error: 'Valid wallet address required' }, { status: 400 });
@@ -132,15 +132,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Rate limit exceeded. Try again later.' }, { status: 429 });
     }
 
-    // Validate images array
-    const postImages = Array.isArray(images) ? images.filter((img: unknown) => typeof img === 'string').slice(0, 3) : [];
-
     const insertData: Record<string, unknown> = {
       title: title.trim(),
       description: description?.trim() || null,
       category: postCategory,
       wallet_address: wallet_address.toLowerCase(),
-      images: postImages,
       vote_count: 1, // Auto-upvote by creator
     };
 

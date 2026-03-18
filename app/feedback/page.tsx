@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAccount } from 'wagmi';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
-import { ChevronUp, MessageSquare, Plus, X, Image as ImageIcon, Send, Filter, Loader2, Shield, Trash2, Copy, ArrowRight } from 'lucide-react';
+import { ChevronUp, MessageSquare, Plus, X, Send, Filter, Loader2, Shield, Trash2, Copy, ArrowRight } from 'lucide-react';
 
 // Types
 interface FeedbackPost {
@@ -16,7 +16,6 @@ interface FeedbackPost {
   wallet_address: string;
   vote_count: number;
   comment_count: number;
-  images: string[];
   duplicate_of: number | null;
   token_ticker: string | null;
   token_contract_address: string | null;
@@ -89,8 +88,6 @@ export default function FeedbackPage() {
   const [newTitle, setNewTitle] = useState('');
   const [newDescription, setNewDescription] = useState('');
   const [newCategory, setNewCategory] = useState<string>('feature');
-  const [newImages, setNewImages] = useState<string[]>([]);
-  const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [newTokenTicker, setNewTokenTicker] = useState('');
   const [newContractAddress, setNewContractAddress] = useState('');
@@ -192,7 +189,6 @@ export default function FeedbackPage() {
           title: newTitle.trim(),
           description: newDescription.trim() || null,
           category: newCategory,
-          images: newImages,
           ...(newCategory === 'whitelist' && {
             token_ticker: newTokenTicker.trim(),
             token_contract_address: newContractAddress.trim(),
@@ -206,7 +202,6 @@ export default function FeedbackPage() {
         setNewTitle('');
         setNewDescription('');
         setNewCategory('feature');
-        setNewImages([]);
         setNewTokenTicker('');
         setNewContractAddress('');
         setNewIsTaxToken(null);
@@ -216,32 +211,6 @@ export default function FeedbackPage() {
       // silently fail
     } finally {
       setSubmitting(false);
-    }
-  };
-
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !address) return;
-    if (newImages.length >= 3) return;
-    setUploading(true);
-
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('wallet_address', address);
-
-      const res = await fetch('/api/feedback/upload', {
-        method: 'POST',
-        body: formData,
-      });
-      const data = await res.json();
-      if (data.success && data.url) {
-        setNewImages(prev => [...prev, data.url]);
-      }
-    } catch {
-      // silently fail
-    } finally {
-      setUploading(false);
     }
   };
 
@@ -604,43 +573,6 @@ export default function FeedbackPage() {
                   </div>
                 )}
 
-                {/* Image upload */}
-                <div className="mb-5">
-                  <div className="flex items-center gap-2 mb-2">
-                    <label className="text-xs text-gray-500 uppercase tracking-wider">
-                      Images ({newImages.length}/3)
-                    </label>
-                    {newImages.length < 3 && (
-                      <label className="flex items-center gap-1 px-2 py-1 rounded-md bg-white/5 border border-white/10 text-gray-400 hover:text-white text-xs cursor-pointer transition-colors">
-                        <ImageIcon size={12} />
-                        {uploading ? 'Uploading...' : 'Add Image'}
-                        <input
-                          type="file"
-                          accept="image/jpeg,image/png,image/gif,image/webp"
-                          onChange={handleImageUpload}
-                          className="hidden"
-                          disabled={uploading}
-                        />
-                      </label>
-                    )}
-                  </div>
-                  {newImages.length > 0 && (
-                    <div className="flex gap-2">
-                      {newImages.map((url, i) => (
-                        <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-white/10">
-                          <img src={url} alt="" className="w-full h-full object-cover" />
-                          <button
-                            onClick={() => setNewImages(prev => prev.filter((_, idx) => idx !== i))}
-                            className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-black/70 flex items-center justify-center text-white hover:bg-red-500"
-                          >
-                            <X size={10} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
                 {/* Submit */}
                 <button
                   onClick={handleSubmitPost}
@@ -816,17 +748,6 @@ export default function FeedbackPage() {
                             </motion.div>
                           )}
                         </AnimatePresence>
-                      </div>
-                    )}
-
-                    {/* Images */}
-                    {post.images && post.images.length > 0 && (
-                      <div className="flex gap-2 mt-3">
-                        {post.images.map((url, i) => (
-                          <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block w-20 h-20 rounded-lg overflow-hidden border border-white/10 hover:border-white/30 transition-colors">
-                            <img src={url} alt="" className="w-full h-full object-cover" />
-                          </a>
-                        ))}
                       </div>
                     )}
 
