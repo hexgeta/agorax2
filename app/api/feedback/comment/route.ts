@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { createHash } from 'crypto';
 import { verifySessionToken } from '@/lib/auth';
+
+function hashWalletToUserId(wallet: string): string {
+  const hash = createHash('sha256').update(wallet.toLowerCase()).digest('hex');
+  const num = parseInt(hash.slice(0, 8), 16) % 10000;
+  return `User #${num}`;
+}
 
 const supabaseUrl = process.env.SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -39,7 +46,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: false, error: 'Failed to fetch comments' }, { status: 500 });
   }
 
-  return NextResponse.json({ success: true, comments: data || [] });
+  // Hash wallet addresses for privacy
+  const sanitizedComments = (data || []).map((c: Record<string, unknown>) => ({
+    ...c,
+    wallet_address: hashWalletToUserId(c.wallet_address as string),
+  }));
+
+  return NextResponse.json({ success: true, comments: sanitizedComments });
 }
 
 // POST /api/feedback/comment
@@ -89,7 +102,7 @@ export async function POST(request: NextRequest) {
       await supabase.from('feedback_posts').update({ comment_count: post.comment_count + 1 }).eq('id', post_id);
     }
 
-    return NextResponse.json({ success: true, comment: data });
+    return NextResponse.json({ success: true, comment: { ...data, wallet_address: hashWalletToUserId(data.wallet_address) } });
   } catch {
     return NextResponse.json({ success: false, error: 'Invalid request body' }, { status: 400 });
   }

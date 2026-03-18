@@ -51,10 +51,6 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   duplicate: { label: 'Duplicate', color: 'text-gray-400 bg-gray-500/20' },
 };
 
-function formatAddress(address: string): string {
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
-}
-
 function timeAgo(dateString: string): string {
   const seconds = Math.floor((Date.now() - new Date(dateString).getTime()) / 1000);
   if (seconds < 60) return 'just now';
@@ -675,7 +671,7 @@ export default function FeedbackPage() {
                         </div>
                       )}
                       <div className="flex items-center gap-3 text-[11px] text-gray-500">
-                        <span>{formatAddress(post.wallet_address)}</span>
+                        <span>{post.wallet_address}</span>
                         <span>{timeAgo(post.created_at)}</span>
                         <span className="flex items-center gap-1">
                           <MessageSquare size={11} />
@@ -788,7 +784,7 @@ export default function FeedbackPage() {
                                       <div key={comment.id} className="text-xs">
                                         <div className="flex items-center gap-2 text-gray-500 mb-0.5">
                                           <span className="font-medium text-gray-400">
-                                            {formatAddress(comment.wallet_address)}
+                                            {comment.wallet_address}
                                           </span>
                                           <span>{timeAgo(comment.created_at)}</span>
                                         </div>

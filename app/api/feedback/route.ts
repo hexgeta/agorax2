@@ -1,6 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { createHash } from 'crypto';
 import { verifySessionToken } from '@/lib/auth';
+
+/**
+ * Hash a wallet address into a deterministic anonymous user ID.
+ * Same wallet always produces the same number (0-9999).
+ */
+function hashWalletToUserId(wallet: string): string {
+  const hash = createHash('sha256').update(wallet.toLowerCase()).digest('hex');
+  const num = parseInt(hash.slice(0, 8), 16) % 10000;
+  return `User #${num}`;
+}
 
 const supabaseUrl = process.env.SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -90,9 +101,15 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // Hash wallet addresses before sending to client for privacy
+  const sanitizedPosts = (posts || []).map((p: Record<string, unknown>) => ({
+    ...p,
+    wallet_address: hashWalletToUserId(p.wallet_address as string),
+  }));
+
   return NextResponse.json({
     success: true,
-    posts: posts || [],
+    posts: sanitizedPosts,
     userVotes,
     duplicateOriginals,
     pagination: { page, limit, total: count || 0 },
@@ -170,7 +187,7 @@ export async function POST(request: NextRequest) {
       wallet_address: verifiedWallet,
     });
 
-    return NextResponse.json({ success: true, post: data });
+    return NextResponse.json({ success: true, post: { ...data, wallet_address: hashWalletToUserId(data.wallet_address) } });
   } catch {
     return NextResponse.json({ success: false, error: 'Invalid request body' }, { status: 400 });
   }
