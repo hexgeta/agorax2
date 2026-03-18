@@ -141,6 +141,7 @@ export default function FeedbackPage() {
   const [adminActionPost, setAdminActionPost] = useState<number | null>(null);
   const [duplicateIdInput, setDuplicateIdInput] = useState('');
   const [adminLoading, setAdminLoading] = useState(false);
+  const [copiedId, setCopiedId] = useState<number | null>(null);
   const [duplicateOriginals, setDuplicateOriginals] = useState<Record<number, { id: number; title: string }>>({});
 
   // Check admin status when wallet connects
@@ -408,7 +409,7 @@ export default function FeedbackPage() {
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center gap-3 mb-2">
-          <h1 className="text-3xl font-bold text-white">Feedback & Feature Requests</h1>
+          <h1 className="text-3xl font-bold text-white">Track and Submit Requests</h1>
           {isConnected && userDisplayName && (
             <span className="text-sm"><span className="text-gray-500">Username:</span> <span className={`font-medium ${getUsernameColor(userDisplayName)}`}>{userDisplayName}</span></span>
           )}
@@ -510,14 +511,14 @@ export default function FeedbackPage() {
           )}
         </button>
 
-        {/* New Post button */}
+        {/* New Request button */}
         <button
           onClick={() => setShowNewPost(true)}
           disabled={!isConnected}
           className="ml-auto flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium bg-white hover:bg-gray-200 text-black transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <Plus size={14} />
-          New Post
+          New Request
         </button>
       </div>
 
@@ -601,7 +602,7 @@ export default function FeedbackPage() {
         )}
       </AnimatePresence>
 
-      {/* New Post Modal */}
+      {/* New Request Modal */}
       <AnimatePresence>
         {showNewPost && (
           <motion.div
@@ -737,7 +738,7 @@ export default function FeedbackPage() {
                   className="w-full py-2.5 rounded-lg bg-white hover:bg-gray-200 text-black font-medium text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {submitting ? <Loader2 size={16} className="animate-spin" /> : <Send size={14} />}
-                  Submit Feedback
+                  Submit Request
                 </button>
               </LiquidGlassCard>
             </motion.div>
@@ -886,10 +887,15 @@ export default function FeedbackPage() {
                             <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-medium">{post.token_ticker}</span>
                             {post.token_contract_address && (
                               <span
-                                className="text-gray-500 font-mono text-[10px] break-all cursor-pointer hover:text-white transition-colors"
+                                className="text-gray-500 font-mono text-[10px] break-all cursor-pointer hover:text-white transition-colors relative"
                                 title="Click to copy"
-                                onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(post.token_contract_address!); }}
-                              >{post.token_contract_address}</span>
+                                onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(post.token_contract_address!); setCopiedId(post.id); setTimeout(() => setCopiedId(null), 1500); }}
+                              >
+                                {post.token_contract_address}
+                                {copiedId === post.id && (
+                                  <span className="ml-2 text-green-400 text-[10px] font-sans">Copied!</span>
+                                )}
+                              </span>
                             )}
                             {post.is_tax_token !== null && (
                               <span className={`px-1.5 py-0.5 rounded text-[10px] ${post.is_tax_token ? 'bg-amber-500/10 text-amber-400' : 'bg-gray-500/10 text-gray-400'}`}>
