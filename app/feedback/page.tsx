@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAccount } from 'wagmi';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
-import { ChevronUp, MessageSquare, Plus, X, Image as ImageIcon, Send, Filter, Loader2 } from 'lucide-react';
+import { ChevronUp, MessageSquare, Plus, X, Image as ImageIcon, Send, Filter, Loader2, Shield, Trash2, Copy, ArrowRight } from 'lucide-react';
 
 // Types
 interface FeedbackPost {
@@ -12,11 +12,12 @@ interface FeedbackPost {
   title: string;
   description: string | null;
   category: 'feature' | 'bug' | 'improvement' | 'question';
-  status: 'open' | 'under_review' | 'planned' | 'in_progress' | 'completed' | 'declined';
+  status: 'open' | 'under_review' | 'planned' | 'in_progress' | 'completed' | 'declined' | 'duplicate';
   wallet_address: string;
   vote_count: number;
   comment_count: number;
   images: string[];
+  duplicate_of: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -43,6 +44,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   in_progress: { label: 'In Progress', color: 'text-orange-400 bg-orange-500/20' },
   completed: { label: 'Completed', color: 'text-green-400 bg-green-500/20' },
   declined: { label: 'Declined', color: 'text-red-400 bg-red-500/20' },
+  duplicate: { label: 'Duplicate', color: 'text-gray-400 bg-gray-500/20' },
 };
 
 function formatAddress(address: string): string {
@@ -94,6 +96,22 @@ export default function FeedbackPage() {
   // Voting state
   const [votingPost, setVotingPost] = useState<number | null>(null);
 
+  // Admin state
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminActionPost, setAdminActionPost] = useState<number | null>(null);
+  const [duplicateIdInput, setDuplicateIdInput] = useState('');
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [duplicateOriginals, setDuplicateOriginals] = useState<Record<number, { id: number; title: string }>>({});
+
+  // Check admin status when wallet connects
+  useEffect(() => {
+    if (!address) { setIsAdmin(false); return; }
+    fetch(`/api/admin/feedback?wallet=${address}`)
+      .then(res => res.json())
+      .then(data => setIsAdmin(data.isAdmin))
+      .catch(() => setIsAdmin(false));
+  }, [address]);
+
   const fetchPosts = useCallback(async (page = 1) => {
     setLoading(true);
     const params = new URLSearchParams({
@@ -111,6 +129,7 @@ export default function FeedbackPage() {
       if (data.success) {
         setPosts(data.posts);
         setUserVotes(data.userVotes || []);
+        setDuplicateOriginals(data.duplicateOriginals || {});
         setPagination(data.pagination);
       }
     } catch {
@@ -267,6 +286,63 @@ export default function FeedbackPage() {
     } finally {
       setSubmittingComment(false);
     }
+  };
+
+  const handleAdminUpdateStatus = async (postId: number, status: string) => {
+    if (!address) return;
+    setAdminLoading(true);
+    try {
+      const res = await fetch('/api/admin/feedback', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ wallet_address: address, post_id: postId, action: 'update_status', status }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPosts(prev => prev.map(p => p.id === postId ? { ...p, status: status as FeedbackPost['status'], duplicate_of: null } : p));
+        setAdminActionPost(null);
+      }
+    } catch { /* silently fail */ } finally { setAdminLoading(false); }
+  };
+
+  const handleAdminMarkDuplicate = async (postId: number) => {
+    if (!address || !duplicateIdInput) return;
+    const dupId = parseInt(duplicateIdInput);
+    if (isNaN(dupId) || dupId === postId) return;
+    setAdminLoading(true);
+    try {
+      const res = await fetch('/api/admin/feedback', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ wallet_address: address, post_id: postId, action: 'mark_duplicate', duplicate_of: dupId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPosts(prev => prev.map(p => p.id === postId ? { ...p, status: 'duplicate' as const, duplicate_of: dupId } : p));
+        if (data.original_post) {
+          setDuplicateOriginals(prev => ({ ...prev, [dupId]: data.original_post }));
+        }
+        setAdminActionPost(null);
+        setDuplicateIdInput('');
+      }
+    } catch { /* silently fail */ } finally { setAdminLoading(false); }
+  };
+
+  const handleAdminDelete = async (postId: number) => {
+    if (!address || !confirm('Permanently delete this post and all its votes/comments?')) return;
+    setAdminLoading(true);
+    try {
+      const res = await fetch('/api/admin/feedback', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ wallet_address: address, post_id: postId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPosts(prev => prev.filter(p => p.id !== postId));
+        setAdminActionPost(null);
+      }
+    } catch { /* silently fail */ } finally { setAdminLoading(false); }
   };
 
   return (
@@ -560,6 +636,12 @@ export default function FeedbackPage() {
                         )}
                       </div>
                       <h3 className="text-white font-medium text-sm mb-1 line-clamp-1">{post.title}</h3>
+                      {post.status === 'duplicate' && post.duplicate_of && duplicateOriginals[post.duplicate_of] && (
+                        <p className="text-xs text-gray-500 mb-1 flex items-center gap-1">
+                          <Copy size={10} />
+                          Duplicate of #{post.duplicate_of}: {duplicateOriginals[post.duplicate_of].title}
+                        </p>
+                      )}
                       {post.description && (
                         <p className="text-gray-400 text-xs line-clamp-2 mb-2">{post.description}</p>
                       )}
@@ -570,8 +652,87 @@ export default function FeedbackPage() {
                           <MessageSquare size={11} />
                           {post.comment_count}
                         </span>
+                        <span className="text-gray-600">#{post.id}</span>
                       </div>
                     </div>
+
+                    {/* Admin controls */}
+                    {isAdmin && (
+                      <div className="mt-2">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setAdminActionPost(adminActionPost === post.id ? null : post.id); }}
+                          className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] text-amber-400 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20 transition-colors"
+                        >
+                          <Shield size={10} />
+                          Admin
+                        </button>
+
+                        <AnimatePresence>
+                          {adminActionPost === post.id && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              className="overflow-hidden"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <div className="mt-2 p-3 rounded-lg bg-amber-500/5 border border-amber-500/10 space-y-3">
+                                {/* Status update */}
+                                <div>
+                                  <label className="text-[10px] text-amber-400/70 uppercase tracking-wider block mb-1">Set Status</label>
+                                  <div className="flex flex-wrap gap-1">
+                                    {Object.entries(STATUS_CONFIG).filter(([k]) => k !== 'duplicate').map(([key, cfg]) => (
+                                      <button
+                                        key={key}
+                                        onClick={() => handleAdminUpdateStatus(post.id, key)}
+                                        disabled={adminLoading || post.status === key}
+                                        className={`px-2 py-0.5 rounded text-[10px] transition-colors disabled:opacity-30 ${
+                                          post.status === key ? cfg.color + ' font-medium' : 'bg-white/5 text-gray-400 hover:text-white'
+                                        }`}
+                                      >
+                                        {cfg.label}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+
+                                {/* Mark as duplicate */}
+                                <div>
+                                  <label className="text-[10px] text-amber-400/70 uppercase tracking-wider block mb-1">Mark as Duplicate</label>
+                                  <div className="flex gap-1.5">
+                                    <input
+                                      type="number"
+                                      placeholder="Original post #ID"
+                                      value={duplicateIdInput}
+                                      onChange={(e) => setDuplicateIdInput(e.target.value)}
+                                      className="flex-1 px-2 py-1 bg-white/5 border border-white/10 rounded text-white placeholder-gray-600 text-xs focus:outline-none focus:border-amber-500/50 w-24"
+                                    />
+                                    <button
+                                      onClick={() => handleAdminMarkDuplicate(post.id)}
+                                      disabled={adminLoading || !duplicateIdInput}
+                                      className="px-2 py-1 rounded text-[10px] bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 disabled:opacity-30 flex items-center gap-1"
+                                    >
+                                      <ArrowRight size={10} />
+                                      Link
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* Delete */}
+                                <button
+                                  onClick={() => handleAdminDelete(post.id)}
+                                  disabled={adminLoading}
+                                  className="flex items-center gap-1 px-2 py-1 rounded text-[10px] bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 disabled:opacity-30 transition-colors"
+                                >
+                                  <Trash2 size={10} />
+                                  Delete Post
+                                </button>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    )}
 
                     {/* Images */}
                     {post.images && post.images.length > 0 && (

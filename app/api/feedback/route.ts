@@ -74,10 +74,26 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // Fetch original post titles for any duplicate posts
+  const duplicateOfIds = (posts || [])
+    .filter((p: { duplicate_of: number | null }) => p.duplicate_of)
+    .map((p: { duplicate_of: number }) => p.duplicate_of);
+  let duplicateOriginals: Record<number, { id: number; title: string }> = {};
+  if (duplicateOfIds.length > 0) {
+    const { data: originals } = await supabase
+      .from('feedback_posts')
+      .select('id, title')
+      .in('id', duplicateOfIds);
+    if (originals) {
+      duplicateOriginals = Object.fromEntries(originals.map((o: { id: number; title: string }) => [o.id, o]));
+    }
+  }
+
   return NextResponse.json({
     success: true,
     posts: posts || [],
     userVotes,
+    duplicateOriginals,
     pagination: { page, limit, total: count || 0 },
   });
 }
