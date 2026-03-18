@@ -1,13 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { createHash } from 'crypto';
 import { verifySessionToken } from '@/lib/auth';
-
-function hashWalletToUserId(wallet: string): string {
-  const hash = createHash('sha256').update(wallet.toLowerCase()).digest('hex');
-  const num = parseInt(hash.slice(0, 8), 16) % 10000;
-  return `User #${num}`;
-}
+import { hashWallet, hashToDisplayName } from '@/lib/feedback-hash';
 
 const supabaseUrl = process.env.SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -46,10 +40,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: false, error: 'Failed to fetch comments' }, { status: 500 });
   }
 
-  // Hash wallet addresses for privacy
+  // DB already stores hashes — convert to display names for client
   const sanitizedComments = (data || []).map((c: Record<string, unknown>) => ({
     ...c,
-    wallet_address: hashWalletToUserId(c.wallet_address as string),
+    wallet_address: hashToDisplayName(c.wallet_address as string),
   }));
 
   return NextResponse.json({ success: true, comments: sanitizedComments });
@@ -69,6 +63,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Invalid session token' }, { status: 401 });
     }
 
+    // Hash immediately — raw wallet never touches the database
+    const walletHash = hashWallet(verifiedWallet);
+
     const body = await request.json();
     const { post_id, content } = body;
 
@@ -78,7 +75,7 @@ export async function POST(request: NextRequest) {
     if (!content || typeof content !== 'string' || content.trim().length < 1 || content.trim().length > 2000) {
       return NextResponse.json({ success: false, error: 'Comment must be 1-2000 characters' }, { status: 400 });
     }
-    if (!checkRateLimit(`comment:${verifiedWallet}`)) {
+    if (!checkRateLimit(`comment:${walletHash}`)) {
       return NextResponse.json({ success: false, error: 'Rate limit exceeded' }, { status: 429 });
     }
 
@@ -86,7 +83,7 @@ export async function POST(request: NextRequest) {
       .from('feedback_comments')
       .insert({
         post_id,
-        wallet_address: verifiedWallet,
+        wallet_address: walletHash,
         content: content.trim(),
       })
       .select()
@@ -102,7 +99,7 @@ export async function POST(request: NextRequest) {
       await supabase.from('feedback_posts').update({ comment_count: post.comment_count + 1 }).eq('id', post_id);
     }
 
-    return NextResponse.json({ success: true, comment: { ...data, wallet_address: hashWalletToUserId(data.wallet_address) } });
+    return NextResponse.json({ success: true, comment: { ...data, wallet_address: hashToDisplayName(walletHash) } });
   } catch {
     return NextResponse.json({ success: false, error: 'Invalid request body' }, { status: 400 });
   }

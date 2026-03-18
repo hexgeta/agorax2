@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { verifySessionToken } from '@/lib/auth';
+import { hashWallet } from '@/lib/feedback-hash';
 
 const supabaseUrl = process.env.SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -31,10 +32,13 @@ export async function POST(request: NextRequest) {
     if (!authHeader?.startsWith('Bearer ')) {
       return NextResponse.json({ success: false, error: 'Authentication required' }, { status: 401 });
     }
-    const walletLower = verifySessionToken(authHeader.slice(7));
-    if (!walletLower) {
+    const verifiedWallet = verifySessionToken(authHeader.slice(7));
+    if (!verifiedWallet) {
       return NextResponse.json({ success: false, error: 'Invalid session token' }, { status: 401 });
     }
+
+    // Hash immediately — raw wallet never touches the database
+    const walletHash = hashWallet(verifiedWallet);
 
     const body = await request.json();
     const { post_id } = body;
@@ -42,7 +46,7 @@ export async function POST(request: NextRequest) {
     if (!post_id || typeof post_id !== 'number') {
       return NextResponse.json({ success: false, error: 'Valid post_id required' }, { status: 400 });
     }
-    if (!checkRateLimit(`vote:${walletLower}`)) {
+    if (!checkRateLimit(`vote:${walletHash}`)) {
       return NextResponse.json({ success: false, error: 'Rate limit exceeded' }, { status: 429 });
     }
 
@@ -51,7 +55,7 @@ export async function POST(request: NextRequest) {
       .from('feedback_votes')
       .select('id')
       .eq('post_id', post_id)
-      .eq('wallet_address', walletLower)
+      .eq('wallet_address', walletHash)
       .single();
 
     if (existing) {
@@ -67,7 +71,7 @@ export async function POST(request: NextRequest) {
       // Add vote
       const { error } = await supabase.from('feedback_votes').insert({
         post_id,
-        wallet_address: walletLower,
+        wallet_address: walletHash,
       });
 
       if (error) {

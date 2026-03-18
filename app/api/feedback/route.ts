@@ -1,17 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { createHash } from 'crypto';
 import { verifySessionToken } from '@/lib/auth';
-
-/**
- * Hash a wallet address into a deterministic anonymous user ID.
- * Same wallet always produces the same number (0-9999).
- */
-function hashWalletToUserId(wallet: string): string {
-  const hash = createHash('sha256').update(wallet.toLowerCase()).digest('hex');
-  const num = parseInt(hash.slice(0, 8), 16) % 10000;
-  return `User #${num}`;
-}
+import { hashWallet, hashToDisplayName } from '@/lib/feedback-hash';
 
 const supabaseUrl = process.env.SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -31,10 +21,6 @@ function checkRateLimit(key: string): boolean {
   if (entry.count >= MAX_REQUESTS_PER_WINDOW) return false;
   entry.count++;
   return true;
-}
-
-function isValidWalletAddress(address: string): boolean {
-  return /^0x[a-fA-F0-9]{40}$/.test(address);
 }
 
 // GET /api/feedback?sort=popular|newest|oldest&category=feature|bug|improvement|question&status=open|...&wallet=0x...
@@ -72,15 +58,17 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: false, error: 'Failed to fetch feedback' }, { status: 500 });
   }
 
-  // If wallet provided, fetch which posts user has voted on
+  // If wallet provided, hash it and fetch which posts user has voted on
+  // DB stores hashed wallets, so we hash the incoming wallet to match
   let userVotes: number[] = [];
-  if (wallet && isValidWalletAddress(wallet)) {
+  if (wallet) {
+    const walletHash = hashWallet(wallet);
     const postIds = (posts || []).map((p: { id: number }) => p.id);
     if (postIds.length > 0) {
       const { data: votes } = await supabase
         .from('feedback_votes')
         .select('post_id')
-        .eq('wallet_address', wallet.toLowerCase())
+        .eq('wallet_address', walletHash)
         .in('post_id', postIds);
       userVotes = (votes || []).map((v: { post_id: number }) => v.post_id);
     }
@@ -101,10 +89,10 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Hash wallet addresses before sending to client for privacy
+  // Convert stored hashes to display names for the client
   const sanitizedPosts = (posts || []).map((p: Record<string, unknown>) => ({
     ...p,
-    wallet_address: hashWalletToUserId(p.wallet_address as string),
+    wallet_address: hashToDisplayName(p.wallet_address as string),
   }));
 
   return NextResponse.json({
@@ -130,6 +118,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Invalid session token' }, { status: 401 });
     }
 
+    // Hash immediately — raw wallet never touches the database
+    const walletHash = hashWallet(verifiedWallet);
+
     const body = await request.json();
     const { title, description, category, token_ticker, token_contract_address, is_tax_token } = body;
 
@@ -153,7 +144,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (!checkRateLimit(`feedback:${verifiedWallet}`)) {
+    if (!checkRateLimit(`feedback:${walletHash}`)) {
       return NextResponse.json({ success: false, error: 'Rate limit exceeded. Try again later.' }, { status: 429 });
     }
 
@@ -161,7 +152,7 @@ export async function POST(request: NextRequest) {
       title: title.trim(),
       description: description?.trim() || null,
       category: postCategory,
-      wallet_address: verifiedWallet,
+      wallet_address: walletHash,
       vote_count: 1, // Auto-upvote by creator
     };
 
@@ -184,10 +175,10 @@ export async function POST(request: NextRequest) {
     // Auto-vote for the creator
     await supabase.from('feedback_votes').insert({
       post_id: data.id,
-      wallet_address: verifiedWallet,
+      wallet_address: walletHash,
     });
 
-    return NextResponse.json({ success: true, post: { ...data, wallet_address: hashWalletToUserId(data.wallet_address) } });
+    return NextResponse.json({ success: true, post: { ...data, wallet_address: hashToDisplayName(walletHash) } });
   } catch {
     return NextResponse.json({ success: false, error: 'Invalid request body' }, { status: 400 });
   }
