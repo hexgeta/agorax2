@@ -44,9 +44,10 @@ const NOUNS = [
 export function hashToDisplayName(hash: string): string {
   const adjIdx = parseInt(hash.slice(0, 4), 16) % ADJECTIVES.length;
   const nounIdx = parseInt(hash.slice(4, 8), 16) % NOUNS.length;
+  const suffix = parseInt(hash.slice(8, 12), 16) % 100;
   const adj = ADJECTIVES[adjIdx];
   const noun = NOUNS[nounIdx];
-  return capitalize(adj) + capitalize(noun);
+  return capitalize(adj) + capitalize(noun) + suffix;
 }
 
 function capitalize(s: string): string {
