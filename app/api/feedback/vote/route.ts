@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { verifySessionToken } from '@/lib/auth';
-import { hashWallet } from '@/lib/feedback-hash';
+import { hashWallet, isAdminWallet } from '@/lib/feedback-hash';
 
 const supabaseUrl = process.env.SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -37,6 +37,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Invalid session token' }, { status: 401 });
     }
 
+    // Admins cannot vote
+    if (isAdminWallet(verifiedWallet)) {
+      return NextResponse.json({ success: false, error: 'Admins cannot vote' }, { status: 403 });
+    }
+
     // Hash immediately — raw wallet never touches the database
     const walletHash = hashWallet(verifiedWallet);
 
@@ -59,6 +64,16 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (existing) {
+      // Check if user is the post author — authors can't remove their own vote
+      const { data: postData } = await supabase
+        .from('feedback_posts')
+        .select('wallet_address')
+        .eq('id', post_id)
+        .single();
+      if (postData && postData.wallet_address === walletHash) {
+        return NextResponse.json({ success: false, error: 'You cannot remove your vote from your own post' }, { status: 403 });
+      }
+
       // Remove vote
       await supabase.from('feedback_votes').delete().eq('id', existing.id);
       const { data: post } = await supabase.from('feedback_posts').select('vote_count').eq('id', post_id).single();

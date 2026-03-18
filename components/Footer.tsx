@@ -79,7 +79,7 @@ const Footer = () => {
                   href="/feedback"
                   className="text-sm text-white/70 hover:text-white transition-colors"
                 >
-                  Feedback
+                  Requests
                 </Link>
               </li>
             </ul>

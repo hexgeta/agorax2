@@ -31,6 +31,7 @@ export async function GET(request: NextRequest) {
   const category = searchParams.get('category');
   const status = searchParams.get('status');
   const wallet = searchParams.get('wallet');
+  const search = searchParams.get('search');
   const page = parseInt(searchParams.get('page') || '1');
   const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 50);
   const offset = (page - 1) * limit;
@@ -41,6 +42,7 @@ export async function GET(request: NextRequest) {
 
   if (category) query = query.eq('category', category);
   if (status) query = query.eq('status', status);
+  if (search) query = query.ilike('title', `%${search}%`);
 
   if (sort === 'newest') {
     query = query.order('created_at', { ascending: false });
@@ -59,9 +61,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: false, error: 'Failed to fetch feedback' }, { status: 500 });
   }
 
-  // If wallet provided, hash it and fetch which posts user has voted on
+  // If wallet provided, hash it and fetch which posts user has voted on + authored
   // DB stores hashed wallets, so we hash the incoming wallet to match
   let userVotes: number[] = [];
+  let userPosts: number[] = [];
   if (wallet) {
     const walletHash = hashWallet(wallet);
     const postIds = (posts || []).map((p: { id: number }) => p.id);
@@ -73,6 +76,10 @@ export async function GET(request: NextRequest) {
         .in('post_id', postIds);
       userVotes = (votes || []).map((v: { post_id: number }) => v.post_id);
     }
+    // Find posts authored by this wallet
+    userPosts = (posts || [])
+      .filter((p: { wallet_address: string }) => p.wallet_address === walletHash)
+      .map((p: { id: number }) => p.id);
   }
 
   // Fetch original post titles for any duplicate posts
@@ -100,6 +107,7 @@ export async function GET(request: NextRequest) {
     success: true,
     posts: sanitizedPosts,
     userVotes,
+    userPosts,
     duplicateOriginals,
     pagination: { page, limit, total: count || 0 },
   });

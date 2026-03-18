@@ -5,7 +5,7 @@ import { useAccount } from 'wagmi';
 import { useWalletAuth } from '@/hooks/useWalletAuth';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
-import { ChevronUp, MessageSquare, Plus, X, Send, Filter, Loader2, Shield, Trash2, Copy, ArrowRight } from 'lucide-react';
+import { ChevronUp, ChevronDown, MessageSquare, Plus, X, Send, Filter, Loader2, Shield, Trash2, Copy, ArrowRight, List, LayoutGrid, Search } from 'lucide-react';
 
 // Deterministic username color from string — avoids amber (admin-only)
 const USERNAME_COLORS = [
@@ -28,7 +28,7 @@ interface FeedbackPost {
   id: number;
   title: string;
   description: string | null;
-  category: 'feature' | 'bug' | 'improvement' | 'question' | 'whitelist';
+  category: 'feature' | 'bug' | 'improvement' | 'question' | 'whitelist'; // improvement/question legacy
   status: 'open' | 'under_review' | 'planned' | 'in_progress' | 'completed' | 'declined' | 'duplicate';
   wallet_address: string;
   vote_count: number;
@@ -57,8 +57,11 @@ const CATEGORY_CONFIG = {
   whitelist: { label: 'Whitelist Request', color: 'text-emerald-400 bg-emerald-500/20 border-emerald-500/30' },
 };
 
+// Categories available for new posts (excludes legacy improvement/question)
+const ACTIVE_CATEGORIES = ['feature', 'bug', 'whitelist'] as const;
+
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
-  open: { label: 'Open', color: 'text-gray-400 bg-gray-500/20' },
+  open: { label: 'Open', color: 'text-cyan-400 bg-cyan-500/20' },
   under_review: { label: 'Under Review', color: 'text-yellow-400 bg-yellow-500/20' },
   planned: { label: 'Planned', color: 'text-blue-400 bg-blue-500/20' },
   in_progress: { label: 'In Progress', color: 'text-orange-400 bg-orange-500/20' },
@@ -98,10 +101,14 @@ export default function FeedbackPage() {
   // State
   const [posts, setPosts] = useState<FeedbackPost[]>([]);
   const [userVotes, setUserVotes] = useState<number[]>([]);
+  const [userPosts, setUserPosts] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
   const [sort, setSort] = useState<'popular' | 'newest' | 'oldest'>('popular');
+  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
   const [categoryFilter, setCategoryFilter] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('');
+  const [searchInput, setSearchInput] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [showNewPost, setShowNewPost] = useState(false);
   const [expandedPost, setExpandedPost] = useState<number | null>(null);
@@ -150,6 +157,7 @@ export default function FeedbackPage() {
     });
     if (categoryFilter) params.set('category', categoryFilter);
     if (statusFilter) params.set('status', statusFilter);
+    if (searchQuery.trim()) params.set('search', searchQuery.trim());
     if (address) params.set('wallet', address);
 
     try {
@@ -158,6 +166,7 @@ export default function FeedbackPage() {
       if (data.success) {
         setPosts(data.posts);
         setUserVotes(data.userVotes || []);
+        setUserPosts(data.userPosts || []);
         setDuplicateOriginals(data.duplicateOriginals || {});
         setPagination(data.pagination);
       }
@@ -166,11 +175,27 @@ export default function FeedbackPage() {
     } finally {
       setLoading(false);
     }
-  }, [sort, categoryFilter, statusFilter, address]);
+  }, [sort, categoryFilter, statusFilter, searchQuery, address]);
 
   useEffect(() => {
     fetchPosts();
   }, [fetchPosts]);
+
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => setSearchQuery(searchInput), 300);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  // Lock body scroll when popup is open
+  useEffect(() => {
+    if (showNewPost) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => { document.body.style.overflow = ''; };
+  }, [showNewPost]);
 
   const handleVote = async (postId: number) => {
     if (!isConnected || !address) return;
@@ -373,6 +398,26 @@ export default function FeedbackPage() {
         </p>
       </div>
 
+      {/* Search bar */}
+      <div className="relative mb-4">
+        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+        <input
+          type="text"
+          placeholder="Search posts..."
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          className="w-full pl-10 pr-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-white/30 text-sm transition-colors"
+        />
+        {searchInput && (
+          <button
+            onClick={() => { setSearchInput(''); setSearchQuery(''); }}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
+          >
+            <X size={14} />
+          </button>
+        )}
+      </div>
+
       {/* Controls bar */}
       <div className="flex flex-wrap items-center gap-3 mb-6">
         {/* Sort buttons */}
@@ -390,6 +435,24 @@ export default function FeedbackPage() {
               {s}
             </button>
           ))}
+        </div>
+
+        {/* View toggle */}
+        <div className="flex rounded-lg overflow-hidden border border-white/10">
+          <button
+            onClick={() => setViewMode('list')}
+            className={`px-2.5 py-1.5 transition-colors ${viewMode === 'list' ? 'bg-white/15 text-white' : 'bg-white/5 text-gray-400 hover:text-white hover:bg-white/10'}`}
+            title="List view"
+          >
+            <List size={14} />
+          </button>
+          <button
+            onClick={() => setViewMode('kanban')}
+            className={`px-2.5 py-1.5 transition-colors ${viewMode === 'kanban' ? 'bg-white/15 text-white' : 'bg-white/5 text-gray-400 hover:text-white hover:bg-white/10'}`}
+            title="Board view"
+          >
+            <LayoutGrid size={14} />
+          </button>
         </div>
 
         {/* Filter toggle */}
@@ -412,7 +475,7 @@ export default function FeedbackPage() {
         <button
           onClick={() => setShowNewPost(true)}
           disabled={!isConnected}
-          className="ml-auto flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium bg-purple-600 hover:bg-purple-500 text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          className="ml-auto flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium bg-white hover:bg-gray-200 text-black transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <Plus size={14} />
           New Post
@@ -441,17 +504,20 @@ export default function FeedbackPage() {
                     >
                       All
                     </button>
-                    {Object.entries(CATEGORY_CONFIG).map(([key, cfg]) => (
-                      <button
-                        key={key}
-                        onClick={() => setCategoryFilter(categoryFilter === key ? '' : key)}
-                        className={`px-2.5 py-1 rounded-md text-xs border transition-colors ${
-                          categoryFilter === key ? cfg.color + ' border-current' : 'bg-white/5 text-gray-400 hover:text-white border-transparent'
-                        }`}
-                      >
-                        {cfg.label}
-                      </button>
-                    ))}
+                    {ACTIVE_CATEGORIES.map((key) => {
+                      const cfg = CATEGORY_CONFIG[key];
+                      return (
+                        <button
+                          key={key}
+                          onClick={() => setCategoryFilter(categoryFilter === key ? '' : key)}
+                          className={`px-2.5 py-1 rounded-md text-xs border transition-colors ${
+                            categoryFilter === key ? cfg.color + ' border-current' : 'bg-white/5 text-gray-400 hover:text-white border-transparent'
+                          }`}
+                        >
+                          {cfg.label}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
                 <div>
@@ -512,17 +578,20 @@ export default function FeedbackPage() {
                 <div className="mb-4">
                   <label className="text-xs text-gray-500 uppercase tracking-wider mb-2 block">Type</label>
                   <div className="flex flex-wrap gap-1.5">
-                    {Object.entries(CATEGORY_CONFIG).map(([key, cfg]) => (
-                      <button
-                        key={key}
-                        onClick={() => setNewCategory(key)}
-                        className={`px-3 py-1.5 rounded-lg text-xs border transition-colors ${
-                          newCategory === key ? cfg.color + ' border-current' : 'bg-white/5 text-gray-400 hover:text-white border-white/10'
-                        }`}
-                      >
-                        {cfg.label}
-                      </button>
-                    ))}
+                    {ACTIVE_CATEGORIES.map((key) => {
+                      const cfg = CATEGORY_CONFIG[key];
+                      return (
+                        <button
+                          key={key}
+                          onClick={() => setNewCategory(key)}
+                          className={`px-3 py-1.5 rounded-lg text-xs border transition-colors ${
+                            newCategory === key ? cfg.color + ' border-current' : 'bg-white/5 text-gray-400 hover:text-white border-white/10'
+                          }`}
+                        >
+                          {cfg.label}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -635,6 +704,68 @@ export default function FeedbackPage() {
           <p className="text-gray-400 text-lg mb-2">No feedback yet</p>
           <p className="text-gray-500 text-sm">Be the first to share your ideas!</p>
         </LiquidGlassCard>
+      ) : viewMode === 'kanban' ? (
+        <div className="flex gap-3 overflow-x-scroll pb-4 items-start visible-scrollbar" style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.2) transparent' }}>
+          {Object.entries(STATUS_CONFIG).filter(([key]) => key !== 'duplicate').map(([statusKey, statusCfg]) => {
+            const statusPosts = posts.filter(p => p.status === statusKey);
+            return (
+              <div key={statusKey} className="min-w-[260px] w-[260px] flex-shrink-0">
+                <div className={`flex items-center gap-2 mb-3 px-1`}>
+                  <span className={`text-xs px-2 py-0.5 rounded ${statusCfg.color}`}>{statusCfg.label}</span>
+                  <span className="text-xs text-gray-500">{statusPosts.length}</span>
+                </div>
+                <div className="space-y-2">
+                  {statusPosts.length === 0 ? (
+                    <div className="border border-dashed border-white/10 rounded-lg p-4 text-center">
+                      <p className="text-gray-600 text-xs">No posts</p>
+                    </div>
+                  ) : (
+                    statusPosts.map((post) => (
+                      <LiquidGlassCard key={post.id} className="rounded-lg p-3">
+                        <div className="flex items-start gap-2 mb-2">
+                          <button
+                            onClick={() => handleVote(post.id)}
+                            disabled={!isConnected || isAdmin || votingPost === post.id || (userPosts.includes(post.id) && userVotes.includes(post.id))}
+                            className={`flex flex-col items-center min-w-[32px] rounded transition-colors ${
+                              userVotes.includes(post.id) ? 'text-purple-400' : 'text-gray-500 hover:text-white'
+                            } disabled:cursor-not-allowed`}
+                          >
+                            <ChevronUp size={14} />
+                            <span className="text-[10px] font-semibold">{post.vote_count}</span>
+                          </button>
+                          <div className="flex-1 min-w-0">
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded border ${CATEGORY_CONFIG[post.category].color}`}>
+                              {CATEGORY_CONFIG[post.category].label}
+                            </span>
+                            <h4 className="text-white text-xs font-medium mt-1 line-clamp-2">{post.title}</h4>
+                          </div>
+                        </div>
+                        {post.description && (
+                          <p className="text-gray-400 text-[10px] line-clamp-2 mb-2">{post.description}</p>
+                        )}
+                        {post.category === 'whitelist' && post.token_ticker && (
+                          <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[10px] font-medium">{post.token_ticker}</span>
+                        )}
+                        <div className="flex items-center gap-2 text-[10px] text-gray-500 mt-2">
+                          {post.wallet_address === 'Admin' ? (
+                            <span className="font-bold text-amber-300 text-[9px]">Admin</span>
+                          ) : (
+                            <span className={`font-medium ${getUsernameColor(post.wallet_address)}`}>{post.wallet_address}</span>
+                          )}
+                          <span>{timeAgo(post.created_at)}</span>
+                          <span className="flex items-center gap-0.5">
+                            <MessageSquare size={9} />
+                            {post.comment_count}
+                          </span>
+                        </div>
+                      </LiquidGlassCard>
+                    ))
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       ) : (
         <div className="space-y-3">
           {posts.map((post) => (
@@ -646,10 +777,10 @@ export default function FeedbackPage() {
             >
               <LiquidGlassCard className="rounded-xl overflow-hidden">
                 <div className="flex">
-                  {/* Vote button */}
+                  {/* Vote button — disabled for authors who already voted on their own post */}
                   <button
                     onClick={(e) => { e.stopPropagation(); handleVote(post.id); }}
-                    disabled={!isConnected || votingPost === post.id}
+                    disabled={!isConnected || isAdmin || votingPost === post.id || (userPosts.includes(post.id) && userVotes.includes(post.id))}
                     className={`flex flex-col items-center justify-center px-4 py-4 min-w-[64px] border-r border-white/5 transition-colors ${
                       userVotes.includes(post.id)
                         ? 'bg-purple-500/10 text-purple-400'
@@ -663,7 +794,7 @@ export default function FeedbackPage() {
                   {/* Content */}
                   <div className="flex-1 p-4 min-w-0">
                     <div
-                      className="cursor-pointer"
+                      className="cursor-pointer group/post hover:bg-white/[0.02] rounded-lg transition-colors -m-2 p-2"
                       onClick={() => handleToggleExpand(post.id)}
                     >
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -690,7 +821,7 @@ export default function FeedbackPage() {
                         <div className="flex flex-wrap items-center gap-2 mb-2 text-xs">
                           <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-medium">{post.token_ticker}</span>
                           {post.token_contract_address && (
-                            <span className="text-gray-500 font-mono">{post.token_contract_address.slice(0, 6)}...{post.token_contract_address.slice(-4)}</span>
+                            <span className="text-gray-500 font-mono text-[10px] break-all">{post.token_contract_address}</span>
                           )}
                           {post.is_tax_token !== null && (
                             <span className={`px-1.5 py-0.5 rounded text-[10px] ${post.is_tax_token ? 'bg-amber-500/10 text-amber-400' : 'bg-gray-500/10 text-gray-400'}`}>
@@ -710,11 +841,11 @@ export default function FeedbackPage() {
                           </span>
                         )}
                         <span>{timeAgo(post.created_at)}</span>
-                        <span className="flex items-center gap-1">
+                        <span className="flex items-center gap-1 group-hover/post:text-white/60 transition-colors">
                           <MessageSquare size={11} />
                           {post.comment_count}
+                          {expandedPost === post.id ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
                         </span>
-                        <span className="text-gray-600">#{post.id}</span>
                       </div>
                     </div>
 
@@ -726,7 +857,7 @@ export default function FeedbackPage() {
                           className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] text-amber-400 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20 transition-colors"
                         >
                           <Shield size={10} />
-                          Admin
+                          Admin Settings
                         </button>
 
                         <AnimatePresence>
