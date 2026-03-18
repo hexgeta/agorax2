@@ -85,10 +85,12 @@ export default function FeedbackPage() {
   const { sessionToken, isVerified, verify } = useWalletAuth();
 
   // Helper to get auth headers for API calls
-  const getAuthHeaders = useCallback((): Record<string, string> => {
+  // Accepts optional token override for use immediately after verify() (before state updates)
+  const getAuthHeaders = useCallback((tokenOverride?: string): Record<string, string> => {
+    const token = tokenOverride || sessionToken;
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (sessionToken) {
-      headers['Authorization'] = `Bearer ${sessionToken}`;
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
     }
     return headers;
   }, [sessionToken]);
@@ -172,13 +174,14 @@ export default function FeedbackPage() {
 
   const handleVote = async (postId: number) => {
     if (!isConnected || !address) return;
-    if (!isVerified) { await verify(); return; }
+    let freshToken: string | undefined;
+    if (!isVerified) { const token = await verify(); if (!token) return; freshToken = token; }
     setVotingPost(postId);
 
     try {
       const res = await fetch('/api/feedback/vote', {
         method: 'POST',
-        headers: getAuthHeaders(),
+        headers: getAuthHeaders(freshToken),
         body: JSON.stringify({ post_id: postId }),
       });
       const data = await res.json();
@@ -201,17 +204,23 @@ export default function FeedbackPage() {
   };
 
   const handleSubmitPost = async () => {
-    if (!isConnected || !address || !newTitle.trim()) return;
-    if (!isVerified) { await verify(); return; }
+    if (!isConnected || !address) return;
+    if (newCategory !== 'whitelist' && !newTitle.trim()) return;
+    let freshToken: string | undefined;
+    if (!isVerified) {
+      const token = await verify();
+      if (!token) return;
+      freshToken = token;
+    }
     setSubmitting(true);
 
     try {
       const res = await fetch('/api/feedback', {
         method: 'POST',
-        headers: getAuthHeaders(),
+        headers: getAuthHeaders(freshToken),
         body: JSON.stringify({
-          title: newTitle.trim(),
-          description: newDescription.trim() || null,
+          title: newCategory === 'whitelist' ? `Whitelist ${newTokenTicker.trim().toUpperCase()}` : newTitle.trim(),
+          description: newCategory === 'whitelist' ? null : (newDescription.trim() || null),
           category: newCategory,
           ...(newCategory === 'whitelist' && {
             token_ticker: newTokenTicker.trim(),
@@ -266,13 +275,14 @@ export default function FeedbackPage() {
 
   const handleSubmitComment = async (postId: number) => {
     if (!isConnected || !address || !commentText.trim()) return;
-    if (!isVerified) { await verify(); return; }
+    let freshToken: string | undefined;
+    if (!isVerified) { const token = await verify(); if (!token) return; freshToken = token; }
     setSubmittingComment(true);
 
     try {
       const res = await fetch('/api/feedback/comment', {
         method: 'POST',
-        headers: getAuthHeaders(),
+        headers: getAuthHeaders(freshToken),
         body: JSON.stringify({
           post_id: postId,
           content: commentText.trim(),
@@ -516,29 +526,32 @@ export default function FeedbackPage() {
                   </div>
                 </div>
 
-                {/* Title */}
-                <div className="mb-4">
-                  <input
-                    type="text"
-                    placeholder="Short, descriptive title..."
-                    value={newTitle}
-                    onChange={(e) => setNewTitle(e.target.value)}
-                    maxLength={200}
-                    className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50 text-sm"
-                  />
-                </div>
+                {/* Title & Description - hidden for whitelist */}
+                {newCategory !== 'whitelist' && (
+                  <>
+                    <div className="mb-4">
+                      <input
+                        type="text"
+                        placeholder="Short, descriptive title..."
+                        value={newTitle}
+                        onChange={(e) => setNewTitle(e.target.value)}
+                        maxLength={200}
+                        className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50 text-sm"
+                      />
+                    </div>
 
-                {/* Description */}
-                <div className="mb-4">
-                  <textarea
-                    placeholder="Describe your idea or issue in detail... (optional)"
-                    value={newDescription}
-                    onChange={(e) => setNewDescription(e.target.value)}
-                    maxLength={5000}
-                    rows={4}
-                    className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50 text-sm resize-none"
-                  />
-                </div>
+                    <div className="mb-4">
+                      <textarea
+                        placeholder="Describe your idea or issue in detail... (optional)"
+                        value={newDescription}
+                        onChange={(e) => setNewDescription(e.target.value)}
+                        maxLength={5000}
+                        rows={4}
+                        className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50 text-sm resize-none"
+                      />
+                    </div>
+                  </>
+                )}
 
                 {/* Whitelist-specific fields */}
                 {newCategory === 'whitelist' && (
@@ -600,7 +613,7 @@ export default function FeedbackPage() {
                 {/* Submit */}
                 <button
                   onClick={handleSubmitPost}
-                  disabled={submitting || !newTitle.trim() || newTitle.trim().length < 3 || (newCategory === 'whitelist' && (!newTokenTicker.trim() || !/^0x[a-fA-F0-9]{40}$/.test(newContractAddress.trim()) || newIsTaxToken === null))}
+                  disabled={submitting || (newCategory === 'whitelist' ? (!newTokenTicker.trim() || !/^0x[a-fA-F0-9]{40}$/.test(newContractAddress.trim()) || newIsTaxToken === null) : (!newTitle.trim() || newTitle.trim().length < 3))}
                   className="w-full py-2.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-medium text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {submitting ? <Loader2 size={16} className="animate-spin" /> : <Send size={14} />}
