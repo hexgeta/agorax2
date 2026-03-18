@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { verifySessionToken } from '@/lib/auth';
 import { hashWallet, hashToDisplayName, isAdminWallet } from '@/lib/feedback-hash';
+import { notifyNewFeedback } from '@/lib/telegram';
 
 const supabaseUrl = process.env.SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -179,6 +180,16 @@ export async function POST(request: NextRequest) {
     await supabase.from('feedback_votes').insert({
       post_id: data.id,
       wallet_address: walletHash,
+    });
+
+    // Fire-and-forget Telegram notification
+    notifyNewFeedback({
+      id: data.id,
+      title: data.title,
+      category: data.category,
+      description: data.description,
+      tokenTicker: data.token_ticker,
+      tokenContract: data.token_contract_address,
     });
 
     return NextResponse.json({ success: true, post: { ...data, wallet_address: admin ? 'Admin' : hashToDisplayName(walletHash) } });
