@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { verifySessionToken } from '@/lib/auth';
 
 const supabaseUrl = process.env.SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -99,15 +100,22 @@ export async function GET(request: NextRequest) {
 }
 
 // POST /api/feedback
-// Body: { wallet_address, title, description?, category?, token_ticker?, token_contract_address?, is_tax_token? }
+// Body: { title, description?, category?, token_ticker?, token_contract_address?, is_tax_token? }
+// Requires: Authorization: Bearer <token>
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { wallet_address, title, description, category, token_ticker, token_contract_address, is_tax_token } = body;
-
-    if (!wallet_address || !isValidWalletAddress(wallet_address)) {
-      return NextResponse.json({ success: false, error: 'Valid wallet address required' }, { status: 400 });
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json({ success: false, error: 'Authentication required' }, { status: 401 });
     }
+    const verifiedWallet = verifySessionToken(authHeader.slice(7));
+    if (!verifiedWallet) {
+      return NextResponse.json({ success: false, error: 'Invalid session token' }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const { title, description, category, token_ticker, token_contract_address, is_tax_token } = body;
+
     if (!title || typeof title !== 'string' || title.trim().length < 3 || title.trim().length > 200) {
       return NextResponse.json({ success: false, error: 'Title must be 3-200 characters' }, { status: 400 });
     }
@@ -128,7 +136,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (!checkRateLimit(`feedback:${wallet_address.toLowerCase()}`)) {
+    if (!checkRateLimit(`feedback:${verifiedWallet}`)) {
       return NextResponse.json({ success: false, error: 'Rate limit exceeded. Try again later.' }, { status: 429 });
     }
 
@@ -136,7 +144,7 @@ export async function POST(request: NextRequest) {
       title: title.trim(),
       description: description?.trim() || null,
       category: postCategory,
-      wallet_address: wallet_address.toLowerCase(),
+      wallet_address: verifiedWallet,
       vote_count: 1, // Auto-upvote by creator
     };
 
@@ -159,7 +167,7 @@ export async function POST(request: NextRequest) {
     // Auto-vote for the creator
     await supabase.from('feedback_votes').insert({
       post_id: data.id,
-      wallet_address: wallet_address.toLowerCase(),
+      wallet_address: verifiedWallet,
     });
 
     return NextResponse.json({ success: true, post: data });

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { verifySessionToken } from '@/lib/auth';
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -20,6 +21,17 @@ function isValidWalletAddress(address: string): boolean {
 }
 
 /**
+ * Extract and verify wallet from Authorization: Bearer <token> header.
+ * Returns the verified wallet address or null.
+ */
+function getVerifiedWallet(request: NextRequest): string | null {
+  const authHeader = request.headers.get('authorization');
+  if (!authHeader?.startsWith('Bearer ')) return null;
+  const token = authHeader.slice(7);
+  return verifySessionToken(token);
+}
+
+/**
  * PATCH /api/admin/feedback
  * Admin actions: update status, mark as duplicate, link duplicate
  *
@@ -29,15 +41,16 @@ function isValidWalletAddress(address: string): boolean {
  */
 export async function PATCH(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { wallet_address, post_id, action } = body;
-
-    if (!wallet_address || !isValidWalletAddress(wallet_address)) {
-      return NextResponse.json({ success: false, error: 'Valid wallet address required' }, { status: 400 });
+    const verifiedWallet = getVerifiedWallet(request);
+    if (!verifiedWallet) {
+      return NextResponse.json({ success: false, error: 'Authentication required' }, { status: 401 });
     }
-    if (!isAdminWallet(wallet_address)) {
+    if (!isAdminWallet(verifiedWallet)) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 403 });
     }
+
+    const body = await request.json();
+    const { post_id, action } = body;
     if (!post_id || typeof post_id !== 'number') {
       return NextResponse.json({ success: false, error: 'Valid post_id required' }, { status: 400 });
     }
@@ -107,15 +120,16 @@ export async function PATCH(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { wallet_address, post_id } = body;
-
-    if (!wallet_address || !isValidWalletAddress(wallet_address)) {
-      return NextResponse.json({ success: false, error: 'Valid wallet address required' }, { status: 400 });
+    const verifiedWallet = getVerifiedWallet(request);
+    if (!verifiedWallet) {
+      return NextResponse.json({ success: false, error: 'Authentication required' }, { status: 401 });
     }
-    if (!isAdminWallet(wallet_address)) {
+    if (!isAdminWallet(verifiedWallet)) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 403 });
     }
+
+    const body = await request.json();
+    const { post_id } = body;
     if (!post_id || typeof post_id !== 'number') {
       return NextResponse.json({ success: false, error: 'Valid post_id required' }, { status: 400 });
     }

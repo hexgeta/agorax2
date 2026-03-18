@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useAccount } from 'wagmi';
+import { useWalletAuth } from '@/hooks/useWalletAuth';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 import { ChevronUp, MessageSquare, Plus, X, Send, Filter, Loader2, Shield, Trash2, Copy, ArrowRight } from 'lucide-react';
@@ -69,6 +70,16 @@ function timeAgo(dateString: string): string {
 
 export default function FeedbackPage() {
   const { address, isConnected } = useAccount();
+  const { sessionToken, isVerified, verify } = useWalletAuth();
+
+  // Helper to get auth headers for API calls
+  const getAuthHeaders = useCallback((): Record<string, string> => {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (sessionToken) {
+      headers['Authorization'] = `Bearer ${sessionToken}`;
+    }
+    return headers;
+  }, [sessionToken]);
 
   // State
   const [posts, setPosts] = useState<FeedbackPost[]>([]);
@@ -149,13 +160,14 @@ export default function FeedbackPage() {
 
   const handleVote = async (postId: number) => {
     if (!isConnected || !address) return;
+    if (!isVerified) { await verify(); return; }
     setVotingPost(postId);
 
     try {
       const res = await fetch('/api/feedback/vote', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ wallet_address: address, post_id: postId }),
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ post_id: postId }),
       });
       const data = await res.json();
       if (data.success) {
@@ -178,14 +190,14 @@ export default function FeedbackPage() {
 
   const handleSubmitPost = async () => {
     if (!isConnected || !address || !newTitle.trim()) return;
+    if (!isVerified) { await verify(); return; }
     setSubmitting(true);
 
     try {
       const res = await fetch('/api/feedback', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
-          wallet_address: address,
           title: newTitle.trim(),
           description: newDescription.trim() || null,
           category: newCategory,
@@ -242,14 +254,14 @@ export default function FeedbackPage() {
 
   const handleSubmitComment = async (postId: number) => {
     if (!isConnected || !address || !commentText.trim()) return;
+    if (!isVerified) { await verify(); return; }
     setSubmittingComment(true);
 
     try {
       const res = await fetch('/api/feedback/comment', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
-          wallet_address: address,
           post_id: postId,
           content: commentText.trim(),
         }),
@@ -278,8 +290,8 @@ export default function FeedbackPage() {
     try {
       const res = await fetch('/api/admin/feedback', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ wallet_address: address, post_id: postId, action: 'update_status', status }),
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ post_id: postId, action: 'update_status', status }),
       });
       const data = await res.json();
       if (data.success) {
@@ -297,8 +309,8 @@ export default function FeedbackPage() {
     try {
       const res = await fetch('/api/admin/feedback', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ wallet_address: address, post_id: postId, action: 'mark_duplicate', duplicate_of: dupId }),
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ post_id: postId, action: 'mark_duplicate', duplicate_of: dupId }),
       });
       const data = await res.json();
       if (data.success) {
@@ -318,8 +330,8 @@ export default function FeedbackPage() {
     try {
       const res = await fetch('/api/admin/feedback', {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ wallet_address: address, post_id: postId }),
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ post_id: postId }),
       });
       const data = await res.json();
       if (data.success) {
