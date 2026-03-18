@@ -5,6 +5,7 @@ import { useAccount } from 'wagmi';
 import { useWalletAuth } from '@/hooks/useWalletAuth';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
+import { Checkbox } from '@/components/ui/checkbox';
 import { ChevronUp, ChevronDown, MessageSquare, Plus, X, Send, Filter, Loader2, Shield, Trash2, Copy, ArrowRight, List, LayoutGrid, Search } from 'lucide-react';
 
 // Deterministic username color from string — avoids amber (admin-only)
@@ -67,7 +68,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   in_progress: { label: 'In Progress', color: 'text-orange-400 border border-orange-500/40 bg-transparent' },
   completed: { label: 'Completed', color: 'text-green-400 border border-green-500/40 bg-transparent' },
   declined: { label: 'Declined', color: 'text-red-400 border border-red-500/40 bg-transparent' },
-  duplicate: { label: 'Duplicate', color: 'text-gray-400 border border-gray-500/40 bg-transparent' },
+  duplicate: { label: 'Merged', color: 'text-gray-400 border border-gray-500/40 bg-transparent' },
 };
 
 function timeAgo(dateString: string): string {
@@ -136,6 +137,7 @@ export default function FeedbackPage() {
 
   // Admin state
   const [isAdmin, setIsAdmin] = useState(false);
+  const [showMerged, setShowMerged] = useState(true);
   const [adminActionPost, setAdminActionPost] = useState<number | null>(null);
   const [duplicateIdInput, setDuplicateIdInput] = useState('');
   const [adminLoading, setAdminLoading] = useState(false);
@@ -394,9 +396,12 @@ export default function FeedbackPage() {
     } catch { /* silently fail */ } finally { setAdminLoading(false); }
   };
 
-  const filteredPosts = ownerFilter === 'all' ? posts
-    : ownerFilter === 'mine' ? posts.filter(p => userPosts.includes(p.id))
-    : posts.filter(p => !userPosts.includes(p.id));
+  const visiblePosts = posts.filter(p =>
+    p.status !== 'duplicate' || userPosts.includes(p.id) || (isAdmin && showMerged)
+  );
+  const filteredPosts = ownerFilter === 'all' ? visiblePosts
+    : ownerFilter === 'mine' ? visiblePosts.filter(p => userPosts.includes(p.id))
+    : visiblePosts.filter(p => !userPosts.includes(p.id));
 
   return (
     <div className="min-h-screen px-4 py-8 max-w-4xl mx-auto">
@@ -565,7 +570,7 @@ export default function FeedbackPage() {
                     >
                       All
                     </button>
-                    {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
+                    {Object.entries(STATUS_CONFIG).filter(([k]) => !['duplicate', 'under_review', 'planned'].includes(k)).map(([key, cfg]) => (
                       <button
                         key={key}
                         onClick={() => setStatusFilter(statusFilter === key ? '' : key)}
@@ -578,6 +583,18 @@ export default function FeedbackPage() {
                     ))}
                   </div>
                 </div>
+                {isAdmin && (
+                  <div>
+                    <label className="flex items-center gap-2 cursor-pointer" onClick={() => setShowMerged(!showMerged)}>
+                      <Checkbox
+                        checked={showMerged}
+                        onCheckedChange={(checked) => setShowMerged(!!checked)}
+                        className="h-4 w-4 border-white/30 data-[state=checked]:bg-white data-[state=checked]:text-black"
+                      />
+                      <span className="text-xs text-gray-400">Show Merged</span>
+                    </label>
+                  </div>
+                )}
               </div>
             </LiquidGlassCard>
           </motion.div>
@@ -858,7 +875,7 @@ export default function FeedbackPage() {
                         {post.status === 'duplicate' && post.duplicate_of && duplicateOriginals[post.duplicate_of] && (
                           <p className="text-xs text-gray-500 mb-1 flex items-center gap-1">
                             <Copy size={10} />
-                            Duplicate of #{post.duplicate_of}: {duplicateOriginals[post.duplicate_of].title}
+                            Merged with #{post.duplicate_of}: {duplicateOriginals[post.duplicate_of].title}
                           </p>
                         )}
                         {post.description && (
@@ -901,6 +918,7 @@ export default function FeedbackPage() {
                             <MessageSquare size={11} />
                             {post.comment_count}
                           </span>
+                          <span className="text-gray-600">#{post.id}</span>
                         </div>
                       </div>
                       <div className="flex-shrink-0 text-gray-500 group-hover/post:text-white/60 transition-colors self-center pr-2">
@@ -933,7 +951,7 @@ export default function FeedbackPage() {
                                 <div>
                                   <label className="text-[10px] text-amber-400/70 uppercase tracking-wider block mb-1">Set Status</label>
                                   <div className="flex flex-wrap gap-1">
-                                    {Object.entries(STATUS_CONFIG).filter(([k]) => k !== 'duplicate').map(([key, cfg]) => (
+                                    {Object.entries(STATUS_CONFIG).filter(([k]) => !['duplicate', 'under_review', 'planned'].includes(k)).map(([key, cfg]) => (
                                       <button
                                         key={key}
                                         onClick={() => handleAdminUpdateStatus(post.id, key)}
@@ -950,7 +968,7 @@ export default function FeedbackPage() {
 
                                 {/* Mark as duplicate */}
                                 <div>
-                                  <label className="text-[10px] text-amber-400/70 uppercase tracking-wider block mb-1">Mark as Duplicate</label>
+                                  <label className="text-[10px] text-amber-400/70 uppercase tracking-wider block mb-1">Merge Into</label>
                                   <div className="flex gap-1.5">
                                     <input
                                       type="number"

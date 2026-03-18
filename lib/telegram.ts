@@ -10,7 +10,7 @@
  */
 
 const BOT_TOKEN = () => process.env.TELEGRAM_BOT_TOKEN || '';
-const CHAT_ID = () => process.env.TELEGRAM_CHAT_ID || '';
+const CHAT_ID = () => process.env.TELEGRAM_CHAT_ID_GROUP || process.env.TELEGRAM_CHAT_ID || '';
 
 function isConfigured(): boolean {
   return BOT_TOKEN().length > 0 && CHAT_ID().length > 0;
