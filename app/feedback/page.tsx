@@ -7,6 +7,22 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 import { ChevronUp, MessageSquare, Plus, X, Send, Filter, Loader2, Shield, Trash2, Copy, ArrowRight } from 'lucide-react';
 
+// Deterministic username color from string — avoids amber (admin-only)
+const USERNAME_COLORS = [
+  'text-blue-400', 'text-emerald-400', 'text-violet-400', 'text-rose-400',
+  'text-cyan-400', 'text-pink-400', 'text-teal-400', 'text-indigo-400',
+  'text-lime-400', 'text-fuchsia-400', 'text-sky-400', 'text-orange-300',
+  'text-green-400', 'text-purple-400', 'text-red-300', 'text-yellow-300',
+];
+
+function getUsernameColor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = ((hash << 5) - hash + name.charCodeAt(i)) | 0;
+  }
+  return USERNAME_COLORS[Math.abs(hash) % USERNAME_COLORS.length];
+}
+
 // Types
 interface FeedbackPost {
   id: number;
@@ -671,9 +687,15 @@ export default function FeedbackPage() {
                         </div>
                       )}
                       <div className="flex items-center gap-3 text-[11px] text-gray-500">
-                        <span className={post.wallet_address === 'Admin' ? 'text-amber-400 font-semibold' : ''}>
-                          {post.wallet_address}
-                        </span>
+                        {post.wallet_address === 'Admin' ? (
+                          <span className="font-bold text-amber-300 bg-amber-500/15 border border-amber-500/30 rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
+                            Admin
+                          </span>
+                        ) : (
+                          <span className={`font-medium ${getUsernameColor(post.wallet_address)}`}>
+                            {post.wallet_address}
+                          </span>
+                        )}
                         <span>{timeAgo(post.created_at)}</span>
                         <span className="flex items-center gap-1">
                           <MessageSquare size={11} />
@@ -785,9 +807,15 @@ export default function FeedbackPage() {
                                     {(comments[post.id] || []).map((comment) => (
                                       <div key={comment.id} className="text-xs">
                                         <div className="flex items-center gap-2 text-gray-500 mb-0.5">
-                                          <span className={`font-medium ${comment.wallet_address === 'Admin' ? 'text-amber-400' : 'text-gray-400'}`}>
-                                            {comment.wallet_address}
-                                          </span>
+                                          {comment.wallet_address === 'Admin' ? (
+                                            <span className="font-bold text-amber-300 bg-amber-500/15 border border-amber-500/30 rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
+                                              Admin
+                                            </span>
+                                          ) : (
+                                            <span className={`font-medium ${getUsernameColor(comment.wallet_address)}`}>
+                                              {comment.wallet_address}
+                                            </span>
+                                          )}
                                           <span>{timeAgo(comment.created_at)}</span>
                                         </div>
                                         <p className="text-gray-300">{comment.content}</p>
