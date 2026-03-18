@@ -2,22 +2,41 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useAccount } from 'wagmi';
+import { useWalletAuth } from '@/hooks/useWalletAuth';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
-import { ChevronUp, MessageSquare, Plus, X, Image as ImageIcon, Send, Filter, Loader2, Shield, Trash2, Copy, ArrowRight } from 'lucide-react';
+import { ChevronUp, MessageSquare, Plus, X, Send, Filter, Loader2, Shield, Trash2, Copy, ArrowRight } from 'lucide-react';
+
+// Deterministic username color from string — avoids amber (admin-only)
+const USERNAME_COLORS = [
+  'text-blue-400', 'text-emerald-400', 'text-violet-400', 'text-rose-400',
+  'text-cyan-400', 'text-pink-400', 'text-teal-400', 'text-indigo-400',
+  'text-lime-400', 'text-fuchsia-400', 'text-sky-400', 'text-orange-300',
+  'text-green-400', 'text-purple-400', 'text-red-300', 'text-yellow-300',
+];
+
+function getUsernameColor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = ((hash << 5) - hash + name.charCodeAt(i)) | 0;
+  }
+  return USERNAME_COLORS[Math.abs(hash) % USERNAME_COLORS.length];
+}
 
 // Types
 interface FeedbackPost {
   id: number;
   title: string;
   description: string | null;
-  category: 'feature' | 'bug' | 'improvement' | 'question';
+  category: 'feature' | 'bug' | 'improvement' | 'question' | 'whitelist';
   status: 'open' | 'under_review' | 'planned' | 'in_progress' | 'completed' | 'declined' | 'duplicate';
   wallet_address: string;
   vote_count: number;
   comment_count: number;
-  images: string[];
   duplicate_of: number | null;
+  token_ticker: string | null;
+  token_contract_address: string | null;
+  is_tax_token: boolean | null;
   created_at: string;
   updated_at: string;
 }
@@ -35,6 +54,7 @@ const CATEGORY_CONFIG = {
   bug: { label: 'Bug Report', color: 'text-red-400 bg-red-500/20 border-red-500/30' },
   improvement: { label: 'Improvement', color: 'text-blue-400 bg-blue-500/20 border-blue-500/30' },
   question: { label: 'Question', color: 'text-yellow-400 bg-yellow-500/20 border-yellow-500/30' },
+  whitelist: { label: 'Whitelist Request', color: 'text-emerald-400 bg-emerald-500/20 border-emerald-500/30' },
 };
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
@@ -46,10 +66,6 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   declined: { label: 'Declined', color: 'text-red-400 bg-red-500/20' },
   duplicate: { label: 'Duplicate', color: 'text-gray-400 bg-gray-500/20' },
 };
-
-function formatAddress(address: string): string {
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
-}
 
 function timeAgo(dateString: string): string {
   const seconds = Math.floor((Date.now() - new Date(dateString).getTime()) / 1000);
@@ -66,6 +82,16 @@ function timeAgo(dateString: string): string {
 
 export default function FeedbackPage() {
   const { address, isConnected } = useAccount();
+  const { sessionToken, isVerified, verify } = useWalletAuth();
+
+  // Helper to get auth headers for API calls
+  const getAuthHeaders = useCallback((): Record<string, string> => {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (sessionToken) {
+      headers['Authorization'] = `Bearer ${sessionToken}`;
+    }
+    return headers;
+  }, [sessionToken]);
 
   // State
   const [posts, setPosts] = useState<FeedbackPost[]>([]);
@@ -85,9 +111,10 @@ export default function FeedbackPage() {
   const [newTitle, setNewTitle] = useState('');
   const [newDescription, setNewDescription] = useState('');
   const [newCategory, setNewCategory] = useState<string>('feature');
-  const [newImages, setNewImages] = useState<string[]>([]);
-  const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [newTokenTicker, setNewTokenTicker] = useState('');
+  const [newContractAddress, setNewContractAddress] = useState('');
+  const [newIsTaxToken, setNewIsTaxToken] = useState<boolean | null>(null);
 
   // Comment form
   const [commentText, setCommentText] = useState('');
@@ -145,13 +172,14 @@ export default function FeedbackPage() {
 
   const handleVote = async (postId: number) => {
     if (!isConnected || !address) return;
+    if (!isVerified) { await verify(); return; }
     setVotingPost(postId);
 
     try {
       const res = await fetch('/api/feedback/vote', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ wallet_address: address, post_id: postId }),
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ post_id: postId }),
       });
       const data = await res.json();
       if (data.success) {
@@ -174,18 +202,22 @@ export default function FeedbackPage() {
 
   const handleSubmitPost = async () => {
     if (!isConnected || !address || !newTitle.trim()) return;
+    if (!isVerified) { await verify(); return; }
     setSubmitting(true);
 
     try {
       const res = await fetch('/api/feedback', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
-          wallet_address: address,
           title: newTitle.trim(),
           description: newDescription.trim() || null,
           category: newCategory,
-          images: newImages,
+          ...(newCategory === 'whitelist' && {
+            token_ticker: newTokenTicker.trim(),
+            token_contract_address: newContractAddress.trim(),
+            is_tax_token: newIsTaxToken === true,
+          }),
         }),
       });
       const data = await res.json();
@@ -194,39 +226,15 @@ export default function FeedbackPage() {
         setNewTitle('');
         setNewDescription('');
         setNewCategory('feature');
-        setNewImages([]);
+        setNewTokenTicker('');
+        setNewContractAddress('');
+        setNewIsTaxToken(null);
         fetchPosts();
       }
     } catch {
       // silently fail
     } finally {
       setSubmitting(false);
-    }
-  };
-
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !address) return;
-    if (newImages.length >= 3) return;
-    setUploading(true);
-
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('wallet_address', address);
-
-      const res = await fetch('/api/feedback/upload', {
-        method: 'POST',
-        body: formData,
-      });
-      const data = await res.json();
-      if (data.success && data.url) {
-        setNewImages(prev => [...prev, data.url]);
-      }
-    } catch {
-      // silently fail
-    } finally {
-      setUploading(false);
     }
   };
 
@@ -258,14 +266,14 @@ export default function FeedbackPage() {
 
   const handleSubmitComment = async (postId: number) => {
     if (!isConnected || !address || !commentText.trim()) return;
+    if (!isVerified) { await verify(); return; }
     setSubmittingComment(true);
 
     try {
       const res = await fetch('/api/feedback/comment', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
-          wallet_address: address,
           post_id: postId,
           content: commentText.trim(),
         }),
@@ -294,8 +302,8 @@ export default function FeedbackPage() {
     try {
       const res = await fetch('/api/admin/feedback', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ wallet_address: address, post_id: postId, action: 'update_status', status }),
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ post_id: postId, action: 'update_status', status }),
       });
       const data = await res.json();
       if (data.success) {
@@ -313,8 +321,8 @@ export default function FeedbackPage() {
     try {
       const res = await fetch('/api/admin/feedback', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ wallet_address: address, post_id: postId, action: 'mark_duplicate', duplicate_of: dupId }),
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ post_id: postId, action: 'mark_duplicate', duplicate_of: dupId }),
       });
       const data = await res.json();
       if (data.success) {
@@ -334,8 +342,8 @@ export default function FeedbackPage() {
     try {
       const res = await fetch('/api/admin/feedback', {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ wallet_address: address, post_id: postId }),
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ post_id: postId }),
       });
       const data = await res.json();
       if (data.success) {
@@ -532,47 +540,67 @@ export default function FeedbackPage() {
                   />
                 </div>
 
-                {/* Image upload */}
-                <div className="mb-5">
-                  <div className="flex items-center gap-2 mb-2">
-                    <label className="text-xs text-gray-500 uppercase tracking-wider">
-                      Images ({newImages.length}/3)
-                    </label>
-                    {newImages.length < 3 && (
-                      <label className="flex items-center gap-1 px-2 py-1 rounded-md bg-white/5 border border-white/10 text-gray-400 hover:text-white text-xs cursor-pointer transition-colors">
-                        <ImageIcon size={12} />
-                        {uploading ? 'Uploading...' : 'Add Image'}
-                        <input
-                          type="file"
-                          accept="image/jpeg,image/png,image/gif,image/webp"
-                          onChange={handleImageUpload}
-                          className="hidden"
-                          disabled={uploading}
-                        />
-                      </label>
-                    )}
-                  </div>
-                  {newImages.length > 0 && (
-                    <div className="flex gap-2">
-                      {newImages.map((url, i) => (
-                        <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-white/10">
-                          <img src={url} alt="" className="w-full h-full object-cover" />
-                          <button
-                            onClick={() => setNewImages(prev => prev.filter((_, idx) => idx !== i))}
-                            className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-black/70 flex items-center justify-center text-white hover:bg-red-500"
-                          >
-                            <X size={10} />
-                          </button>
-                        </div>
-                      ))}
+                {/* Whitelist-specific fields */}
+                {newCategory === 'whitelist' && (
+                  <div className="mb-4 space-y-3 p-4 rounded-lg bg-emerald-500/5 border border-emerald-500/10">
+                    <div>
+                      <label className="text-xs text-gray-500 uppercase tracking-wider mb-1.5 block">Token Ticker *</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. HEX, PLSX, INC..."
+                        value={newTokenTicker}
+                        onChange={(e) => setNewTokenTicker(e.target.value)}
+                        maxLength={20}
+                        className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500/50 text-sm"
+                      />
                     </div>
-                  )}
-                </div>
+                    <div>
+                      <label className="text-xs text-gray-500 uppercase tracking-wider mb-1.5 block">Contract Address *</label>
+                      <input
+                        type="text"
+                        placeholder="0x..."
+                        value={newContractAddress}
+                        onChange={(e) => setNewContractAddress(e.target.value)}
+                        maxLength={42}
+                        className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500/50 text-sm font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-500 uppercase tracking-wider mb-1.5 block">
+                        Is this a tax/fee on-transfer or rebasing token?
+                      </label>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setNewIsTaxToken(true)}
+                          className={`px-4 py-2 rounded-lg text-sm border transition-colors ${
+                            newIsTaxToken === true
+                              ? 'border-emerald-500/50 bg-emerald-500/20 text-emerald-400'
+                              : 'border-white/10 bg-white/5 text-gray-400 hover:text-white'
+                          }`}
+                        >
+                          Yes
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setNewIsTaxToken(false)}
+                          className={`px-4 py-2 rounded-lg text-sm border transition-colors ${
+                            newIsTaxToken === false
+                              ? 'border-emerald-500/50 bg-emerald-500/20 text-emerald-400'
+                              : 'border-white/10 bg-white/5 text-gray-400 hover:text-white'
+                          }`}
+                        >
+                          No
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Submit */}
                 <button
                   onClick={handleSubmitPost}
-                  disabled={submitting || !newTitle.trim() || newTitle.trim().length < 3}
+                  disabled={submitting || !newTitle.trim() || newTitle.trim().length < 3 || (newCategory === 'whitelist' && (!newTokenTicker.trim() || !/^0x[a-fA-F0-9]{40}$/.test(newContractAddress.trim()) || newIsTaxToken === null))}
                   className="w-full py-2.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-medium text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {submitting ? <Loader2 size={16} className="animate-spin" /> : <Send size={14} />}
@@ -645,8 +673,29 @@ export default function FeedbackPage() {
                       {post.description && (
                         <p className="text-gray-400 text-xs line-clamp-2 mb-2">{post.description}</p>
                       )}
+                      {post.category === 'whitelist' && post.token_ticker && (
+                        <div className="flex flex-wrap items-center gap-2 mb-2 text-xs">
+                          <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-medium">{post.token_ticker}</span>
+                          {post.token_contract_address && (
+                            <span className="text-gray-500 font-mono">{post.token_contract_address.slice(0, 6)}...{post.token_contract_address.slice(-4)}</span>
+                          )}
+                          {post.is_tax_token !== null && (
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] ${post.is_tax_token ? 'bg-amber-500/10 text-amber-400' : 'bg-gray-500/10 text-gray-400'}`}>
+                              {post.is_tax_token ? 'Tax/Fee Token' : 'Standard Token'}
+                            </span>
+                          )}
+                        </div>
+                      )}
                       <div className="flex items-center gap-3 text-[11px] text-gray-500">
-                        <span>{formatAddress(post.wallet_address)}</span>
+                        {post.wallet_address === 'Admin' ? (
+                          <span className="font-bold text-amber-300 bg-amber-500/15 border border-amber-500/30 rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
+                            Admin
+                          </span>
+                        ) : (
+                          <span className={`font-medium ${getUsernameColor(post.wallet_address)}`}>
+                            {post.wallet_address}
+                          </span>
+                        )}
                         <span>{timeAgo(post.created_at)}</span>
                         <span className="flex items-center gap-1">
                           <MessageSquare size={11} />
@@ -734,17 +783,6 @@ export default function FeedbackPage() {
                       </div>
                     )}
 
-                    {/* Images */}
-                    {post.images && post.images.length > 0 && (
-                      <div className="flex gap-2 mt-3">
-                        {post.images.map((url, i) => (
-                          <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block w-20 h-20 rounded-lg overflow-hidden border border-white/10 hover:border-white/30 transition-colors">
-                            <img src={url} alt="" className="w-full h-full object-cover" />
-                          </a>
-                        ))}
-                      </div>
-                    )}
-
                     {/* Expanded: Comments */}
                     <AnimatePresence>
                       {expandedPost === post.id && (
@@ -769,9 +807,15 @@ export default function FeedbackPage() {
                                     {(comments[post.id] || []).map((comment) => (
                                       <div key={comment.id} className="text-xs">
                                         <div className="flex items-center gap-2 text-gray-500 mb-0.5">
-                                          <span className="font-medium text-gray-400">
-                                            {formatAddress(comment.wallet_address)}
-                                          </span>
+                                          {comment.wallet_address === 'Admin' ? (
+                                            <span className="font-bold text-amber-300 bg-amber-500/15 border border-amber-500/30 rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
+                                              Admin
+                                            </span>
+                                          ) : (
+                                            <span className={`font-medium ${getUsernameColor(comment.wallet_address)}`}>
+                                              {comment.wallet_address}
+                                            </span>
+                                          )}
                                           <span>{timeAgo(comment.created_at)}</span>
                                         </div>
                                         <p className="text-gray-300">{comment.content}</p>

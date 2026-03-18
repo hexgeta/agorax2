@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { verifySessionToken } from '@/lib/auth';
+import { hashWallet, hashToDisplayName, isAdminWallet } from '@/lib/feedback-hash';
 
 const supabaseUrl = process.env.SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -21,10 +23,6 @@ function checkRateLimit(key: string): boolean {
   return true;
 }
 
-function isValidWalletAddress(address: string): boolean {
-  return /^0x[a-fA-F0-9]{40}$/.test(address);
-}
-
 // GET /api/feedback/comment?post_id=123
 export async function GET(request: NextRequest) {
   const postId = request.nextUrl.searchParams.get('post_id');
@@ -42,34 +40,53 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: false, error: 'Failed to fetch comments' }, { status: 500 });
   }
 
-  return NextResponse.json({ success: true, comments: data || [] });
+  // DB already stores hashes — convert to display names; admins get labeled
+  const sanitizedComments = (data || []).map((c: Record<string, unknown>) => ({
+    ...c,
+    wallet_address: c.is_admin ? 'Admin' : hashToDisplayName(c.wallet_address as string),
+  }));
+
+  return NextResponse.json({ success: true, comments: sanitizedComments });
 }
 
 // POST /api/feedback/comment
-// Body: { wallet_address, post_id, content }
+// Body: { post_id, content }
+// Requires: Authorization: Bearer <token>
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { wallet_address, post_id, content } = body;
-
-    if (!wallet_address || !isValidWalletAddress(wallet_address)) {
-      return NextResponse.json({ success: false, error: 'Valid wallet address required' }, { status: 400 });
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json({ success: false, error: 'Authentication required' }, { status: 401 });
     }
+    const verifiedWallet = verifySessionToken(authHeader.slice(7));
+    if (!verifiedWallet) {
+      return NextResponse.json({ success: false, error: 'Invalid session token' }, { status: 401 });
+    }
+
+    // Hash immediately — raw wallet never touches the database
+    const walletHash = hashWallet(verifiedWallet);
+
+    const body = await request.json();
+    const { post_id, content } = body;
+
     if (!post_id || typeof post_id !== 'number') {
       return NextResponse.json({ success: false, error: 'Valid post_id required' }, { status: 400 });
     }
     if (!content || typeof content !== 'string' || content.trim().length < 1 || content.trim().length > 2000) {
       return NextResponse.json({ success: false, error: 'Comment must be 1-2000 characters' }, { status: 400 });
     }
-    if (!checkRateLimit(`comment:${wallet_address.toLowerCase()}`)) {
+    if (!checkRateLimit(`comment:${walletHash}`)) {
       return NextResponse.json({ success: false, error: 'Rate limit exceeded' }, { status: 429 });
     }
+
+    const admin = isAdminWallet(verifiedWallet);
 
     const { data, error } = await supabase
       .from('feedback_comments')
       .insert({
         post_id,
-        wallet_address: wallet_address.toLowerCase(),
+        wallet_address: walletHash,
+        is_admin: admin,
         content: content.trim(),
       })
       .select()
@@ -85,7 +102,7 @@ export async function POST(request: NextRequest) {
       await supabase.from('feedback_posts').update({ comment_count: post.comment_count + 1 }).eq('id', post_id);
     }
 
-    return NextResponse.json({ success: true, comment: data });
+    return NextResponse.json({ success: true, comment: { ...data, wallet_address: admin ? 'Admin' : hashToDisplayName(walletHash) } });
   } catch {
     return NextResponse.json({ success: false, error: 'Invalid request body' }, { status: 400 });
   }

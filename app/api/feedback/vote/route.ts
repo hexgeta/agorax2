@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { verifySessionToken } from '@/lib/auth';
+import { hashWallet } from '@/lib/feedback-hash';
 
 const supabaseUrl = process.env.SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -21,35 +23,39 @@ function checkRateLimit(key: string): boolean {
   return true;
 }
 
-function isValidWalletAddress(address: string): boolean {
-  return /^0x[a-fA-F0-9]{40}$/.test(address);
-}
-
 // POST /api/feedback/vote - Toggle vote
-// Body: { wallet_address, post_id }
+// Body: { post_id }
+// Requires: Authorization: Bearer <token>
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { wallet_address, post_id } = body;
-
-    if (!wallet_address || !isValidWalletAddress(wallet_address)) {
-      return NextResponse.json({ success: false, error: 'Valid wallet address required' }, { status: 400 });
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json({ success: false, error: 'Authentication required' }, { status: 401 });
     }
+    const verifiedWallet = verifySessionToken(authHeader.slice(7));
+    if (!verifiedWallet) {
+      return NextResponse.json({ success: false, error: 'Invalid session token' }, { status: 401 });
+    }
+
+    // Hash immediately — raw wallet never touches the database
+    const walletHash = hashWallet(verifiedWallet);
+
+    const body = await request.json();
+    const { post_id } = body;
+
     if (!post_id || typeof post_id !== 'number') {
       return NextResponse.json({ success: false, error: 'Valid post_id required' }, { status: 400 });
     }
-    if (!checkRateLimit(`vote:${wallet_address.toLowerCase()}`)) {
+    if (!checkRateLimit(`vote:${walletHash}`)) {
       return NextResponse.json({ success: false, error: 'Rate limit exceeded' }, { status: 429 });
     }
-
-    const walletLower = wallet_address.toLowerCase();
 
     // Check if already voted
     const { data: existing } = await supabase
       .from('feedback_votes')
       .select('id')
       .eq('post_id', post_id)
-      .eq('wallet_address', walletLower)
+      .eq('wallet_address', walletHash)
       .single();
 
     if (existing) {
@@ -65,7 +71,7 @@ export async function POST(request: NextRequest) {
       // Add vote
       const { error } = await supabase.from('feedback_votes').insert({
         post_id,
-        wallet_address: walletLower,
+        wallet_address: walletHash,
       });
 
       if (error) {

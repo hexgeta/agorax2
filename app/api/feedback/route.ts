@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { verifySessionToken } from '@/lib/auth';
+import { hashWallet, hashToDisplayName, isAdminWallet } from '@/lib/feedback-hash';
 
 const supabaseUrl = process.env.SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -19,10 +21,6 @@ function checkRateLimit(key: string): boolean {
   if (entry.count >= MAX_REQUESTS_PER_WINDOW) return false;
   entry.count++;
   return true;
-}
-
-function isValidWalletAddress(address: string): boolean {
-  return /^0x[a-fA-F0-9]{40}$/.test(address);
 }
 
 // GET /api/feedback?sort=popular|newest|oldest&category=feature|bug|improvement|question&status=open|...&wallet=0x...
@@ -60,15 +58,17 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: false, error: 'Failed to fetch feedback' }, { status: 500 });
   }
 
-  // If wallet provided, fetch which posts user has voted on
+  // If wallet provided, hash it and fetch which posts user has voted on
+  // DB stores hashed wallets, so we hash the incoming wallet to match
   let userVotes: number[] = [];
-  if (wallet && isValidWalletAddress(wallet)) {
+  if (wallet) {
+    const walletHash = hashWallet(wallet);
     const postIds = (posts || []).map((p: { id: number }) => p.id);
     if (postIds.length > 0) {
       const { data: votes } = await supabase
         .from('feedback_votes')
         .select('post_id')
-        .eq('wallet_address', wallet.toLowerCase())
+        .eq('wallet_address', walletHash)
         .in('post_id', postIds);
       userVotes = (votes || []).map((v: { post_id: number }) => v.post_id);
     }
@@ -89,9 +89,15 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // Convert stored hashes to display names; admins get labeled "Admin"
+  const sanitizedPosts = (posts || []).map((p: Record<string, unknown>) => ({
+    ...p,
+    wallet_address: p.is_admin ? 'Admin' : hashToDisplayName(p.wallet_address as string),
+  }));
+
   return NextResponse.json({
     success: true,
-    posts: posts || [],
+    posts: sanitizedPosts,
     userVotes,
     duplicateOriginals,
     pagination: { page, limit, total: count || 0 },
@@ -99,15 +105,25 @@ export async function GET(request: NextRequest) {
 }
 
 // POST /api/feedback
-// Body: { wallet_address, title, description?, category?, images?: string[] }
+// Body: { title, description?, category?, token_ticker?, token_contract_address?, is_tax_token? }
+// Requires: Authorization: Bearer <token>
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { wallet_address, title, description, category, images } = body;
-
-    if (!wallet_address || !isValidWalletAddress(wallet_address)) {
-      return NextResponse.json({ success: false, error: 'Valid wallet address required' }, { status: 400 });
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json({ success: false, error: 'Authentication required' }, { status: 401 });
     }
+    const verifiedWallet = verifySessionToken(authHeader.slice(7));
+    if (!verifiedWallet) {
+      return NextResponse.json({ success: false, error: 'Invalid session token' }, { status: 401 });
+    }
+
+    // Hash immediately — raw wallet never touches the database
+    const walletHash = hashWallet(verifiedWallet);
+
+    const body = await request.json();
+    const { title, description, category, token_ticker, token_contract_address, is_tax_token } = body;
+
     if (!title || typeof title !== 'string' || title.trim().length < 3 || title.trim().length > 200) {
       return NextResponse.json({ success: false, error: 'Title must be 3-200 characters' }, { status: 400 });
     }
@@ -115,26 +131,43 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Description must be under 5000 characters' }, { status: 400 });
     }
 
-    const validCategories = ['feature', 'bug', 'improvement', 'question'];
+    const validCategories = ['feature', 'bug', 'improvement', 'question', 'whitelist'];
     const postCategory = category && validCategories.includes(category) ? category : 'feature';
 
-    if (!checkRateLimit(`feedback:${wallet_address.toLowerCase()}`)) {
+    // Validate whitelist-specific fields
+    if (postCategory === 'whitelist') {
+      if (!token_ticker || typeof token_ticker !== 'string' || token_ticker.trim().length === 0 || token_ticker.trim().length > 20) {
+        return NextResponse.json({ success: false, error: 'Token ticker is required (max 20 characters)' }, { status: 400 });
+      }
+      if (!token_contract_address || !/^0x[a-fA-F0-9]{40}$/.test(token_contract_address)) {
+        return NextResponse.json({ success: false, error: 'Valid contract address required' }, { status: 400 });
+      }
+    }
+
+    if (!checkRateLimit(`feedback:${walletHash}`)) {
       return NextResponse.json({ success: false, error: 'Rate limit exceeded. Try again later.' }, { status: 429 });
     }
 
-    // Validate images array
-    const postImages = Array.isArray(images) ? images.filter((img: unknown) => typeof img === 'string').slice(0, 3) : [];
+    const admin = isAdminWallet(verifiedWallet);
+
+    const insertData: Record<string, unknown> = {
+      title: title.trim(),
+      description: description?.trim() || null,
+      category: postCategory,
+      wallet_address: walletHash,
+      is_admin: admin,
+      vote_count: 1, // Auto-upvote by creator
+    };
+
+    if (postCategory === 'whitelist') {
+      insertData.token_ticker = token_ticker.trim().toUpperCase();
+      insertData.token_contract_address = token_contract_address.toLowerCase();
+      insertData.is_tax_token = is_tax_token === true;
+    }
 
     const { data, error } = await supabase
       .from('feedback_posts')
-      .insert({
-        title: title.trim(),
-        description: description?.trim() || null,
-        category: postCategory,
-        wallet_address: wallet_address.toLowerCase(),
-        images: postImages,
-        vote_count: 1, // Auto-upvote by creator
-      })
+      .insert(insertData)
       .select()
       .single();
 
@@ -145,10 +178,10 @@ export async function POST(request: NextRequest) {
     // Auto-vote for the creator
     await supabase.from('feedback_votes').insert({
       post_id: data.id,
-      wallet_address: wallet_address.toLowerCase(),
+      wallet_address: walletHash,
     });
 
-    return NextResponse.json({ success: true, post: data });
+    return NextResponse.json({ success: true, post: { ...data, wallet_address: admin ? 'Admin' : hashToDisplayName(walletHash) } });
   } catch {
     return NextResponse.json({ success: false, error: 'Invalid request body' }, { status: 400 });
   }
