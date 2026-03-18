@@ -4,6 +4,7 @@ import { createPublicClient, http, parseAbiItem } from 'viem';
 import { pulsechain } from 'viem/chains';
 import { TOKEN_CONSTANTS } from '@/constants/crypto';
 import { ACTION_XP, calculateVolumeBonus } from '@/constants/xp';
+import { notifyNewOrder } from '@/lib/telegram';
 
 // Supabase with service role for writes
 const supabaseUrl = process.env.SUPABASE_URL!;
@@ -337,6 +338,18 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           creation_block_number: Number(log.blockNumber),
           created_at: timestamp ? new Date(timestamp * 1000).toISOString() : new Date().toISOString(),
         }, { onConflict: 'order_id' });
+
+        // Fire-and-forget Telegram notification
+        notifyNewOrder({
+          orderId,
+          maker: owner,
+          sellToken: getTokenTicker(sellToken),
+          sellAmount: formatAmount(sellAmount, sellDecimals).toLocaleString(),
+          buyTokens: buyTickers,
+          buyAmounts: buyAmountsFormatted.map((a: number) => a.toLocaleString()),
+          allOrNothing: Boolean(orderDetails?.allOrNothing),
+          expiration: Number(orderDetails?.expirationTime || 0n),
+        });
       } catch (err) {
         stats.errors.push(`Order write ${orderId}: ${err}`);
       }
