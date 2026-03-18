@@ -103,7 +103,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { wallet_address, title, description, category, images } = body;
+    const { wallet_address, title, description, category, images, token_ticker, token_contract_address, is_tax_token } = body;
 
     if (!wallet_address || !isValidWalletAddress(wallet_address)) {
       return NextResponse.json({ success: false, error: 'Valid wallet address required' }, { status: 400 });
@@ -115,8 +115,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Description must be under 5000 characters' }, { status: 400 });
     }
 
-    const validCategories = ['feature', 'bug', 'improvement', 'question'];
+    const validCategories = ['feature', 'bug', 'improvement', 'question', 'whitelist'];
     const postCategory = category && validCategories.includes(category) ? category : 'feature';
+
+    // Validate whitelist-specific fields
+    if (postCategory === 'whitelist') {
+      if (!token_ticker || typeof token_ticker !== 'string' || token_ticker.trim().length === 0 || token_ticker.trim().length > 20) {
+        return NextResponse.json({ success: false, error: 'Token ticker is required (max 20 characters)' }, { status: 400 });
+      }
+      if (!token_contract_address || !/^0x[a-fA-F0-9]{40}$/.test(token_contract_address)) {
+        return NextResponse.json({ success: false, error: 'Valid contract address required' }, { status: 400 });
+      }
+    }
 
     if (!checkRateLimit(`feedback:${wallet_address.toLowerCase()}`)) {
       return NextResponse.json({ success: false, error: 'Rate limit exceeded. Try again later.' }, { status: 429 });
@@ -125,16 +135,24 @@ export async function POST(request: NextRequest) {
     // Validate images array
     const postImages = Array.isArray(images) ? images.filter((img: unknown) => typeof img === 'string').slice(0, 3) : [];
 
+    const insertData: Record<string, unknown> = {
+      title: title.trim(),
+      description: description?.trim() || null,
+      category: postCategory,
+      wallet_address: wallet_address.toLowerCase(),
+      images: postImages,
+      vote_count: 1, // Auto-upvote by creator
+    };
+
+    if (postCategory === 'whitelist') {
+      insertData.token_ticker = token_ticker.trim().toUpperCase();
+      insertData.token_contract_address = token_contract_address.toLowerCase();
+      insertData.is_tax_token = is_tax_token === true;
+    }
+
     const { data, error } = await supabase
       .from('feedback_posts')
-      .insert({
-        title: title.trim(),
-        description: description?.trim() || null,
-        category: postCategory,
-        wallet_address: wallet_address.toLowerCase(),
-        images: postImages,
-        vote_count: 1, // Auto-upvote by creator
-      })
+      .insert(insertData)
       .select()
       .single();
 

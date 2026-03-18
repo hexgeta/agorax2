@@ -11,13 +11,16 @@ interface FeedbackPost {
   id: number;
   title: string;
   description: string | null;
-  category: 'feature' | 'bug' | 'improvement' | 'question';
+  category: 'feature' | 'bug' | 'improvement' | 'question' | 'whitelist';
   status: 'open' | 'under_review' | 'planned' | 'in_progress' | 'completed' | 'declined' | 'duplicate';
   wallet_address: string;
   vote_count: number;
   comment_count: number;
   images: string[];
   duplicate_of: number | null;
+  token_ticker: string | null;
+  token_contract_address: string | null;
+  is_tax_token: boolean | null;
   created_at: string;
   updated_at: string;
 }
@@ -35,6 +38,7 @@ const CATEGORY_CONFIG = {
   bug: { label: 'Bug Report', color: 'text-red-400 bg-red-500/20 border-red-500/30' },
   improvement: { label: 'Improvement', color: 'text-blue-400 bg-blue-500/20 border-blue-500/30' },
   question: { label: 'Question', color: 'text-yellow-400 bg-yellow-500/20 border-yellow-500/30' },
+  whitelist: { label: 'Whitelist Request', color: 'text-emerald-400 bg-emerald-500/20 border-emerald-500/30' },
 };
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
@@ -88,6 +92,9 @@ export default function FeedbackPage() {
   const [newImages, setNewImages] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [newTokenTicker, setNewTokenTicker] = useState('');
+  const [newContractAddress, setNewContractAddress] = useState('');
+  const [newIsTaxToken, setNewIsTaxToken] = useState<boolean | null>(null);
 
   // Comment form
   const [commentText, setCommentText] = useState('');
@@ -186,6 +193,11 @@ export default function FeedbackPage() {
           description: newDescription.trim() || null,
           category: newCategory,
           images: newImages,
+          ...(newCategory === 'whitelist' && {
+            token_ticker: newTokenTicker.trim(),
+            token_contract_address: newContractAddress.trim(),
+            is_tax_token: newIsTaxToken === true,
+          }),
         }),
       });
       const data = await res.json();
@@ -195,6 +207,9 @@ export default function FeedbackPage() {
         setNewDescription('');
         setNewCategory('feature');
         setNewImages([]);
+        setNewTokenTicker('');
+        setNewContractAddress('');
+        setNewIsTaxToken(null);
         fetchPosts();
       }
     } catch {
@@ -532,6 +547,63 @@ export default function FeedbackPage() {
                   />
                 </div>
 
+                {/* Whitelist-specific fields */}
+                {newCategory === 'whitelist' && (
+                  <div className="mb-4 space-y-3 p-4 rounded-lg bg-emerald-500/5 border border-emerald-500/10">
+                    <div>
+                      <label className="text-xs text-gray-500 uppercase tracking-wider mb-1.5 block">Token Ticker *</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. HEX, PLSX, INC..."
+                        value={newTokenTicker}
+                        onChange={(e) => setNewTokenTicker(e.target.value)}
+                        maxLength={20}
+                        className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500/50 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-500 uppercase tracking-wider mb-1.5 block">Contract Address *</label>
+                      <input
+                        type="text"
+                        placeholder="0x..."
+                        value={newContractAddress}
+                        onChange={(e) => setNewContractAddress(e.target.value)}
+                        maxLength={42}
+                        className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500/50 text-sm font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-500 uppercase tracking-wider mb-1.5 block">
+                        Is this a tax/fee on-transfer or rebasing token?
+                      </label>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setNewIsTaxToken(true)}
+                          className={`px-4 py-2 rounded-lg text-sm border transition-colors ${
+                            newIsTaxToken === true
+                              ? 'border-emerald-500/50 bg-emerald-500/20 text-emerald-400'
+                              : 'border-white/10 bg-white/5 text-gray-400 hover:text-white'
+                          }`}
+                        >
+                          Yes
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setNewIsTaxToken(false)}
+                          className={`px-4 py-2 rounded-lg text-sm border transition-colors ${
+                            newIsTaxToken === false
+                              ? 'border-emerald-500/50 bg-emerald-500/20 text-emerald-400'
+                              : 'border-white/10 bg-white/5 text-gray-400 hover:text-white'
+                          }`}
+                        >
+                          No
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Image upload */}
                 <div className="mb-5">
                   <div className="flex items-center gap-2 mb-2">
@@ -572,7 +644,7 @@ export default function FeedbackPage() {
                 {/* Submit */}
                 <button
                   onClick={handleSubmitPost}
-                  disabled={submitting || !newTitle.trim() || newTitle.trim().length < 3}
+                  disabled={submitting || !newTitle.trim() || newTitle.trim().length < 3 || (newCategory === 'whitelist' && (!newTokenTicker.trim() || !/^0x[a-fA-F0-9]{40}$/.test(newContractAddress.trim()) || newIsTaxToken === null))}
                   className="w-full py-2.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-medium text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {submitting ? <Loader2 size={16} className="animate-spin" /> : <Send size={14} />}
@@ -644,6 +716,19 @@ export default function FeedbackPage() {
                       )}
                       {post.description && (
                         <p className="text-gray-400 text-xs line-clamp-2 mb-2">{post.description}</p>
+                      )}
+                      {post.category === 'whitelist' && post.token_ticker && (
+                        <div className="flex flex-wrap items-center gap-2 mb-2 text-xs">
+                          <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-medium">{post.token_ticker}</span>
+                          {post.token_contract_address && (
+                            <span className="text-gray-500 font-mono">{post.token_contract_address.slice(0, 6)}...{post.token_contract_address.slice(-4)}</span>
+                          )}
+                          {post.is_tax_token !== null && (
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] ${post.is_tax_token ? 'bg-amber-500/10 text-amber-400' : 'bg-gray-500/10 text-gray-400'}`}>
+                              {post.is_tax_token ? 'Tax/Fee Token' : 'Standard Token'}
+                            </span>
+                          )}
+                        </div>
                       )}
                       <div className="flex items-center gap-3 text-[11px] text-gray-500">
                         <span>{formatAddress(post.wallet_address)}</span>
