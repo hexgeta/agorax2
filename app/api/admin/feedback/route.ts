@@ -1,20 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { verifySessionToken } from '@/lib/auth';
+import { isAdminWallet } from '@/lib/feedback-hash';
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
-
-function getAdminWallets(): string[] {
-  const raw = process.env.ADMIN_WALLETS || '';
-  return raw.split(',').map((w: string) => w.trim().toLowerCase()).filter(Boolean);
-}
-
-function isAdminWallet(wallet: string): boolean {
-  return getAdminWallets().includes(wallet.toLowerCase());
-}
 
 function isValidWalletAddress(address: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(address);

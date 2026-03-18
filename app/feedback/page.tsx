@@ -671,7 +671,9 @@ export default function FeedbackPage() {
                         </div>
                       )}
                       <div className="flex items-center gap-3 text-[11px] text-gray-500">
-                        <span>{post.wallet_address}</span>
+                        <span className={post.wallet_address === 'Admin' ? 'text-amber-400 font-semibold' : ''}>
+                          {post.wallet_address}
+                        </span>
                         <span>{timeAgo(post.created_at)}</span>
                         <span className="flex items-center gap-1">
                           <MessageSquare size={11} />
@@ -783,7 +785,7 @@ export default function FeedbackPage() {
                                     {(comments[post.id] || []).map((comment) => (
                                       <div key={comment.id} className="text-xs">
                                         <div className="flex items-center gap-2 text-gray-500 mb-0.5">
-                                          <span className="font-medium text-gray-400">
+                                          <span className={`font-medium ${comment.wallet_address === 'Admin' ? 'text-amber-400' : 'text-gray-400'}`}>
                                             {comment.wallet_address}
                                           </span>
                                           <span>{timeAgo(comment.created_at)}</span>

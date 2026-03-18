@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { verifySessionToken } from '@/lib/auth';
-import { hashWallet, hashToDisplayName } from '@/lib/feedback-hash';
+import { hashWallet, hashToDisplayName, isAdminWallet } from '@/lib/feedback-hash';
 
 const supabaseUrl = process.env.SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -89,10 +89,10 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Convert stored hashes to display names for the client
+  // Convert stored hashes to display names; admins get labeled "Admin"
   const sanitizedPosts = (posts || []).map((p: Record<string, unknown>) => ({
     ...p,
-    wallet_address: hashToDisplayName(p.wallet_address as string),
+    wallet_address: p.is_admin ? 'Admin' : hashToDisplayName(p.wallet_address as string),
   }));
 
   return NextResponse.json({
@@ -148,11 +148,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Rate limit exceeded. Try again later.' }, { status: 429 });
     }
 
+    const admin = isAdminWallet(verifiedWallet);
+
     const insertData: Record<string, unknown> = {
       title: title.trim(),
       description: description?.trim() || null,
       category: postCategory,
       wallet_address: walletHash,
+      is_admin: admin,
       vote_count: 1, // Auto-upvote by creator
     };
 
@@ -178,7 +181,7 @@ export async function POST(request: NextRequest) {
       wallet_address: walletHash,
     });
 
-    return NextResponse.json({ success: true, post: { ...data, wallet_address: hashToDisplayName(walletHash) } });
+    return NextResponse.json({ success: true, post: { ...data, wallet_address: admin ? 'Admin' : hashToDisplayName(walletHash) } });
   } catch {
     return NextResponse.json({ success: false, error: 'Invalid request body' }, { status: 400 });
   }

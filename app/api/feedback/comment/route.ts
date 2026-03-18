@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { verifySessionToken } from '@/lib/auth';
-import { hashWallet, hashToDisplayName } from '@/lib/feedback-hash';
+import { hashWallet, hashToDisplayName, isAdminWallet } from '@/lib/feedback-hash';
 
 const supabaseUrl = process.env.SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -40,10 +40,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: false, error: 'Failed to fetch comments' }, { status: 500 });
   }
 
-  // DB already stores hashes — convert to display names for client
+  // DB already stores hashes — convert to display names; admins get labeled
   const sanitizedComments = (data || []).map((c: Record<string, unknown>) => ({
     ...c,
-    wallet_address: hashToDisplayName(c.wallet_address as string),
+    wallet_address: c.is_admin ? 'Admin' : hashToDisplayName(c.wallet_address as string),
   }));
 
   return NextResponse.json({ success: true, comments: sanitizedComments });
@@ -79,11 +79,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Rate limit exceeded' }, { status: 429 });
     }
 
+    const admin = isAdminWallet(verifiedWallet);
+
     const { data, error } = await supabase
       .from('feedback_comments')
       .insert({
         post_id,
         wallet_address: walletHash,
+        is_admin: admin,
         content: content.trim(),
       })
       .select()
@@ -99,7 +102,7 @@ export async function POST(request: NextRequest) {
       await supabase.from('feedback_posts').update({ comment_count: post.comment_count + 1 }).eq('id', post_id);
     }
 
-    return NextResponse.json({ success: true, comment: { ...data, wallet_address: hashToDisplayName(walletHash) } });
+    return NextResponse.json({ success: true, comment: { ...data, wallet_address: admin ? 'Admin' : hashToDisplayName(walletHash) } });
   } catch {
     return NextResponse.json({ success: false, error: 'Invalid request body' }, { status: 400 });
   }
