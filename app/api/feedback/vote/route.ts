@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { verifySessionToken } from '@/lib/auth';
-import { hashWallet, isAdminWallet } from '@/lib/feedback-hash';
+import { hashWallet, isAdminWallet, hashToDisplayName } from '@/lib/feedback-hash';
+import { notifyNewVote } from '@/lib/telegram';
 
 const supabaseUrl = process.env.SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -94,9 +95,11 @@ export async function POST(request: NextRequest) {
       }
 
       // Increment count
-      const { data: post } = await supabase.from('feedback_posts').select('vote_count').eq('id', post_id).single();
+      const { data: post } = await supabase.from('feedback_posts').select('vote_count, title').eq('id', post_id).single();
       if (post) {
-        await supabase.from('feedback_posts').update({ vote_count: post.vote_count + 1 }).eq('id', post_id);
+        const newCount = post.vote_count + 1;
+        await supabase.from('feedback_posts').update({ vote_count: newCount }).eq('id', post_id);
+        notifyNewVote({ postId: post_id, postTitle: post.title, voteCount: newCount, displayName: hashToDisplayName(walletHash) });
       }
 
       return NextResponse.json({ success: true, voted: true });

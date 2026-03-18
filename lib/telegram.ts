@@ -105,3 +105,36 @@ export function notifyNewFeedback(post: {
 
   sendTelegram(lines.join('\n'));
 }
+
+export function notifyNewComment(comment: {
+  postId: number;
+  postTitle: string;
+  displayName: string;
+  content: string;
+}) {
+  const content = comment.content.length > 200 ? comment.content.slice(0, 200) + '...' : comment.content;
+  const lines = [
+    `💬 *New Comment on \\#${esc(String(comment.postId))}*`,
+    ``,
+    `*Post:* ${esc(comment.postTitle)}`,
+    `*By:* ${esc(comment.displayName)}`,
+    `*Comment:* ${esc(content)}`,
+  ];
+  sendTelegram(lines.join('\n'));
+}
+
+export function notifyNewVote(vote: {
+  postId: number;
+  postTitle: string;
+  voteCount: number;
+  displayName: string;
+}) {
+  const lines = [
+    `👍 *Upvote on \\#${esc(String(vote.postId))}*`,
+    ``,
+    `*Post:* ${esc(vote.postTitle)}`,
+    `*By:* ${esc(vote.displayName)}`,
+    `*Total votes:* ${esc(String(vote.voteCount))}`,
+  ];
+  sendTelegram(lines.join('\n'));
+}

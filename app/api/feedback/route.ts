@@ -103,11 +103,17 @@ export async function GET(request: NextRequest) {
     wallet_address: p.is_admin ? 'Admin' : hashToDisplayName(p.wallet_address as string),
   }));
 
+  // Get user display name
+  const userDisplayName = wallet
+    ? (isAdminWallet(wallet) ? 'Admin' : hashToDisplayName(hashWallet(wallet)))
+    : null;
+
   return NextResponse.json({
     success: true,
     posts: sanitizedPosts,
     userVotes,
     userPosts,
+    userDisplayName,
     duplicateOriginals,
     pagination: { page, limit, total: count || 0 },
   });

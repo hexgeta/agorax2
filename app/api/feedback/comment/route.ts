@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { verifySessionToken } from '@/lib/auth';
 import { hashWallet, hashToDisplayName, isAdminWallet } from '@/lib/feedback-hash';
+import { notifyNewComment } from '@/lib/telegram';
 
 const supabaseUrl = process.env.SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -97,10 +98,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Update comment count on post
-    const { data: post } = await supabase.from('feedback_posts').select('comment_count').eq('id', post_id).single();
+    const { data: post } = await supabase.from('feedback_posts').select('comment_count, title').eq('id', post_id).single();
     if (post) {
       await supabase.from('feedback_posts').update({ comment_count: post.comment_count + 1 }).eq('id', post_id);
     }
+
+    // Telegram notification
+    const displayName = admin ? 'Admin' : hashToDisplayName(walletHash);
+    notifyNewComment({ postId: post_id, postTitle: post?.title || `#${post_id}`, displayName, content: content.trim() });
 
     return NextResponse.json({ success: true, comment: { ...data, wallet_address: admin ? 'Admin' : hashToDisplayName(walletHash) } });
   } catch {
