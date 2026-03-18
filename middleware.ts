@@ -5,6 +5,8 @@ import { NextRequest, NextResponse } from 'next/server';
 // requests from other websites. Note: non-browser clients (curl, scripts)
 // can spoof this header, so this is defense-in-depth, not a full auth solution.
 const ALLOWED_ORIGINS = new Set([
+  'https://www.agorax.win',
+  'https://agorax.win',
   'https://agorax2.lookintomaxi.com',
   // Local dev
   'http://localhost:3000',
