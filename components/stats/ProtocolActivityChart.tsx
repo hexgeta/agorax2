@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { ComposedChart, Area, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid, Legend } from 'recharts';
+import { ComposedChart, Area, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid, Legend, Cell } from 'recharts';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 import { formatUSD, getTokenPrice } from '@/utils/format';
 import { getTokenInfo } from '@/utils/tokenUtils';
@@ -33,6 +33,8 @@ interface ProtocolActivityChartProps {
   orders: OrderPlaced[];
   contractOrders?: CompleteOrderDetails[];
   tokenPrices: Record<string, { price: number }>;
+  onDateSelect?: (date: string | null) => void;
+  selectedDate?: string | null;
 }
 
 type TimeRange = '1D' | '1W' | '1M' | '1Y' | 'ALL';
@@ -51,7 +53,7 @@ function getTimeRangeStart(range: TimeRange): Date | null {
   return now;
 }
 
-export default function ProtocolActivityChart({ transactions, orders, contractOrders = [], tokenPrices }: ProtocolActivityChartProps) {
+export default function ProtocolActivityChart({ transactions, orders, contractOrders = [], tokenPrices, onDateSelect, selectedDate }: ProtocolActivityChartProps) {
   const [timeRange, setTimeRange] = useState<TimeRange>('1M');
 
   // Calculate cumulative activity by day with volume data
@@ -296,6 +298,13 @@ export default function ProtocolActivityChart({ transactions, orders, contractOr
           margin={{ top: 10, right: 5, left: -10, bottom: 0 }}
           barGap={0}
           barCategoryGap="20%"
+          onClick={(state: any) => {
+            if (state?.activePayload?.[0]?.payload?.date) {
+              const clickedDate = state.activePayload[0].payload.date;
+              onDateSelect?.(selectedDate === clickedDate ? null : clickedDate);
+            }
+          }}
+          style={{ cursor: onDateSelect ? 'pointer' : undefined }}
         >
           <defs>
             <linearGradient id="colorListedVolume" x1="0" y1="0" x2="0" y2="1">
@@ -418,14 +427,28 @@ export default function ProtocolActivityChart({ transactions, orders, contractOr
             fill="#4ADE80"
             radius={[4, 4, 0, 0]}
             legendType="none"
-          />
+          >
+            {selectedDate && chartData.map((entry, index) => (
+              <Cell
+                key={index}
+                fill={entry.date === selectedDate ? '#4ADE80' : '#4ADE8030'}
+              />
+            ))}
+          </Bar>
           <Bar
             yAxisId="left"
             dataKey="listedVolume"
             fill="#EC4899"
             radius={[4, 4, 0, 0]}
             legendType="none"
-          />
+          >
+            {selectedDate && chartData.map((entry, index) => (
+              <Cell
+                key={index}
+                fill={entry.date === selectedDate ? '#EC4899' : '#EC489930'}
+              />
+            ))}
+          </Bar>
         </ComposedChart>
       </ResponsiveContainer>
     </LiquidGlassCard>

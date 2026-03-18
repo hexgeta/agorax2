@@ -135,10 +135,11 @@ export default function StatsPage() {
   }
   const [fillEvents, setFillEvents] = useState<FillEvent[]>([]);
   const [selectedTokenFilters, setSelectedTokenFilters] = useState<{ address: string; ticker: string }[]>([]);
-  const [selectedTraderFilter, setSelectedTraderFilter] = useState<string | null>(null);
+  const [selectedTraderFilters, setSelectedTraderFilters] = useState<string[]>([]);
   const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | 'active' | 'completed' | 'cancelled'>('all');
   const [addressSearch, setAddressSearch] = useState('');
   const [orderIdSearch, setOrderIdSearch] = useState('');
+  const [selectedDateFilter, setSelectedDateFilter] = useState<string | null>(null);
 
   const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
@@ -391,9 +392,9 @@ export default function StatsPage() {
       );
     }
 
-    if (selectedTraderFilter) {
-      const traderAddr = selectedTraderFilter.toLowerCase();
-      result = result.filter(tx => tx.buyer?.toLowerCase() === traderAddr);
+    if (selectedTraderFilters.length > 0) {
+      const traderAddrs = selectedTraderFilters.map(a => a.toLowerCase());
+      result = result.filter(tx => tx.buyer && traderAddrs.includes(tx.buyer.toLowerCase()));
     }
 
     if (addressSearch.trim()) {
@@ -407,7 +408,7 @@ export default function StatsPage() {
     }
 
     return result;
-  }, [transactions, selectedTokenFilters, selectedTraderFilter, addressSearch, orderIdSearch]);
+  }, [transactions, selectedTokenFilters, selectedTraderFilters, addressSearch, orderIdSearch]);
 
   const filteredOrders = useMemo(() => {
     let result = orders;
@@ -417,9 +418,9 @@ export default function StatsPage() {
       result = result.filter(order => tokenAddrs.includes(order.sellToken.toLowerCase()));
     }
 
-    if (selectedTraderFilter) {
-      const traderAddr = selectedTraderFilter.toLowerCase();
-      result = result.filter(order => order.orderOwner.toLowerCase() === traderAddr);
+    if (selectedTraderFilters.length > 0) {
+      const traderAddrs = selectedTraderFilters.map(a => a.toLowerCase());
+      result = result.filter(order => traderAddrs.includes(order.orderOwner.toLowerCase()));
     }
 
     if (addressSearch.trim()) {
@@ -433,7 +434,7 @@ export default function StatsPage() {
     }
 
     return result;
-  }, [orders, selectedTokenFilters, selectedTraderFilter, addressSearch, orderIdSearch]);
+  }, [orders, selectedTokenFilters, selectedTraderFilters, addressSearch, orderIdSearch]);
 
   const filteredContractOrders = useMemo(() => {
     let result = contractOrders;
@@ -449,10 +450,10 @@ export default function StatsPage() {
       );
     }
 
-    if (selectedTraderFilter) {
-      const traderAddr = selectedTraderFilter.toLowerCase();
+    if (selectedTraderFilters.length > 0) {
+      const traderAddrs = selectedTraderFilters.map(a => a.toLowerCase());
       result = result.filter(order =>
-        order.userDetails.orderOwner?.toLowerCase() === traderAddr
+        order.userDetails.orderOwner && traderAddrs.includes(order.userDetails.orderOwner.toLowerCase())
       );
     }
 
@@ -471,7 +472,7 @@ export default function StatsPage() {
     }
 
     return result;
-  }, [contractOrders, selectedTokenFilters, selectedTraderFilter, whitelist, addressSearch, orderIdSearch]);
+  }, [contractOrders, selectedTokenFilters, selectedTraderFilters, whitelist, addressSearch, orderIdSearch]);
 
   const filteredActiveOrders = useMemo(() => {
     let result = activeOrders;
@@ -487,10 +488,10 @@ export default function StatsPage() {
       );
     }
 
-    if (selectedTraderFilter) {
-      const traderAddr = selectedTraderFilter.toLowerCase();
+    if (selectedTraderFilters.length > 0) {
+      const traderAddrs = selectedTraderFilters.map(a => a.toLowerCase());
       result = result.filter(order =>
-        order.userDetails.orderOwner?.toLowerCase() === traderAddr
+        order.userDetails.orderOwner && traderAddrs.includes(order.userDetails.orderOwner.toLowerCase())
       );
     }
 
@@ -509,7 +510,7 @@ export default function StatsPage() {
     }
 
     return result;
-  }, [activeOrders, selectedTokenFilters, selectedTraderFilter, whitelist, addressSearch, orderIdSearch]);
+  }, [activeOrders, selectedTokenFilters, selectedTraderFilters, whitelist, addressSearch, orderIdSearch]);
 
   // Build formatted orders for All Orders table (respects token/trader filters)
   const formattedOrders = useMemo(() => {
@@ -628,9 +629,9 @@ export default function StatsPage() {
       );
     }
 
-    if (selectedTraderFilter) {
-      const traderAddr = selectedTraderFilter.toLowerCase();
-      result = result.filter(fill => fill.buyer.toLowerCase() === traderAddr);
+    if (selectedTraderFilters.length > 0) {
+      const traderAddrs = selectedTraderFilters.map(a => a.toLowerCase());
+      result = result.filter(fill => traderAddrs.includes(fill.buyer.toLowerCase()));
     }
 
     if (addressSearch.trim()) {
@@ -644,7 +645,7 @@ export default function StatsPage() {
     }
 
     return result;
-  }, [formattedFills, selectedTokenFilters, selectedTraderFilter, addressSearch, orderIdSearch]);
+  }, [formattedFills, selectedTokenFilters, selectedTraderFilters, addressSearch, orderIdSearch]);
 
   const filteredOrdersByStatus = useMemo(() => {
     if (orderStatusFilter === 'all') return formattedOrders;
@@ -662,15 +663,16 @@ export default function StatsPage() {
     });
   }, []);
 
-  // Handle trader filter selection
+  // Handle trader filter selection (multi-select toggle)
   const handleTraderFilterSelect = useCallback((address: string) => {
-    if (selectedTraderFilter?.toLowerCase() === address.toLowerCase()) {
-      // Clicking the same trader clears the filter
-      setSelectedTraderFilter(null);
-    } else {
-      setSelectedTraderFilter(address);
-    }
-  }, [selectedTraderFilter]);
+    setSelectedTraderFilters(prev => {
+      const exists = prev.some(a => a.toLowerCase() === address.toLowerCase());
+      if (exists) {
+        return prev.filter(a => a.toLowerCase() !== address.toLowerCase());
+      }
+      return [...prev, address];
+    });
+  }, []);
 
   return (
     <>
@@ -712,10 +714,10 @@ export default function StatsPage() {
                 className="space-y-6"
               >
                 {/* Filter Bar - sticky when any filter is active */}
-                <div className={`${(selectedTokenFilters.length > 0 || selectedTraderFilter || addressSearch || orderIdSearch) ? 'md:sticky md:top-24 z-20' : ''}`}>
-                  <div className="flex flex-wrap items-center gap-3 p-3 bg-black/80 backdrop-blur-md border border-white/10 rounded-lg">
+                <div className={`${(selectedTokenFilters.length > 0 || selectedTraderFilters.length > 0 || addressSearch || orderIdSearch) ? 'sticky top-[72px] z-30' : ''}`}>
+                  <div className="flex flex-wrap items-center gap-3 p-3 bg-black/95 backdrop-blur-md border border-white/10 rounded-lg shadow-lg">
                     {/* Active filter pills */}
-                    {(selectedTokenFilters.length > 0 || selectedTraderFilter) && (
+                    {(selectedTokenFilters.length > 0 || selectedTraderFilters.length > 0) && (
                       <>
                         <span className="text-gray-400 text-sm">Filtering by:</span>
                         {selectedTokenFilters.map(token => (
@@ -732,13 +734,13 @@ export default function StatsPage() {
                             </button>
                           </div>
                         ))}
-                        {selectedTraderFilter && (
-                          <div className="flex items-center gap-2 px-2 py-1 bg-white/10 rounded">
+                        {selectedTraderFilters.map(trader => (
+                          <div key={trader} className="flex items-center gap-2 px-2 py-1 bg-white/10 rounded">
                             <span className="text-white font-mono text-sm">
-                              {selectedTraderFilter.slice(0, 6)}...{selectedTraderFilter.slice(-4)}
+                              {trader.slice(0, 6)}...{trader.slice(-4)}
                             </span>
                             <button
-                              onClick={() => setSelectedTraderFilter(null)}
+                              onClick={() => handleTraderFilterSelect(trader)}
                               className="text-gray-400 hover:text-white transition-colors"
                             >
                               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -746,31 +748,31 @@ export default function StatsPage() {
                               </svg>
                             </button>
                           </div>
-                        )}
+                        ))}
                       </>
                     )}
 
                     {/* Search inputs */}
-                    <div className="flex items-center gap-2 ml-auto">
+                    <div className="flex items-center gap-2 ml-auto min-w-0">
                       <input
                         type="text"
                         placeholder="Address..."
                         value={addressSearch}
                         onChange={(e) => setAddressSearch(e.target.value)}
-                        className="bg-white/5 border border-white/10 rounded px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-white/30 font-mono w-[380px]"
+                        className="bg-white/5 border border-white/10 rounded px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-white/30 font-mono w-[140px] md:w-[380px]"
                       />
                       <input
                         type="text"
-                        placeholder="Order ID..."
+                        placeholder="Order ID."
                         value={orderIdSearch}
                         onChange={(e) => setOrderIdSearch(e.target.value)}
-                        className="bg-white/5 border border-white/10 rounded px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-white/30 font-mono w-[100px]"
+                        className="bg-white/5 border border-white/10 rounded px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-white/30 font-mono w-[80px] md:w-[110px] shrink-0"
                       />
-                      {(selectedTokenFilters.length > 0 || selectedTraderFilter || addressSearch || orderIdSearch) && (
+                      {(selectedTokenFilters.length > 0 || selectedTraderFilters.length > 0 || addressSearch || orderIdSearch) && (
                         <button
                           onClick={() => {
                             setSelectedTokenFilters([]);
-                            setSelectedTraderFilter(null);
+                            setSelectedTraderFilters([]);
                             setAddressSearch('');
                             setOrderIdSearch('');
                           }}
@@ -801,6 +803,8 @@ export default function StatsPage() {
                   orders={filteredOrders}
                   contractOrders={filteredContractOrders}
                   tokenPrices={tokenPrices}
+                  selectedDate={selectedDateFilter}
+                  onDateSelect={setSelectedDateFilter}
                 />
 
                 {/* Top Tokens Chart */}
@@ -813,13 +817,16 @@ export default function StatsPage() {
                   selectedTokens={selectedTokenFilters.map(t => t.address)}
                 />
 
-                {/* Leaderboard - hidden for now */}
-                {/* <TopTradersLeaderboard
-                  transactions={transactions}
-                  orders={orders}
+                {/* Leaderboard */}
+                <TopTradersLeaderboard
+                  transactions={(addressSearch || orderIdSearch) ? filteredTransactions : transactions}
+                  orders={(addressSearch || orderIdSearch) ? filteredOrders : orders}
                   tokenPrices={tokenPrices}
-                  contractOrders={contractOrders}
-                /> */}
+                  contractOrders={(addressSearch || orderIdSearch) ? filteredContractOrders : contractOrders}
+                  onTraderClick={handleTraderFilterSelect}
+                  selectedTraders={selectedTraderFilters}
+                  searchQuery={addressSearch || orderIdSearch}
+                />
 
                 {/* Order Book */}
                 {filteredActiveOrders.length > 0 && whitelist.length > 0 && (
@@ -903,10 +910,9 @@ export default function StatsPage() {
                               return (
                                 <tr
                                   key={order.id}
-                                  className={`border-b border-white/5 transition-colors cursor-pointer ${
+                                  className={`border-b border-white/5 transition-colors ${
                                     isCurrentUser ? 'bg-white/5 hover:bg-white/10' : 'hover:bg-white/5'
                                   }`}
-                                  onClick={() => window.location.href = href}
                                 >
                                   <td className="py-4 px-2">
                                     <span className="text-gray-500 text-sm">#{order.id}</span>

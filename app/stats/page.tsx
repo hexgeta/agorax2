@@ -332,10 +332,11 @@ export default function Stats2Page() {
   const { dbOrders, dbFills, isLoading, error, refetch: fetchData } = useStatsData();
 
   const [selectedTokenFilters, setSelectedTokenFilters] = useState<{ address: string; ticker: string }[]>([]);
-  const [selectedTraderFilter, setSelectedTraderFilter] = useState<string | null>(null);
+  const [selectedTraderFilters, setSelectedTraderFilters] = useState<string[]>([]);
   const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | 'active' | 'completed' | 'cancelled'>('all');
   const [addressSearch, setAddressSearch] = useState('');
   const [orderIdSearch, setOrderIdSearch] = useState('');
+  const [selectedDateFilter, setSelectedDateFilter] = useState<string | null>(null);
   const [orderPage, setOrderPage] = useState(1);
   const [fillPage, setFillPage] = useState(1);
   const PAGE_SIZE = 20;
@@ -440,7 +441,8 @@ export default function Stats2Page() {
 
   // ── Filters ─────────────────────────────────────────────────────────────
 
-  const filteredTransactions = useMemo(() => {
+  // Base filtered transactions (without date filter - used by chart)
+  const baseFilteredTransactions = useMemo(() => {
     let result = transactions;
     if (selectedTokenFilters.length > 0) {
       const tokenAddrs = selectedTokenFilters.map(t => t.address.toLowerCase());
@@ -449,9 +451,9 @@ export default function Stats2Page() {
           Object.keys(tx.buyTokens).some(a => a.toLowerCase() === addr))
       );
     }
-    if (selectedTraderFilter) {
-      const traderAddr = selectedTraderFilter.toLowerCase();
-      result = result.filter(tx => tx.buyer?.toLowerCase() === traderAddr);
+    if (selectedTraderFilters.length > 0) {
+      const traderAddrs = selectedTraderFilters.map(a => a.toLowerCase());
+      result = result.filter(tx => tx.buyer && traderAddrs.includes(tx.buyer.toLowerCase()));
     }
     if (addressSearch.trim()) {
       const query = addressSearch.toLowerCase().trim();
@@ -462,17 +464,26 @@ export default function Stats2Page() {
       result = result.filter(tx => tx.orderId === query);
     }
     return result;
-  }, [transactions, selectedTokenFilters, selectedTraderFilter, addressSearch, orderIdSearch]);
+  }, [transactions, selectedTokenFilters, selectedTraderFilters, addressSearch, orderIdSearch]);
 
-  const filteredOrders = useMemo(() => {
+  // Full filtered transactions (with date filter - used by everything except chart)
+  const filteredTransactions = useMemo(() => {
+    if (!selectedDateFilter) return baseFilteredTransactions;
+    return baseFilteredTransactions.filter(tx => {
+      if (!tx.timestamp) return false;
+      return new Date(tx.timestamp * 1000).toISOString().split('T')[0] === selectedDateFilter;
+    });
+  }, [baseFilteredTransactions, selectedDateFilter]);
+
+  const baseFilteredOrders = useMemo(() => {
     let result = orders;
     if (selectedTokenFilters.length > 0) {
       const tokenAddrs = selectedTokenFilters.map(t => t.address.toLowerCase());
       result = result.filter(order => tokenAddrs.includes(order.sellToken.toLowerCase()));
     }
-    if (selectedTraderFilter) {
-      const traderAddr = selectedTraderFilter.toLowerCase();
-      result = result.filter(order => order.orderOwner.toLowerCase() === traderAddr);
+    if (selectedTraderFilters.length > 0) {
+      const traderAddrs = selectedTraderFilters.map(a => a.toLowerCase());
+      result = result.filter(order => traderAddrs.includes(order.orderOwner.toLowerCase()));
     }
     if (addressSearch.trim()) {
       const query = addressSearch.toLowerCase().trim();
@@ -483,9 +494,17 @@ export default function Stats2Page() {
       result = result.filter(order => order.orderId === query);
     }
     return result;
-  }, [orders, selectedTokenFilters, selectedTraderFilter, addressSearch, orderIdSearch]);
+  }, [orders, selectedTokenFilters, selectedTraderFilters, addressSearch, orderIdSearch]);
 
-  const filteredContractOrders = useMemo(() => {
+  const filteredOrders = useMemo(() => {
+    if (!selectedDateFilter) return baseFilteredOrders;
+    return baseFilteredOrders.filter(order => {
+      if (!order.timestamp) return false;
+      return new Date(order.timestamp * 1000).toISOString().split('T')[0] === selectedDateFilter;
+    });
+  }, [baseFilteredOrders, selectedDateFilter]);
+
+  const baseFilteredContractOrders = useMemo(() => {
     let result = contractOrders;
     if (selectedTokenFilters.length > 0) {
       const tokenAddrs = selectedTokenFilters.map(t => t.address.toLowerCase());
@@ -497,10 +516,10 @@ export default function Stats2Page() {
         })
       );
     }
-    if (selectedTraderFilter) {
-      const traderAddr = selectedTraderFilter.toLowerCase();
+    if (selectedTraderFilters.length > 0) {
+      const traderAddrs = selectedTraderFilters.map(a => a.toLowerCase());
       result = result.filter(order =>
-        order.userDetails.orderOwner?.toLowerCase() === traderAddr
+        order.userDetails.orderOwner && traderAddrs.includes(order.userDetails.orderOwner.toLowerCase())
       );
     }
     if (addressSearch.trim()) {
@@ -516,7 +535,16 @@ export default function Stats2Page() {
       );
     }
     return result;
-  }, [contractOrders, selectedTokenFilters, selectedTraderFilter, whitelist, addressSearch, orderIdSearch]);
+  }, [contractOrders, selectedTokenFilters, selectedTraderFilters, whitelist, addressSearch, orderIdSearch]);
+
+  const filteredContractOrders = useMemo(() => {
+    if (!selectedDateFilter) return baseFilteredContractOrders;
+    return baseFilteredContractOrders.filter(order => {
+      const timestamp = Number(order.orderDetailsWithID.lastUpdateTime);
+      if (!timestamp || timestamp <= 0) return false;
+      return new Date(timestamp * 1000).toISOString().split('T')[0] === selectedDateFilter;
+    });
+  }, [baseFilteredContractOrders, selectedDateFilter]);
 
   const filteredActiveOrders = useMemo(() => {
     let result = activeOrders;
@@ -530,10 +558,10 @@ export default function Stats2Page() {
         })
       );
     }
-    if (selectedTraderFilter) {
-      const traderAddr = selectedTraderFilter.toLowerCase();
+    if (selectedTraderFilters.length > 0) {
+      const traderAddrs = selectedTraderFilters.map(a => a.toLowerCase());
       result = result.filter(order =>
-        order.userDetails.orderOwner?.toLowerCase() === traderAddr
+        order.userDetails.orderOwner && traderAddrs.includes(order.userDetails.orderOwner.toLowerCase())
       );
     }
     if (addressSearch.trim()) {
@@ -548,8 +576,15 @@ export default function Stats2Page() {
         order.orderDetailsWithID.orderID.toString() === query
       );
     }
+    if (selectedDateFilter) {
+      result = result.filter(order => {
+        const timestamp = Number(order.orderDetailsWithID.lastUpdateTime);
+        if (!timestamp || timestamp <= 0) return false;
+        return new Date(timestamp * 1000).toISOString().split('T')[0] === selectedDateFilter;
+      });
+    }
     return result;
-  }, [activeOrders, selectedTokenFilters, selectedTraderFilter, whitelist, addressSearch, orderIdSearch]);
+  }, [activeOrders, selectedTokenFilters, selectedTraderFilters, whitelist, addressSearch, orderIdSearch, selectedDateFilter]);
 
   // ── Formatted data for tables ───────────────────────────────────────────
 
@@ -646,9 +681,9 @@ export default function Stats2Page() {
         tokenAddrs.includes(fill.sellTokenAddress.toLowerCase()) || tokenAddrs.includes(fill.buyTokenAddress.toLowerCase())
       );
     }
-    if (selectedTraderFilter) {
-      const traderAddr = selectedTraderFilter.toLowerCase();
-      fills = fills.filter(fill => fill.buyer.toLowerCase() === traderAddr);
+    if (selectedTraderFilters.length > 0) {
+      const traderAddrs = selectedTraderFilters.map(a => a.toLowerCase());
+      fills = fills.filter(fill => traderAddrs.includes(fill.buyer.toLowerCase()));
     }
     if (addressSearch.trim()) {
       const query = addressSearch.toLowerCase().trim();
@@ -657,6 +692,12 @@ export default function Stats2Page() {
     if (orderIdSearch.trim()) {
       const query = orderIdSearch.trim();
       fills = fills.filter(fill => fill.orderId === query);
+    }
+    if (selectedDateFilter) {
+      fills = fills.filter(fill => {
+        if (!fill.timestamp) return false;
+        return new Date(fill.timestamp * 1000).toISOString().split('T')[0] === selectedDateFilter;
+      });
     }
 
     // Sort
@@ -668,7 +709,7 @@ export default function Stats2Page() {
       return String(av).localeCompare(String(bv)) * dir;
     });
     return fills;
-  }, [formattedFills, selectedTokenFilters, selectedTraderFilter, addressSearch, orderIdSearch, fillSortKey, fillSortDir]);
+  }, [formattedFills, selectedTokenFilters, selectedTraderFilters, addressSearch, orderIdSearch, selectedDateFilter, fillSortKey, fillSortDir]);
 
   // Reset page when fills filter changes
   useEffect(() => { setFillPage(1); }, [addressSearch, orderIdSearch]);
@@ -688,6 +729,16 @@ export default function Stats2Page() {
         return prev.filter(t => t.address.toLowerCase() !== address.toLowerCase());
       }
       return [...prev, { address, ticker }];
+    });
+  }, []);
+
+  const handleTraderFilterSelect = useCallback((address: string) => {
+    setSelectedTraderFilters(prev => {
+      const exists = prev.some(a => a.toLowerCase() === address.toLowerCase());
+      if (exists) {
+        return prev.filter(a => a.toLowerCase() !== address.toLowerCase());
+      }
+      return [...prev, address];
     });
   }, []);
 
@@ -759,10 +810,10 @@ export default function Stats2Page() {
                 className="space-y-6"
               >
                 {/* Filter Bar - sticky when any filter is active */}
-                <div className={`${(selectedTokenFilters.length > 0 || selectedTraderFilter || addressSearch || orderIdSearch) ? 'md:sticky md:top-24 z-20' : ''}`}>
-                  <div className="flex flex-wrap items-center gap-3 p-3 bg-black/80 backdrop-blur-md border border-white/10 rounded-lg">
+                <div className={`${(selectedTokenFilters.length > 0 || selectedTraderFilters.length > 0 || addressSearch || orderIdSearch || selectedDateFilter) ? 'sticky top-[72px] z-30' : ''}`}>
+                  <div className="flex flex-wrap items-center gap-3 p-3 bg-black/95 backdrop-blur-md border border-white/10 rounded-lg shadow-lg">
                     {/* Active filter pills */}
-                    {(selectedTokenFilters.length > 0 || selectedTraderFilter) && (
+                    {(selectedTokenFilters.length > 0 || selectedTraderFilters.length > 0 || selectedDateFilter) && (
                       <>
                         <span className="text-gray-400 text-sm">Filtering by:</span>
                         {selectedTokenFilters.map(token => (
@@ -779,13 +830,31 @@ export default function Stats2Page() {
                             </button>
                           </div>
                         ))}
-                        {selectedTraderFilter && (
-                          <div className="flex items-center gap-2 px-2 py-1 bg-white/10 rounded">
+                        {selectedTraderFilters.map(trader => (
+                          <div key={trader} className="flex items-center gap-2 px-2 py-1 bg-white/10 rounded">
                             <span className="text-white font-mono text-sm">
-                              {selectedTraderFilter.slice(0, 6)}...{selectedTraderFilter.slice(-4)}
+                              {trader.slice(0, 6)}...{trader.slice(-4)}
                             </span>
                             <button
-                              onClick={() => setSelectedTraderFilter(null)}
+                              onClick={() => handleTraderFilterSelect(trader)}
+                              className="text-gray-400 hover:text-white transition-colors"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </div>
+                        ))}
+                        {selectedDateFilter && (
+                          <div className="flex items-center gap-2 px-2 py-1 bg-white/10 rounded">
+                            <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            <span className="text-white font-medium text-sm">
+                              {new Date(selectedDateFilter + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })}
+                            </span>
+                            <button
+                              onClick={() => setSelectedDateFilter(null)}
                               className="text-gray-400 hover:text-white transition-colors"
                             >
                               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -798,28 +867,29 @@ export default function Stats2Page() {
                     )}
 
                     {/* Search inputs */}
-                    <div className="flex items-center gap-2 ml-auto">
+                    <div className="flex items-center gap-2 ml-auto min-w-0">
                       <input
                         type="text"
                         placeholder="Address..."
                         value={addressSearch}
                         onChange={(e) => setAddressSearch(e.target.value)}
-                        className="bg-white/5 border border-white/10 rounded px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-white/30 font-mono w-[380px]"
+                        className="bg-white/5 border border-white/10 rounded px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-white/30 font-mono w-[140px] md:w-[380px]"
                       />
                       <input
                         type="text"
-                        placeholder="Order ID..."
+                        placeholder="Order ID."
                         value={orderIdSearch}
                         onChange={(e) => setOrderIdSearch(e.target.value)}
-                        className="bg-white/5 border border-white/10 rounded px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-white/30 font-mono w-[100px]"
+                        className="bg-white/5 border border-white/10 rounded px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-white/30 font-mono w-[80px] md:w-[110px] shrink-0"
                       />
-                      {(selectedTokenFilters.length > 0 || selectedTraderFilter || addressSearch || orderIdSearch) && (
+                      {(selectedTokenFilters.length > 0 || selectedTraderFilters.length > 0 || addressSearch || orderIdSearch || selectedDateFilter) && (
                         <button
                           onClick={() => {
                             setSelectedTokenFilters([]);
-                            setSelectedTraderFilter(null);
+                            setSelectedTraderFilters([]);
                             setAddressSearch('');
                             setOrderIdSearch('');
+                            setSelectedDateFilter(null);
                           }}
                           className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-white/10 rounded transition-colors whitespace-nowrap"
                         >
@@ -840,15 +910,17 @@ export default function Stats2Page() {
                   tokenPrices={tokenPrices}
                   contractOrders={filteredContractOrders}
                   activeOrders={filteredActiveOrders}
-                  dbTvl={(selectedTokenFilters.length > 0 || selectedTraderFilter || addressSearch || orderIdSearch) ? undefined : dbTvl}
+                  dbTvl={(selectedTokenFilters.length > 0 || selectedTraderFilters.length > 0 || addressSearch || orderIdSearch) ? undefined : dbTvl}
                 />
 
                 {/* Protocol Activity Chart */}
                 <ProtocolActivityChart
-                  transactions={filteredTransactions}
-                  orders={filteredOrders}
-                  contractOrders={filteredContractOrders}
+                  transactions={baseFilteredTransactions}
+                  orders={baseFilteredOrders}
+                  contractOrders={baseFilteredContractOrders}
                   tokenPrices={tokenPrices}
+                  selectedDate={selectedDateFilter}
+                  onDateSelect={setSelectedDateFilter}
                 />
 
                 {/* Top Tokens Chart */}
@@ -863,18 +935,13 @@ export default function Stats2Page() {
 
                 {/* Leaderboard */}
                 <TopTradersLeaderboard
-                  transactions={transactions}
-                  orders={orders}
+                  transactions={(addressSearch || orderIdSearch) ? filteredTransactions : transactions}
+                  orders={(addressSearch || orderIdSearch) ? filteredOrders : orders}
                   tokenPrices={tokenPrices}
-                  contractOrders={contractOrders}
-                  searchQuery={addressSearch}
-                  onSearchChange={(q) => {
-                    setAddressSearch(q);
-                  }}
-                  onTraderClick={(address) => {
-                    const toggle = addressSearch.toLowerCase() === address.toLowerCase() ? '' : address;
-                    setAddressSearch(toggle);
-                  }}
+                  contractOrders={(addressSearch || orderIdSearch) ? filteredContractOrders : contractOrders}
+                  onTraderClick={handleTraderFilterSelect}
+                  selectedTraders={selectedTraderFilters}
+                  searchQuery={addressSearch || orderIdSearch}
                 />
 
                 {/* Hourly Activity Heatmap - hidden for now */}
@@ -960,10 +1027,9 @@ export default function Stats2Page() {
                               return (
                                 <tr
                                   key={order.id}
-                                  className={`border-b border-white/5 transition-colors cursor-pointer ${
+                                  className={`border-b border-white/5 transition-colors ${
                                     isCurrentUser ? 'bg-white/5 hover:bg-white/10' : 'hover:bg-white/5'
                                   }`}
-                                  onClick={() => window.location.href = href}
                                 >
                                   <td className="py-4 px-2 text-center">
                                     <span

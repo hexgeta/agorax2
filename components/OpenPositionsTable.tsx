@@ -612,6 +612,25 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
     : realCancelledOrders;
   const isLoading = isMockMode ? false : realIsLoading;
 
+  // Fetch actual fill data from Supabase for completed/cancelled orders
+  const [orderFillsMap, setOrderFillsMap] = useState<Record<number, { address: string; ticker: string; totalAmount: number }[]>>({});
+  useEffect(() => {
+    const doneOrders = [...(completedOrders || []), ...(cancelledOrders || [])];
+    if (doneOrders.length === 0) return;
+    const orderIds = doneOrders.map(o => Number(o.orderDetailsWithID.orderID));
+    // Only fetch for IDs we haven't fetched yet
+    const newIds = orderIds.filter(id => !orderFillsMap[id]);
+    if (newIds.length === 0) return;
+    fetch(`/api/v1/fills?order_ids=${newIds.join(',')}`)
+      .then(r => r.json())
+      .then(json => {
+        if (json.data) {
+          setOrderFillsMap(prev => ({ ...prev, ...json.data }));
+        }
+      })
+      .catch(() => {});
+  }, [completedOrders, cancelledOrders]);
+
   // Get unique sell token addresses for price fetching
   const sellTokenAddresses = allOrders ? [...new Set(allOrders.map(order =>
     order.orderDetailsWithID.orderDetails.sellToken
@@ -4240,37 +4259,125 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                           let totalUsdValue = askingUsdValue; // Default to pre-calculated value
 
                           if (isDoneCol2) {
-                            const tokenValues: number[] = [];
-                            const origSellAmt = order.orderDetailsWithID.orderDetails.sellAmount;
-                            // Filled = original minus remaining
-                            const filledSellCol2 = origSellAmt - order.orderDetailsWithID.remainingSellAmount;
-                            buyTokensIndex.forEach((tokenIndex: bigint, idx: number) => {
-                              const tokenInfo = getTokenInfoByIndex(Number(tokenIndex));
-                              const originalAmount = buyAmounts[idx];
-                              // Scale buy amount by filled proportion
-                              const amountToUse = origSellAmt > 0n
-                                ? (originalAmount * filledSellCol2) / origSellAmt
-                                : 0n;
-                              const tokenAmount = parseFloat(formatTokenAmount(amountToUse, tokenInfo.decimals));
-                              const tokenPrice = getTokenPrice(tokenInfo.address, tokenPrices);
-                              const usdValue = tokenAmount * tokenPrice;
-                              tokenValues.push(usdValue);
-                            });
-                            // Use minimum value (cheapest option for buyer)
-                            totalUsdValue = tokenValues.length > 0 ? Math.min(...tokenValues) : 0;
+                            const orderId = Number(order.orderDetailsWithID.orderID);
+                            const fills = orderFillsMap[orderId];
+                            const proceeds = order.collectableProceeds;
+
+                            if (fills && fills.length > 0) {
+                              // Best source: actual fill events from Supabase
+                              let fillsUsd = 0;
+                              fills.forEach(fill => {
+                                const tokenInfo = getTokenInfo(fill.address);
+                                const tokenPrice = getTokenPrice(tokenInfo.address, tokenPrices);
+                                fillsUsd += fill.totalAmount * tokenPrice;
+                              });
+                              totalUsdValue = fillsUsd;
+                            } else if (proceeds && proceeds.buyTokens.length > 0) {
+                              // Secondary: unclaimed proceeds from contract
+                              let proceedsUsd = 0;
+                              proceeds.buyTokens.forEach((tokenAddr: string, idx: number) => {
+                                const tokenInfo = getTokenInfo(tokenAddr);
+                                const tokenAmount = parseFloat(formatTokenAmount(proceeds.buyAmounts[idx], tokenInfo.decimals));
+                                const tokenPrice = getTokenPrice(tokenInfo.address, tokenPrices);
+                                proceedsUsd += tokenAmount * tokenPrice;
+                              });
+                              totalUsdValue = proceedsUsd;
+                            } else {
+                              // Last fallback: scale by filled proportion
+                              const tokenValues: number[] = [];
+                              const origSellAmt = order.orderDetailsWithID.orderDetails.sellAmount;
+                              const filledSellCol2 = origSellAmt - order.orderDetailsWithID.remainingSellAmount;
+                              buyTokensIndex.forEach((tokenIndex: bigint, idx: number) => {
+                                const tokenInfo = getTokenInfoByIndex(Number(tokenIndex));
+                                const originalAmount = buyAmounts[idx];
+                                const amountToUse = origSellAmt > 0n
+                                  ? (originalAmount * filledSellCol2) / origSellAmt
+                                  : 0n;
+                                const tokenAmount = parseFloat(formatTokenAmount(amountToUse, tokenInfo.decimals));
+                                const tokenPrice = getTokenPrice(tokenInfo.address, tokenPrices);
+                                const usdValue = tokenAmount * tokenPrice;
+                                tokenValues.push(usdValue);
+                              });
+                              totalUsdValue = tokenValues.length > 0 ? Math.min(...tokenValues) : 0;
+                            }
                           }
 
                           return (
                             <div className="inline-block">
                               {(() => {
-                                // For completed and active orders
+                                const isDoneInner = statusFilter === 'completed' || order.orderDetailsWithID.status === 1 || order.orderDetailsWithID.status === 2 || (order.orderDetailsWithID.status === 0 && isOrderNearlyFilled(order));
+                                const orderId = Number(order.orderDetailsWithID.orderID);
+                                const fills = orderFillsMap[orderId];
+                                const proceeds = order.collectableProceeds;
+
+                                // Best source: actual fill events from Supabase
+                                if (isDoneInner && fills && fills.length > 0) {
+                                  return fills.map((fill, idx) => {
+                                    const tokenInfo = getTokenInfo(fill.address);
+                                    const tokenAmount = fill.totalAmount;
+                                    const tokenPrice = getTokenPrice(tokenInfo.address, tokenPrices);
+                                    const usdValue = tokenAmount * tokenPrice;
+
+                                    return (
+                                      <div key={idx} className="flex items-center space-x-2 mb-1.5">
+                                        <TokenLogo
+                                          src={tokenInfo.logo}
+                                          alt={formatTokenTicker(tokenInfo.ticker)}
+                                          className="w-6 h-6 "
+                                        />
+                                        <div className="flex flex-col">
+                                          <span className="text-white text-sm font-medium whitespace-nowrap">
+                                            {formatTokenTicker(tokenInfo.ticker)}
+                                          </span>
+                                          <ClickableNumber value={tokenAmount} className="text-white/60 text-xs whitespace-nowrap" />
+                                          {tokenPrice > 0 && (
+                                            <span className="text-gray-500 text-xs">
+                                              {formatUSD(usdValue)}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  });
+                                }
+
+                                // Secondary: unclaimed proceeds from contract
+                                if (isDoneInner && proceeds && proceeds.buyTokens.length > 0) {
+                                  return proceeds.buyTokens.map((tokenAddr: string, idx: number) => {
+                                    const tokenInfo = getTokenInfo(tokenAddr);
+                                    const rawAmount = proceeds.buyAmounts[idx];
+                                    const tokenAmount = parseFloat(formatTokenAmount(rawAmount, tokenInfo.decimals));
+                                    const tokenPrice = getTokenPrice(tokenInfo.address, tokenPrices);
+                                    const usdValue = tokenAmount * tokenPrice;
+
+                                    return (
+                                      <div key={idx} className="flex items-center space-x-2 mb-1.5">
+                                        <TokenLogo
+                                          src={tokenInfo.logo}
+                                          alt={formatTokenTicker(tokenInfo.ticker)}
+                                          className="w-6 h-6 "
+                                        />
+                                        <div className="flex flex-col">
+                                          <span className="text-white text-sm font-medium whitespace-nowrap">
+                                            {formatTokenTicker(tokenInfo.ticker)}
+                                          </span>
+                                          <ClickableNumber value={tokenAmount} className="text-white/60 text-xs whitespace-nowrap" />
+                                          {tokenPrice > 0 && (
+                                            <span className="text-gray-500 text-xs">
+                                              {formatUSD(usdValue)}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  });
+                                }
+
+                                // Last fallback: for active orders or when no fill data available
                                 return buyTokensIndex.map((tokenIndex: bigint, idx: number) => {
                                   const tokenInfo = getTokenInfoByIndex(Number(tokenIndex));
                                   const originalAmount = buyAmounts[idx];
-                                  // For done orders, show filled proportion; for active, show remaining
-                                  const isDoneInner = statusFilter === 'completed' || order.orderDetailsWithID.status === 1 || order.orderDetailsWithID.status === 2 || (order.orderDetailsWithID.status === 0 && isOrderNearlyFilled(order));
                                   const origSellAmt = order.orderDetailsWithID.orderDetails.sellAmount;
-                                  // Filled = original minus remaining
                                   const filledSellInner = origSellAmt - order.orderDetailsWithID.remainingSellAmount;
                                   const filledBuyAmount = origSellAmt > 0n
                                     ? (originalAmount * filledSellInner) / origSellAmt
@@ -4588,7 +4695,19 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
                                 );
                               }
 
-                              if (!hasClaimable) return <div className="w-16 h-8"></div>;
+                              if (!hasClaimable) {
+                                // Check if order was filled (has fill data or redeemed amount > 0)
+                                const redeemed = order.orderDetailsWithID.redeemedSellAmount || 0n;
+                                const wasFilled = redeemed > 0n || (orderFillsMap[Number(order.orderDetailsWithID.orderID)]?.length > 0);
+                                if (wasFilled) {
+                                  return (
+                                    <span className="px-2.5 py-1 text-xs rounded-full bg-blue-500/15 border border-blue-500/30 text-blue-400 font-medium">
+                                      Claimed
+                                    </span>
+                                  );
+                                }
+                                return <div className="w-16 h-8"></div>;
+                              }
 
                               return (
                                 <button

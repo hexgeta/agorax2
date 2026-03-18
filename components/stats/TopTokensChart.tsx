@@ -169,7 +169,7 @@ export default function TopTokensChart({ transactions, orders, tokenPrices, cont
       <div className="overflow-x-auto pb-2 modern-scrollbar">
         <div className="min-w-[700px] space-y-3">
         {/* Header */}
-        <div className="grid grid-cols-12 gap-2 text-gray-400 text-xs font-medium pb-2 border-b border-white/10">
+        <div className="grid grid-cols-12 gap-2 text-gray-400 text-xs font-medium pb-2 px-3 border-b border-white/10">
           <div className="col-span-1">#</div>
           <div className="col-span-2 cursor-pointer hover:text-white select-none" onClick={() => toggleSort('ticker')}>
             Token{sortKey === 'ticker' && <span className="ml-1 text-white/60">{sortDir === 'asc' ? '▲' : '▼'}</span>}
@@ -198,7 +198,7 @@ export default function TopTokensChart({ transactions, orders, tokenPrices, cont
           return (
             <div
               key={token.address}
-              className={`group/row relative cursor-pointer transition-all rounded ${isSelected ? 'ring-1 ring-white/50' : ''}`}
+              className={`group/row relative cursor-pointer transition-all rounded-lg ${isSelected ? 'border border-white/50 bg-white/10' : 'border border-transparent'}`}
               onClick={() => onTokenSelect?.(token.address, token.ticker)}
             >
               {/* Background bar */}
@@ -208,7 +208,7 @@ export default function TopTokensChart({ transactions, orders, tokenPrices, cont
               />
 
               {/* Content */}
-              <div className="grid grid-cols-12 gap-2 items-center py-2.5 px-1 relative">
+              <div className="grid grid-cols-12 gap-2 items-center py-2.5 px-3 relative">
                 <div className="col-span-1">
                   <span className={`text-sm font-bold ${globalIndex < 3 ? 'text-white' : 'text-gray-500'}`}>
                     {globalIndex + 1}

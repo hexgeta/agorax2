@@ -79,6 +79,7 @@ interface TopTradersLeaderboardProps {
   tokenPrices: Record<string, { price: number }>;
   contractOrders?: CompleteOrderDetails[];
   onTraderClick?: (address: string) => void;
+  selectedTraders?: string[];
   searchQuery?: string;
   onSearchChange?: (query: string) => void;
 }
@@ -125,7 +126,7 @@ function formatXp(xp: number): string {
   return '-';
 }
 
-export default function TopTradersLeaderboard({ transactions, orders, tokenPrices, contractOrders = [], onTraderClick, searchQuery = '', onSearchChange }: TopTradersLeaderboardProps) {
+export default function TopTradersLeaderboard({ transactions, orders, tokenPrices, contractOrders = [], onTraderClick, selectedTraders = [], searchQuery = '', onSearchChange }: TopTradersLeaderboardProps) {
   const { address: connectedAddress } = useAccount();
 
   // Fetch Supabase leaderboard data for XP, volume, prestige
@@ -406,124 +407,118 @@ export default function TopTradersLeaderboard({ transactions, orders, tokenPrice
       ) : (
         <>
         <div className="overflow-x-auto pb-2 modern-scrollbar">
-          <table className="w-full min-w-[1000px]">
-            <thead>
-              <tr className="border-b border-white/10">
-                <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap cursor-pointer hover:text-white select-none" onClick={() => toggleLbSort('rank')}>
-                  Rank{lbSortKey === 'rank' && <span className="ml-1 text-white/60">{lbSortDir === 'asc' ? '▲' : '▼'}</span>}
-                </th>
-                <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Trader</th>
-                <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap cursor-pointer hover:text-white select-none" onClick={() => toggleLbSort('totalXp')}>
-                  XP{lbSortKey === 'totalXp' && <span className="ml-1 text-white/60">{lbSortDir === 'asc' ? '▲' : '▼'}</span>}
-                </th>
-                <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap cursor-pointer hover:text-white select-none" onClick={() => toggleLbSort('listedVolumeUsd')}>
-                  Listed{lbSortKey === 'listedVolumeUsd' && <span className="ml-1 text-white/60">{lbSortDir === 'asc' ? '▲' : '▼'}</span>}
-                </th>
-                <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap cursor-pointer hover:text-white select-none" onClick={() => toggleLbSort('gotFilledVolumeUsd')}>
-                  Got Filled{lbSortKey === 'gotFilledVolumeUsd' && <span className="ml-1 text-white/60">{lbSortDir === 'asc' ? '▲' : '▼'}</span>}
-                </th>
-                <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap cursor-pointer hover:text-white select-none" onClick={() => toggleLbSort('filledVolumeUsd')}>
-                  They Filled{lbSortKey === 'filledVolumeUsd' && <span className="ml-1 text-white/60">{lbSortDir === 'asc' ? '▲' : '▼'}</span>}
-                </th>
-                <th className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap cursor-pointer hover:text-white select-none" onClick={() => toggleLbSort('totalVolume')}>
-                  Total Vol. Traded{lbSortKey === 'totalVolume' && <span className="ml-1 text-white/60">{lbSortDir === 'asc' ? '▲' : '▼'}</span>}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {paginatedUsers.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="py-8 text-center text-gray-500">
-                    No traders found yet.
-                  </td>
-                </tr>
-              ) : (
-                paginatedUsers.map((user) => {
-                  const isCurrentUser = connectedAddress?.toLowerCase() === user.address.toLowerCase();
-                  // Show grey if user hasn't completed first legion, otherwise show completed level
-                  const hasCompletedFirstLegion = user.prestigeLevel >= 1;
-                  const displayLevel = hasCompletedFirstLegion ? user.prestigeLevel - 1 : 0;
-                  const prestige = PRESTIGE_LEVELS[displayLevel] || PRESTIGE_LEVELS[0];
-                  const rankDisplay = getRankDisplay(user.rank);
-                  const totalVolume = user.filledVolumeUsd + user.gotFilledVolumeUsd;
+          <div className="min-w-[1000px]">
+            {/* Header */}
+            <div className="grid grid-cols-7 border-b border-white/10">
+              <div className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap cursor-pointer hover:text-white select-none" onClick={() => toggleLbSort('rank')}>
+                Rank{lbSortKey === 'rank' && <span className="ml-1 text-white/60">{lbSortDir === 'asc' ? '▲' : '▼'}</span>}
+              </div>
+              <div className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap">Trader</div>
+              <div className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap cursor-pointer hover:text-white select-none" onClick={() => toggleLbSort('totalXp')}>
+                XP{lbSortKey === 'totalXp' && <span className="ml-1 text-white/60">{lbSortDir === 'asc' ? '▲' : '▼'}</span>}
+              </div>
+              <div className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap cursor-pointer hover:text-white select-none" onClick={() => toggleLbSort('listedVolumeUsd')}>
+                Listed{lbSortKey === 'listedVolumeUsd' && <span className="ml-1 text-white/60">{lbSortDir === 'asc' ? '▲' : '▼'}</span>}
+              </div>
+              <div className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap cursor-pointer hover:text-white select-none" onClick={() => toggleLbSort('gotFilledVolumeUsd')}>
+                Got Filled{lbSortKey === 'gotFilledVolumeUsd' && <span className="ml-1 text-white/60">{lbSortDir === 'asc' ? '▲' : '▼'}</span>}
+              </div>
+              <div className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap cursor-pointer hover:text-white select-none" onClick={() => toggleLbSort('filledVolumeUsd')}>
+                They Filled{lbSortKey === 'filledVolumeUsd' && <span className="ml-1 text-white/60">{lbSortDir === 'asc' ? '▲' : '▼'}</span>}
+              </div>
+              <div className="text-center py-3 px-2 text-gray-400 font-medium text-sm whitespace-nowrap cursor-pointer hover:text-white select-none" onClick={() => toggleLbSort('totalVolume')}>
+                Total Vol. Traded{lbSortKey === 'totalVolume' && <span className="ml-1 text-white/60">{lbSortDir === 'asc' ? '▲' : '▼'}</span>}
+              </div>
+            </div>
 
-                  return (
-                    <tr
-                      key={user.address}
-                      className={`border-b border-white/5 transition-colors ${
-                        isCurrentUser ? 'bg-white/5' : 'hover:bg-white/5'
-                      }`}
-                    >
-                      <td className="py-4 px-2 text-center">
-                        <span className={`font-bold ${rankDisplay.color}`}>
-                          {rankDisplay.text}
+            {/* Rows */}
+            {paginatedUsers.length === 0 ? (
+              <div className="py-8 text-center text-gray-500">
+                No traders found yet.
+              </div>
+            ) : (
+              paginatedUsers.map((user) => {
+                const isCurrentUser = connectedAddress?.toLowerCase() === user.address.toLowerCase();
+                const isSelected = selectedTraders.some(t => t.toLowerCase() === user.address.toLowerCase());
+                const hasCompletedFirstLegion = user.prestigeLevel >= 1;
+                const displayLevel = hasCompletedFirstLegion ? user.prestigeLevel - 1 : 0;
+                const prestige = PRESTIGE_LEVELS[displayLevel] || PRESTIGE_LEVELS[0];
+                const rankDisplay = getRankDisplay(user.rank);
+                const totalVolume = user.filledVolumeUsd + user.gotFilledVolumeUsd;
+                const color = getAddressColor(user.address);
+
+                return (
+                  <div
+                    key={user.address}
+                    className={`grid grid-cols-7 items-center cursor-pointer transition-all rounded-lg ${isSelected ? 'border border-white/50 bg-white/10' : 'border border-transparent hover:bg-white/5'} ${isCurrentUser && !isSelected ? 'bg-white/5' : ''}`}
+                    onClick={() => onTraderClick?.(user.address)}
+                  >
+                    <div className="py-4 px-2 text-center">
+                      <span className={`font-bold ${rankDisplay.color}`}>
+                        {rankDisplay.text}
+                      </span>
+                    </div>
+                    <div className="py-4 px-2 text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        <span
+                          className="font-mono text-xs px-2.5 py-1 rounded-full inline-block"
+                          style={{ backgroundColor: color.bg, color: color.text, border: `1px solid ${color.border}` }}
+                        >
+                          {formatAddress(user.address)}
                         </span>
-                      </td>
-                      <td className="py-4 px-2 text-center">
-                        {(() => {
-                          const color = getAddressColor(user.address);
-                          return (
-                            <div className="flex items-center justify-center gap-2">
-                              <span
-                                className="font-mono text-xs px-2.5 py-1 rounded-full inline-block cursor-pointer hover:opacity-80 transition-opacity"
-                                style={{ backgroundColor: color.bg, color: color.text, border: `1px solid ${color.border}` }}
-                                onClick={() => onTraderClick?.(user.address)}
-                              >
-                                {formatAddress(user.address)}
-                              </span>
-                              {isCurrentUser && (
-                                <span className="text-xs bg-white/10 px-2 py-0.5 rounded text-gray-300">You</span>
-                              )}
-                            </div>
-                          );
-                        })()}
-                      </td>
-                      <td className="py-4 px-2 text-center">
-                        <span className={`font-medium ${user.totalXp > 0 ? 'text-amber-400' : 'text-gray-600'}`}>
-                          {formatXp(user.totalXp)}
-                        </span>
-                      </td>
-                      <td className="py-4 px-2 text-center">
-                        {user.listedVolumeUsd > 0 ? (
-                          <>
-                            <span className="text-pink-400 text-sm">{formatUSD(user.listedVolumeUsd)}</span>
-                            <span className="text-gray-500 text-xs ml-1">({user.listedOrderCount})</span>
-                          </>
-                        ) : (
-                          <span className="text-gray-600 text-sm">-</span>
+                        {isCurrentUser && (
+                          <span className="text-xs bg-white/10 px-2 py-0.5 rounded text-gray-300">You</span>
                         )}
-                      </td>
-                      <td className="py-4 px-2 text-center">
-                        {user.gotFilledVolumeUsd > 0 ? (
-                          <>
-                            <span className="text-blue-400 text-sm">{formatUSD(user.gotFilledVolumeUsd)}</span>
-                            <span className="text-gray-500 text-xs ml-1">({user.gotFilledCount})</span>
-                          </>
-                        ) : (
-                          <span className="text-gray-600 text-sm">-</span>
+                        {isSelected && (
+                          <span className="text-[10px] px-1.5 py-0.5 bg-white/20 text-white rounded">FILTERED</span>
                         )}
-                      </td>
-                      <td className="py-4 px-2 text-center">
-                        {user.filledVolumeUsd > 0 ? (
-                          <>
-                            <span className="text-green-400 text-sm">{formatUSD(user.filledVolumeUsd)}</span>
-                            <span className="text-gray-500 text-xs ml-1">({user.filledCount})</span>
-                          </>
-                        ) : (
-                          <span className="text-gray-600 text-sm">-</span>
-                        )}
-                      </td>
-                      <td className="py-4 px-2 text-center">
-                        <span className="text-white font-bold text-sm">
-                          {totalVolume > 0 ? formatUSD(totalVolume) : '-'}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+                      </div>
+                    </div>
+                    <div className="py-4 px-2 text-center">
+                      <span className={`font-medium ${user.totalXp > 0 ? 'text-amber-400' : 'text-gray-600'}`}>
+                        {formatXp(user.totalXp)}
+                      </span>
+                    </div>
+                    <div className="py-4 px-2 text-center">
+                      {user.listedVolumeUsd > 0 ? (
+                        <>
+                          <span className="text-pink-400 text-sm">{formatUSD(user.listedVolumeUsd)}</span>
+                          <span className="text-gray-500 text-xs ml-1">({user.listedOrderCount})</span>
+                        </>
+                      ) : (
+                        <span className="text-gray-600 text-sm">-</span>
+                      )}
+                    </div>
+                    <div className="py-4 px-2 text-center">
+                      {user.gotFilledVolumeUsd > 0 ? (
+                        <>
+                          <span className="text-blue-400 text-sm">{formatUSD(user.gotFilledVolumeUsd)}</span>
+                          <span className="text-gray-500 text-xs ml-1">({user.gotFilledCount})</span>
+                        </>
+                      ) : (
+                        <span className="text-gray-600 text-sm">-</span>
+                      )}
+                    </div>
+                    <div className="py-4 px-2 text-center">
+                      {user.filledVolumeUsd > 0 ? (
+                        <>
+                          <span className="text-green-400 text-sm">{formatUSD(user.filledVolumeUsd)}</span>
+                          <span className="text-gray-500 text-xs ml-1">({user.filledCount})</span>
+                        </>
+                      ) : (
+                        <span className="text-gray-600 text-sm">-</span>
+                      )}
+                    </div>
+                    <div className="py-4 px-2 text-center">
+                      <span className="text-white font-bold text-sm">
+                        {totalVolume > 0 ? formatUSD(totalVolume) : '-'}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
         </div>
         {totalPages > 1 && (
           <div className="flex items-center justify-end mt-4">
