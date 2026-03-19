@@ -3714,6 +3714,14 @@ export function LimitOrderForm({
               </div>
             </LiquidGlassCard>
 
+            {/* Warning */}
+            <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20">
+              <span className="text-amber-400 text-sm mt-0.5">⚠</span>
+              <p className="text-amber-400/80 text-xs leading-relaxed">
+                Carefully check your order amounts in native units. Your order may be dependent on low liquidity price feeds.
+              </p>
+            </div>
+
             {/* Action Buttons */}
             <div className="flex gap-3">
               <button
@@ -5436,7 +5444,7 @@ export function LimitOrderForm({
 
                       {/* Price Warning for tokens without price data */}
                       {sellToken && (
-                        (prices[sellToken.a]?.price === -1) || (prices[buyToken.a]?.price === -1)
+                        getPrice(sellToken.a) <= 0 || getPrice(buyToken.a) <= 0
                       ) && (
                         <div className="mt-2 p-3 bg-yellow-900/20 border border-yellow-500/30 rounded-lg">
                           <div className="flex items-start gap-2">
@@ -5446,9 +5454,9 @@ export function LimitOrderForm({
                             <div className="text-sm">
                               <p className="text-yellow-500 font-medium">No Market Price Available</p>
                               <p className="text-yellow-400/80 mt-1">
-                                {prices[sellToken.a]?.price === -1 && prices[buyToken.a]?.price === -1
+                                {getPrice(sellToken.a) <= 0 && getPrice(buyToken.a) <= 0
                                   ? `Neither ${formatTokenTicker(sellToken.ticker, chainId)} nor ${formatTokenTicker(buyToken.ticker, chainId)} have market prices.`
-                                  : prices[sellToken.a]?.price === -1
+                                  : getPrice(sellToken.a) <= 0
                                     ? `${formatTokenTicker(sellToken.ticker, chainId)} has no market price data.`
                                     : `${formatTokenTicker(buyToken.ticker, chainId)} has no market price data.`
                                 } You'll need to manually set your desired price.
