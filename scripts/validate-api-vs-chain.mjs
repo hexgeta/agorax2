@@ -260,10 +260,12 @@ async function runCheck(checkNum, totalOnChain) {
   log(`Sampling random orders from ${totalOnChain} total on-chain orders`);
 
   // Pick 5-10 random order IDs per check
-  const sampleSize = Math.min(randomInt(5, 10), totalOnChain);
+  // Exclude the last 2 orders to avoid sync lag false positives
+  const maxId = Math.max(0, totalOnChain - 3);
+  const sampleSize = Math.min(randomInt(5, 10), maxId + 1);
   const orderIds = new Set();
   while (orderIds.size < sampleSize) {
-    orderIds.add(randomInt(0, totalOnChain - 1));
+    orderIds.add(randomInt(0, maxId));
   }
 
   log(`Validating orders: ${[...orderIds].join(', ')}`);
