@@ -248,11 +248,11 @@ export default function PLSWrapPage() {
                     inputRef.current?.setSelectionRange(newCursorPos, newCursorPos);
                   });
                 }}
-                className="flex-1 bg-transparent text-white text-xl font-medium outline-none placeholder-gray-600"
+                className="flex-1 min-w-0 bg-transparent text-white text-xl font-medium outline-none placeholder-gray-600"
               />
               <button
                 onClick={handleMax}
-                className="text-xs text-gray-400 hover:text-white bg-white/10 px-2 py-1 rounded transition-colors"
+                className="flex-shrink-0 text-xs text-gray-400 hover:text-white bg-white/10 px-2 py-1 rounded transition-colors"
               >
                 MAX
               </button>
