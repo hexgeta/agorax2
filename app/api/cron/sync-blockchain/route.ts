@@ -616,6 +616,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 }
 
 // Re-sync all orders against on-chain state to ensure API data is never stale
+// Uses upsert so that orders missing from the DB (e.g. missed OrderPlaced events) are inserted
 async function resyncAllOrders(client: any, CONTRACT_ABI: any): Promise<number> {
   let resynced = 0;
   const totalOrderCount = await client.readContract({
@@ -623,6 +624,20 @@ async function resyncAllOrders(client: any, CONTRACT_ABI: any): Promise<number> 
     abi: CONTRACT_ABI,
     functionName: 'getTotalOrderCount',
   }) as bigint;
+
+  // Fetch whitelist for resolving buy token indices to addresses
+  let whitelist: string[] = [];
+  try {
+    const whitelistResult = await client.readContract({
+      address: CONTRACT_ADDRESS,
+      abi: CONTRACT_ABI,
+      functionName: 'viewWhitelisted',
+      args: [0n, 1000n],
+    }) as [Array<{ tokenAddress: string; isActive: boolean }>, bigint];
+    whitelist = whitelistResult[0].map((t) => t.tokenAddress.toLowerCase());
+  } catch {
+    // If whitelist fetch fails, we can still update existing orders but can't insert new ones properly
+  }
 
   const total = Number(totalOrderCount);
   for (let i = 0; i < total; i += 10) {
@@ -641,7 +656,9 @@ async function resyncAllOrders(client: any, CONTRACT_ABI: any): Promise<number> 
       if (!data) continue;
       try {
         const details = data.orderDetailsWithID || data;
+        const userDetails = data.userDetails;
         const orderDetails = details.orderDetails;
+        const sellToken = (orderDetails?.sellToken as string || '').toLowerCase();
         const totalSell = orderDetails?.sellAmount ? BigInt(orderDetails.sellAmount) : 0n;
         const redeemed = details.redeemedSellAmount ? BigInt(details.redeemedSellAmount) : 0n;
         const remaining = details.remainingSellAmount ? BigInt(details.remainingSellAmount) : 0n;
@@ -649,15 +666,44 @@ async function resyncAllOrders(client: any, CONTRACT_ABI: any): Promise<number> 
         let chainStatus = Number(details.status ?? 0);
         if (fillPct >= 100 && chainStatus !== 1) chainStatus = 2;
 
-        await supabase.from('orders').update({
+        const sellDecimals = getTokenDecimals(sellToken);
+        const buyTokensIndices = (orderDetails?.buyTokensIndex || []).map((x: any) => Number(x));
+        const buyAddresses = buyTokensIndices.map((idx: number) => whitelist[idx] || '');
+        const buyTickers = buyAddresses.map((addr: string) => addr ? getTokenTicker(addr) : 'UNKNOWN');
+        const buyAmountsRaw = (orderDetails?.buyAmounts || []).map((a: any) => a.toString());
+        const buyAmountsFormatted = (orderDetails?.buyAmounts || []).map((a: any, j: number) => {
+          const addr = buyAddresses[j];
+          const dec = addr ? getTokenDecimals(addr) : 18;
+          return formatAmount(BigInt(a), dec);
+        });
+        const makerAddress = (userDetails?.orderOwner as string || '').toLowerCase();
+
+        // Ensure maker wallet exists in users table (needed for foreign key)
+        if (makerAddress) {
+          await supabase
+            .from('users')
+            .upsert({ wallet_address: makerAddress }, { onConflict: 'wallet_address', ignoreDuplicates: true });
+        }
+
+        await supabase.from('orders').upsert({
+          order_id: oid,
+          maker_address: makerAddress,
+          sell_token_address: sellToken,
+          sell_token_ticker: getTokenTicker(sellToken),
+          sell_amount_raw: totalSell.toString(),
+          sell_amount_formatted: formatAmount(totalSell, sellDecimals),
+          buy_tokens_addresses: buyAddresses,
+          buy_tokens_tickers: buyTickers,
+          buy_amounts_raw: buyAmountsRaw,
+          buy_amounts_formatted: buyAmountsFormatted,
           status: chainStatus,
           fill_percentage: fillPct,
           remaining_sell_amount: remaining.toString(),
           redeemed_sell_amount: redeemed.toString(),
-          expiration: Number(orderDetails?.expirationTime || 0n),
           is_all_or_nothing: Boolean(orderDetails?.allOrNothing),
+          expiration: Number(orderDetails?.expirationTime || 0n),
           updated_at: new Date().toISOString(),
-        }).eq('order_id', oid);
+        }, { onConflict: 'order_id' });
         resynced++;
       } catch {
         // Skip individual order failures
