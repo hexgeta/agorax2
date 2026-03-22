@@ -640,6 +640,23 @@ async function resyncAllOrders(client: any, CONTRACT_ABI: any): Promise<number> 
   }
 
   const total = Number(totalOrderCount);
+
+  // Query existing order IDs so we can set creation_block_number for new orders only
+  // (orders missed by event sync won't have creation_block_number, making them invisible
+  // to the protocol-data API which filters by .gte('creation_block_number', DEPLOYMENT_BLOCK))
+  const existingOrderIds = new Set<number>();
+  try {
+    const { data: existingOrders } = await supabase
+      .from('orders')
+      .select('order_id')
+      .not('creation_block_number', 'is', null);
+    if (existingOrders) {
+      existingOrders.forEach((o: { order_id: number }) => existingOrderIds.add(o.order_id));
+    }
+  } catch {
+    // If query fails, we'll still sync orders but new ones may lack creation_block_number
+  }
+
   for (let i = 0; i < total; i += 10) {
     const batch = Array.from({ length: Math.min(10, total - i) }, (_, j) => i + j + 1);
     const batchResults = await Promise.all(
@@ -685,7 +702,10 @@ async function resyncAllOrders(client: any, CONTRACT_ABI: any): Promise<number> 
             .upsert({ wallet_address: makerAddress }, { onConflict: 'wallet_address', ignoreDuplicates: true });
         }
 
-        await supabase.from('orders').upsert({
+        // For orders not yet in the DB (missed by event sync), set creation_block_number
+        // to DEPLOYMENT_BLOCK so they appear in the protocol-data API which filters by it.
+        // For existing orders, don't overwrite the real creation_block_number from event sync.
+        const orderRow: Record<string, any> = {
           order_id: oid,
           maker_address: makerAddress,
           sell_token_address: sellToken,
@@ -703,7 +723,14 @@ async function resyncAllOrders(client: any, CONTRACT_ABI: any): Promise<number> 
           is_all_or_nothing: Boolean(orderDetails?.allOrNothing),
           expiration: Number(orderDetails?.expirationTime || 0n),
           updated_at: new Date().toISOString(),
-        }, { onConflict: 'order_id' });
+        };
+
+        if (!existingOrderIds.has(oid)) {
+          orderRow.creation_block_number = Number(DEPLOYMENT_BLOCK);
+          orderRow.created_at = new Date().toISOString();
+        }
+
+        await supabase.from('orders').upsert(orderRow, { onConflict: 'order_id' });
         resynced++;
       } catch {
         // Skip individual order failures
