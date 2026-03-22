@@ -726,8 +726,36 @@ async function resyncAllOrders(client: any, CONTRACT_ABI: any): Promise<number> 
         };
 
         if (!existingOrderIds.has(oid)) {
-          orderRow.creation_block_number = Number(DEPLOYMENT_BLOCK);
-          orderRow.created_at = new Date().toISOString();
+          // Fetch the actual OrderPlaced event to get the real block number and tx hash
+          try {
+            const logs = await client.getLogs({
+              address: CONTRACT_ADDRESS,
+              event: ORDER_PLACED_EVENT,
+              args: { orderID: BigInt(oid) },
+              fromBlock: DEPLOYMENT_BLOCK,
+              toBlock: 'latest',
+            });
+            if (logs.length > 0) {
+              const log = logs[0];
+              orderRow.creation_block_number = Number(log.blockNumber);
+              orderRow.creation_tx_hash = log.transactionHash;
+              // Get block timestamp for created_at
+              try {
+                const block = await client.getBlock({ blockNumber: log.blockNumber });
+                orderRow.created_at = new Date(Number(block.timestamp) * 1000).toISOString();
+              } catch {
+                orderRow.created_at = new Date().toISOString();
+              }
+            } else {
+              // Fallback if event not found (shouldn't happen)
+              orderRow.creation_block_number = Number(DEPLOYMENT_BLOCK);
+              orderRow.created_at = new Date().toISOString();
+            }
+          } catch {
+            // Fallback if event lookup fails
+            orderRow.creation_block_number = Number(DEPLOYMENT_BLOCK);
+            orderRow.created_at = new Date().toISOString();
+          }
         }
 
         await supabase.from('orders').upsert(orderRow, { onConflict: 'order_id' });
