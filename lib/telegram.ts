@@ -45,6 +45,30 @@ export function esc(s: string): string {
   return s.replace(/([_*\[\]()~`>#+\-=|{}.!\\])/g, '\\$1');
 }
 
+/**
+ * Send a Telegram message to a specific user's chat (by chat_id).
+ * Used for per-user notifications (e.g. order fill alerts).
+ */
+export async function sendTelegramToUser(chatId: string, text: string): Promise<boolean> {
+  const token = BOT_TOKEN();
+  if (!token) return false;
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text,
+        parse_mode: 'MarkdownV2',
+        disable_web_page_preview: true,
+      }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 // ── Notification helpers ──────────────────────────────────────────────
 
 export function notifyNewOrder(order: {
@@ -74,6 +98,55 @@ export function notifyNewOrder(order: {
     const date = new Date(exp * 1000).toISOString().replace('T', ' ').slice(0, 19);
     lines.push(`⏰ _Expires: ${esc(date)} UTC_`);
   }
+
+  sendTelegram(lines.join('\n'));
+}
+
+export function notifyOrderFilled(chatId: string, fill: {
+  orderId: string | number;
+  fillAmount: string;
+  fillToken: string;
+  fillerAddress: string;
+  fillPercentage: number;
+  txHash: string;
+}) {
+  const pct = fill.fillPercentage >= 100 ? '100%' : `${fill.fillPercentage.toFixed(1)}%`;
+  const shortFiller = `${fill.fillerAddress.slice(0, 6)}...${fill.fillerAddress.slice(-4)}`;
+  const lines = [
+    `🔔 *Order \\#${esc(String(fill.orderId))} Filled\\!*`,
+    ``,
+    `*Amount:* ${esc(fill.fillAmount)} ${esc(fill.fillToken)}`,
+    `*By:* \`${esc(shortFiller)}\``,
+    `*Fill:* ${esc(pct)}`,
+    ``,
+    `[View Tx](https://scan.pulsechain.com/tx/${esc(fill.txHash)})`,
+  ];
+
+  sendTelegramToUser(chatId, lines.join('\n'));
+}
+
+export function notifyOrderFilledGroup(fill: {
+  orderId: string | number;
+  makerAddress: string;
+  fillAmount: string;
+  fillToken: string;
+  fillerAddress: string;
+  fillPercentage: number;
+  txHash: string;
+}) {
+  const pct = fill.fillPercentage >= 100 ? '100%' : `${fill.fillPercentage.toFixed(1)}%`;
+  const shortMaker = `${fill.makerAddress.slice(0, 6)}...${fill.makerAddress.slice(-4)}`;
+  const shortFiller = `${fill.fillerAddress.slice(0, 6)}...${fill.fillerAddress.slice(-4)}`;
+  const lines = [
+    `✅ *Order \\#${esc(String(fill.orderId))} Filled*`,
+    ``,
+    `*Maker:* \`${esc(shortMaker)}\``,
+    `*Filler:* \`${esc(shortFiller)}\``,
+    `*Amount:* ${esc(fill.fillAmount)} ${esc(fill.fillToken)}`,
+    `*Fill:* ${esc(pct)}`,
+    ``,
+    `[View Tx](https://scan.pulsechain.com/tx/${esc(fill.txHash)})`,
+  ];
 
   sendTelegram(lines.join('\n'));
 }
