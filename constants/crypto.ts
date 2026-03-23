@@ -3528,6 +3528,27 @@ export const TOKEN_CONSTANTS = [{
   ticker: "GIZMO",
   decimals: 18,
   name: "Gizmo"
+}, {
+  chain: 369,
+  a: "0x4fc0c8a7636cfe551bb077ba928b4e9d59b02dc2",
+  dexs: null,
+  ticker: "GOLD 6T",
+  decimals: 8,
+  name: "6 Tons of Digital Gold"
+}, {
+  chain: 369,
+  a: "0x1e5e67983bfcc37c3c4a1a25f15e57170762398c",
+  dexs: null,
+  ticker: "USDG",
+  decimals: 8,
+  name: "USD Gold 6T"
+}, {
+  chain: 369,
+  a: "0x35b5f0bd6264ffe48a848809bb44583ed25cdd18",
+  dexs: null,
+  ticker: "BULLX",
+  decimals: 18,
+  name: "Provex Bull"
 }];
 
 export const API_ENDPOINTS = {
