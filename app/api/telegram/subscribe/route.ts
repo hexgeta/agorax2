@@ -38,7 +38,8 @@ export async function POST(req: NextRequest) {
       });
 
     if (error) {
-      return NextResponse.json({ error: 'Failed to create subscription' }, { status: 500 });
+      console.error('Telegram subscribe error:', error);
+      return NextResponse.json({ error: `Failed to create subscription: ${error.message}` }, { status: 500 });
     }
 
     const telegramLink = `https://t.me/${BOT_USERNAME}?start=${linkCode}`;

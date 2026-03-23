@@ -14,12 +14,18 @@ type SubStatus = {
   notifyCancellations: boolean;
 };
 
+type ErrorState = {
+  message: string;
+  detail?: string;
+};
+
 export default function NotificationsPage() {
   const { address, isConnected } = useAccount();
   const [status, setStatus] = useState<SubStatus | null>(null);
   const [telegramLink, setTelegramLink] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
+  const [error, setError] = useState<ErrorState | null>(null);
 
   const checkStatus = useCallback(async () => {
     if (!address) return;
@@ -54,6 +60,7 @@ export default function NotificationsPage() {
   const handleSubscribe = async () => {
     if (!address) return;
     setLoading(true);
+    setError(null);
     try {
       const res = await fetch('/api/telegram/subscribe', {
         method: 'POST',
@@ -61,12 +68,18 @@ export default function NotificationsPage() {
         body: JSON.stringify({ walletAddress: address }),
       });
       const data = await res.json();
+      if (!res.ok) {
+        setError({ message: 'Failed to enable notifications', detail: data.error || `Status ${res.status}` });
+        return;
+      }
       if (data.telegramLink) {
         setTelegramLink(data.telegramLink);
         setStatus({ subscribed: false, pending: true, notifyFills: true, notifyCancellations: false });
+      } else {
+        setError({ message: 'Unexpected response', detail: 'No Telegram link returned' });
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      setError({ message: 'Network error', detail: err instanceof Error ? err.message : 'Could not reach server' });
     } finally {
       setLoading(false);
     }
@@ -206,6 +219,13 @@ export default function NotificationsPage() {
               </div>
             )}
           </LiquidGlassCard>
+
+          {error && (
+            <div className="mt-4 p-4 rounded-lg bg-red-500/10 border border-red-500/20">
+              <p className="text-red-400 text-sm font-medium">{error.message}</p>
+              {error.detail && <p className="text-red-400/60 text-xs mt-1">{error.detail}</p>}
+            </div>
+          )}
 
           <div className="mt-6 text-center">
             <p className="text-xs text-white/30">
