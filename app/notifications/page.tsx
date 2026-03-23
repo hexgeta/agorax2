@@ -26,7 +26,7 @@ export default function NotificationsPage() {
   const [checking, setChecking] = useState(true);
   const [error, setError] = useState<ErrorState | null>(null);
   const [linkCode, setLinkCode] = useState<string | null>(null);
-  const [botUsername, setBotUsername] = useState<string>('AgoraXBot');
+  const [botUsername, setBotUsername] = useState<string>('agorax_notification_bot');
   const [copied, setCopied] = useState(false);
 
   const checkStatus = useCallback(async () => {

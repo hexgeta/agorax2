@@ -6,7 +6,7 @@ const supabaseUrl = process.env.SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-const BOT_USERNAME = process.env.TELEGRAM_BOT_USERNAME || 'AgoraXBot';
+const BOT_USERNAME = process.env.TELEGRAM_BOT_USERNAME || 'agorax_notification_bot';
 
 /**
  * POST /api/telegram/subscribe
