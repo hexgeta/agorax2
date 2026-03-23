@@ -4,7 +4,7 @@ import { createPublicClient, http, parseAbiItem } from 'viem';
 import { pulsechain } from 'viem/chains';
 import { TOKEN_CONSTANTS } from '@/constants/crypto';
 import { ACTION_XP, calculateVolumeBonus } from '@/constants/xp';
-import { notifyNewOrder } from '@/lib/telegram';
+import { notifyNewOrder, notifyOrderFilled, notifyOrderFilledGroup } from '@/lib/telegram';
 
 // Supabase with service role for writes
 const supabaseUrl = process.env.SUPABASE_URL!;
@@ -461,6 +461,54 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         }
       } catch (err) {
         stats.errors.push(`Order update after fill ${orderId}: ${err}`);
+      }
+
+      // Send Telegram fill notification to group chat
+      {
+        const onChainData = onChainOrders.get(orderId);
+        const totalSellAmt = onChainData?.orderDetails?.sellAmount ? BigInt(onChainData.orderDetails.sellAmount) : 0n;
+        const redeemedAmt = onChainData?.redeemedSellAmount ? BigInt(onChainData.redeemedSellAmount) : 0n;
+        const fillPctGroup = totalSellAmt > 0n ? Number((redeemedAmt * 10000n) / totalSellAmt) / 100 : 0;
+
+        notifyOrderFilledGroup({
+          orderId,
+          makerAddress: orderMeta?.owner || 'unknown',
+          fillAmount: formatAmount(buyAmount, buyDecimals).toString(),
+          fillToken: buyTicker,
+          fillerAddress: buyer,
+          fillPercentage: fillPctGroup,
+          txHash: log.transactionHash || '',
+        });
+      }
+
+      // Send Telegram notification to maker if subscribed
+      if (orderMeta) {
+        try {
+          const { data: sub } = await supabase
+            .from('telegram_subscriptions')
+            .select('telegram_chat_id')
+            .eq('wallet_address', orderMeta.owner)
+            .eq('is_active', true)
+            .single();
+
+          if (sub?.telegram_chat_id) {
+            const onChain = onChainOrders.get(orderId);
+            const totalSell = onChain?.orderDetails?.sellAmount ? BigInt(onChain.orderDetails.sellAmount) : 0n;
+            const redeemed = onChain?.redeemedSellAmount ? BigInt(onChain.redeemedSellAmount) : 0n;
+            const fillPct = totalSell > 0n ? Number((redeemed * 10000n) / totalSell) / 100 : 0;
+
+            notifyOrderFilled(sub.telegram_chat_id, {
+              orderId,
+              fillAmount: formatAmount(buyAmount, buyDecimals).toString(),
+              fillToken: buyTicker,
+              fillerAddress: buyer,
+              fillPercentage: fillPct,
+              txHash: log.transactionHash || '',
+            });
+          }
+        } catch {
+          // Fire-and-forget — never block sync
+        }
       }
 
       stats.filled++;
