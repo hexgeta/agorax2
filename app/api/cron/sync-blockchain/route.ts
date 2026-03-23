@@ -19,6 +19,9 @@ const DEPLOYMENT_BLOCK = 21266815n;
 // Vercel cron secret (set CRON_SECRET in env)
 const CRON_SECRET = process.env.CRON_SECRET;
 
+// Test address: always send fill notifications to group chat for this maker
+const TEST_NOTIFY_ADDRESS = '0xeeced771c782fa648c2a6902fdf5fa572c49964d';
+
 // Token resolution
 const TOKEN_MAP = new Map<string, { ticker: string; decimals: number }>();
 TOKEN_CONSTANTS
@@ -481,7 +484,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         });
       }
 
-      // Send Telegram notification to maker if subscribed
+      // Send Telegram notification to maker if subscribed (or test address)
       if (orderMeta) {
         try {
           const { data: sub } = await supabase
@@ -491,13 +494,19 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
             .eq('is_active', true)
             .single();
 
-          if (sub?.telegram_chat_id) {
+          // Use subscription chat_id, or fall back to group chat for test address
+          const chatId = sub?.telegram_chat_id
+            || (orderMeta.owner === TEST_NOTIFY_ADDRESS
+              ? (process.env.TELEGRAM_CHAT_ID_GROUP || process.env.TELEGRAM_CHAT_ID || '')
+              : '');
+
+          if (chatId) {
             const onChain = onChainOrders.get(orderId);
             const totalSell = onChain?.orderDetails?.sellAmount ? BigInt(onChain.orderDetails.sellAmount) : 0n;
             const redeemed = onChain?.redeemedSellAmount ? BigInt(onChain.redeemedSellAmount) : 0n;
             const fillPct = totalSell > 0n ? Number((redeemed * 10000n) / totalSell) / 100 : 0;
 
-            notifyOrderFilled(sub.telegram_chat_id, {
+            notifyOrderFilled(chatId, {
               orderId,
               fillAmount: formatAmount(buyAmount, buyDecimals).toString(),
               fillToken: buyTicker,
