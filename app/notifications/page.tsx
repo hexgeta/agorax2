@@ -27,7 +27,6 @@ export default function NotificationsPage() {
   const [error, setError] = useState<ErrorState | null>(null);
   const [linkCode, setLinkCode] = useState<string | null>(null);
   const [botUsername, setBotUsername] = useState<string>('agorax_notification_bot');
-  const [copied, setCopied] = useState(false);
 
   const checkStatus = useCallback(async () => {
     if (!address) return;
@@ -105,13 +104,7 @@ export default function NotificationsPage() {
     }
   };
 
-  const startCommand = `/start ${linkCode}`;
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(startCommand);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
+  const botDeepLink = `https://t.me/${botUsername}?start=${linkCode}`;
 
   return (
     <div className="relative min-h-[calc(100vh-5rem)]">
@@ -169,27 +162,27 @@ export default function NotificationsPage() {
               <div className="space-y-6">
                 <div className="flex items-center gap-3">
                   <div className="w-3 h-3 rounded-full bg-yellow-400 animate-pulse" />
-                  <span className="text-yellow-400 font-medium">Almost done — message the bot</span>
+                  <span className="text-yellow-400 font-medium">Almost done — open the bot</span>
                 </div>
 
                 <p className="text-sm text-white/60">
-                  Open <span className="text-white font-medium">@{botUsername}</span> on Telegram and send this message:
+                  Tap the button below to open <span className="text-white font-medium">@{botUsername}</span> on Telegram, then press <span className="text-white font-medium">Start</span>.
                 </p>
 
-                <div className="flex items-center gap-2">
-                  <code className="flex-1 bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-sm text-white font-mono select-all">
-                    {startCommand}
-                  </code>
-                  <button
-                    onClick={handleCopy}
-                    className="shrink-0 px-4 py-3 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm transition-colors"
-                  >
-                    {copied ? 'Copied' : 'Copy'}
-                  </button>
-                </div>
+                <a
+                  href={botDeepLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 w-full py-3 px-4 rounded-lg bg-[#2AABEE] hover:bg-[#229ED9] text-white font-medium transition-colors text-sm"
+                >
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
+                  </svg>
+                  Open in Telegram
+                </a>
 
                 <p className="text-xs text-white/40 text-center">
-                  This page will update automatically once you send the message.
+                  This page will update automatically once you press Start in the bot.
                 </p>
               </div>
             ) : (
