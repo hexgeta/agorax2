@@ -22,7 +22,6 @@ type ErrorState = {
 export default function NotificationsPage() {
   const { address, isConnected } = useAccount();
   const [status, setStatus] = useState<SubStatus | null>(null);
-  const [telegramLink, setTelegramLink] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
   const [error, setError] = useState<ErrorState | null>(null);
@@ -50,13 +49,6 @@ export default function NotificationsPage() {
     }
   }, [address, checkStatus]);
 
-  // Poll for status changes when pending (user might be clicking the Telegram link)
-  useEffect(() => {
-    if (!status?.pending) return;
-    const interval = setInterval(checkStatus, 3000);
-    return () => clearInterval(interval);
-  }, [status?.pending, checkStatus]);
-
   const handleSubscribe = async () => {
     if (!address) return;
     setLoading(true);
@@ -72,12 +64,7 @@ export default function NotificationsPage() {
         setError({ message: 'Failed to enable notifications', detail: data.error || `Status ${res.status}` });
         return;
       }
-      if (data.telegramLink) {
-        setTelegramLink(data.telegramLink);
-        setStatus({ subscribed: false, pending: true, notifyFills: true, notifyCancellations: false });
-      } else {
-        setError({ message: 'Unexpected response', detail: 'No Telegram link returned' });
-      }
+      setStatus({ subscribed: true, pending: false, notifyFills: true, notifyCancellations: false });
     } catch (err) {
       setError({ message: 'Network error', detail: err instanceof Error ? err.message : 'Could not reach server' });
     } finally {
@@ -95,7 +82,6 @@ export default function NotificationsPage() {
         body: JSON.stringify({ walletAddress: address }),
       });
       setStatus({ subscribed: false, pending: false, notifyFills: false, notifyCancellations: false });
-      setTelegramLink(null);
     } catch {
       // ignore
     } finally {
@@ -153,32 +139,6 @@ export default function NotificationsPage() {
                 >
                   {loading ? 'Disabling...' : 'Disable notifications'}
                 </button>
-              </div>
-            ) : status?.pending || telegramLink ? (
-              /* Pending - waiting for user to click Telegram link */
-              <div className="space-y-6">
-                <div className="flex items-center gap-3">
-                  <div className="w-3 h-3 rounded-full bg-yellow-400 animate-pulse" />
-                  <span className="text-yellow-400 font-medium">Waiting for Telegram confirmation</span>
-                </div>
-
-                <p className="text-sm text-white/60">
-                  Click the button below to open Telegram and activate notifications.
-                  Press &quot;Start&quot; in the bot chat to confirm.
-                </p>
-
-                <a
-                  href={telegramLink || '#'}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block w-full py-3 px-4 rounded-lg bg-[#2AABEE] hover:bg-[#229ED9] text-white text-center font-medium transition-colors text-sm"
-                >
-                  Open Telegram Bot
-                </a>
-
-                <p className="text-xs text-white/40 text-center">
-                  This page will update automatically once you confirm in Telegram.
-                </p>
               </div>
             ) : (
               /* Not subscribed */
