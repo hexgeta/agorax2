@@ -1,16 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { randomBytes } from 'crypto';
 
 const supabaseUrl = process.env.SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+const BOT_USERNAME = process.env.TELEGRAM_BOT_USERNAME || 'AgoraXBot';
+
 /**
  * POST /api/telegram/subscribe
  * Body: { walletAddress: string }
  *
- * Creates a pending subscription with a random link code.
- * Returns a Telegram deep link the user clicks to activate.
+ * Creates a pending subscription with a short link code.
+ * User messages the bot with /start <code> to activate.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -20,14 +23,14 @@ export async function POST(req: NextRequest) {
     }
 
     const wallet = walletAddress.toLowerCase();
+    const linkCode = randomBytes(4).toString('hex'); // short 8-char code
 
-    // Upsert: create or update subscription as active
     const { error } = await supabase
       .from('telegram_subscriptions')
       .upsert({
         wallet_address: wallet,
-        telegram_chat_id: `wallet:${wallet}`,
-        is_active: true,
+        telegram_chat_id: `pending:${linkCode}`,
+        is_active: false,
         updated_at: new Date().toISOString(),
       }, {
         onConflict: 'wallet_address',
@@ -38,7 +41,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `Failed to create subscription: ${error.message}` }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({
+      success: true,
+      linkCode,
+      botUsername: BOT_USERNAME,
+    });
   } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

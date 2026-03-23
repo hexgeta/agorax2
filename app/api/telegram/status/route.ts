@@ -25,9 +25,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ subscribed: false });
   }
 
+  const isPending = data.telegram_chat_id.startsWith('pending:');
+
   return NextResponse.json({
-    subscribed: data.is_active,
-    pending: false,
+    subscribed: data.is_active && !isPending,
+    pending: isPending,
     notifyFills: data.notify_fills,
     notifyCancellations: data.notify_cancellations,
     updatedAt: data.updated_at,

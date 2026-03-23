@@ -25,6 +25,9 @@ export default function NotificationsPage() {
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
   const [error, setError] = useState<ErrorState | null>(null);
+  const [linkCode, setLinkCode] = useState<string | null>(null);
+  const [botUsername, setBotUsername] = useState<string>('AgoraXBot');
+  const [copied, setCopied] = useState(false);
 
   const checkStatus = useCallback(async () => {
     if (!address) return;
@@ -32,6 +35,9 @@ export default function NotificationsPage() {
       const res = await fetch(`/api/telegram/status?wallet=${address}`);
       const data = await res.json();
       setStatus(data);
+      if (data.subscribed) {
+        setLinkCode(null);
+      }
     } catch {
       setStatus(null);
     } finally {
@@ -49,6 +55,13 @@ export default function NotificationsPage() {
     }
   }, [address, checkStatus]);
 
+  // Poll while pending (waiting for user to message the bot)
+  useEffect(() => {
+    if (!status?.pending && !linkCode) return;
+    const interval = setInterval(checkStatus, 3000);
+    return () => clearInterval(interval);
+  }, [status?.pending, linkCode, checkStatus]);
+
   const handleSubscribe = async () => {
     if (!address) return;
     setLoading(true);
@@ -64,7 +77,9 @@ export default function NotificationsPage() {
         setError({ message: 'Failed to enable notifications', detail: data.error || `Status ${res.status}` });
         return;
       }
-      setStatus({ subscribed: true, pending: false, notifyFills: true, notifyCancellations: false });
+      setLinkCode(data.linkCode);
+      if (data.botUsername) setBotUsername(data.botUsername);
+      setStatus({ subscribed: false, pending: true, notifyFills: true, notifyCancellations: false });
     } catch (err) {
       setError({ message: 'Network error', detail: err instanceof Error ? err.message : 'Could not reach server' });
     } finally {
@@ -82,11 +97,20 @@ export default function NotificationsPage() {
         body: JSON.stringify({ walletAddress: address }),
       });
       setStatus({ subscribed: false, pending: false, notifyFills: false, notifyCancellations: false });
+      setLinkCode(null);
     } catch {
       // ignore
     } finally {
       setLoading(false);
     }
+  };
+
+  const startCommand = `/start ${linkCode}`;
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(startCommand);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
@@ -139,6 +163,34 @@ export default function NotificationsPage() {
                 >
                   {loading ? 'Disabling...' : 'Disable notifications'}
                 </button>
+              </div>
+            ) : (status?.pending || linkCode) ? (
+              /* Pending - user needs to message the bot */
+              <div className="space-y-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-3 h-3 rounded-full bg-yellow-400 animate-pulse" />
+                  <span className="text-yellow-400 font-medium">Almost done — message the bot</span>
+                </div>
+
+                <p className="text-sm text-white/60">
+                  Open <span className="text-white font-medium">@{botUsername}</span> on Telegram and send this message:
+                </p>
+
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-sm text-white font-mono select-all">
+                    {startCommand}
+                  </code>
+                  <button
+                    onClick={handleCopy}
+                    className="shrink-0 px-4 py-3 rounded-lg bg-white/10 hover:bg-white/20 text-white text-sm transition-colors"
+                  >
+                    {copied ? 'Copied' : 'Copy'}
+                  </button>
+                </div>
+
+                <p className="text-xs text-white/40 text-center">
+                  This page will update automatically once you send the message.
+                </p>
               </div>
             ) : (
               /* Not subscribed */
