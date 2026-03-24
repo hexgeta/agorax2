@@ -4599,25 +4599,26 @@ export function LimitOrderForm({
                           const cursorPos = input.selectionStart || 0;
                           const oldValue = input.value;
 
-                          // Remove commas first, then filter to only numbers and decimal
-                          const rawValue = removeCommas(e.target.value).replace(/[^0-9.]/g, '');
-                          // Format with commas for display
-                          const formattedValue = formatNumberWithCommas(rawValue);
+                          // Remove $ prefix and commas, then filter to only numbers and decimal
+                          const rawValue = removeCommas(e.target.value.replace(/^\$/, '')).replace(/[^0-9.]/g, '');
+                          // Format with commas for display, re-add $ if in USD mode
+                          const formattedValue = (showUsdPrices ? '$' : '') + formatNumberWithCommas(rawValue);
                           setLimitPriceInputValue(formattedValue);
 
                           // Calculate new cursor position
-                          const digitsBeforeCursor = removeCommas(oldValue.slice(0, cursorPos)).length;
-                          let newCursorPos = 0;
+                          const digitsBeforeCursor = removeCommas(oldValue.replace(/^\$/, '').slice(0, Math.max(0, cursorPos - (showUsdPrices ? 1 : 0)))).length;
+                          let newCursorPos = showUsdPrices ? 1 : 0;
                           let digitCount = 0;
-                          for (let i = 0; i < formattedValue.length; i++) {
+                          const numPart = formattedValue.replace(/^\$/, '');
+                          for (let i = 0; i < numPart.length; i++) {
                             if (digitCount >= digitsBeforeCursor) {
-                              newCursorPos = i;
+                              newCursorPos = i + (showUsdPrices ? 1 : 0);
                               break;
                             }
-                            if (formattedValue[i] !== ',') {
+                            if (numPart[i] !== ',') {
                               digitCount++;
                             }
-                            newCursorPos = i + 1;
+                            newCursorPos = i + 1 + (showUsdPrices ? 1 : 0);
                           }
 
                           requestAnimationFrame(() => {
@@ -4695,12 +4696,24 @@ export function LimitOrderForm({
                           setIsLimitPriceInputFocused(true);
                           if (limitPrice && parseFloat(limitPrice) > 0) {
                             const price = parseFloat(limitPrice);
-                            const displayValue = invertPriceDisplay && price > 0
-                              ? (1 / price).toFixed(8).replace(/\.?0+$/, '')
-                              : price.toFixed(8).replace(/\.?0+$/, '');
-                            setLimitPriceInputValue(formatNumberWithCommas(displayValue));
+                            let displayValue: string;
+                            if (showUsdPrices) {
+                              const unitToken = invertPriceDisplay ? sellToken : buyTokens[0];
+                              const unitTokenUsdPrice = unitToken ? getPrice(unitToken.a) : 0;
+                              const finalPrice = invertPriceDisplay && price > 0 ? 1 / price : price;
+                              const usdValue = finalPrice * unitTokenUsdPrice;
+                              displayValue = '$' + formatNumberWithCommas(usdValue.toLocaleString(undefined, {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: usdValue < 0.01 ? 6 : usdValue < 1 ? 4 : 2
+                              }));
+                            } else {
+                              displayValue = invertPriceDisplay && price > 0
+                                ? formatNumberWithCommas((1 / price).toFixed(8).replace(/\.?0+$/, ''))
+                                : formatNumberWithCommas(price.toFixed(8).replace(/\.?0+$/, ''));
+                            }
+                            setLimitPriceInputValue(displayValue);
                           } else {
-                            setLimitPriceInputValue('');
+                            setLimitPriceInputValue(showUsdPrices ? '$' : '');
                           }
                         }}
                         onBlur={() => setIsLimitPriceInputFocused(false)}
@@ -5332,25 +5345,26 @@ export function LimitOrderForm({
                             const cursorPos = input.selectionStart || 0;
                             const oldValue = input.value;
 
-                            // Remove commas first, then filter to only numbers and decimal
-                            const rawValue = removeCommas(e.target.value).replace(/[^0-9.]/g, '');
-                            // Format with commas for display
-                            const formattedValue = formatNumberWithCommas(rawValue);
+                            // Remove $ prefix and commas, then filter to only numbers and decimal
+                            const rawValue = removeCommas(e.target.value.replace(/^\$/, '')).replace(/[^0-9.]/g, '');
+                            // Format with commas for display, re-add $ if in USD mode
+                            const formattedValue = (showUsdPrices ? '$' : '') + formatNumberWithCommas(rawValue);
                             setLimitPriceInputValue(formattedValue);
 
                             // Calculate new cursor position
-                            const digitsBeforeCursor = removeCommas(oldValue.slice(0, cursorPos)).length;
-                            let newCursorPos = 0;
+                            const digitsBeforeCursor = removeCommas(oldValue.replace(/^\$/, '').slice(0, Math.max(0, cursorPos - (showUsdPrices ? 1 : 0)))).length;
+                            let newCursorPos = showUsdPrices ? 1 : 0;
                             let digitCount = 0;
-                            for (let i = 0; i < formattedValue.length; i++) {
+                            const numPart = formattedValue.replace(/^\$/, '');
+                            for (let i = 0; i < numPart.length; i++) {
                               if (digitCount >= digitsBeforeCursor) {
-                                newCursorPos = i;
+                                newCursorPos = i + (showUsdPrices ? 1 : 0);
                                 break;
                               }
-                              if (formattedValue[i] !== ',') {
+                              if (numPart[i] !== ',') {
                                 digitCount++;
                               }
-                              newCursorPos = i + 1;
+                              newCursorPos = i + 1 + (showUsdPrices ? 1 : 0);
                             }
 
                             requestAnimationFrame(() => {
@@ -5425,12 +5439,24 @@ export function LimitOrderForm({
                             setIsLimitPriceInputFocused(true);
                             if (limitPrice && parseFloat(limitPrice) > 0) {
                               const price = parseFloat(limitPrice);
-                              const displayValue = invertPriceDisplay && price > 0
-                                ? (1 / price).toFixed(8).replace(/\.?0+$/, '')
-                                : price.toFixed(8).replace(/\.?0+$/, '');
-                              setLimitPriceInputValue(formatNumberWithCommas(displayValue));
+                              let displayValue: string;
+                              if (showUsdPrices) {
+                                const unitToken = invertPriceDisplay ? sellToken : buyToken;
+                                const unitTokenUsdPrice = unitToken ? getPrice(unitToken.a) : 0;
+                                const finalPrice = invertPriceDisplay && price > 0 ? 1 / price : price;
+                                const usdValue = finalPrice * unitTokenUsdPrice;
+                                displayValue = '$' + formatNumberWithCommas(usdValue.toLocaleString(undefined, {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: usdValue < 0.01 ? 6 : usdValue < 1 ? 4 : 2
+                                }));
+                              } else {
+                                displayValue = invertPriceDisplay && price > 0
+                                  ? formatNumberWithCommas((1 / price).toFixed(8).replace(/\.?0+$/, ''))
+                                  : formatNumberWithCommas(price.toFixed(8).replace(/\.?0+$/, ''));
+                              }
+                              setLimitPriceInputValue(displayValue);
                             } else {
-                              setLimitPriceInputValue('');
+                              setLimitPriceInputValue(showUsdPrices ? '$' : '');
                             }
                           }}
                           onBlur={() => setIsLimitPriceInputFocused(false)}
