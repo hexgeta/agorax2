@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { verifySessionToken } from '@/lib/auth';
-import { hashWallet, hashToDisplayName, isAdminWallet } from '@/lib/feedback-hash';
+import { hashToDisplayName, isAdminWallet } from '@/lib/feedback-hash';
 import { notifyNewComment } from '@/lib/telegram';
 
 const supabaseUrl = process.env.SUPABASE_URL!;
@@ -64,11 +64,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Invalid session token' }, { status: 401 });
     }
 
-    // Hash immediately — raw wallet never touches the database
-    const walletHash = hashWallet(verifiedWallet);
-
     const body = await request.json();
-    const { post_id, content } = body;
+    const { post_id, content, wallet_hash: clientWalletHash } = body;
+
+    // Client must provide the pre-hashed wallet — server never hashes the raw wallet for storage
+    if (!clientWalletHash || typeof clientWalletHash !== 'string' || !/^[a-f0-9]{64}$/.test(clientWalletHash)) {
+      return NextResponse.json({ success: false, error: 'wallet_hash is required (SHA-256 hex)' }, { status: 400 });
+    }
+    const walletHash = clientWalletHash;
 
     if (!post_id || typeof post_id !== 'number') {
       return NextResponse.json({ success: false, error: 'Valid post_id required' }, { status: 400 });
@@ -76,7 +79,8 @@ export async function POST(request: NextRequest) {
     if (!content || typeof content !== 'string' || content.trim().length < 1 || content.trim().length > 2000) {
       return NextResponse.json({ success: false, error: 'Comment must be 1-2000 characters' }, { status: 400 });
     }
-    if (!checkRateLimit(`comment:${walletHash}`)) {
+    // Rate limit by verified wallet (from auth token), not client-provided hash
+    if (!checkRateLimit(`comment:${verifiedWallet.toLowerCase()}`)) {
       return NextResponse.json({ success: false, error: 'Rate limit exceeded' }, { status: 429 });
     }
 

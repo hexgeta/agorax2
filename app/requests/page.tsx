@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAccount } from 'wagmi';
 import { useWalletAuth } from '@/hooks/useWalletAuth';
+import { hashWalletClient } from '@/lib/feedback-hash-client';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -99,6 +100,14 @@ export default function FeedbackPage() {
     return headers;
   }, [sessionToken]);
 
+  // Client-side wallet hash — computed once, sent to server instead of raw address
+  const [walletHash, setWalletHash] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!address) { setWalletHash(null); return; }
+    hashWalletClient(address).then(setWalletHash);
+  }, [address]);
+
   // State
   const [posts, setPosts] = useState<FeedbackPost[]>([]);
   const [userVotes, setUserVotes] = useState<number[]>([]);
@@ -165,7 +174,7 @@ export default function FeedbackPage() {
     if (categoryFilter) params.set('category', categoryFilter);
     if (statusFilter) params.set('status', statusFilter);
     if (searchQuery.trim()) params.set('search', searchQuery.trim());
-    if (address) params.set('wallet', address);
+    if (walletHash) params.set('wallet_hash', walletHash);
 
     try {
       const res = await fetch(`/api/feedback?${params}`);
@@ -184,7 +193,7 @@ export default function FeedbackPage() {
       setLoading(false);
       initialLoadDone.current = true;
     }
-  }, [sort, categoryFilter, statusFilter, searchQuery, address]);
+  }, [sort, categoryFilter, statusFilter, searchQuery, walletHash]);
 
   useEffect(() => {
     fetchPosts();
@@ -222,7 +231,7 @@ export default function FeedbackPage() {
       const res = await fetch('/api/feedback/vote', {
         method: 'POST',
         headers: getAuthHeaders(freshToken),
-        body: JSON.stringify({ post_id: postId }),
+        body: JSON.stringify({ post_id: postId, wallet_hash: walletHash }),
       });
       const data = await res.json();
       if (!data.success) {
@@ -256,6 +265,7 @@ export default function FeedbackPage() {
           title: newCategory === 'whitelist' ? `Whitelist ${newTokenTicker.trim().toUpperCase()}` : newTitle.trim(),
           description: newCategory === 'whitelist' ? null : (newDescription.trim() || null),
           category: newCategory,
+          wallet_hash: walletHash,
           ...(newCategory === 'whitelist' && {
             token_ticker: newTokenTicker.trim(),
             token_contract_address: newContractAddress.trim(),
@@ -320,6 +330,7 @@ export default function FeedbackPage() {
         body: JSON.stringify({
           post_id: postId,
           content: commentText.trim(),
+          wallet_hash: walletHash,
         }),
       });
       const data = await res.json();
@@ -410,8 +421,8 @@ export default function FeedbackPage() {
       <div className="mb-8">
         <div className="flex items-center gap-3 mb-2">
           <h1 className="text-3xl font-bold text-white">Track and Submit Requests</h1>
-          {isConnected && userDisplayName && (
-            <span className="text-sm"><span className="text-gray-500">Username:</span> <span className={`font-medium ${getUsernameColor(userDisplayName)}`}>{userDisplayName}</span></span>
+          {isConnected && (userDisplayName || isAdmin) && (
+            <span className="text-sm"><span className="text-gray-500">Username:</span> <span className={`font-medium ${isAdmin ? 'text-amber-400' : getUsernameColor(userDisplayName || '')}`}>{isAdmin ? 'Admin' : userDisplayName}</span></span>
           )}
         </div>
         <p className="text-gray-400">

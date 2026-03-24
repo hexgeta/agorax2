@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { verifySessionToken } from '@/lib/auth';
-import { hashWallet, isAdminWallet, hashToDisplayName } from '@/lib/feedback-hash';
+import { isAdminWallet, hashToDisplayName } from '@/lib/feedback-hash';
 import { notifyNewVote } from '@/lib/telegram';
 
 const supabaseUrl = process.env.SUPABASE_URL!;
@@ -43,16 +43,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Admins cannot vote' }, { status: 403 });
     }
 
-    // Hash immediately — raw wallet never touches the database
-    const walletHash = hashWallet(verifiedWallet);
-
     const body = await request.json();
-    const { post_id } = body;
+    const { post_id, wallet_hash: clientWalletHash } = body;
+
+    // Client must provide the pre-hashed wallet — server never hashes the raw wallet for storage
+    if (!clientWalletHash || typeof clientWalletHash !== 'string' || !/^[a-f0-9]{64}$/.test(clientWalletHash)) {
+      return NextResponse.json({ success: false, error: 'wallet_hash is required (SHA-256 hex)' }, { status: 400 });
+    }
+    const walletHash = clientWalletHash;
 
     if (!post_id || typeof post_id !== 'number') {
       return NextResponse.json({ success: false, error: 'Valid post_id required' }, { status: 400 });
     }
-    if (!checkRateLimit(`vote:${walletHash}`)) {
+    // Rate limit by verified wallet (from auth token), not client-provided hash
+    if (!checkRateLimit(`vote:${verifiedWallet.toLowerCase()}`)) {
       return NextResponse.json({ success: false, error: 'Rate limit exceeded' }, { status: 429 });
     }
 

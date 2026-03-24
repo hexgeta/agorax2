@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { verifySessionToken } from '@/lib/auth';
-import { hashWallet, hashToDisplayName, isAdminWallet } from '@/lib/feedback-hash';
+import { hashToDisplayName, isAdminWallet } from '@/lib/feedback-hash';
 import { notifyNewFeedback } from '@/lib/telegram';
 
 const supabaseUrl = process.env.SUPABASE_URL!;
@@ -24,17 +24,22 @@ function checkRateLimit(key: string): boolean {
   return true;
 }
 
-// GET /api/feedback?sort=popular|newest|oldest&category=feature|bug|improvement|question&status=open|...&wallet=0x...
+// GET /api/feedback?sort=popular|newest|oldest&category=feature|bug|improvement|question&status=open|...&wallet_hash=abc123...
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
   const sort = searchParams.get('sort') || 'popular';
   const category = searchParams.get('category');
   const status = searchParams.get('status');
-  const wallet = searchParams.get('wallet');
+  const walletHash = searchParams.get('wallet_hash');
   const search = searchParams.get('search');
   const page = parseInt(searchParams.get('page') || '1');
   const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 50);
   const offset = (page - 1) * limit;
+
+  // Basic validation: wallet_hash should be a 64-char hex string (SHA-256)
+  if (walletHash && !/^[a-f0-9]{64}$/.test(walletHash)) {
+    return NextResponse.json({ success: false, error: 'Invalid wallet_hash format' }, { status: 400 });
+  }
 
   let query = supabase
     .from('feedback_posts')
@@ -61,12 +66,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: false, error: 'Failed to fetch feedback' }, { status: 500 });
   }
 
-  // If wallet provided, hash it and fetch which posts user has voted on + authored
-  // DB stores hashed wallets, so we hash the incoming wallet to match
+  // If wallet_hash provided, fetch which posts user has voted on + authored
+  // The client pre-hashes the wallet — the server never sees the raw address
   let userVotes: number[] = [];
   let userPosts: number[] = [];
-  if (wallet) {
-    const walletHash = hashWallet(wallet);
+  if (walletHash) {
     const postIds = (posts || []).map((p: { id: number }) => p.id);
     if (postIds.length > 0) {
       const { data: votes } = await supabase
@@ -103,9 +107,9 @@ export async function GET(request: NextRequest) {
     wallet_address: p.is_admin ? 'Admin' : hashToDisplayName(p.wallet_address as string),
   }));
 
-  // Get user display name
-  const userDisplayName = wallet
-    ? (isAdminWallet(wallet) ? 'Admin' : hashToDisplayName(hashWallet(wallet)))
+  // Get user display name from the client-provided hash
+  const userDisplayName = walletHash
+    ? hashToDisplayName(walletHash)
     : null;
 
   return NextResponse.json({
@@ -133,11 +137,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Invalid session token' }, { status: 401 });
     }
 
-    // Hash immediately — raw wallet never touches the database
-    const walletHash = hashWallet(verifiedWallet);
-
     const body = await request.json();
-    const { title, description, category, token_ticker, token_contract_address, is_tax_token } = body;
+    const { title, description, category, token_ticker, token_contract_address, is_tax_token, wallet_hash: clientWalletHash } = body;
+
+    // Client must provide the pre-hashed wallet — server never hashes the raw wallet for storage
+    if (!clientWalletHash || typeof clientWalletHash !== 'string' || !/^[a-f0-9]{64}$/.test(clientWalletHash)) {
+      return NextResponse.json({ success: false, error: 'wallet_hash is required (SHA-256 hex)' }, { status: 400 });
+    }
+    const walletHash = clientWalletHash;
 
     if (!title || typeof title !== 'string' || title.trim().length < 3 || title.trim().length > 200) {
       return NextResponse.json({ success: false, error: 'Title must be 3-200 characters' }, { status: 400 });
@@ -159,7 +166,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (!checkRateLimit(`feedback:${walletHash}`)) {
+    // Rate limit by verified wallet (from auth token), not client-provided hash
+    if (!checkRateLimit(`feedback:${verifiedWallet.toLowerCase()}`)) {
       return NextResponse.json({ success: false, error: 'Rate limit exceeded. Try again later.' }, { status: 429 });
     }
 

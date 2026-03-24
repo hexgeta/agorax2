@@ -109,18 +109,21 @@ export function notifyOrderFilled(chatId: string, fill: {
   fillToken: string;
   fillerAddress: string;
   fillPercentage: number;
+  thisFillPercentage: number;
   txHash: string;
 }) {
-  const pct = fill.fillPercentage >= 100 ? '100%' : `${fill.fillPercentage.toFixed(1)}%`;
+  const totalPct = fill.fillPercentage >= 100 ? '100%' : `${fill.fillPercentage.toFixed(1)}%`;
+  const thisPct = fill.thisFillPercentage >= 100 ? '100%' : `${fill.thisFillPercentage.toFixed(1)}%`;
   const shortFiller = `${fill.fillerAddress.slice(0, 6)}...${fill.fillerAddress.slice(-4)}`;
   const lines = [
-    `🔔 *Order \\#${esc(String(fill.orderId))} Filled\\!*`,
+    `🔔 *New Fill on Order \\#${esc(String(fill.orderId))}*`,
     ``,
     `*Amount:* ${esc(fill.fillAmount)} ${esc(fill.fillToken)}`,
     `*By:* \`${esc(shortFiller)}\``,
-    `*Fill:* ${esc(pct)}`,
+    `*They Filled:* ${esc(thisPct)}`,
+    `*Total Filled So Far:* ${esc(totalPct)}`,
     ``,
-    `[View Tx](https://scan.pulsechain.com/tx/${esc(fill.txHash)})`,
+    `[View Tx](https://otter.pulsechain.com/tx/${esc(fill.txHash)})`,
   ];
 
   sendTelegramToUser(chatId, lines.join('\n'));
@@ -146,7 +149,7 @@ export function notifyOrderFilledGroup(fill: {
     `*Amount:* ${esc(fill.fillAmount)} ${esc(fill.fillToken)}`,
     `*Fill:* ${esc(pct)}`,
     ``,
-    `[View Tx](https://scan.pulsechain.com/tx/${esc(fill.txHash)})`,
+    `[View Tx](https://otter.pulsechain.com/tx/${esc(fill.txHash)})`,
   ];
 
   sendTelegram(lines.join('\n'));

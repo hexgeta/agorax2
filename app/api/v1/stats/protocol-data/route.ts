@@ -9,6 +9,10 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey);
 // Current contract deployment block — filter out data from previous deployments
 const DEPLOYMENT_BLOCK = 21266815;
 
+// In-memory cache to reduce Supabase egress
+let cachedResponse: { data: unknown; timestamp: number } | null = null;
+const CACHE_TTL_MS = 60_000; // 60 seconds
+
 /**
  * GET /api/v1/stats/protocol-data
  *
@@ -22,6 +26,11 @@ export async function GET(request: NextRequest): Promise<Response> {
   if (rateLimited) return rateLimited;
 
   try {
+    // Return cached data if fresh enough
+    if (cachedResponse && Date.now() - cachedResponse.timestamp < CACHE_TTL_MS) {
+      return apiSuccess(cachedResponse.data, request);
+    }
+
     const [ordersResult, fillsResult] = await Promise.all([
       supabase
         .from('orders')
@@ -68,13 +77,15 @@ export async function GET(request: NextRequest): Promise<Response> {
       return true;
     });
 
-    return apiSuccess(
-      {
-        orders: ordersResult.data || [],
-        fills: dedupedFills,
-      },
-      request,
-    );
+    const responseData = {
+      orders: ordersResult.data || [],
+      fills: dedupedFills,
+    };
+
+    // Cache the result
+    cachedResponse = { data: responseData, timestamp: Date.now() };
+
+    return apiSuccess(responseData, request);
   } catch {
     return apiError('Internal server error', 500);
   }

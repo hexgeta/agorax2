@@ -26,3 +26,4 @@
 - Token addresses are always lowercased for comparison
 - Contract orders use BigInt for amounts
 - Stats page (`/stats`) reads from blockchain directly; Stats2 page (`/stats2`) reads from Supabase API
+- Always use Otterscan (`otter.pulsechain.com`) for transaction/address links, never `scan.pulsechain.com`
