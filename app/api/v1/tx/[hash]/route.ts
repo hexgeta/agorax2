@@ -76,14 +76,68 @@ export async function GET(
         .select('order_id, maker_address, sell_token_address, sell_token_ticker, sell_amount_raw, sell_amount_formatted, status, fill_percentage')
         .in('order_id', orderIds);
 
+      // Fetch ALL fills for these orders to calculate cumulative percentages at time of this fill
+      const { data: allFillsForOrders } = await supabase
+        .from('order_fills')
+        .select('order_id, buy_amount_raw, filled_at, tx_hash, block_number')
+        .in('order_id', orderIds)
+        .order('block_number', { ascending: true });
+
       const orderMap = new Map((parentOrders || []).map(o => [o.order_id, o]));
 
       for (const fill of fillsResult.data) {
+        const parentOrder = orderMap.get(fill.order_id);
+        let thisFillPct = 0;
+        let beforeFillPct = 0;
+
+        if (parentOrder && allFillsForOrders) {
+          const orderFills = allFillsForOrders.filter(f => f.order_id === fill.order_id);
+          const totalSell = BigInt(parentOrder.sell_amount_raw || '0');
+
+          if (totalSell > 0n) {
+            // Sum all fills before this one (by block number, then tx hash for same-block ordering)
+            let cumulativeBefore = 0n;
+            for (const f of orderFills) {
+              if (f.block_number < fill.block_number ||
+                  (f.block_number === fill.block_number && f.tx_hash < fill.tx_hash)) {
+                cumulativeBefore += BigInt(f.buy_amount_raw || '0');
+              }
+            }
+            // This fill's contribution — use sell-side amount if available, otherwise estimate
+            // Since fills redeem sell tokens, we can calculate from the order's redeemed amount
+            // But we only have buy_amount_raw per fill. Use ratio of this fill to total fills.
+            const totalFillsBuyRaw = orderFills.reduce((sum, f) => sum + BigInt(f.buy_amount_raw || '0'), 0n);
+            const currentFillPct = Number(parentOrder.fill_percentage ?? 0);
+
+            if (totalFillsBuyRaw > 0n) {
+              const thisFillBuy = BigInt(fill.buy_amount_raw || '0');
+              thisFillPct = (Number(thisFillBuy) / Number(totalFillsBuyRaw)) * currentFillPct;
+              beforeFillPct = currentFillPct - thisFillPct;
+              // If there are fills after this one, recalculate
+              const beforeBuyRaw = orderFills
+                .filter(f => f.block_number < fill.block_number ||
+                  (f.block_number === fill.block_number && f.tx_hash < fill.tx_hash))
+                .reduce((sum, f) => sum + BigInt(f.buy_amount_raw || '0'), 0n);
+              beforeFillPct = (Number(beforeBuyRaw) / Number(totalFillsBuyRaw)) * currentFillPct;
+              thisFillPct = currentFillPct - beforeFillPct;
+              // Subtract fills after this one
+              const afterBuyRaw = orderFills
+                .filter(f => f.block_number > fill.block_number ||
+                  (f.block_number === fill.block_number && f.tx_hash > fill.tx_hash))
+                .reduce((sum, f) => sum + BigInt(f.buy_amount_raw || '0'), 0n);
+              const afterPct = (Number(afterBuyRaw) / Number(totalFillsBuyRaw)) * currentFillPct;
+              thisFillPct = currentFillPct - beforeFillPct - afterPct;
+            }
+          }
+        }
+
         events.push({
           type: 'order_filled',
           data: {
             ...fill,
-            parent_order: orderMap.get(fill.order_id) || null,
+            parent_order: parentOrder || null,
+            this_fill_pct: Math.round(thisFillPct * 100) / 100,
+            before_fill_pct: Math.round(beforeFillPct * 100) / 100,
           },
         });
       }

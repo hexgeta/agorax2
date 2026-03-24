@@ -205,7 +205,7 @@ function OrderFilledCard({ data }: { data: Record<string, unknown> }) {
         <div className="p-2 rounded-lg bg-blue-500/10">
           <ShoppingCart className="w-5 h-5 text-blue-400" />
         </div>
-        <h2 className="text-lg font-semibold text-white">Order Filled</h2>
+        <h2 className="text-lg font-semibold text-white">Order Fill</h2>
       </div>
 
       <div className="space-y-0">
@@ -233,19 +233,42 @@ function OrderFilledCard({ data }: { data: Record<string, unknown> }) {
           </InfoRow>
         )}
 
-        {parentOrder && (
-          <InfoRow label="Order Fill %">
-            <div className="flex items-center gap-2">
-              <div className="w-24 h-2 bg-white/10 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-blue-500 rounded-full transition-all"
-                  style={{ width: `${Math.min(Number(parentOrder.fill_percentage ?? 0), 100)}%` }}
-                />
+        {parentOrder && (() => {
+          const beforePct = Number(data.before_fill_pct ?? 0);
+          const thisPct = Number(data.this_fill_pct ?? 0);
+          const totalPct = Number(parentOrder.fill_percentage ?? 0);
+          return (
+            <InfoRow label="Fill Progress">
+              <div className="flex flex-col gap-1.5 w-full max-w-xs">
+                <div className="w-full h-3 bg-white/10 rounded-full overflow-hidden flex">
+                  {beforePct > 0 && (
+                    <div
+                      className="h-full bg-white/30"
+                      style={{ width: `${Math.min(beforePct, 100)}%` }}
+                    />
+                  )}
+                  <div
+                    className="h-full bg-green-500"
+                    style={{ width: `${Math.min(thisPct, 100)}%` }}
+                  />
+                </div>
+                <div className="flex items-center gap-3 text-xs">
+                  {beforePct > 0 && (
+                    <span className="flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-white/30 inline-block" />
+                      <span className="text-gray-400">Before: {beforePct.toFixed(2)}%</span>
+                    </span>
+                  )}
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
+                    <span className="text-green-400">This fill: {thisPct.toFixed(2)}%</span>
+                  </span>
+                  <span className="text-gray-500">Total: {totalPct.toFixed(2)}%</span>
+                </div>
               </div>
-              <span className="text-sm">{Number(parentOrder.fill_percentage ?? 0).toFixed(2)}%</span>
-            </div>
-          </InfoRow>
-        )}
+            </InfoRow>
+          );
+        })()}
 
         <InfoRow label="Filled At">
           {formatDate(data.filled_at as string)}
@@ -352,8 +375,7 @@ export default function TransactionPage({ params }: { params: Promise<{ hash: st
         {/* Header */}
         <div className="mb-6 sm:mb-8">
           <h1 className="text-2xl sm:text-3xl font-bold text-white mb-1">Transaction Details</h1>
-          <p className="text-gray-500 text-sm">AgoraX on-chain activity</p>
-        </div>
+          </div>
 
         {/* Tx Hash Bar */}
         <LiquidGlassCard className="p-4 sm:p-5 rounded-xl mb-6">
@@ -368,7 +390,7 @@ export default function TransactionPage({ params }: { params: Promise<{ hash: st
               href={`https://otter.pulsechain.com/tx/${hash}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors shrink-0"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white hover:bg-white/80 text-black text-sm font-medium transition-colors shrink-0"
             >
               View on Otterscan
               <ExternalLink className="w-4 h-4" />
