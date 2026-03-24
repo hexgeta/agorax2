@@ -497,7 +497,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           // Use subscription chat_id, or fall back to group chat for test address
           const chatId = sub?.telegram_chat_id
             || (orderMeta.owner === TEST_NOTIFY_ADDRESS
-              ? (process.env.TELEGRAM_CHAT_ID_GROUP || process.env.TELEGRAM_CHAT_ID || '')
+              ? (process.env.TELEGRAM_CHAT_ID_GROUP || process.env.TELEGRAM_CHAT_ID_BOT || '')
               : '');
 
           if (chatId) {

@@ -4,13 +4,14 @@
  *
  * Required env vars:
  *   TELEGRAM_BOT_TOKEN  — from @BotFather
- *   TELEGRAM_CHAT_ID    — your personal/group chat ID
+ *   TELEGRAM_CHAT_ID_BOT   — bot DM chat ID (fallback)
+ *   TELEGRAM_CHAT_ID_GROUP — group chat ID (preferred)
  *
  * All sends are fire-and-forget (never block the caller).
  */
 
 const BOT_TOKEN = () => process.env.TELEGRAM_BOT_TOKEN || '';
-const CHAT_ID = () => process.env.TELEGRAM_CHAT_ID_GROUP || process.env.TELEGRAM_CHAT_ID || '';
+const CHAT_ID = () => process.env.TELEGRAM_CHAT_ID_GROUP || process.env.TELEGRAM_CHAT_ID_BOT || '';
 
 function isConfigured(): boolean {
   return BOT_TOKEN().length > 0 && CHAT_ID().length > 0;
