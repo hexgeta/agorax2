@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ChevronUp, ChevronDown, MessageSquare, Plus, X, Send, Filter, Loader2, Shield, Trash2, Copy, ArrowRight, List, LayoutGrid, Search } from 'lucide-react';
+import useToast from '@/hooks/use-toast';
 
 // Deterministic username color from string — avoids amber (admin-only)
 const USERNAME_COLORS = [
@@ -88,6 +89,7 @@ function timeAgo(dateString: string): string {
 export default function FeedbackPage() {
   const { address, isConnected } = useAccount();
   const { sessionToken, isVerified, verify } = useWalletAuth();
+  const toast = useToast();
 
   // Helper to get auth headers for API calls
   // Accepts optional token override for use immediately after verify() (before state updates)
@@ -235,14 +237,14 @@ export default function FeedbackPage() {
       });
       const data = await res.json();
       if (!data.success) {
-        // Revert on failure
         setPosts(prev => prev.map(p => p.id === postId ? { ...p, vote_count: p.vote_count - delta } : p));
         setUserVotes(prev => wasVoted ? [...prev, postId] : prev.filter(id => id !== postId));
+        toast.error(data.error || 'Failed to vote');
       }
     } catch {
-      // Revert on error
       setPosts(prev => prev.map(p => p.id === postId ? { ...p, vote_count: p.vote_count - delta } : p));
       setUserVotes(prev => wasVoted ? [...prev, postId] : prev.filter(id => id !== postId));
+      toast.error('Failed to vote. Please try again.');
     }
   };
 
@@ -283,9 +285,12 @@ export default function FeedbackPage() {
         setNewContractAddress('');
         setNewIsTaxToken(null);
         fetchPosts();
+        toast.success('Request submitted!');
+      } else {
+        toast.error(data.error || 'Failed to submit request');
       }
     } catch {
-      // silently fail
+      toast.error('Failed to submit request. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -343,9 +348,11 @@ export default function FeedbackPage() {
         setPosts(prev => prev.map(p =>
           p.id === postId ? { ...p, comment_count: p.comment_count + 1 } : p
         ));
+      } else {
+        toast.error(data.error || 'Failed to post comment');
       }
     } catch {
-      // silently fail
+      toast.error('Failed to post comment. Please try again.');
     } finally {
       setSubmittingComment(false);
     }
