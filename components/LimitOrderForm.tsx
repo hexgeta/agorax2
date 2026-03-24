@@ -4545,7 +4545,7 @@ export function LimitOrderForm({
                         ref={limitPriceInputRef}
                         type="text"
                         inputMode="decimal"
-                        className="w-full bg-black/40 border border-[#FF0080]/30 p-3 text-[#FF0080] text-lg min-h-[52px] rounded-lg focus:outline-none focus:border-[#FF0080]/60 transition-colors"
+                        className="w-full bg-black/40 border border-[#FF0080]/30 p-3 text-[#FF0080] text-lg min-h-[52px] rounded-lg focus:outline-none focus:border-[#FF0080]/60 transition-colors placeholder:text-[#FF0080]/30"
                         placeholder="0.00000000"
                         value={isLimitPriceInputFocused ? limitPriceInputValue : (() => {
                           if (!limitPrice || parseFloat(limitPrice) <= 0) return '';
@@ -5304,7 +5304,7 @@ export function LimitOrderForm({
                           ref={limitPriceInputRef}
                           type="text"
                           inputMode="decimal"
-                          className="w-full bg-black/40 border border-[#FF0080]/30 p-3 text-[#FF0080] text-lg min-h-[52px] rounded-lg focus:outline-none focus:border-[#FF0080]/60 transition-colors"
+                          className="w-full bg-black/40 border border-[#FF0080]/30 p-3 text-[#FF0080] text-lg min-h-[52px] rounded-lg focus:outline-none focus:border-[#FF0080]/60 transition-colors placeholder:text-[#FF0080]/30"
                           placeholder="0.00000000"
                           value={isLimitPriceInputFocused ? limitPriceInputValue : (() => {
                             if (!limitPrice || parseFloat(limitPrice) <= 0) return '';
