@@ -531,77 +531,81 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
               </div>
             </LiquidGlassCard>
 
-            {/* Cancellation */}
-            {data.cancellation && (
-              <CancellationSection cancellation={data.cancellation} />
-            )}
+            {/* Order Details + Status side by side */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* Left: Order Details */}
+              <LiquidGlassCard className="p-5 sm:p-6 rounded-xl">
+                <div className="space-y-0">
+                  <InfoRow label="Maker">
+                    <AddressLink address={data.order.maker_address} />
+                  </InfoRow>
 
-            {/* Order Details */}
-            <LiquidGlassCard className="p-5 sm:p-6 rounded-xl">
-              <div className="space-y-0">
-                <InfoRow label="Maker">
-                  <AddressLink address={data.order.maker_address} />
-                </InfoRow>
+                  <InfoRow label="Selling">
+                    <TokenDisplay
+                      ticker={data.order.sell_token_ticker}
+                      amount={data.order.sell_amount_formatted}
+                    />
+                  </InfoRow>
 
-                <InfoRow label="Selling">
-                  <TokenDisplay
-                    ticker={data.order.sell_token_ticker}
-                    amount={data.order.sell_amount_formatted}
+                  <InfoRow label="Accepting">
+                    <div className="flex flex-wrap gap-2">
+                      {data.order.buy_tokens_tickers.map((ticker, i) => (
+                        <TokenDisplay
+                          key={i}
+                          ticker={ticker}
+                          amount={data.order.buy_amounts_formatted?.[i]}
+                        />
+                      ))}
+                    </div>
+                  </InfoRow>
+
+                  <InfoRow label="Fills">
+                    <span className="text-white">{data.fills.length}</span>
+                  </InfoRow>
+
+                  <InfoRow label="All or Nothing">
+                    {data.order.is_all_or_nothing ? (
+                      <span className="text-yellow-400">Yes</span>
+                    ) : (
+                      <span className="text-gray-400">No</span>
+                    )}
+                  </InfoRow>
+
+                  <InfoRow label="Expiration">
+                    <span className="inline-flex items-center gap-1.5">
+                      <Clock className="w-4 h-4 text-gray-500" />
+                      {formatExpiration(data.order.expiration)}
+                    </span>
+                  </InfoRow>
+
+                  <InfoRow label="Created">
+                    {formatDate(data.order.created_at)}
+                  </InfoRow>
+
+                  <InfoRow label="Creation Tx">
+                    <TxLink hash={data.order.creation_tx_hash} />
+                  </InfoRow>
+
+                  <InfoRow label="Block">
+                    <span className="font-mono">{data.order.creation_block_number}</span>
+                  </InfoRow>
+                </div>
+              </LiquidGlassCard>
+
+              {/* Right: Status / Cancellation + Fill Progress */}
+              <div className="space-y-4">
+                {data.cancellation && (
+                  <CancellationSection cancellation={data.cancellation} />
+                )}
+
+                <LiquidGlassCard className="p-5 sm:p-6 rounded-xl">
+                  <FillProgressBar
+                    fillPct={data.order.fill_percentage}
+                    fills={data.fills}
                   />
-                </InfoRow>
-
-                <InfoRow label="Accepting">
-                  <div className="flex flex-wrap gap-2">
-                    {data.order.buy_tokens_tickers.map((ticker, i) => (
-                      <TokenDisplay
-                        key={i}
-                        ticker={ticker}
-                        amount={data.order.buy_amounts_formatted?.[i]}
-                      />
-                    ))}
-                  </div>
-                </InfoRow>
-
-                <InfoRow label="Fills">
-                  <span className="text-white">{data.fills.length}</span>
-                </InfoRow>
-
-                <InfoRow label="All or Nothing">
-                  {data.order.is_all_or_nothing ? (
-                    <span className="text-yellow-400">Yes</span>
-                  ) : (
-                    <span className="text-gray-400">No</span>
-                  )}
-                </InfoRow>
-
-                <InfoRow label="Expiration">
-                  <span className="inline-flex items-center gap-1.5">
-                    <Clock className="w-4 h-4 text-gray-500" />
-                    {formatExpiration(data.order.expiration)}
-                  </span>
-                </InfoRow>
-
-                <InfoRow label="Created">
-                  {formatDate(data.order.created_at)}
-                </InfoRow>
-
-                <InfoRow label="Creation Tx">
-                  <TxLink hash={data.order.creation_tx_hash} />
-                </InfoRow>
-
-                <InfoRow label="Block">
-                  <span className="font-mono">{data.order.creation_block_number}</span>
-                </InfoRow>
+                </LiquidGlassCard>
               </div>
-            </LiquidGlassCard>
-
-            {/* Fill Progress */}
-            <LiquidGlassCard className="p-5 sm:p-6 rounded-xl">
-              <FillProgressBar
-                fillPct={data.order.fill_percentage}
-                fills={data.fills}
-              />
-            </LiquidGlassCard>
+            </div>
 
             {/* Fill History */}
             <FillHistorySection fills={data.fills} />
