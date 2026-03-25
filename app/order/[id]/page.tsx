@@ -291,7 +291,7 @@ function FillProgressBar({ fillPct, fills }: { fillPct: number; fills: FillData[
 
 // ---------- Fill History ----------
 
-function FillHistorySection({ fills }: { fills: FillData[] }) {
+function FillHistorySection({ fills, fillPct }: { fills: FillData[]; fillPct: number }) {
   if (fills.length === 0) {
     return (
       <LiquidGlassCard className="p-5 sm:p-6 rounded-xl">
@@ -312,41 +312,45 @@ function FillHistorySection({ fills }: { fills: FillData[] }) {
         </h2>
       </div>
 
+      <div className="mb-6">
+        <FillProgressBar fillPct={fillPct} fills={fills} />
+      </div>
+
       {/* Desktop table */}
       <div className="hidden sm:block overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-white/10">
-              <th className="text-left text-gray-500 font-medium py-2 pr-3">Filler</th>
-              <th className="text-left text-gray-500 font-medium py-2 pr-3">Token</th>
-              <th className="text-right text-gray-500 font-medium py-2 pr-3">Amount</th>
-              <th className="text-right text-gray-500 font-medium py-2 pr-3">Contribution</th>
-              <th className="text-left text-gray-500 font-medium py-2 pr-3">Tx</th>
-              <th className="text-right text-gray-500 font-medium py-2">Time</th>
+              <th className="text-center text-gray-500 font-medium py-2 pr-3">Filler</th>
+              <th className="text-center text-gray-500 font-medium py-2 pr-3">Token</th>
+              <th className="text-center text-gray-500 font-medium py-2 pr-3">Amount</th>
+              <th className="text-center text-gray-500 font-medium py-2 pr-3">Contribution</th>
+              <th className="text-center text-gray-500 font-medium py-2 pr-3">Tx</th>
+              <th className="text-center text-gray-500 font-medium py-2">Time</th>
             </tr>
           </thead>
           <tbody>
             {fills.map((fill, i) => (
               <tr key={i} className="border-b border-white/5 last:border-0">
-                <td className="py-2.5 pr-3">
+                <td className="py-2.5 pr-3 text-center">
                   <AddressLink address={fill.filler_address} />
                 </td>
-                <td className="py-2.5 pr-3">
-                  <span className="inline-flex items-center gap-1">
+                <td className="py-2.5 pr-3 text-center">
+                  <span className="inline-flex items-center justify-center gap-1">
                     <TokenLogo ticker={fill.buy_token_ticker} className="w-4 h-4 rounded-full" />
                     <span className="text-gray-300">{fill.buy_token_ticker}</span>
                   </span>
                 </td>
-                <td className="py-2.5 pr-3 text-right text-white font-medium">
+                <td className="py-2.5 pr-3 text-center text-white font-medium">
                   {formatAmount(fill.buy_amount_formatted)}
                 </td>
-                <td className="py-2.5 pr-3 text-right text-gray-400">
+                <td className="py-2.5 pr-3 text-center text-gray-400">
                   {fill.contribution_pct.toFixed(2)}%
                 </td>
-                <td className="py-2.5 pr-3">
+                <td className="py-2.5 pr-3 text-center">
                   <TxLink hash={fill.tx_hash} />
                 </td>
-                <td className="py-2.5 text-right text-gray-400 whitespace-nowrap">
+                <td className="py-2.5 text-center text-gray-400 whitespace-nowrap">
                   {formatDate(fill.filled_at)}
                 </td>
               </tr>
@@ -598,16 +602,8 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
               )}
             </div>
 
-            {/* Fill Progress - full width below */}
-            <LiquidGlassCard className="p-5 sm:p-6 rounded-xl">
-              <FillProgressBar
-                fillPct={data.order.fill_percentage}
-                fills={data.fills}
-              />
-            </LiquidGlassCard>
-
-            {/* Fill History */}
-            <FillHistorySection fills={data.fills} />
+            {/* Fill History (includes progress bar) */}
+            <FillHistorySection fills={data.fills} fillPct={data.order.fill_percentage} />
 
           </div>
         )}
