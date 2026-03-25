@@ -80,7 +80,7 @@ export async function waitForTransactionWithTimeout(
       // Final attempt failed or non-retriable error
       if (isRetriable) {
         const timeoutError = new Error(
-          `Transaction submitted but confirmation is taking longer than expected. Check Otterscan to verify: https://otter.pulsechain.com/tx/${hash}`
+          `Transaction submitted but confirmation is taking longer than expected. View transaction: /tx/${hash}`
         );
         (timeoutError as any).isTimeout = true;
         throw timeoutError;

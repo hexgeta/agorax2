@@ -903,9 +903,7 @@ export default function StatsPage() {
                               const isCurrentUser = connectedAddress?.toLowerCase() === order.maker.toLowerCase();
                               const statusColors = getStatusColor(order.status);
 
-                              const href = isCurrentUser
-                                ? `/my-orders?orderId=${order.id}`
-                                : `/marketplace?order-id=${order.id}`;
+                              const href = `/order/${order.id}`;
 
                               return (
                                 <tr
@@ -1062,9 +1060,7 @@ export default function StatsPage() {
                                 </td>
                                 <td className="py-4 px-2 text-right">
                                   <a
-                                    href={`https://otter.pulsechain.com/tx/${fill.txHash}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
+                                    href={`/tx/${fill.txHash}`}
                                     className="text-blue-400 hover:text-blue-300 text-sm font-mono"
                                     onClick={(e) => e.stopPropagation()}
                                   >

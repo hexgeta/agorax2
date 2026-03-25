@@ -390,7 +390,7 @@ export function OrderHistoryLog() {
                 };
 
                 const txHash = event.event_data.tx_hash;
-                const explorerUrl = txHash ? `https://otter.pulsechain.com/tx/${txHash}` : null;
+                const explorerUrl = txHash ? `/tx/${txHash}` : null;
 
                 const rowContent = (
                   <>
@@ -420,8 +420,6 @@ export function OrderHistoryLog() {
                   <a
                     key={event.id}
                     href={explorerUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
                     className="grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-4 px-4 py-4 hover:bg-white/5 transition-colors cursor-pointer"
                   >
                     {rowContent}

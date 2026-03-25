@@ -5,18 +5,13 @@
  * @returns Full URL to view the transaction on the appropriate explorer
  */
 export function getBlockExplorerTxUrl(chainId: number | undefined, txHash: string): string {
-  // Mainnet (369) - Use Otterscan
-  if (chainId === 369) {
-    return `https://otter.pulsechain.com/tx/${txHash}`;
-  }
-  
-  // Testnet (943) - Use PulseChain Testnet Explorer
+  // Testnet (943) - Use PulseChain Testnet Explorer (no internal page)
   if (chainId === 943) {
     return `https://scan.v4.testnet.pulsechain.com/tx/${txHash}`;
   }
-  
-  // Default to Otterscan for mainnet if chain ID is undefined/unknown
-  return `https://otter.pulsechain.com/tx/${txHash}`;
+
+  // Mainnet & default - Use internal tx page
+  return `/tx/${txHash}`;
 }
 
 /**
@@ -25,18 +20,13 @@ export function getBlockExplorerTxUrl(chainId: number | undefined, txHash: strin
  * @returns Base URL for the block explorer
  */
 export function getBlockExplorerUrl(chainId: number | undefined): string {
-  // Mainnet (369) - Use Otterscan
-  if (chainId === 369) {
-    return 'https://otter.pulsechain.com';
-  }
-  
   // Testnet (943) - Use PulseChain Testnet Explorer
   if (chainId === 943) {
     return 'https://scan.v4.testnet.pulsechain.com';
   }
-  
-  // Default to Otterscan for mainnet
-  return 'https://otter.pulsechain.com';
+
+  // Mainnet & default - Use internal paths
+  return '';
 }
 
 /**

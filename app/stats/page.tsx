@@ -867,20 +867,20 @@ export default function Stats2Page() {
                     )}
 
                     {/* Search inputs */}
-                    <div className="flex items-center gap-2 ml-auto min-w-0">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 ml-auto min-w-0 w-full sm:w-auto">
                       <input
                         type="text"
                         placeholder="Address..."
                         value={addressSearch}
                         onChange={(e) => setAddressSearch(e.target.value)}
-                        className="bg-white/5 border border-white/10 rounded px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-white/30 font-mono w-[140px] md:w-[380px]"
+                        className="bg-white/5 border border-white/10 rounded px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-white/30 font-mono w-full sm:w-[380px]"
                       />
                       <input
                         type="text"
-                        placeholder="Order ID."
+                        placeholder="Order ID"
                         value={orderIdSearch}
                         onChange={(e) => setOrderIdSearch(e.target.value)}
-                        className="bg-white/5 border border-white/10 rounded px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-white/30 font-mono w-[80px] md:w-[110px] shrink-0"
+                        className="bg-white/5 border border-white/10 rounded px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-white/30 font-mono w-full sm:w-[130px] shrink-0"
                       />
                       {(selectedTokenFilters.length > 0 || selectedTraderFilters.length > 0 || addressSearch || orderIdSearch || selectedDateFilter) && (
                         <button
@@ -891,7 +891,7 @@ export default function Stats2Page() {
                             setOrderIdSearch('');
                             setSelectedDateFilter(null);
                           }}
-                          className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-white/10 rounded transition-colors whitespace-nowrap"
+                          className="flex items-center gap-1 px-3 py-1.5 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors whitespace-nowrap"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1020,9 +1020,7 @@ export default function Stats2Page() {
                               const sellUsd = order.sellUsd;
                               const buyUsd = order.buyUsd;
 
-                              const href = isCurrentUser
-                                ? `/my-orders?orderId=${order.id}`
-                                : `/marketplace?order-id=${order.id}`;
+                              const href = `/order/${order.id}`;
 
                               return (
                                 <tr
@@ -1314,9 +1312,7 @@ export default function Stats2Page() {
                                 </td>
                                 <td className="py-4 px-2 text-center">
                                   <a
-                                    href={`https://otter.pulsechain.com/tx/${fill.txHash}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
+                                    href={`/tx/${fill.txHash}`}
                                     className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/10 hover:bg-white/20 border border-white/20 rounded-full text-white text-xs font-medium transition-colors"
                                     onClick={(e) => e.stopPropagation()}
                                   >

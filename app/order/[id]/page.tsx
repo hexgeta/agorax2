@@ -592,20 +592,19 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
                 </div>
               </LiquidGlassCard>
 
-              {/* Right: Status / Cancellation + Fill Progress */}
-              <div className="space-y-4">
-                {data.cancellation && (
-                  <CancellationSection cancellation={data.cancellation} />
-                )}
-
-                <LiquidGlassCard className="p-5 sm:p-6 rounded-xl">
-                  <FillProgressBar
-                    fillPct={data.order.fill_percentage}
-                    fills={data.fills}
-                  />
-                </LiquidGlassCard>
-              </div>
+              {/* Right: Status / Cancellation */}
+              {data.cancellation && (
+                <CancellationSection cancellation={data.cancellation} />
+              )}
             </div>
+
+            {/* Fill Progress - full width below */}
+            <LiquidGlassCard className="p-5 sm:p-6 rounded-xl">
+              <FillProgressBar
+                fillPct={data.order.fill_percentage}
+                fills={data.fills}
+              />
+            </LiquidGlassCard>
 
             {/* Fill History */}
             <FillHistorySection fills={data.fills} />

@@ -7,6 +7,14 @@ import { formatUSD, getTokenPrice } from '@/utils/format';
 import { getTokenInfo, formatTokenTicker } from '@/utils/tokenUtils';
 import { CoinLogo } from '@/components/ui/CoinLogo';
 import { CompleteOrderDetails } from '@/hooks/contracts/useOpenPositions';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationPrevious,
+  PaginationNext,
+} from '@/components/ui/pagination';
 
 interface Transaction {
   transactionHash: string;
@@ -117,8 +125,7 @@ export default function TopTokensChart({ transactions, orders, tokenPrices, cont
     });
 
     return Object.values(stats)
-      .sort((a, b) => (b.listedVolume + b.tradedVolume) - (a.listedVolume + a.tradedVolume))
-      .slice(0, 10);
+      .sort((a, b) => (b.listedVolume + b.tradedVolume) - (a.listedVolume + a.tradedVolume));
   }, [transactions, orders, tokenPrices, contractOrders]);
 
   type SortKey = 'total' | 'ticker' | 'listedVolume' | 'tradedVolume';
@@ -266,24 +273,46 @@ export default function TopTokensChart({ transactions, orders, tokenPrices, cont
       </div>
 
       {tokenTotalPages > 1 && (
-        <div className="flex items-center justify-center gap-3 mt-4">
-          <button
-            onClick={() => setTokenPage(p => Math.max(1, p - 1))}
-            disabled={tokenPage === 1}
-            className="px-3 py-1 text-sm rounded bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-          >
-            Prev
-          </button>
-          <span className="text-gray-500 text-sm">
-            {tokenPage} / {tokenTotalPages}
-          </span>
-          <button
-            onClick={() => setTokenPage(p => Math.min(tokenTotalPages, p + 1))}
-            disabled={tokenPage === tokenTotalPages}
-            className="px-3 py-1 text-sm rounded bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-          >
-            Next
-          </button>
+        <div className="flex items-center justify-end mt-4">
+          <Pagination>
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious
+                  className={tokenPage <= 1 ? 'pointer-events-none opacity-40' : 'cursor-pointer'}
+                  onClick={() => setTokenPage(p => Math.max(1, p - 1))}
+                />
+              </PaginationItem>
+              {Array.from({ length: Math.min(5, tokenTotalPages) }, (_, i) => {
+                let pg: number;
+                if (tokenTotalPages <= 5) {
+                  pg = i + 1;
+                } else if (tokenPage <= 3) {
+                  pg = i + 1;
+                } else if (tokenPage >= tokenTotalPages - 2) {
+                  pg = tokenTotalPages - 4 + i;
+                } else {
+                  pg = tokenPage - 2 + i;
+                }
+                return (
+                  <PaginationItem key={pg}>
+                    <PaginationLink
+                      isActive={pg === tokenPage}
+                      className="cursor-pointer"
+                      onClick={() => setTokenPage(pg)}
+                    >
+                      {pg}
+                    </PaginationLink>
+                  </PaginationItem>
+                );
+              })}
+              <PaginationItem>
+                <PaginationNext
+                  className={tokenPage >= tokenTotalPages ? 'pointer-events-none opacity-40' : 'cursor-pointer'}
+                  onClick={() => setTokenPage(p => Math.min(tokenTotalPages, p + 1))}
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
         </div>
       )}
 

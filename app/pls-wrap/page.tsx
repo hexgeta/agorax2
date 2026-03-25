@@ -146,11 +146,9 @@ export default function PLSWrapPage() {
           description: (
             <a
               href={getBlockExplorerTxUrl(chainId, hash)}
-              target="_blank"
-              rel="noopener noreferrer"
               className="underline"
             >
-              View on Otterscan
+              View Transaction
             </a>
           ),
           variant: 'success' as never,
@@ -318,11 +316,9 @@ export default function PLSWrapPage() {
               <p className="text-green-400 text-sm font-medium">Transaction confirmed!</p>
               <a
                 href={getBlockExplorerTxUrl(chainId, txHash)}
-                target="_blank"
-                rel="noopener noreferrer"
                 className="text-green-400/70 text-xs hover:text-green-400 underline mt-1 inline-block"
               >
-                View on Otterscan
+                View Transaction
               </a>
             </div>
           )}

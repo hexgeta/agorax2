@@ -2520,7 +2520,7 @@ export function LimitOrderForm({
       // Check if this is a timeout error (transaction submitted but confirmation pending)
       const isTimeout = error?.isTimeout ||
         error?.message?.includes('confirmation is taking') ||
-        error?.message?.includes('Check Otterscan');
+        error?.message?.includes('View transaction');
 
       if (isTimeout) {
         // Extract tx hash from error message if present

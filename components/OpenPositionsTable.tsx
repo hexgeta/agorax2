@@ -1985,7 +1985,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
       const isTimeout = error.isTimeout ||
         errorMsg.includes('taking longer than expected') ||
         errorMsg.includes('confirmation is taking longer') ||
-        errorMsg.includes('Check Otterscan');
+        errorMsg.includes('View transaction');
 
       setCollectErrors(prev => ({
         ...prev,
@@ -1997,7 +1997,7 @@ export const OpenPositionsTable = forwardRef<any, OpenPositionsTableProps>(({ is
         // Transaction submitted but confirmation timeout
         toast({
           title: "⏳ Collection Pending",
-          description: "Your transaction was submitted but is taking longer to confirm. Funds may arrive soon - check Otterscan.",
+          description: "Your transaction was submitted but is taking longer to confirm. Funds may arrive soon.",
           variant: "default",
           action: txHash ? (
             <a

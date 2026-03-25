@@ -3530,13 +3530,6 @@ export const TOKEN_CONSTANTS = [{
   name: "Gizmo"
 }, {
   chain: 369,
-  a: "0x4fc0c8a7636cfe551bb077ba928b4e9d59b02dc2",
-  dexs: null,
-  ticker: "GOLD 6T",
-  decimals: 8,
-  name: "6 Tons of Digital Gold"
-}, {
-  chain: 369,
   a: "0x1e5e67983bfcc37c3c4a1a25f15e57170762398c",
   dexs: null,
   ticker: "USDG",
