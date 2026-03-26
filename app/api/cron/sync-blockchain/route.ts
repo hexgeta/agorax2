@@ -320,6 +320,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           orderStatus = 2;
         }
 
+        // Check if order already exists before upserting (to avoid duplicate notifications)
+        const { data: existingOrder } = await supabase
+          .from('orders')
+          .select('order_id')
+          .eq('order_id', Number(orderId))
+          .maybeSingle();
+
         await supabase.from('orders').upsert({
           order_id: Number(orderId),
           maker_address: owner,
@@ -342,17 +349,19 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           created_at: timestamp ? new Date(timestamp * 1000).toISOString() : new Date().toISOString(),
         }, { onConflict: 'order_id' });
 
-        // Fire-and-forget Telegram notification
-        notifyNewOrder({
-          orderId,
-          maker: owner,
-          sellToken: getTokenTicker(sellToken),
-          sellAmount: formatAmount(sellAmount, sellDecimals).toLocaleString(),
-          buyTokens: buyTickers,
-          buyAmounts: buyAmountsFormatted.map((a: number) => a.toLocaleString()),
-          allOrNothing: Boolean(orderDetails?.allOrNothing),
-          expiration: Number(orderDetails?.expirationTime || 0n),
-        });
+        // Only send notification for genuinely new orders (not re-processed events)
+        if (!existingOrder) {
+          notifyNewOrder({
+            orderId,
+            maker: owner,
+            sellToken: getTokenTicker(sellToken),
+            sellAmount: formatAmount(sellAmount, sellDecimals).toLocaleString(),
+            buyTokens: buyTickers,
+            buyAmounts: buyAmountsFormatted.map((a: number) => a.toLocaleString()),
+            allOrNothing: Boolean(orderDetails?.allOrNothing),
+            expiration: Number(orderDetails?.expirationTime || 0n),
+          });
+        }
       } catch (err) {
         stats.errors.push(`Order write ${orderId}: ${err}`);
       }
@@ -420,6 +429,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       }
 
       // Write to order_fills table
+      let isNewFill = true;
       try {
         const { error } = await supabase.from('order_fills').insert({
           order_id: Number(orderId),
@@ -434,7 +444,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           block_number: Number(log.blockNumber),
           filled_at: timestamp ? new Date(timestamp * 1000).toISOString() : new Date().toISOString(),
         });
-        if (error && error.code !== '23505') stats.errors.push(`Fill write ${orderId}: ${error.message}`);
+        if (error && error.code === '23505') {
+          isNewFill = false; // Duplicate fill — already processed
+        } else if (error) {
+          stats.errors.push(`Fill write ${orderId}: ${error.message}`);
+        }
       } catch (err) {
         stats.errors.push(`Fill write ${orderId}: ${err}`);
       }
@@ -466,8 +480,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         stats.errors.push(`Order update after fill ${orderId}: ${err}`);
       }
 
-      // Send Telegram fill notification to group chat
-      {
+      // Send Telegram fill notifications only for new fills (not re-processed events)
+      if (isNewFill) {
         const onChainData = onChainOrders.get(orderId);
         const totalSellAmt = onChainData?.orderDetails?.sellAmount ? BigInt(onChainData.orderDetails.sellAmount) : 0n;
         const redeemedAmt = onChainData?.redeemedSellAmount ? BigInt(onChainData.redeemedSellAmount) : 0n;
@@ -486,7 +500,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       }
 
       // Send Telegram notification to maker if subscribed (or test address)
-      if (orderMeta) {
+      if (isNewFill && orderMeta) {
         try {
           const { data: sub } = await supabase
             .from('telegram_subscriptions')
