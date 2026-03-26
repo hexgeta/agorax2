@@ -480,6 +480,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           fillToken: buyTicker,
           fillerAddress: buyer,
           fillPercentage: fillPctGroup,
+          thisFillPercentage: thisFillPctGroup,
           txHash: log.transactionHash || '',
         });
       }
@@ -506,16 +507,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
             const redeemed = onChain?.redeemedSellAmount ? BigInt(onChain.redeemedSellAmount) : 0n;
             const fillPct = totalSell > 0n ? Number((redeemed * 10000n) / totalSell) / 100 : 0;
 
-            // Calculate this fill's percentage of the total order
-            const thisFillPct = totalSell > 0n ? Number((BigInt(sellAmount) * 10000n) / totalSell) / 100 : 0;
-
             notifyOrderFilled(chatId, {
               orderId,
               fillAmount: formatAmount(buyAmount, buyDecimals).toString(),
               fillToken: buyTicker,
               fillerAddress: buyer,
               fillPercentage: fillPct,
-              thisFillPercentage: thisFillPct,
               txHash: log.transactionHash || '',
             });
           }
