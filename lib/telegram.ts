@@ -1,6 +1,6 @@
 /**
  * Server-side Telegram notification utility.
- * Sends messages to a private Telegram chat via Bot API.
+ * Sends messages to a private Telegram chat via Bot API (HTML parse mode).
  *
  * Required env vars:
  *   TELEGRAM_BOT_TOKEN  — from @BotFather
@@ -18,32 +18,36 @@ function isConfigured(): boolean {
 }
 
 /**
- * Send a Telegram message (Markdown V2 format).
- * Silently no-ops if env vars are missing.
+ * Escape special characters for Telegram HTML mode.
+ */
+export function esc(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/**
+ * Send a Telegram message (HTML format).
+ * Logs errors but never crashes the caller.
  */
 export async function sendTelegram(text: string): Promise<void> {
   if (!isConfigured()) return;
   try {
-    await fetch(`https://api.telegram.org/bot${BOT_TOKEN()}/sendMessage`, {
+    const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN()}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         chat_id: CHAT_ID(),
         text,
-        parse_mode: 'MarkdownV2',
+        parse_mode: 'HTML',
         disable_web_page_preview: true,
       }),
     });
-  } catch {
-    // Fire-and-forget — never crash the caller
+    if (!res.ok) {
+      const body = await res.text();
+      console.error(`[telegram] sendTelegram failed ${res.status}: ${body}`);
+    }
+  } catch (err) {
+    console.error('[telegram] sendTelegram error:', err);
   }
-}
-
-/**
- * Escape special characters for Telegram MarkdownV2.
- */
-export function esc(s: string): string {
-  return s.replace(/([_*\[\]()~`>#+\-=|{}.!\\])/g, '\\$1');
 }
 
 /**
@@ -60,12 +64,17 @@ export async function sendTelegramToUser(chatId: string, text: string): Promise<
       body: JSON.stringify({
         chat_id: chatId,
         text,
-        parse_mode: 'MarkdownV2',
+        parse_mode: 'HTML',
         disable_web_page_preview: true,
       }),
     });
+    if (!res.ok) {
+      const body = await res.text();
+      console.error(`[telegram] sendTelegramToUser failed ${res.status}: ${body}`);
+    }
     return res.ok;
-  } catch {
+  } catch (err) {
+    console.error('[telegram] sendTelegramToUser error:', err);
     return false;
   }
 }
@@ -83,21 +92,21 @@ export function notifyNewOrder(order: {
   expiration: string | number;
 }) {
   const lines = [
-    `🆕 *New Order \\#${esc(String(order.orderId))}*`,
+    `🆕 <b>New Order #${esc(String(order.orderId))}</b>`,
     ``,
-    `*Maker:* \`${esc(order.maker)}\``,
-    `*Selling:* ${esc(order.sellAmount)} ${esc(order.sellToken)}`,
+    `<b>Maker:</b> <code>${esc(order.maker)}</code>`,
+    `<b>Selling:</b> ${esc(order.sellAmount)} ${esc(order.sellToken)}`,
   ];
 
   for (let i = 0; i < order.buyTokens.length; i++) {
-    lines.push(`*Wants:* ${esc(order.buyAmounts[i] || '?')} ${esc(order.buyTokens[i] || '?')}`);
+    lines.push(`<b>Wants:</b> ${esc(order.buyAmounts[i] || '?')} ${esc(order.buyTokens[i] || '?')}`);
   }
 
-  if (order.allOrNothing) lines.push(`⚠️ _All or nothing_`);
+  if (order.allOrNothing) lines.push(`⚠️ <i>All or nothing</i>`);
   const exp = Number(order.expiration);
   if (exp > 0) {
     const date = new Date(exp * 1000).toISOString().replace('T', ' ').slice(0, 19);
-    lines.push(`⏰ _Expires: ${esc(date)} UTC_`);
+    lines.push(`⏰ <i>Expires: ${esc(date)} UTC</i>`);
   }
 
   sendTelegram(lines.join('\n'));
@@ -113,14 +122,15 @@ export function notifyOrderFilled(chatId: string, fill: {
 }) {
   const totalPct = fill.fillPercentage >= 100 ? '100%' : `${fill.fillPercentage.toFixed(1)}%`;
   const shortFiller = `${fill.fillerAddress.slice(0, 6)}...${fill.fillerAddress.slice(-4)}`;
+  const txUrl = `https://otter.pulsechain.com/tx/${fill.txHash}`;
   const lines = [
-    `🔔 *New Fill on Order \\#${esc(String(fill.orderId))}*`,
+    `🔔 <b>New Fill on Order #${esc(String(fill.orderId))}</b>`,
     ``,
-    `*Amount:* ${esc(fill.fillAmount)} ${esc(fill.fillToken)}`,
-    `*By:* \`${esc(shortFiller)}\``,
-    `*Total Filled So Far:* ${esc(totalPct)}`,
+    `<b>Amount:</b> ${esc(fill.fillAmount)} ${esc(fill.fillToken)}`,
+    `<b>By:</b> <code>${esc(shortFiller)}</code>`,
+    `<b>Total Filled So Far:</b> ${esc(totalPct)}`,
     ``,
-    `[View Tx](https://otter.pulsechain.com/tx/${esc(fill.txHash)})`,
+    `<a href="${txUrl}">View Tx</a>`,
   ];
 
   sendTelegramToUser(chatId, lines.join('\n'));
@@ -138,15 +148,16 @@ export function notifyOrderFilledGroup(fill: {
   const totalPct = fill.fillPercentage >= 100 ? '100%' : `${fill.fillPercentage.toFixed(1)}%`;
   const shortMaker = `${fill.makerAddress.slice(0, 6)}...${fill.makerAddress.slice(-4)}`;
   const shortFiller = `${fill.fillerAddress.slice(0, 6)}...${fill.fillerAddress.slice(-4)}`;
+  const txUrl = `https://otter.pulsechain.com/tx/${fill.txHash}`;
   const lines = [
-    `✅ *New Fill on Order \\#${esc(String(fill.orderId))}*`,
+    `✅ <b>New Fill on Order #${esc(String(fill.orderId))}</b>`,
     ``,
-    `*Maker:* \`${esc(shortMaker)}\``,
-    `*Filler:* \`${esc(shortFiller)}\``,
-    `*Amount:* ${esc(fill.fillAmount)} ${esc(fill.fillToken)}`,
-    `*Total Filled So Far:* ${esc(totalPct)}`,
+    `<b>Maker:</b> <code>${esc(shortMaker)}</code>`,
+    `<b>Filler:</b> <code>${esc(shortFiller)}</code>`,
+    `<b>Amount:</b> ${esc(fill.fillAmount)} ${esc(fill.fillToken)}`,
+    `<b>Total Filled So Far:</b> ${esc(totalPct)}`,
     ``,
-    `[View Tx](https://otter.pulsechain.com/tx/${esc(fill.txHash)})`,
+    `<a href="${txUrl}">View Tx</a>`,
   ];
 
   sendTelegram(lines.join('\n'));
@@ -162,19 +173,19 @@ export function notifyNewFeedback(post: {
 }) {
   const cat = post.category.toUpperCase();
   const lines = [
-    `💬 *New Feedback \\#${esc(String(post.id))}*`,
+    `💬 <b>New Feedback #${esc(String(post.id))}</b>`,
     ``,
-    `*Category:* ${esc(cat)}`,
-    `*Title:* ${esc(post.title)}`,
+    `<b>Category:</b> ${esc(cat)}`,
+    `<b>Title:</b> ${esc(post.title)}`,
   ];
 
   if (post.description) {
     const desc = post.description.length > 200 ? post.description.slice(0, 200) + '...' : post.description;
-    lines.push(`*Description:* ${esc(desc)}`);
+    lines.push(`<b>Description:</b> ${esc(desc)}`);
   }
 
   if (post.tokenTicker) {
-    lines.push(`*Token:* ${esc(post.tokenTicker)}${post.tokenContract ? ` \\(\`${esc(post.tokenContract)}\`\\)` : ''}`);
+    lines.push(`<b>Token:</b> ${esc(post.tokenTicker)}${post.tokenContract ? ` (<code>${esc(post.tokenContract)}</code>)` : ''}`);
   }
 
   sendTelegram(lines.join('\n'));
@@ -188,11 +199,11 @@ export function notifyNewComment(comment: {
 }) {
   const content = comment.content.length > 200 ? comment.content.slice(0, 200) + '...' : comment.content;
   const lines = [
-    `💬 *New Comment on \\#${esc(String(comment.postId))}*`,
+    `💬 <b>New Comment on #${esc(String(comment.postId))}</b>`,
     ``,
-    `*Post:* ${esc(comment.postTitle)}`,
-    `*By:* ${esc(comment.displayName)}`,
-    `*Comment:* ${esc(content)}`,
+    `<b>Post:</b> ${esc(comment.postTitle)}`,
+    `<b>By:</b> ${esc(comment.displayName)}`,
+    `<b>Comment:</b> ${esc(content)}`,
   ];
   sendTelegram(lines.join('\n'));
 }
@@ -204,11 +215,11 @@ export function notifyNewVote(vote: {
   displayName: string;
 }) {
   const lines = [
-    `👍 *Upvote on \\#${esc(String(vote.postId))}*`,
+    `👍 <b>Upvote on #${esc(String(vote.postId))}</b>`,
     ``,
-    `*Post:* ${esc(vote.postTitle)}`,
-    `*By:* ${esc(vote.displayName)}`,
-    `*Total votes:* ${esc(String(vote.voteCount))}`,
+    `<b>Post:</b> ${esc(vote.postTitle)}`,
+    `<b>By:</b> ${esc(vote.displayName)}`,
+    `<b>Total votes:</b> ${esc(String(vote.voteCount))}`,
   ];
   sendTelegram(lines.join('\n'));
 }
