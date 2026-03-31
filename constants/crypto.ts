@@ -2277,7 +2277,7 @@ export const TOKEN_CONSTANTS = [{
     chain: 369,
     a: "0x4FC0C8a7636cfE551bb077BA928b4E9d59b02DC2",
     dexs: "",
-    ticker: "GOLD6T",
+    ticker: "GOLD 6T",
   decimals: 8,
     name: "6 Tons of Digital Gold"
   },

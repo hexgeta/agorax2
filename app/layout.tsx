@@ -67,6 +67,9 @@ export default async function RootLayout({
   return (
     <html lang="en" className="font-sans">
       <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link rel="preload" href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" as="style" />
         <script async src="https://plausible.io/js/pa-nYdFNHWl30lxqhmQWXzT-.js"></script>
         <script dangerouslySetInnerHTML={{ __html: "window.plausible=window.plausible||function(){(plausible.q=plausible.q||[]).push(arguments)},plausible.init=plausible.init||function(i){plausible.o=i||{}};plausible.init()" }} />
       </head>

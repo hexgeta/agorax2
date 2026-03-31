@@ -4,11 +4,11 @@ import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 import { TokenLogo } from '@/components/TokenLogo';
+import { PixelSpinner } from '@/components/ui/PixelSpinner';
 import {
   ExternalLink,
   Copy,
   Check,
-  Loader2,
   XCircle,
   ShoppingCart,
   Clock,
@@ -468,7 +468,7 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
         {/* Loading */}
         {loading && (
           <div className="flex flex-col items-center justify-center py-20 gap-3">
-            <Loader2 className="w-8 h-8 text-white/40 animate-spin" />
+            <PixelSpinner size={32} />
             <p className="text-gray-500 text-sm">Loading order...</p>
           </div>
         )}

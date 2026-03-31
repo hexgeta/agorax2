@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { DisclaimerDialog } from '@/components/DisclaimerDialog';
 import { LogoPreloader } from '@/components/LogoPreloader';
-import PixelBlastBackground from '@/components/ui/PixelBlastBackground';
+import dynamic from 'next/dynamic';
+const PixelBlastBackground = dynamic(() => import('@/components/ui/PixelBlastBackground'), { ssr: false });
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 import { motion } from 'framer-motion';
 import { ConnectButton } from '@/components/ConnectButton';
