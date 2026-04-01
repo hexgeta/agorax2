@@ -28,7 +28,9 @@ export async function GET(request: NextRequest): Promise<Response> {
   try {
     // Return cached data if fresh enough
     if (cachedResponse && Date.now() - cachedResponse.timestamp < CACHE_TTL_MS) {
-      return apiSuccess(cachedResponse.data, request);
+      const res = apiSuccess(cachedResponse.data, request);
+      res.headers.set('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
+      return res;
     }
 
     const [ordersResult, fillsResult] = await Promise.all([
@@ -85,7 +87,9 @@ export async function GET(request: NextRequest): Promise<Response> {
     // Cache the result
     cachedResponse = { data: responseData, timestamp: Date.now() };
 
-    return apiSuccess(responseData, request);
+    const res = apiSuccess(responseData, request);
+    res.headers.set('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
+    return res;
   } catch {
     return apiError('Internal server error', 500);
   }

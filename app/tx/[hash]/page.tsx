@@ -3,7 +3,8 @@
 import { useState, useEffect, use } from 'react';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 import { TokenLogo } from '@/components/TokenLogo';
-import { ExternalLink, Copy, Check, Loader2, ArrowRight, XCircle, ShoppingCart, PlusCircle } from 'lucide-react';
+import { ExternalLink, Copy, Check, ArrowRight, XCircle, ShoppingCart, PlusCircle } from 'lucide-react';
+import { PixelSpinner } from '@/components/ui/PixelSpinner';
 
 // ---------- Types ----------
 
@@ -401,7 +402,7 @@ export default function TransactionPage({ params }: { params: Promise<{ hash: st
         {/* Content */}
         {loading && (
           <div className="flex flex-col items-center justify-center py-20 gap-3">
-            <Loader2 className="w-8 h-8 text-white/40 animate-spin" />
+            <PixelSpinner size={32} />
             <p className="text-gray-500 text-sm">Loading transaction...</p>
           </div>
         )}
