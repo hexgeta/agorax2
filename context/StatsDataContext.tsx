@@ -91,7 +91,7 @@ export function StatsDataProvider({ children }: { children: React.ReactNode }) {
   // Fetch on mount + poll every 60s (matches cron sync interval)
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 60000);
+    const interval = setInterval(fetchData, 300000); // 5 minutes
     return () => clearInterval(interval);
   }, [fetchData]);
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useStatsData } from '@/context/StatsDataContext';
+import { useStatsData, StatsDataProvider } from '@/context/StatsDataContext';
 import { useAccount } from 'wagmi';
 import { motion } from 'framer-motion';
 import { DisclaimerDialog } from '@/components/DisclaimerDialog';
@@ -323,7 +323,7 @@ function dbFillsToFormattedFills(dbFills: DbFill[], dbOrders: DbOrder[], tokenPr
 
 // ── Page Component ──────────────────────────────────────────────────────────
 
-export default function Stats2Page() {
+function StatsPageContent() {
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [pageVisible, setPageVisible] = useState(false);
   const { address: connectedAddress } = useAccount();
@@ -1390,5 +1390,13 @@ export default function Stats2Page() {
         </div>
       </main>
     </>
+  );
+}
+
+export default function StatsPage() {
+  return (
+    <StatsDataProvider>
+      <StatsPageContent />
+    </StatsDataProvider>
   );
 }

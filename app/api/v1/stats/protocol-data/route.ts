@@ -11,7 +11,7 @@ const DEPLOYMENT_BLOCK = 21266815;
 
 // In-memory cache to reduce Supabase egress
 let cachedResponse: { data: unknown; timestamp: number } | null = null;
-const CACHE_TTL_MS = 60_000; // 60 seconds
+const CACHE_TTL_MS = 300_000; // 5 minutes
 
 /**
  * GET /api/v1/stats/protocol-data
@@ -29,7 +29,7 @@ export async function GET(request: NextRequest): Promise<Response> {
     // Return cached data if fresh enough
     if (cachedResponse && Date.now() - cachedResponse.timestamp < CACHE_TTL_MS) {
       const res = apiSuccess(cachedResponse.data, request);
-      res.headers.set('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
+      res.headers.set('Cache-Control', 's-maxage=300, stale-while-revalidate=600');
       return res;
     }
 
@@ -88,7 +88,7 @@ export async function GET(request: NextRequest): Promise<Response> {
     cachedResponse = { data: responseData, timestamp: Date.now() };
 
     const res = apiSuccess(responseData, request);
-    res.headers.set('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
+    res.headers.set('Cache-Control', 's-maxage=300, stale-while-revalidate=600');
     return res;
   } catch {
     return apiError('Internal server error', 500);

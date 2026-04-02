@@ -7,7 +7,6 @@ import { useState } from 'react'
 import { TransactionProvider } from '@/context/TransactionContext'
 import { TokenAccessProvider } from '@/context/TokenAccessContext'
 import { TokenBalancesProvider } from '@/context/TokenBalancesContext'
-import { StatsDataProvider } from '@/context/StatsDataContext'
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient())
@@ -18,9 +17,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <TransactionProvider>
           <TokenAccessProvider>
             <TokenBalancesProvider>
-              <StatsDataProvider>
                 {children}
-              </StatsDataProvider>
             </TokenBalancesProvider>
           </TokenAccessProvider>
         </TransactionProvider>
