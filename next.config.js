@@ -64,11 +64,11 @@ const nextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://vercel.live https://plausible.io https://pulse.walletconnect.org https://pulse.walletconnect.com https://cca-lite.coinbase.com",
+              "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://vercel.live https://plausible.io https://analytics.lookintomaxi.com https://pulse.walletconnect.org https://pulse.walletconnect.com https://cca-lite.coinbase.com",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "img-src 'self' data: https: blob:",
               "font-src 'self' data: https://fonts.googleapis.com https://fonts.gstatic.com",
-              "connect-src 'self' https://plausible.io https://rpc.pulsechain.com https://rpc.v4.testnet.pulsechain.com https://pulsechain-testnet-rpc.publicnode.com https://rpc-testnet-pulsechain.g4mm4.io https://*.supabase.co https://vercel.live https://pulse.walletconnect.org https://pulse.walletconnect.com https://rpc.walletconnect.org https://rpc.walletconnect.com https://*.walletconnect.org https://*.walletconnect.com wss://*.supabase.co wss://ws.walletconnect.com wss://ws.walletconnect.org wss://relay.walletconnect.com wss://relay.walletconnect.org https://relay.walletconnect.com https://relay.walletconnect.org https://*.reown.com wss://*.reown.com https://cloudflare-eth.com https://rpc.ankr.com https://api.dexscreener.com https://cca-lite.coinbase.com https://*.coinbase.com https://api.web3modal.org https://api.web3modal.com",
+              "connect-src 'self' https://plausible.io https://analytics.lookintomaxi.com https://rpc.pulsechain.com https://rpc.v4.testnet.pulsechain.com https://pulsechain-testnet-rpc.publicnode.com https://rpc-testnet-pulsechain.g4mm4.io https://*.supabase.co https://vercel.live https://pulse.walletconnect.org https://pulse.walletconnect.com https://rpc.walletconnect.org https://rpc.walletconnect.com https://*.walletconnect.org https://*.walletconnect.com wss://*.supabase.co wss://ws.walletconnect.com wss://ws.walletconnect.org wss://relay.walletconnect.com wss://relay.walletconnect.org https://relay.walletconnect.com https://relay.walletconnect.org https://*.reown.com wss://*.reown.com https://cloudflare-eth.com https://rpc.ankr.com https://api.dexscreener.com https://cca-lite.coinbase.com https://*.coinbase.com https://api.web3modal.org https://api.web3modal.com",
               "frame-src 'self' https://verify.walletconnect.com https://verify.walletconnect.org https://secure.walletconnect.com https://secure.walletconnect.org https://*.coinbase.com",
               "object-src 'none'",
               "base-uri 'self'",
