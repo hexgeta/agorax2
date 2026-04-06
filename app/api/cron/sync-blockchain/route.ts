@@ -184,13 +184,16 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     const totalEvents = placedLogs.length + filledLogs.length + cancelledLogs.length + proceedsLogs.length + proceedsFailedLogs.length + expirationLogs.length;
 
-    // If no events, still run full re-sync then advance cursor
+    // If no events, only run full re-sync once per hour (not every minute)
     if (totalEvents === 0) {
       let resynced = 0;
-      try {
-        resynced = await resyncAllOrders(client, CONTRACT_ABI);
-      } catch {
-        // Non-critical
+      const currentMinute = new Date().getUTCMinutes();
+      if (currentMinute === 0) {
+        try {
+          resynced = await resyncAllOrders(client, CONTRACT_ABI);
+        } catch {
+          // Non-critical
+        }
       }
 
       await supabase

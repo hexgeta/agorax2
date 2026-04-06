@@ -47,8 +47,8 @@ export function useUserAchievements() {
       return result.data || null;
     },
     enabled: !!address,
-    staleTime: 30000, // 30 seconds
-    refetchOnWindowFocus: true,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    refetchOnWindowFocus: false,
   });
 
   return {
@@ -82,7 +82,7 @@ export function useLeaderboard(limit = 100) {
 
       return result.data?.leaderboard || [];
     },
-    staleTime: 60000, // 1 minute
+    staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
   return {
