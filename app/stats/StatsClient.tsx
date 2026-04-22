@@ -8,6 +8,7 @@ import { PixelSpinner } from '@/components/ui/PixelSpinner';
 import { LogoPreloader } from '@/components/LogoPreloader';
 import PixelBlastBackground from '@/components/ui/PixelBlastBackground';
 import StatsOverviewCards from '@/components/stats/StatsOverviewCards';
+import FillSourceCards from '@/components/stats/FillSourceCards';
 import TopTokensChart from '@/components/stats/TopTokensChart';
 import ProtocolActivityChart from '@/components/stats/ProtocolActivityChart';
 import OrderbookChart from '@/components/stats/OrderbookChart';
@@ -898,6 +899,9 @@ export default function StatsClient({ dbOrders, dbFills }: StatsClientProps) {
                   activeOrders={filteredActiveOrders}
                   dbTvl={(selectedTokenFilters.length > 0 || selectedTraderFilters.length > 0 || addressSearch || orderIdSearch) ? undefined : dbTvl}
                 />
+
+                {/* Fill Source Cards */}
+                <FillSourceCards fills={formattedFills} />
 
                 {/* Protocol Activity Chart */}
                 <ProtocolActivityChart
