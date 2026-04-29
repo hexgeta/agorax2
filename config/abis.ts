@@ -606,6 +606,21 @@ export const AGORAX_ABI = [
     ],
     "stateMutability": "view",
     "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "_sellToken", "type": "address" },
+      { "internalType": "uint256", "name": "_minSellAmount", "type": "uint256" },
+      { "internalType": "uint256", "name": "cursor", "type": "uint256" },
+      { "internalType": "uint256", "name": "size", "type": "uint256" }
+    ],
+    "name": "findFillableOrders",
+    "outputs": [
+      { "internalType": "uint256[]", "name": "orderIDs", "type": "uint256[]" },
+      { "internalType": "uint256", "name": "nextCursor", "type": "uint256" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
   }
 ] as const;
 

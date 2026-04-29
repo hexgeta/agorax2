@@ -48,9 +48,14 @@ export async function GET(request: NextRequest) {
   // Switch splits the fee 50/50 between the partnerAddress and Switch.
   // Min fee is 30 bps (0.30%) per Switch SDK.
   const partnerAddress = process.env.SWITCH_FEE_ADDRESS?.trim();
-  if (partnerAddress && /^0x[a-fA-F0-9]{40}$/.test(partnerAddress)) {
-    qs.set('partnerAddress', partnerAddress);
-    qs.set('fee', '30');
+  const partnerActive =
+    !!partnerAddress && /^0x[a-fA-F0-9]{40}$/.test(partnerAddress);
+  let feeBps = 30; // Switch's default minimum
+  if (partnerActive) {
+    qs.set('partnerAddress', partnerAddress!);
+    qs.set('fee', String(feeBps));
+  } else {
+    qs.set('fee', String(feeBps));
   }
 
   try {
@@ -59,6 +64,15 @@ export async function GET(request: NextRequest) {
       cache: 'no-store',
     });
     const data = await upstream.json();
+    // Echo the fee being charged so the client can display it transparently.
+    if (upstream.ok && typeof data === 'object' && data !== null) {
+      data._fee = {
+        totalBps: feeBps,
+        partnerSharedBps: partnerActive ? Math.floor(feeBps / 2) : 0,
+        switchKeepsBps: partnerActive ? feeBps - Math.floor(feeBps / 2) : feeBps,
+        partnerActive,
+      };
+    }
     return NextResponse.json(data, { status: upstream.status });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Upstream fetch failed';

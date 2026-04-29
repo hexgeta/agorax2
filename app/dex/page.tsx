@@ -1,9 +1,11 @@
 'use client';
 
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useAccount, useBalance, useContractWrite, useReadContract, usePublicClient, useSendTransaction } from 'wagmi';
 import { parseUnits, formatUnits } from 'viem';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
+import { Switch } from '@/components/ui/switch';
 import { TokenLogo } from '@/components/TokenLogo';
 import { ConnectButton } from '@/components/ConnectButton';
 import { Loader2, ArrowDownUp, ChevronDown, AlertTriangle } from 'lucide-react';
@@ -13,10 +15,28 @@ import { formatNumberWithCommas, removeCommas } from '@/utils/format';
 import { TOKEN_CONSTANTS } from '@/constants/crypto';
 import { PRIORITY_TOKEN_ADDRESSES, getTokenInfo } from '@/utils/tokenUtils';
 import { useContractWhitelistRead } from '@/hooks/contracts/useContractWhitelistRead';
+import { getContractAddress } from '@/config/testing';
+import { CONTRACT_ABI } from '@/config/abis';
+import { useTokenPrices } from '@/hooks/crypto/useTokenPrices';
+import { getTokenPrice } from '@/utils/format';
 
 const SWITCH_NATIVE_SENTINEL = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE' as const;
 const SWITCH_ROUTER = '0x0305fcb5dA680EA6fd1B01A96C1949175B99d406' as const;
 const AGORAX_ADAPTER_INDEX = '14';
+const AGORAX_ADAPTER_ADDRESS = '0x79eA0ec76b510D08BF4ca9a4A53A1F9f80Ea1697' as const;
+
+const AGORAX_ADAPTER_ABI = [
+  {
+    inputs: [
+      { name: '_tokenIn', type: 'address' },
+      { name: '_tokenOut', type: 'address' },
+    ],
+    name: 'getPreferredOrders',
+    outputs: [{ type: 'uint256[]' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+] as const;
 
 const ERC20_ABI = [
   {
@@ -105,11 +125,22 @@ function getSwitchAddress(token: TokenOption): string {
 }
 
 type TokenTax = { isTaxToken: boolean; buyTaxBps: number; sellTaxBps: number };
+type QuoteLeg = {
+  tokenIn: string;
+  tokenOut: string;
+  adapter: string;
+  amountIn: string;
+  amountOut: string;
+  percentage: number;
+};
 type QuotePath = {
   adapter: string;
   amountIn: string;
   amountOut: string;
   path: string[];
+  adapters?: string[];
+  legs?: QuoteLeg[];
+  percentage?: number;
 };
 type Quote = {
   fromToken: string;
@@ -125,6 +156,12 @@ type Quote = {
   paths?: QuotePath[];
   fromTokenTax?: TokenTax;
   toTokenTax?: TokenTax;
+  _fee?: {
+    totalBps: number;
+    partnerSharedBps: number;
+    switchKeepsBps: number;
+    partnerActive: boolean;
+  };
 };
 
 function TokenSelect({
@@ -140,16 +177,43 @@ function TokenSelect({
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
-  const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const updatePos = useCallback(() => {
+    if (!buttonRef.current) return;
+    const rect = buttonRef.current.getBoundingClientRect();
+    setPos({
+      top: rect.bottom + 8,
+      right: window.innerWidth - rect.right,
+    });
+  }, []);
 
   useEffect(() => {
     if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    updatePos();
+
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        buttonRef.current?.contains(target) ||
+        dropdownRef.current?.contains(target)
+      )
+        return;
+      setOpen(false);
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
+    const handleScrollOrResize = () => updatePos();
+
+    document.addEventListener('mousedown', handleClickOutside);
+    window.addEventListener('scroll', handleScrollOrResize, true);
+    window.addEventListener('resize', handleScrollOrResize);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('scroll', handleScrollOrResize, true);
+      window.removeEventListener('resize', handleScrollOrResize);
+    };
+  }, [open, updatePos]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -163,8 +227,9 @@ function TokenSelect({
   }, [search, tokens]);
 
   return (
-    <div className="relative" ref={ref}>
+    <>
       <button
+        ref={buttonRef}
         type="button"
         onClick={() => setOpen((o) => !o)}
         className="flex items-center gap-2 bg-white/10 hover:bg-white/20 border border-white/10 rounded-lg px-3 py-2 transition-colors"
@@ -173,50 +238,58 @@ function TokenSelect({
         <span className="text-white text-sm font-medium">{value.ticker}</span>
         <ChevronDown size={14} className="text-gray-400" />
       </button>
-      {open && (
-        <div className="absolute right-0 top-full mt-2 w-72 max-h-80 overflow-y-auto bg-black/95 border border-white/10 rounded-lg shadow-xl z-50">
-          <div className="sticky top-0 bg-black/95 p-2 border-b border-white/10">
-            <input
-              type="text"
-              autoFocus
-              placeholder="Search ticker, name, address"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-white text-sm outline-none placeholder-gray-500"
-            />
-          </div>
-          {filtered.length === 0 ? (
-            <div className="p-4 text-center text-sm text-gray-500">No tokens found</div>
-          ) : (
-            filtered.map((t) => {
-              const isDisabled = disabledAddress?.toLowerCase() === t.address.toLowerCase();
-              return (
-                <button
-                  key={t.address}
-                  disabled={isDisabled}
-                  onClick={() => {
-                    onChange(t);
-                    setOpen(false);
-                    setSearch('');
-                  }}
-                  className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${
-                    isDisabled
-                      ? 'opacity-30 cursor-not-allowed'
-                      : 'hover:bg-white/5'
-                  }`}
-                >
-                  <TokenLogo ticker={t.ticker} className="w-7 h-7" />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-white text-sm font-medium">{t.ticker}</div>
-                    <div className="text-gray-500 text-xs truncate">{t.name}</div>
-                  </div>
-                </button>
-              );
-            })
-          )}
-        </div>
-      )}
-    </div>
+      {open &&
+        pos &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            ref={dropdownRef}
+            style={{ position: 'fixed', top: pos.top, right: pos.right }}
+            className="w-72 max-h-80 overflow-y-auto bg-black/95 border border-white/10 rounded-lg shadow-xl z-[100]"
+          >
+            <div className="sticky top-0 bg-black/95 p-2 border-b border-white/10">
+              <input
+                type="text"
+                autoFocus
+                placeholder="Search ticker, name, address"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-white text-sm outline-none placeholder-gray-500"
+              />
+            </div>
+            {filtered.length === 0 ? (
+              <div className="p-4 text-center text-sm text-gray-500">No tokens found</div>
+            ) : (
+              filtered.map((t) => {
+                const isDisabled = disabledAddress?.toLowerCase() === t.address.toLowerCase();
+                return (
+                  <button
+                    key={t.address}
+                    disabled={isDisabled}
+                    onClick={() => {
+                      onChange(t);
+                      setOpen(false);
+                      setSearch('');
+                    }}
+                    className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${
+                      isDisabled
+                        ? 'opacity-30 cursor-not-allowed'
+                        : 'hover:bg-white/5'
+                    }`}
+                  >
+                    <TokenLogo ticker={t.ticker} className="w-7 h-7" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-white text-sm font-medium">{t.ticker}</div>
+                      <div className="text-gray-500 text-xs truncate">{t.name}</div>
+                    </div>
+                  </button>
+                );
+              })
+            )}
+          </div>,
+          document.body,
+        )}
+    </>
   );
 }
 
@@ -252,10 +325,50 @@ export default function DexPage() {
     [tokens]
   );
 
-  const [fromToken, setFromToken] = useState<TokenOption>(defaultFrom);
-  const [toToken, setToToken] = useState<TokenOption>(defaultTo);
+  // Restore previously selected pair from localStorage synchronously on first render.
+  // Reading inside useState's lazy initializer avoids the flash of defaults that a
+  // useEffect-based restore would cause.
+  const restoredPair = useMemo(() => {
+    if (typeof window === 'undefined') return { from: defaultFrom, to: defaultTo };
+    try {
+      const raw = localStorage.getItem('agorax-dex-pair');
+      if (!raw) return { from: defaultFrom, to: defaultTo };
+      const saved = JSON.parse(raw) as { from?: string; to?: string };
+      const from = saved.from
+        ? tokens.find((t) => t.address.toLowerCase() === saved.from!.toLowerCase()) ||
+          defaultFrom
+        : defaultFrom;
+      const to =
+        saved.to && saved.to.toLowerCase() !== from.address.toLowerCase()
+          ? tokens.find((t) => t.address.toLowerCase() === saved.to!.toLowerCase()) ||
+            defaultTo
+          : defaultTo;
+      return { from, to };
+    } catch {
+      return { from: defaultFrom, to: defaultTo };
+    }
+    // We only want this computed once on mount; downstream changes to the tokens
+    // list should not stomp the user's selection.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const [fromToken, setFromToken] = useState<TokenOption>(restoredPair.from);
+  const [toToken, setToToken] = useState<TokenOption>(restoredPair.to);
   const [amount, setAmount] = useState('');
   const [agoraxOnly, setAgoraxOnly] = useState(false);
+
+  // Persist pair on change.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      localStorage.setItem(
+        'agorax-dex-pair',
+        JSON.stringify({ from: fromToken.address, to: toToken.address }),
+      );
+    } catch {
+      /* ignore quota errors */
+    }
+  }, [fromToken, toToken]);
 
   const visibleTokens = useMemo(
     () => (agoraxOnly && whitelistSet.size > 0 ? tokens.filter(isWhitelisted) : tokens),
@@ -291,7 +404,21 @@ export default function DexPage() {
   const [txHash, setTxHash] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [routeOpen, setRouteOpen] = useState(false);
   const [recipient, setRecipient] = useState('');
+
+  type AgoraxMatchedOrder = {
+    id: bigint;
+    owner: string;
+    remainingSellAmount: bigint;
+    sellAmount: bigint;
+    buyAmount: bigint;
+    rate: number;
+    allOrNothing: boolean;
+  };
+  const [agoraxOrders, setAgoraxOrders] = useState<AgoraxMatchedOrder[] | null>(null);
+  const [agoraxOrdersLoading, setAgoraxOrdersLoading] = useState(false);
+  const [agoraxOrdersError, setAgoraxOrdersError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const recipientFormatValid =
@@ -361,6 +488,26 @@ export default function DexPage() {
       ? formatUnits(toErc20Balance as bigint, toToken.decimals)
       : '0';
 
+  // Token prices for USD value display.
+  const priceAddresses = useMemo(
+    () => [fromToken.address, toToken.address],
+    [fromToken.address, toToken.address],
+  );
+  const { prices: tokenPrices } = useTokenPrices(priceAddresses);
+  const fromUsdPrice = getTokenPrice(fromToken.address, tokenPrices);
+  const toUsdPrice = getTokenPrice(toToken.address, tokenPrices);
+
+  const formatUsd = (n: number) =>
+    n >= 0.01
+      ? n.toLocaleString('en-US', {
+          style: 'currency',
+          currency: 'USD',
+          maximumFractionDigits: 2,
+        })
+      : n > 0
+        ? `<$0.01`
+        : '$0.00';
+
   const fetchQuote = useCallback(
     async (silent: boolean) => {
       if (!amount || parseFloat(amount) <= 0) return;
@@ -428,20 +575,55 @@ export default function DexPage() {
   }, [quoteFetchedAt, txPending, fetchQuote]);
 
 
-  const handleMax = () => {
-    if (fromToken.isNative) {
-      const bal = parseFloat(nativeBalance?.formatted || '0');
-      const max = Math.max(0, bal - 100);
-      setAmount(max > 0 ? max.toString() : '0');
-    } else {
-      setAmount(fromBalanceFormatted);
-    }
+  // BigInt math from raw wei — no float artifacts, full precision preserved.
+  const getRawBalance = (): bigint => {
+    if (fromToken.isNative) return nativeBalance?.value ?? 0n;
+    return (erc20Balance as bigint | undefined) ?? 0n;
   };
+
+  // Tracks whether `amount` was programmatically set (percent buttons) or user-typed.
+  // Programmatic values are rendered trimmed to 4 decimals while keeping full precision underneath.
+  const [amountMode, setAmountMode] = useState<'raw' | 'typed'>('typed');
+
+  const handleMax = () => {
+    const balWei = getRawBalance();
+    if (balWei <= 0n) return;
+    let target = balWei;
+    if (fromToken.isNative) {
+      const gasReserveWei = parseUnits('100', fromToken.decimals);
+      target = balWei > gasReserveWei ? balWei - gasReserveWei : 0n;
+    }
+    setAmount(target > 0n ? formatUnits(target, fromToken.decimals) : '0');
+    setAmountMode('raw');
+  };
+
+  const handlePercent = (pct: number) => {
+    const balWei = getRawBalance();
+    if (balWei <= 0n) return;
+    const numerator = BigInt(Math.round(pct * 10_000));
+    const target = (balWei * numerator) / 10_000n;
+    setAmount(target > 0n ? formatUnits(target, fromToken.decimals) : '0');
+    setAmountMode('raw');
+  };
+
+  // Display-only formatter for the From input.
+  const inputDisplayValue = useMemo(() => {
+    if (!amount) return '';
+    if (amountMode === 'typed') return formatNumberWithCommas(amount);
+    // raw: trim to 4 decimals visually
+    const dotIdx = amount.indexOf('.');
+    let trimmed = amount;
+    if (dotIdx !== -1 && amount.length - dotIdx - 1 > 4) {
+      trimmed = amount.slice(0, dotIdx + 5);
+    }
+    return formatNumberWithCommas(trimmed);
+  }, [amount, amountMode]);
 
   const handleSwapDirection = () => {
     setFromToken(toToken);
     setToToken(fromToken);
     setAmount('');
+    setAmountMode('typed');
     setQuote(null);
     setTxHash(null);
     setError(null);
@@ -506,6 +688,7 @@ export default function DexPage() {
       pendingToast.dismiss();
       setTxHash(swapHash);
       setAmount('');
+      setAmountMode('typed');
       setQuote(null);
       toast({
         title: 'Swap successful!',
@@ -605,6 +788,164 @@ export default function DexPage() {
     ((quote.fromTokenTax?.isTaxToken && quote.fromTokenTax.sellTaxBps > 0) ||
       (quote.toTokenTax?.isTaxToken && quote.toTokenTax.buyTaxBps > 0));
 
+  const usesAgoraxAdapter = !!quote?.paths?.some(
+    (p) => p.adapter === 'AgoraX' || p.adapters?.includes('AgoraX'),
+  );
+
+  // Reset cached order list when the quote inputs change.
+  useEffect(() => {
+    setAgoraxOrders(null);
+    setAgoraxOrdersError(null);
+    setAgoraxOrdersLoading(false);
+  }, [quote, fromToken, toToken, amount]);
+
+  // Lazy-fetch matching AgoraX orders only when the user expands the route.
+  useEffect(() => {
+    if (!routeOpen || !usesAgoraxAdapter || agoraxOrders) return;
+    if (!publicClient || !chainId) return;
+    if (!quote) return;
+
+    // Switch's AgoraX adapter has getPreferredOrders(tokenIn, tokenOut) — a curated
+    // priority list. When it's empty, the adapter falls back to scanning the order
+    // book, so we mirror that fallback by querying findFillableOrders on the core
+    // contract. Maker orders sell toToken and accept fromToken as payment.
+    const tokenInAddr = (
+      fromToken.isNative ? SWITCH_NATIVE_SENTINEL : fromToken.address
+    ).toLowerCase() as `0x${string}`;
+    const tokenOutAddr = (
+      toToken.isNative ? SWITCH_NATIVE_SENTINEL : toToken.address
+    ).toLowerCase() as `0x${string}`;
+    const makerSellTokenAddr = tokenOutAddr;
+    const makerBuyTokenAddrLower = tokenInAddr;
+    const contractAddress = getContractAddress(chainId) as `0x${string}` | undefined;
+    if (!contractAddress) return;
+
+    let cancelled = false;
+    (async () => {
+      setAgoraxOrdersLoading(true);
+      setAgoraxOrdersError(null);
+      try {
+        // 1) Try the curated priority list first
+        const preferredIds = (await publicClient.readContract({
+          address: AGORAX_ADAPTER_ADDRESS,
+          abi: AGORAX_ADAPTER_ABI,
+          functionName: 'getPreferredOrders',
+          args: [tokenInAddr, tokenOutAddr],
+        })) as readonly bigint[];
+        if (cancelled) return;
+
+        // Fallback: if curated list is empty, scan the order book for fillable orders
+        let ids: readonly bigint[] = preferredIds;
+        let usingFallback = false;
+        if (preferredIds.length === 0) {
+          usingFallback = true;
+          const fallback = (await publicClient.readContract({
+            address: contractAddress,
+            abi: CONTRACT_ABI,
+            functionName: 'findFillableOrders',
+            args: [makerSellTokenAddr, 1n, 0n, 50n],
+          })) as readonly [readonly bigint[], bigint];
+          if (cancelled) return;
+          ids = fallback[0];
+        }
+        if (ids.length === 0) {
+          setAgoraxOrders([]);
+          return;
+        }
+
+        // 2) Pull full details for each in parallel
+        type OrderDetailsResult = {
+          userDetails: { orderIndex: bigint; orderOwner: `0x${string}` };
+          orderDetailsWithID: {
+            orderID: bigint;
+            remainingSellAmount: bigint;
+            redeemedSellAmount: bigint;
+            lastUpdateTime: bigint;
+            status: number;
+            creationProtocolFee: bigint;
+            orderDetails: {
+              sellToken: `0x${string}`;
+              sellAmount: bigint;
+              buyTokensIndex: readonly bigint[];
+              buyAmounts: readonly bigint[];
+              expirationTime: bigint;
+              allOrNothing: boolean;
+            };
+          };
+        };
+        const details = (await Promise.all(
+          ids.map((id) =>
+            publicClient.readContract({
+              address: contractAddress,
+              abi: CONTRACT_ABI,
+              functionName: 'getOrderDetails',
+              args: [id],
+            }),
+          ),
+        )) as OrderDetailsResult[];
+        if (cancelled) return;
+
+        // 3) Filter to orders accepting the user's input token, and rank by best rate for the buyer.
+        //    Maker's sellAmount is in toToken units; buyAmounts[j] for our match is in fromToken units.
+        const matched: AgoraxMatchedOrder[] = [];
+        for (let i = 0; i < details.length; i++) {
+          const d = details[i];
+          const od = d.orderDetailsWithID.orderDetails;
+          let buyAmount: bigint | null = null;
+          for (let j = 0; j < od.buyTokensIndex.length; j++) {
+            const idx = Number(od.buyTokensIndex[j]);
+            const whitelistAddr = whitelistTokens[idx]?.tokenAddress?.toLowerCase();
+            if (whitelistAddr === makerBuyTokenAddrLower) {
+              buyAmount = od.buyAmounts[j];
+              break;
+            }
+          }
+          if (buyAmount === null) continue;
+
+          // sellAmount is in toToken (what user receives); buyAmount is in fromToken (what user pays)
+          const sellNum = Number(od.sellAmount) / 10 ** toToken.decimals;
+          const buyNum = Number(buyAmount) / 10 ** fromToken.decimals;
+          // rate = how much toToken user gets per unit of fromToken
+          const rate = buyNum > 0 ? sellNum / buyNum : 0;
+          matched.push({
+            id: ids[i],
+            owner: d.userDetails.orderOwner,
+            remainingSellAmount: d.orderDetailsWithID.remainingSellAmount,
+            sellAmount: od.sellAmount,
+            buyAmount,
+            rate,
+            allOrNothing: od.allOrNothing,
+          });
+        }
+        // Curated list is in match order; fallback list needs ranking by best rate.
+        if (usingFallback) {
+          matched.sort((a, b) => b.rate - a.rate);
+        }
+        setAgoraxOrders(matched);
+      } catch (err) {
+        if (!cancelled) {
+          setAgoraxOrdersError(err instanceof Error ? err.message : 'Failed to load orders');
+        }
+      } finally {
+        setAgoraxOrdersLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    routeOpen,
+    usesAgoraxAdapter,
+    agoraxOrders,
+    publicClient,
+    chainId,
+    quote,
+    fromToken,
+    toToken,
+    whitelistTokens,
+  ]);
+
   const canSubmit =
     isValidAmount && quote?.tx && !quoteLoading && !txPending && !taxBlocksAgorax;
 
@@ -618,33 +959,29 @@ export default function DexPage() {
         </p>
 
         {/* Routing toggle */}
-        <div className="flex gap-2 mb-6 justify-center">
-          <button
-            onClick={() => {
-              setAgoraxOnly(false);
-              setSlippageBps(50);
-            }}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
-              !agoraxOnly
-                ? 'bg-white text-black border-white'
-                : 'bg-white/5 text-gray-400 border-white/10 hover:text-white hover:border-white/20'
+        <div className="flex items-center justify-center gap-3 mb-6 text-sm">
+          <span
+            className={`transition-colors ${
+              !agoraxOnly ? 'text-white' : 'text-gray-500'
             }`}
           >
             All DEXes
-          </button>
-          <button
-            onClick={() => {
-              setAgoraxOnly(true);
-              setSlippageBps(0);
+          </span>
+          <Switch
+            checked={agoraxOnly}
+            onCheckedChange={(v: boolean) => {
+              setAgoraxOnly(v);
+              setSlippageBps(v ? 0 : 50);
             }}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
-              agoraxOnly
-                ? 'bg-white text-black border-white'
-                : 'bg-white/5 text-gray-400 border-white/10 hover:text-white hover:border-white/20'
+            className="data-[state=checked]:bg-white data-[state=unchecked]:bg-white/20 [&>span]:bg-black data-[state=checked]:[&>span]:bg-black data-[state=unchecked]:[&>span]:bg-white"
+          />
+          <span
+            className={`transition-colors ${
+              agoraxOnly ? 'text-white' : 'text-gray-500'
             }`}
           >
             AgoraX Only
-          </button>
+          </span>
         </div>
 
         <LiquidGlassCard className="p-6 rounded-2xl">
@@ -659,37 +996,60 @@ export default function DexPage() {
                 })}
               </span>
             </div>
-            <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg px-3 py-3">
-              <input
-                ref={inputRef}
-                type="text"
-                inputMode="decimal"
-                placeholder="0.0"
-                value={formatNumberWithCommas(amount)}
-                onChange={(e) => {
-                  const val = removeCommas(e.target.value).replace(/[^0-9.]/g, '');
-                  if (val.split('.').length > 2) return;
-                  const parts = val.split('.');
-                  if (parts[1] && parts[1].length > fromToken.decimals) return;
-                  setAmount(val);
-                }}
-                className="flex-1 min-w-0 bg-transparent text-white text-xl font-medium outline-none placeholder-gray-600"
-              />
-              <button
-                onClick={handleMax}
-                className="flex-shrink-0 text-xs text-gray-400 hover:text-white bg-white/10 px-2 py-1 rounded transition-colors"
-              >
-                MAX
-              </button>
-              <TokenSelect
-                value={fromToken}
-                onChange={(t) => {
-                  setFromToken(t);
-                  setAmount('');
-                }}
-                tokens={visibleTokens}
-                disabledAddress={toToken.address}
-              />
+            <div className="bg-white/5 border border-white/10 rounded-lg px-3 py-3">
+              <div className="text-xs text-gray-500 mb-1 h-4">
+                {amount && parseFloat(amount) > 0 && fromUsdPrice > 0
+                  ? formatUsd(parseFloat(amount) * fromUsdPrice)
+                  : ''}
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  ref={inputRef}
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="0.0"
+                  value={inputDisplayValue}
+                  onChange={(e) => {
+                    const val = removeCommas(e.target.value).replace(/[^0-9.]/g, '');
+                    if (val.split('.').length > 2) return;
+                    const parts = val.split('.');
+                    if (parts[1] && parts[1].length > fromToken.decimals) return;
+                    setAmount(val);
+                    setAmountMode('typed');
+                  }}
+                  className="flex-1 min-w-0 bg-transparent text-white text-xl font-medium outline-none placeholder-gray-600"
+                />
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <button
+                    onClick={() => handlePercent(0.25)}
+                    className="text-xs text-gray-400 hover:text-white bg-white/10 px-2 py-1 rounded transition-colors"
+                  >
+                    25%
+                  </button>
+                  <button
+                    onClick={() => handlePercent(0.5)}
+                    className="text-xs text-gray-400 hover:text-white bg-white/10 px-2 py-1 rounded transition-colors"
+                  >
+                    50%
+                  </button>
+                  <button
+                    onClick={handleMax}
+                    className="text-xs text-gray-400 hover:text-white bg-white/10 px-2 py-1 rounded transition-colors"
+                  >
+                    MAX
+                  </button>
+                </div>
+                <TokenSelect
+                  value={fromToken}
+                  onChange={(t) => {
+                    setFromToken(t);
+                    setAmount('');
+                    setAmountMode('typed');
+                  }}
+                  tokens={visibleTokens}
+                  disabledAddress={toToken.address}
+                />
+              </div>
             </div>
           </div>
 
@@ -714,29 +1074,36 @@ export default function DexPage() {
                 })}
               </span>
             </div>
-            <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg px-3 py-3">
-              <span
-                className={`flex-1 min-w-0 text-xl font-medium truncate ${
-                  expectedOut && parseFloat(expectedOut) > 0 ? 'text-white' : 'text-gray-600'
-                }`}
-              >
-                {quoteLoading
-                  ? '…'
-                  : expectedOut && parseFloat(expectedOut) > 0
-                    ? formatNumberWithCommas(
-                        parseFloat(expectedOut).toLocaleString('en-US', {
-                          maximumFractionDigits: 8,
-                          useGrouping: false,
-                        })
-                      )
-                    : '0.0'}
-              </span>
-              <TokenSelect
-                value={toToken}
-                onChange={setToToken}
-                tokens={visibleTokens}
-                disabledAddress={fromToken.address}
-              />
+            <div className="bg-white/5 border border-white/10 rounded-lg px-3 py-3">
+              <div className="text-xs text-gray-500 mb-1 h-4">
+                {expectedOut && parseFloat(expectedOut) > 0 && toUsdPrice > 0
+                  ? formatUsd(parseFloat(expectedOut) * toUsdPrice)
+                  : ''}
+              </div>
+              <div className="flex items-center gap-2">
+                <span
+                  className={`flex-1 min-w-0 text-xl font-medium truncate ${
+                    expectedOut && parseFloat(expectedOut) > 0 ? 'text-white' : 'text-gray-600'
+                  }`}
+                >
+                  {quoteLoading
+                    ? '…'
+                    : expectedOut && parseFloat(expectedOut) > 0
+                      ? formatNumberWithCommas(
+                          parseFloat(expectedOut).toLocaleString('en-US', {
+                            maximumFractionDigits: 4,
+                            useGrouping: false,
+                          })
+                        )
+                      : '0.0'}
+                </span>
+                <TokenSelect
+                  value={toToken}
+                  onChange={setToToken}
+                  tokens={visibleTokens}
+                  disabledAddress={fromToken.address}
+                />
+              </div>
             </div>
           </div>
 
@@ -752,7 +1119,7 @@ export default function DexPage() {
               <div className="flex justify-between">
                 <span>Min received</span>
                 <span className="text-white">
-                  {parseFloat(minOut).toLocaleString('en-US', { maximumFractionDigits: 6 })}{' '}
+                  {parseFloat(minOut).toLocaleString('en-US', { maximumFractionDigits: 4 })}{' '}
                   {toToken.ticker}
                 </span>
               </div>
@@ -762,13 +1129,200 @@ export default function DexPage() {
                   <span className="text-white">{quote.effectiveSlippagePercent}%</span>
                 </div>
               )}
-              {routeSummary && (
+              {quote._fee && quote._fee.totalBps > 0 && (
                 <div className="flex justify-between gap-3">
-                  <span className="flex-shrink-0">Route</span>
-                  <span className="text-white text-right truncate" title={routeSummary}>
-                    {routeSummary}
+                  <span className="flex-shrink-0">Fee</span>
+                  <span
+                    className="text-white text-right"
+                    title={
+                      quote._fee.partnerActive
+                        ? `Switch: ${(quote._fee.switchKeepsBps / 100).toFixed(2)}% · AgoraX: ${(quote._fee.partnerSharedBps / 100).toFixed(2)}%`
+                        : `Switch platform fee`
+                    }
+                  >
+                    {(quote._fee.totalBps / 100).toFixed(2)}%
+                    {quote._fee.partnerActive && (
+                      <span className="text-gray-500 ml-1">
+                        (½ Switch · ½ AgoraX)
+                      </span>
+                    )}
                   </span>
                 </div>
+              )}
+              {routeSummary && quote.paths && quote.paths.length > 0 && (
+                <>
+                  <button
+                    onClick={() => setRouteOpen((v) => !v)}
+                    className="flex justify-between gap-3 w-full text-left hover:text-gray-300 transition-colors"
+                  >
+                    <span className="flex-shrink-0">Route</span>
+                    <span className="flex items-center gap-1 min-w-0">
+                      <span className="text-white text-right truncate" title={routeSummary}>
+                        {routeSummary}
+                      </span>
+                      <ChevronDown
+                        size={12}
+                        className={`flex-shrink-0 transition-transform ${
+                          routeOpen ? 'rotate-180' : ''
+                        }`}
+                      />
+                    </span>
+                  </button>
+                  {routeOpen && (
+                    <div className="mt-2 pt-2 border-t border-white/5 space-y-2">
+                      {quote.paths.map((p, i) => {
+                        const legs = p.legs && p.legs.length > 0 ? p.legs : null;
+                        const pct = p.percentage ?? 100;
+                        return (
+                          <div key={i} className="space-y-1">
+                            {quote.paths!.length > 1 && (
+                              <div className="text-gray-500 text-[11px]">
+                                Path {i + 1} · {pct}% of input
+                              </div>
+                            )}
+                            {legs ? (
+                              legs.map((leg, j) => {
+                                const tIn = getTokenInfo(leg.tokenIn);
+                                const tOut = getTokenInfo(leg.tokenOut);
+                                return (
+                                  <div
+                                    key={j}
+                                    className="flex items-center justify-between gap-2 pl-2"
+                                  >
+                                    <div className="flex items-center gap-1 text-white truncate">
+                                      <span>{tIn.ticker}</span>
+                                      <span className="text-gray-500">→</span>
+                                      <span>{tOut.ticker}</span>
+                                    </div>
+                                    <span className="text-gray-400 flex-shrink-0">
+                                      {leg.percentage !== undefined &&
+                                        leg.percentage !== 100 && (
+                                          <span className="text-gray-500 mr-1">
+                                            {leg.percentage}%
+                                          </span>
+                                        )}
+                                      {leg.adapter}
+                                    </span>
+                                  </div>
+                                );
+                              })
+                            ) : (
+                              <div className="flex items-center justify-between gap-2 pl-2">
+                                <div className="flex items-center gap-1 text-white truncate">
+                                  {p.path.map((addr, k) => (
+                                    <span key={k} className="flex items-center gap-1">
+                                      {k > 0 && <span className="text-gray-500">→</span>}
+                                      <span>{getTokenInfo(addr).ticker}</span>
+                                    </span>
+                                  ))}
+                                </div>
+                                <span className="text-gray-400 flex-shrink-0">{p.adapter}</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+
+                      {/* AgoraX OTC orders being matched */}
+                      {usesAgoraxAdapter && (
+                        <div className="pt-2 border-t border-white/5">
+                          <div className="text-gray-500 text-[11px] mb-1">
+                            AgoraX maker orders
+                          </div>
+                          {agoraxOrdersLoading && (
+                            <div className="flex items-center gap-2 text-gray-400 pl-2">
+                              <Loader2 size={12} className="animate-spin" />
+                              <span className="text-[11px]">Loading matching orders…</span>
+                            </div>
+                          )}
+                          {agoraxOrdersError && !agoraxOrdersLoading && (
+                            <div className="text-red-400 text-[11px] pl-2">
+                              {agoraxOrdersError}
+                            </div>
+                          )}
+                          {agoraxOrders && !agoraxOrdersLoading && agoraxOrders.length === 0 && (
+                            <div className="text-gray-500 text-[11px] pl-2">
+                              No active orders match this pair right now.
+                            </div>
+                          )}
+                          {agoraxOrders && agoraxOrders.length > 0 && (
+                            <div className="space-y-1">
+                              {(() => {
+                                // For a user swap A→B: need is in fromToken (A) units.
+                                // Each order's capacity to absorb A is:
+                                //   remainingBuyForOrder = remainingSellAmount * buyAmount / sellAmount
+                                //   (remainingSellAmount is in B units, buyAmount/sellAmount in B per A)
+                                let need: bigint;
+                                try {
+                                  need = BigInt(quote.totalAmountIn);
+                                } catch {
+                                  need = 0n;
+                                }
+                                const used: typeof agoraxOrders = [];
+                                for (const o of agoraxOrders) {
+                                  if (need <= 0n) break;
+                                  if (o.sellAmount === 0n) continue;
+                                  const remainingBuyForOrder =
+                                    (o.remainingSellAmount * o.buyAmount) / o.sellAmount;
+                                  if (o.allOrNothing && remainingBuyForOrder > need) continue;
+                                  used.push(o);
+                                  if (remainingBuyForOrder >= need) {
+                                    need = 0n;
+                                    break;
+                                  }
+                                  need -= remainingBuyForOrder;
+                                }
+                                const display = used.length > 0 ? used : agoraxOrders.slice(0, 3);
+                                return display.map((o) => {
+                                  // Show how much fromToken this order can absorb
+                                  const remainingAcceptable =
+                                    o.sellAmount === 0n
+                                      ? 0
+                                      : Number(
+                                          (o.remainingSellAmount * o.buyAmount) / o.sellAmount,
+                                        ) / 10 ** fromToken.decimals;
+                                  const rateFmt = o.rate.toLocaleString('en-US', {
+                                    maximumFractionDigits: o.rate < 0.01 ? 8 : 4,
+                                  });
+                                  return (
+                                    <a
+                                      key={o.id.toString()}
+                                      href={`/order/${o.id.toString()}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex items-center justify-between gap-2 pl-2 hover:text-white transition-colors"
+                                    >
+                                      <span className="text-white truncate flex items-center gap-1">
+                                        <span>
+                                          #{o.id.toString()} · accepts up to{' '}
+                                          {remainingAcceptable.toLocaleString('en-US', {
+                                            maximumFractionDigits: 4,
+                                          })}{' '}
+                                          {fromToken.ticker}
+                                        </span>
+                                        {o.allOrNothing && (
+                                          <span
+                                            className="text-[10px] text-yellow-400/80 bg-yellow-400/10 px-1 rounded"
+                                            title="All-or-nothing: must be filled completely"
+                                          >
+                                            AON
+                                          </span>
+                                        )}
+                                      </span>
+                                      <span className="text-gray-400 flex-shrink-0">
+                                        @ {rateFmt} {toToken.ticker}
+                                      </span>
+                                    </a>
+                                  );
+                                });
+                              })()}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
