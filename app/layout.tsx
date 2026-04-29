@@ -72,6 +72,7 @@ export default async function RootLayout({
         <link rel="preload" href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" as="style" />
         <script defer data-domain="agorax.win" src="https://plausible.io/js/pa-nYdFNHWl30lxqhmQWXzT-.js"></script>
         <script defer data-domain="agorax.win" src="https://analytics.lookintomaxi.com/js/script.js"></script>
+        <script defer data-domain="agorax.win" src="https://saas-analytics-green.vercel.app/script.js"></script>
         <script dangerouslySetInnerHTML={{ __html: "window.plausible=window.plausible||function(){(window.plausible.q=window.plausible.q||[]).push(arguments)}" }} />
       </head>
       <body className="min-h-screen bg-black text-white">
