@@ -6,7 +6,7 @@ import { parseUnits, formatUnits } from 'viem';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 import { TokenLogo } from '@/components/TokenLogo';
 import { ConnectButton } from '@/components/ConnectButton';
-import { Loader2, ArrowDownUp, ChevronDown } from 'lucide-react';
+import { Loader2, ArrowDownUp, ChevronDown, AlertTriangle, RefreshCw } from 'lucide-react';
 import useToast from '@/hooks/use-toast';
 import { getBlockExplorerTxUrl } from '@/utils/blockExplorer';
 import { formatNumberWithCommas, removeCommas } from '@/utils/format';
@@ -103,6 +103,13 @@ function getSwitchAddress(token: TokenOption): string {
   return token.isNative ? SWITCH_NATIVE_SENTINEL : token.address;
 }
 
+type TokenTax = { isTaxToken: boolean; buyTaxBps: number; sellTaxBps: number };
+type QuotePath = {
+  adapter: string;
+  amountIn: string;
+  amountOut: string;
+  path: string[];
+};
 type Quote = {
   fromToken: string;
   toToken: string;
@@ -114,6 +121,9 @@ type Quote = {
   effectiveSlippagePercent?: string;
   tx?: { to: string; data: string; value: string };
   txFeeOnOutput?: { to: string; data: string; value: string };
+  paths?: QuotePath[];
+  fromTokenTax?: TokenTax;
+  toTokenTax?: TokenTax;
 };
 
 function TokenSelect({
@@ -232,10 +242,16 @@ export default function DexPage() {
   const [quote, setQuote] = useState<Quote | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [quoteError, setQuoteError] = useState<string | null>(null);
+  const [quoteFetchedAt, setQuoteFetchedAt] = useState<number | null>(null);
+  const [now, setNow] = useState(Date.now());
   const [txPending, setTxPending] = useState(false);
   const [txHash, setTxHash] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [recipient, setRecipient] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const recipientValid = recipient === '' || /^0x[a-fA-F0-9]{40}$/.test(recipient);
 
   // From token balance
   const { data: nativeBalance, refetch: refetchNative } = useBalance({ address });
@@ -271,15 +287,12 @@ export default function DexPage() {
       ? formatUnits(toErc20Balance as bigint, toToken.decimals)
       : '0';
 
-  // Fetch quote with debounce
-  useEffect(() => {
-    setQuote(null);
-    setQuoteError(null);
-    if (!amount || parseFloat(amount) <= 0) return;
-
-    const handle = setTimeout(async () => {
+  const fetchQuote = useCallback(
+    async (silent: boolean) => {
+      if (!amount || parseFloat(amount) <= 0) return;
+      if (recipient && !recipientValid) return;
       try {
-        setQuoteLoading(true);
+        if (!silent) setQuoteLoading(true);
         const amountWei = parseUnits(amount, fromToken.decimals).toString();
         const params = new URLSearchParams({
           from: getSwitchAddress(fromToken),
@@ -288,25 +301,64 @@ export default function DexPage() {
           slippage: String(slippageBps),
         });
         if (address) params.set('sender', address);
+        if (recipient && recipientValid) params.set('receiver', recipient);
         if (agoraxOnly) params.set('adapters', AGORAX_ADAPTER_INDEX);
 
         const res = await fetch(`/api/switch-quote?${params.toString()}`);
         const data = await res.json();
         if (!res.ok) {
           setQuoteError(data?.error || data?.message || 'Quote failed');
-          setQuote(null);
+          if (!silent) setQuote(null);
         } else {
           setQuote(data);
+          setQuoteError(null);
+          setQuoteFetchedAt(Date.now());
         }
       } catch (err) {
         setQuoteError(err instanceof Error ? err.message : 'Quote failed');
       } finally {
-        setQuoteLoading(false);
+        if (!silent) setQuoteLoading(false);
       }
-    }, 400);
+    },
+    [
+      amount,
+      fromToken,
+      toToken,
+      agoraxOnly,
+      slippageBps,
+      address,
+      recipient,
+      recipientValid,
+    ]
+  );
 
+  // Initial fetch on input change (debounced)
+  useEffect(() => {
+    setQuote(null);
+    setQuoteError(null);
+    setQuoteFetchedAt(null);
+    if (!amount || parseFloat(amount) <= 0) return;
+    const handle = setTimeout(() => {
+      fetchQuote(false);
+    }, 400);
     return () => clearTimeout(handle);
-  }, [amount, fromToken, toToken, agoraxOnly, slippageBps, address]);
+  }, [amount, fromToken, toToken, agoraxOnly, slippageBps, address, recipient, recipientValid, fetchQuote]);
+
+  // Auto-refresh quote every 10s while inputs are stable
+  useEffect(() => {
+    if (!quoteFetchedAt || txPending) return;
+    const interval = setInterval(() => {
+      fetchQuote(true);
+    }, 10_000);
+    return () => clearInterval(interval);
+  }, [quoteFetchedAt, txPending, fetchQuote]);
+
+  // 1Hz tick to drive the freshness countdown
+  useEffect(() => {
+    if (!quoteFetchedAt) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [quoteFetchedAt]);
 
   const handleMax = () => {
     if (fromToken.isNative) {
@@ -432,6 +484,55 @@ export default function DexPage() {
     ? formatUnits(BigInt(quote.expectedOutputAmount), toToken.decimals)
     : '';
   const minOut = quote ? formatUnits(BigInt(quote.minAmountOut), toToken.decimals) : '';
+
+  // Rate display: 1 fromToken ≈ X toToken
+  const rateText = useMemo(() => {
+    if (!quote || !amount || parseFloat(amount) <= 0) return null;
+    const out = parseFloat(expectedOut);
+    const inAmt = parseFloat(amount);
+    if (!out || !inAmt) return null;
+    const rate = out / inAmt;
+    const formatted = rate.toLocaleString('en-US', {
+      maximumFractionDigits: rate < 0.01 ? 8 : rate < 1 ? 6 : 4,
+    });
+    return `1 ${fromToken.ticker} ≈ ${formatted} ${toToken.ticker}`;
+  }, [quote, amount, expectedOut, fromToken.ticker, toToken.ticker]);
+
+  // Route summary: aggregate adapters used with their share of input
+  const routeSummary = useMemo(() => {
+    if (!quote?.paths || quote.paths.length === 0) return null;
+    const totalIn = quote.paths.reduce((s, p) => s + Number(BigInt(p.amountIn) / 1_000_000_000n), 0);
+    if (totalIn === 0) return quote.paths.map((p) => p.adapter).join(', ');
+    const grouped = quote.paths.reduce<Record<string, number>>((acc, p) => {
+      const portion = Number(BigInt(p.amountIn) / 1_000_000_000n);
+      acc[p.adapter] = (acc[p.adapter] || 0) + portion;
+      return acc;
+    }, {});
+    const entries = Object.entries(grouped).sort((a, b) => b[1] - a[1]);
+    if (entries.length === 1) return entries[0][0];
+    return entries
+      .map(([name, portion]) => `${Math.round((portion / totalIn) * 100)}% ${name}`)
+      .join(' + ');
+  }, [quote]);
+
+  // Tax warning
+  const taxWarning = useMemo(() => {
+    if (!quote) return null;
+    const warnings: string[] = [];
+    if (quote.fromTokenTax?.isTaxToken) {
+      const sell = quote.fromTokenTax.sellTaxBps;
+      if (sell > 0) warnings.push(`${fromToken.ticker} has a ${(sell / 100).toFixed(2)}% sell tax`);
+    }
+    if (quote.toTokenTax?.isTaxToken) {
+      const buy = quote.toTokenTax.buyTaxBps;
+      if (buy > 0) warnings.push(`${toToken.ticker} has a ${(buy / 100).toFixed(2)}% buy tax`);
+    }
+    return warnings.length ? warnings.join(' · ') : null;
+  }, [quote, fromToken.ticker, toToken.ticker]);
+
+  // Quote freshness
+  const quoteAgeSec = quoteFetchedAt ? Math.floor((now - quoteFetchedAt) / 1000) : null;
+  const quoteStale = quoteAgeSec !== null && quoteAgeSec >= 10;
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-16">
@@ -559,9 +660,11 @@ export default function DexPage() {
           </div>
 
           {/* Slippage */}
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-xs text-gray-500 uppercase tracking-wider">Slippage</span>
-            <div className="flex gap-1">
+          <div className="flex items-center justify-between mb-4 gap-2">
+            <span className="text-xs text-gray-500 uppercase tracking-wider whitespace-nowrap">
+              Slippage
+            </span>
+            <div className="flex gap-1 items-center">
               {[10, 50, 100, 300].map((bps) => (
                 <button
                   key={bps}
@@ -575,8 +678,49 @@ export default function DexPage() {
                   {bps / 100}%
                 </button>
               ))}
+              <div className="relative">
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="Custom"
+                  value={
+                    [10, 50, 100, 300].includes(slippageBps)
+                      ? ''
+                      : (slippageBps / 100).toString()
+                  }
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/[^0-9.]/g, '');
+                    if (val.split('.').length > 2) return;
+                    if (val === '') {
+                      setSlippageBps(50);
+                      return;
+                    }
+                    const pct = parseFloat(val);
+                    if (isNaN(pct)) return;
+                    const bps = Math.round(Math.min(50, Math.max(0, pct)) * 100);
+                    setSlippageBps(bps);
+                  }}
+                  className={`text-xs w-16 px-2 py-1 rounded outline-none transition-colors text-right pr-5 ${
+                    [10, 50, 100, 300].includes(slippageBps)
+                      ? 'bg-white/5 text-gray-400 placeholder-gray-500'
+                      : 'bg-white text-black'
+                  }`}
+                />
+                <span
+                  className={`absolute right-2 top-1/2 -translate-y-1/2 text-xs pointer-events-none ${
+                    [10, 50, 100, 300].includes(slippageBps) ? 'text-gray-500' : 'text-black'
+                  }`}
+                >
+                  %
+                </span>
+              </div>
             </div>
           </div>
+
+          {/* Rate */}
+          {rateText && (
+            <div className="text-xs text-gray-400 text-center mb-3">{rateText}</div>
+          )}
 
           {/* Quote info */}
           {quote && (
@@ -591,15 +735,87 @@ export default function DexPage() {
               {quote.effectiveSlippagePercent && (
                 <div className="flex justify-between">
                   <span>Effective slippage</span>
-                  <span className="text-white">{quote.effectiveSlippagePercent}</span>
+                  <span className="text-white">{quote.effectiveSlippagePercent}%</span>
                 </div>
               )}
-              <div className="flex justify-between">
-                <span>Route</span>
-                <span className="text-white">{agoraxOnly ? 'AgoraX OTC only' : 'All DEXes'}</span>
+              {routeSummary && (
+                <div className="flex justify-between gap-3">
+                  <span className="flex-shrink-0">Route</span>
+                  <span className="text-white text-right truncate" title={routeSummary}>
+                    {routeSummary}
+                  </span>
+                </div>
+              )}
+              <div className="flex justify-between items-center">
+                <span>Quote</span>
+                <span className="flex items-center gap-2">
+                  {quoteAgeSec !== null && (
+                    <span className={quoteStale ? 'text-yellow-400' : 'text-gray-500'}>
+                      {quoteStale ? 'refreshing…' : `fresh ${quoteAgeSec}s ago`}
+                    </span>
+                  )}
+                  <button
+                    onClick={() => fetchQuote(false)}
+                    disabled={quoteLoading}
+                    className="p-1 rounded hover:bg-white/10 text-gray-400 hover:text-white transition-colors disabled:opacity-50"
+                    title="Refresh quote"
+                  >
+                    <RefreshCw size={12} className={quoteLoading ? 'animate-spin' : ''} />
+                  </button>
+                </span>
               </div>
             </div>
           )}
+
+          {/* Tax warning */}
+          {taxWarning && (
+            <div className="mb-4 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg flex items-start gap-2">
+              <AlertTriangle size={14} className="text-yellow-400 flex-shrink-0 mt-0.5" />
+              <p className="text-yellow-400 text-xs">{taxWarning}</p>
+            </div>
+          )}
+
+          {/* Advanced */}
+          <div className="mb-4">
+            <button
+              onClick={() => setAdvancedOpen((v) => !v)}
+              className="w-full flex items-center justify-between text-xs text-gray-500 hover:text-gray-300 uppercase tracking-wider transition-colors"
+            >
+              <span>Advanced</span>
+              <ChevronDown
+                size={14}
+                className={`transition-transform ${advancedOpen ? 'rotate-180' : ''}`}
+              />
+            </button>
+            {advancedOpen && (
+              <div className="mt-3 space-y-2">
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">
+                    Recipient address (optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder={address || '0x...'}
+                    value={recipient}
+                    onChange={(e) => setRecipient(e.target.value.trim())}
+                    className={`w-full bg-white/5 border rounded-lg px-3 py-2 text-white text-sm font-mono outline-none transition-colors ${
+                      recipient && !recipientValid
+                        ? 'border-red-500/50'
+                        : 'border-white/10 focus:border-white/20'
+                    }`}
+                  />
+                  {recipient && !recipientValid && (
+                    <p className="text-xs text-red-400 mt-1">Invalid address</p>
+                  )}
+                  {recipient && recipientValid && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Output will be sent to this address instead of your wallet
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Action */}
           {!isConnected ? (
