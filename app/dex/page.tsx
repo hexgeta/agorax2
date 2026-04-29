@@ -6,12 +6,13 @@ import { parseUnits, formatUnits } from 'viem';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 import { TokenLogo } from '@/components/TokenLogo';
 import { ConnectButton } from '@/components/ConnectButton';
-import { Loader2, ArrowDownUp, ChevronDown, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Loader2, ArrowDownUp, ChevronDown, AlertTriangle } from 'lucide-react';
 import useToast from '@/hooks/use-toast';
 import { getBlockExplorerTxUrl } from '@/utils/blockExplorer';
 import { formatNumberWithCommas, removeCommas } from '@/utils/format';
 import { TOKEN_CONSTANTS } from '@/constants/crypto';
 import { PRIORITY_TOKEN_ADDRESSES, getTokenInfo } from '@/utils/tokenUtils';
+import { useContractWhitelistRead } from '@/hooks/contracts/useContractWhitelistRead';
 
 const SWITCH_NATIVE_SENTINEL = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE' as const;
 const SWITCH_ROUTER = '0x0305fcb5dA680EA6fd1B01A96C1949175B99d406' as const;
@@ -225,6 +226,23 @@ export default function DexPage() {
   const { toast } = useToast();
 
   const tokens = useMemo(() => buildTokenList(), []);
+
+  // AgoraX whitelist — used to restrict tokens when AgoraX-only mode is on.
+  const { activeTokens: whitelistTokens } = useContractWhitelistRead();
+  const whitelistSet = useMemo(() => {
+    const s = new Set<string>();
+    for (const t of whitelistTokens) s.add(t.tokenAddress.toLowerCase());
+    return s;
+  }, [whitelistTokens]);
+
+  const isWhitelisted = useCallback(
+    (token: TokenOption) =>
+      token.isNative
+        ? whitelistSet.has(SWITCH_NATIVE_SENTINEL.toLowerCase())
+        : whitelistSet.has(token.address.toLowerCase()),
+    [whitelistSet]
+  );
+
   const defaultFrom = useMemo(
     () => tokens.find((t) => t.isNative) || tokens[0],
     [tokens]
@@ -238,12 +256,37 @@ export default function DexPage() {
   const [toToken, setToToken] = useState<TokenOption>(defaultTo);
   const [amount, setAmount] = useState('');
   const [agoraxOnly, setAgoraxOnly] = useState(false);
+
+  const visibleTokens = useMemo(
+    () => (agoraxOnly && whitelistSet.size > 0 ? tokens.filter(isWhitelisted) : tokens),
+    [tokens, agoraxOnly, whitelistSet, isWhitelisted]
+  );
+
+  // When AgoraX-only flips on, force the selected pair to whitelisted tokens.
+  useEffect(() => {
+    if (!agoraxOnly || whitelistSet.size === 0) return;
+    if (!isWhitelisted(fromToken)) {
+      const fallback =
+        visibleTokens.find((t) => t.isNative) || visibleTokens[0];
+      if (fallback && fallback.address.toLowerCase() !== fromToken.address.toLowerCase()) {
+        setFromToken(fallback);
+      }
+    }
+    if (!isWhitelisted(toToken)) {
+      const fallback =
+        visibleTokens.find(
+          (t) => t.address.toLowerCase() !== fromToken.address.toLowerCase(),
+        ) || visibleTokens[0];
+      if (fallback && fallback.address.toLowerCase() !== toToken.address.toLowerCase()) {
+        setToToken(fallback);
+      }
+    }
+  }, [agoraxOnly, whitelistSet, fromToken, toToken, isWhitelisted, visibleTokens]);
   const [slippageBps, setSlippageBps] = useState(50);
   const [quote, setQuote] = useState<Quote | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [quoteFetchedAt, setQuoteFetchedAt] = useState<number | null>(null);
-  const [now, setNow] = useState(Date.now());
   const [txPending, setTxPending] = useState(false);
   const [txHash, setTxHash] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -251,7 +294,38 @@ export default function DexPage() {
   const [recipient, setRecipient] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const recipientValid = recipient === '' || /^0x[a-fA-F0-9]{40}$/.test(recipient);
+  const recipientFormatValid =
+    recipient === '' || /^0x[a-fA-F0-9]{40}$/.test(recipient);
+
+  const [recipientIsContract, setRecipientIsContract] = useState(false);
+  const [recipientChecking, setRecipientChecking] = useState(false);
+
+  // Bytecode check — block contract addresses to avoid locked funds.
+  useEffect(() => {
+    setRecipientIsContract(false);
+    if (!recipient || !recipientFormatValid || !publicClient) {
+      setRecipientChecking(false);
+      return;
+    }
+    setRecipientChecking(true);
+    const handle = setTimeout(async () => {
+      try {
+        const code = await publicClient.getCode({
+          address: recipient as `0x${string}`,
+        });
+        // Empty / undefined / "0x" all indicate an EOA
+        const isContract = !!code && code !== '0x' && code.length > 2;
+        setRecipientIsContract(isContract);
+      } catch {
+        setRecipientIsContract(false);
+      } finally {
+        setRecipientChecking(false);
+      }
+    }, 400);
+    return () => clearTimeout(handle);
+  }, [recipient, recipientFormatValid, publicClient]);
+
+  const recipientValid = recipientFormatValid && !recipientIsContract;
 
   // From token balance
   const { data: nativeBalance, refetch: refetchNative } = useBalance({ address });
@@ -353,12 +427,6 @@ export default function DexPage() {
     return () => clearInterval(interval);
   }, [quoteFetchedAt, txPending, fetchQuote]);
 
-  // 1Hz tick to drive the freshness countdown
-  useEffect(() => {
-    if (!quoteFetchedAt) return;
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, [quoteFetchedAt]);
 
   const handleMax = () => {
     if (fromToken.isNative) {
@@ -478,7 +546,6 @@ export default function DexPage() {
 
   const isValidAmount =
     amount && parseFloat(amount) > 0 && parseFloat(amount) <= parseFloat(fromBalanceFormatted);
-  const canSubmit = isValidAmount && quote?.tx && !quoteLoading && !txPending;
 
   const expectedOut = quote
     ? formatUnits(BigInt(quote.expectedOutputAmount), toToken.decimals)
@@ -530,9 +597,17 @@ export default function DexPage() {
     return warnings.length ? warnings.join(' · ') : null;
   }, [quote, fromToken.ticker, toToken.ticker]);
 
-  // Quote freshness
-  const quoteAgeSec = quoteFetchedAt ? Math.floor((now - quoteFetchedAt) / 1000) : null;
-  const quoteStale = quoteAgeSec !== null && quoteAgeSec >= 10;
+  // AgoraX OTC orders quote at a fixed maker price — tax tokens erode that
+  // price below the maker's limit, so we block them in AgoraX-only mode.
+  const taxBlocksAgorax =
+    agoraxOnly &&
+    !!quote &&
+    ((quote.fromTokenTax?.isTaxToken && quote.fromTokenTax.sellTaxBps > 0) ||
+      (quote.toTokenTax?.isTaxToken && quote.toTokenTax.buyTaxBps > 0));
+
+  const canSubmit =
+    isValidAmount && quote?.tx && !quoteLoading && !txPending && !taxBlocksAgorax;
+
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-16">
@@ -545,7 +620,10 @@ export default function DexPage() {
         {/* Routing toggle */}
         <div className="flex gap-2 mb-6 justify-center">
           <button
-            onClick={() => setAgoraxOnly(false)}
+            onClick={() => {
+              setAgoraxOnly(false);
+              setSlippageBps(50);
+            }}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
               !agoraxOnly
                 ? 'bg-white text-black border-white'
@@ -555,7 +633,10 @@ export default function DexPage() {
             All DEXes
           </button>
           <button
-            onClick={() => setAgoraxOnly(true)}
+            onClick={() => {
+              setAgoraxOnly(true);
+              setSlippageBps(0);
+            }}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
               agoraxOnly
                 ? 'bg-white text-black border-white'
@@ -606,7 +687,7 @@ export default function DexPage() {
                   setFromToken(t);
                   setAmount('');
                 }}
-                tokens={tokens}
+                tokens={visibleTokens}
                 disabledAddress={toToken.address}
               />
             </div>
@@ -653,78 +734,21 @@ export default function DexPage() {
               <TokenSelect
                 value={toToken}
                 onChange={setToToken}
-                tokens={tokens}
+                tokens={visibleTokens}
                 disabledAddress={fromToken.address}
               />
             </div>
           </div>
 
-          {/* Slippage */}
-          <div className="flex items-center justify-between mb-4 gap-2">
-            <span className="text-xs text-gray-500 uppercase tracking-wider whitespace-nowrap">
-              Slippage
-            </span>
-            <div className="flex gap-1 items-center">
-              {[10, 50, 100, 300].map((bps) => (
-                <button
-                  key={bps}
-                  onClick={() => setSlippageBps(bps)}
-                  className={`text-xs px-2 py-1 rounded transition-colors ${
-                    slippageBps === bps
-                      ? 'bg-white text-black'
-                      : 'bg-white/5 text-gray-400 hover:text-white'
-                  }`}
-                >
-                  {bps / 100}%
-                </button>
-              ))}
-              <div className="relative">
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  placeholder="Custom"
-                  value={
-                    [10, 50, 100, 300].includes(slippageBps)
-                      ? ''
-                      : (slippageBps / 100).toString()
-                  }
-                  onChange={(e) => {
-                    const val = e.target.value.replace(/[^0-9.]/g, '');
-                    if (val.split('.').length > 2) return;
-                    if (val === '') {
-                      setSlippageBps(50);
-                      return;
-                    }
-                    const pct = parseFloat(val);
-                    if (isNaN(pct)) return;
-                    const bps = Math.round(Math.min(50, Math.max(0, pct)) * 100);
-                    setSlippageBps(bps);
-                  }}
-                  className={`text-xs w-16 px-2 py-1 rounded outline-none transition-colors text-right pr-5 ${
-                    [10, 50, 100, 300].includes(slippageBps)
-                      ? 'bg-white/5 text-gray-400 placeholder-gray-500'
-                      : 'bg-white text-black'
-                  }`}
-                />
-                <span
-                  className={`absolute right-2 top-1/2 -translate-y-1/2 text-xs pointer-events-none ${
-                    [10, 50, 100, 300].includes(slippageBps) ? 'text-gray-500' : 'text-black'
-                  }`}
-                >
-                  %
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Rate */}
-          {rateText && (
-            <div className="text-xs text-gray-400 text-center mb-3">{rateText}</div>
-          )}
-
           {/* Quote info */}
           {quote && (
             <div className="mb-4 p-3 bg-white/5 border border-white/10 rounded-lg text-xs text-gray-400 space-y-1">
+              {rateText && (
+                <div className="flex justify-between">
+                  <span>Price</span>
+                  <span className="text-white">{rateText}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span>Min received</span>
                 <span className="text-white">
@@ -746,32 +770,35 @@ export default function DexPage() {
                   </span>
                 </div>
               )}
-              <div className="flex justify-between items-center">
-                <span>Quote</span>
-                <span className="flex items-center gap-2">
-                  {quoteAgeSec !== null && (
-                    <span className={quoteStale ? 'text-yellow-400' : 'text-gray-500'}>
-                      {quoteStale ? 'refreshing…' : `fresh ${quoteAgeSec}s ago`}
-                    </span>
-                  )}
-                  <button
-                    onClick={() => fetchQuote(false)}
-                    disabled={quoteLoading}
-                    className="p-1 rounded hover:bg-white/10 text-gray-400 hover:text-white transition-colors disabled:opacity-50"
-                    title="Refresh quote"
-                  >
-                    <RefreshCw size={12} className={quoteLoading ? 'animate-spin' : ''} />
-                  </button>
-                </span>
-              </div>
             </div>
           )}
 
           {/* Tax warning */}
           {taxWarning && (
-            <div className="mb-4 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg flex items-start gap-2">
-              <AlertTriangle size={14} className="text-yellow-400 flex-shrink-0 mt-0.5" />
-              <p className="text-yellow-400 text-xs">{taxWarning}</p>
+            <div
+              className={`mb-4 p-3 border rounded-lg flex items-start gap-2 ${
+                taxBlocksAgorax
+                  ? 'bg-red-500/10 border-red-500/20'
+                  : 'bg-yellow-500/10 border-yellow-500/20'
+              }`}
+            >
+              <AlertTriangle
+                size={14}
+                className={`flex-shrink-0 mt-0.5 ${
+                  taxBlocksAgorax ? 'text-red-400' : 'text-yellow-400'
+                }`}
+              />
+              <div className="space-y-1">
+                <p className={`text-xs ${taxBlocksAgorax ? 'text-red-400' : 'text-yellow-400'}`}>
+                  {taxWarning}
+                </p>
+                {taxBlocksAgorax && (
+                  <p className="text-xs text-red-400/70">
+                    Tax tokens are not supported in AgoraX-only mode. Switch to All DEXes to swap
+                    via AMMs that handle the tax.
+                  </p>
+                )}
+              </div>
             </div>
           )}
 
@@ -788,26 +815,97 @@ export default function DexPage() {
               />
             </button>
             {advancedOpen && (
-              <div className="mt-3 space-y-2">
+              <div className="mt-3 space-y-3">
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">Slippage</label>
+                  {agoraxOnly ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs px-2 py-1 rounded bg-white/5 text-gray-500">
+                        0%
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        Locked — OTC orders fill at fixed maker price
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex gap-1 items-center">
+                      {[10, 50, 100, 300].map((bps) => (
+                        <button
+                          key={bps}
+                          onClick={() => setSlippageBps(bps)}
+                          className={`text-xs px-2 py-1 rounded transition-colors ${
+                            slippageBps === bps
+                              ? 'bg-white text-black'
+                              : 'bg-white/5 text-gray-400 hover:text-white'
+                          }`}
+                        >
+                          {bps / 100}%
+                        </button>
+                      ))}
+                      <div className="relative">
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          placeholder="Custom"
+                          value={
+                            [10, 50, 100, 300].includes(slippageBps)
+                              ? ''
+                              : (slippageBps / 100).toString()
+                          }
+                          onChange={(e) => {
+                            const val = e.target.value.replace(/[^0-9.]/g, '');
+                            if (val.split('.').length > 2) return;
+                            if (val === '') {
+                              setSlippageBps(50);
+                              return;
+                            }
+                            const pct = parseFloat(val);
+                            if (isNaN(pct)) return;
+                            const bps = Math.round(Math.min(50, Math.max(0, pct)) * 100);
+                            setSlippageBps(bps);
+                          }}
+                          className={`text-xs w-[68px] px-2 py-1 rounded outline-none transition-colors text-right ${
+                            [10, 50, 100, 300].includes(slippageBps)
+                              ? 'bg-white/5 text-gray-400 placeholder-gray-500 pr-2'
+                              : 'bg-white text-black pr-5'
+                          }`}
+                        />
+                        {![10, 50, 100, 300].includes(slippageBps) && (
+                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs pointer-events-none text-black">
+                            %
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
                 <div>
                   <label className="text-xs text-gray-500 mb-1 block">
                     Recipient address (optional)
                   </label>
                   <input
                     type="text"
-                    placeholder={address || '0x...'}
+                    placeholder="0x..."
                     value={recipient}
                     onChange={(e) => setRecipient(e.target.value.trim())}
-                    className={`w-full bg-white/5 border rounded-lg px-3 py-2 text-white text-sm font-mono outline-none transition-colors ${
-                      recipient && !recipientValid
+                    className={`w-full bg-white/5 border rounded-lg px-3 py-2 text-white text-sm font-mono outline-none placeholder-gray-600 transition-colors ${
+                      recipient && (!recipientFormatValid || recipientIsContract)
                         ? 'border-red-500/50'
                         : 'border-white/10 focus:border-white/20'
                     }`}
                   />
-                  {recipient && !recipientValid && (
+                  {recipient && !recipientFormatValid && (
                     <p className="text-xs text-red-400 mt-1">Invalid address</p>
                   )}
-                  {recipient && recipientValid && (
+                  {recipient && recipientFormatValid && recipientChecking && (
+                    <p className="text-xs text-gray-500 mt-1">Checking address…</p>
+                  )}
+                  {recipient && recipientFormatValid && !recipientChecking && recipientIsContract && (
+                    <p className="text-xs text-red-400 mt-1">
+                      Contract addresses are not allowed — funds could be lost
+                    </p>
+                  )}
+                  {recipient && recipientValid && !recipientChecking && (
                     <p className="text-xs text-gray-500 mt-1">
                       Output will be sent to this address instead of your wallet
                     </p>
@@ -840,10 +938,12 @@ export default function DexPage() {
                 amount && parseFloat(amount) > parseFloat(fromBalanceFormatted)
                   ? 'Insufficient balance'
                   : 'Enter an amount'
+              ) : taxBlocksAgorax ? (
+                'Tax tokens not supported on AgoraX'
               ) : !quote?.tx ? (
                 quoteError || 'No route found'
               ) : (
-                `Swap ${fromToken.ticker} → ${toToken.ticker}`
+                'Swap'
               )}
             </button>
           )}

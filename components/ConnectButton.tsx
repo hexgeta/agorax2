@@ -39,6 +39,8 @@ export const ConnectButton = ({ connectedText, connectedHref }: ConnectButtonPro
   useEffect(() => {
     if (!isConnected || !address || !isInitialized) return
     if (isVerifying || isVerified || hasStoredSession) return
+    // Don't re-prompt across page loads if user already dismissed the popup
+    if (hasBeenPrompted) return
     // Module-level dedup: don't prompt if another instance already triggered verify
     if (promptedWallets.has(address)) return
 
