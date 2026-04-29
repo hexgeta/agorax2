@@ -55,38 +55,45 @@ type TokenOption = {
   isNative: boolean;
 };
 
-const NATIVE_FRONTEND_ADDRESS = '0x000000000000000000000000000000000000dead';
+const NATIVE_ADDRESSES = new Set([
+  '0x000000000000000000000000000000000000dead',
+  '0x0000000000000000000000000000000000000000',
+  SWITCH_NATIVE_SENTINEL.toLowerCase(),
+]);
 
 function buildTokenList(): TokenOption[] {
   const seen = new Set<string>();
   const list: TokenOption[] = [];
+  let nativeAdded = false;
+
+  const addToken = (addr: string, ticker: string, name: string, decimals: number) => {
+    const lower = addr.toLowerCase();
+    const isNative = NATIVE_ADDRESSES.has(lower);
+    if (isNative) {
+      if (nativeAdded) return;
+      nativeAdded = true;
+      list.push({
+        address: SWITCH_NATIVE_SENTINEL,
+        ticker,
+        name,
+        decimals,
+        isNative: true,
+      });
+      return;
+    }
+    if (seen.has(lower)) return;
+    seen.add(lower);
+    list.push({ address: addr, ticker, name, decimals, isNative: false });
+  };
 
   for (const addr of PRIORITY_TOKEN_ADDRESSES) {
-    const lower = addr.toLowerCase();
-    if (seen.has(lower)) continue;
-    seen.add(lower);
     const info = getTokenInfo(addr);
-    list.push({
-      address: addr,
-      ticker: info.ticker,
-      name: info.name,
-      decimals: info.decimals,
-      isNative: lower === NATIVE_FRONTEND_ADDRESS,
-    });
+    addToken(addr, info.ticker, info.name, info.decimals);
   }
 
   for (const t of TOKEN_CONSTANTS) {
     if (t.chain !== 369 || !t.a) continue;
-    const lower = t.a.toLowerCase();
-    if (seen.has(lower)) continue;
-    seen.add(lower);
-    list.push({
-      address: t.a,
-      ticker: t.ticker,
-      name: t.name,
-      decimals: t.decimals,
-      isNative: lower === SWITCH_NATIVE_SENTINEL.toLowerCase(),
-    });
+    addToken(t.a, t.ticker, t.name, t.decimals);
   }
 
   return list;
