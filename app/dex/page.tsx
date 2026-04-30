@@ -6,37 +6,27 @@ import { useAccount, useBalance, useContractWrite, useReadContract, usePublicCli
 import { parseUnits, formatUnits } from 'viem';
 import { LiquidGlassCard } from '@/components/ui/liquid-glass';
 import { Switch } from '@/components/ui/switch';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { TokenLogo } from '@/components/TokenLogo';
 import { ConnectButton } from '@/components/ConnectButton';
-import { Loader2, ArrowDownUp, ChevronDown, AlertTriangle } from 'lucide-react';
+import { Loader2, ArrowDownUp, ChevronDown, AlertTriangle, ArrowRight } from 'lucide-react';
 import useToast from '@/hooks/use-toast';
 import { getBlockExplorerTxUrl } from '@/utils/blockExplorer';
 import { formatNumberWithCommas, removeCommas } from '@/utils/format';
 import { TOKEN_CONSTANTS } from '@/constants/crypto';
 import { PRIORITY_TOKEN_ADDRESSES, getTokenInfo } from '@/utils/tokenUtils';
 import { useContractWhitelistRead } from '@/hooks/contracts/useContractWhitelistRead';
-import { getContractAddress } from '@/config/testing';
-import { CONTRACT_ABI } from '@/config/abis';
 import { useTokenPrices } from '@/hooks/crypto/useTokenPrices';
 import { getTokenPrice } from '@/utils/format';
 
 const SWITCH_NATIVE_SENTINEL = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE' as const;
 const SWITCH_ROUTER = '0x0305fcb5dA680EA6fd1B01A96C1949175B99d406' as const;
 const AGORAX_ADAPTER_INDEX = '14';
-const AGORAX_ADAPTER_ADDRESS = '0x79eA0ec76b510D08BF4ca9a4A53A1F9f80Ea1697' as const;
-
-const AGORAX_ADAPTER_ABI = [
-  {
-    inputs: [
-      { name: '_tokenIn', type: 'address' },
-      { name: '_tokenOut', type: 'address' },
-    ],
-    name: 'getPreferredOrders',
-    outputs: [{ type: 'uint256[]' }],
-    stateMutability: 'view',
-    type: 'function',
-  },
-] as const;
 
 const ERC20_ABI = [
   {
@@ -407,18 +397,6 @@ export default function DexPage() {
   const [routeOpen, setRouteOpen] = useState(false);
   const [recipient, setRecipient] = useState('');
 
-  type AgoraxMatchedOrder = {
-    id: bigint;
-    owner: string;
-    remainingSellAmount: bigint;
-    sellAmount: bigint;
-    buyAmount: bigint;
-    rate: number;
-    allOrNothing: boolean;
-  };
-  const [agoraxOrders, setAgoraxOrders] = useState<AgoraxMatchedOrder[] | null>(null);
-  const [agoraxOrdersLoading, setAgoraxOrdersLoading] = useState(false);
-  const [agoraxOrdersError, setAgoraxOrdersError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const recipientFormatValid =
@@ -507,6 +485,11 @@ export default function DexPage() {
       : n > 0
         ? `<$0.01`
         : '$0.00';
+
+  const fmtPct = (n: number) => {
+    const r = Math.round(n * 10) / 10;
+    return Number.isInteger(r) ? `${Math.round(r)}%` : `${r.toFixed(1)}%`;
+  };
 
   const fetchQuote = useCallback(
     async (silent: boolean) => {
@@ -735,6 +718,16 @@ export default function DexPage() {
     : '';
   const minOut = quote ? formatUnits(BigInt(quote.minAmountOut), toToken.decimals) : '';
 
+  // Price impact based on the USD values of input vs expected output.
+  // Negative = user is losing value vs market.
+  const priceImpactPct = useMemo(() => {
+    if (!amount || !expectedOut) return null;
+    const inUsd = parseFloat(amount) * fromUsdPrice;
+    const outUsd = parseFloat(expectedOut) * toUsdPrice;
+    if (!inUsd || !outUsd) return null;
+    return ((outUsd - inUsd) / inUsd) * 100;
+  }, [amount, expectedOut, fromUsdPrice, toUsdPrice]);
+
   // Rate display: 1 fromToken ≈ X toToken
   const rateText = useMemo(() => {
     if (!quote || !amount || parseFloat(amount) <= 0) return null;
@@ -787,164 +780,6 @@ export default function DexPage() {
     !!quote &&
     ((quote.fromTokenTax?.isTaxToken && quote.fromTokenTax.sellTaxBps > 0) ||
       (quote.toTokenTax?.isTaxToken && quote.toTokenTax.buyTaxBps > 0));
-
-  const usesAgoraxAdapter = !!quote?.paths?.some(
-    (p) => p.adapter === 'AgoraX' || p.adapters?.includes('AgoraX'),
-  );
-
-  // Reset cached order list when the quote inputs change.
-  useEffect(() => {
-    setAgoraxOrders(null);
-    setAgoraxOrdersError(null);
-    setAgoraxOrdersLoading(false);
-  }, [quote, fromToken, toToken, amount]);
-
-  // Lazy-fetch matching AgoraX orders only when the user expands the route.
-  useEffect(() => {
-    if (!routeOpen || !usesAgoraxAdapter || agoraxOrders) return;
-    if (!publicClient || !chainId) return;
-    if (!quote) return;
-
-    // Switch's AgoraX adapter has getPreferredOrders(tokenIn, tokenOut) — a curated
-    // priority list. When it's empty, the adapter falls back to scanning the order
-    // book, so we mirror that fallback by querying findFillableOrders on the core
-    // contract. Maker orders sell toToken and accept fromToken as payment.
-    const tokenInAddr = (
-      fromToken.isNative ? SWITCH_NATIVE_SENTINEL : fromToken.address
-    ).toLowerCase() as `0x${string}`;
-    const tokenOutAddr = (
-      toToken.isNative ? SWITCH_NATIVE_SENTINEL : toToken.address
-    ).toLowerCase() as `0x${string}`;
-    const makerSellTokenAddr = tokenOutAddr;
-    const makerBuyTokenAddrLower = tokenInAddr;
-    const contractAddress = getContractAddress(chainId) as `0x${string}` | undefined;
-    if (!contractAddress) return;
-
-    let cancelled = false;
-    (async () => {
-      setAgoraxOrdersLoading(true);
-      setAgoraxOrdersError(null);
-      try {
-        // 1) Try the curated priority list first
-        const preferredIds = (await publicClient.readContract({
-          address: AGORAX_ADAPTER_ADDRESS,
-          abi: AGORAX_ADAPTER_ABI,
-          functionName: 'getPreferredOrders',
-          args: [tokenInAddr, tokenOutAddr],
-        })) as readonly bigint[];
-        if (cancelled) return;
-
-        // Fallback: if curated list is empty, scan the order book for fillable orders
-        let ids: readonly bigint[] = preferredIds;
-        let usingFallback = false;
-        if (preferredIds.length === 0) {
-          usingFallback = true;
-          const fallback = (await publicClient.readContract({
-            address: contractAddress,
-            abi: CONTRACT_ABI,
-            functionName: 'findFillableOrders',
-            args: [makerSellTokenAddr, 1n, 0n, 50n],
-          })) as readonly [readonly bigint[], bigint];
-          if (cancelled) return;
-          ids = fallback[0];
-        }
-        if (ids.length === 0) {
-          setAgoraxOrders([]);
-          return;
-        }
-
-        // 2) Pull full details for each in parallel
-        type OrderDetailsResult = {
-          userDetails: { orderIndex: bigint; orderOwner: `0x${string}` };
-          orderDetailsWithID: {
-            orderID: bigint;
-            remainingSellAmount: bigint;
-            redeemedSellAmount: bigint;
-            lastUpdateTime: bigint;
-            status: number;
-            creationProtocolFee: bigint;
-            orderDetails: {
-              sellToken: `0x${string}`;
-              sellAmount: bigint;
-              buyTokensIndex: readonly bigint[];
-              buyAmounts: readonly bigint[];
-              expirationTime: bigint;
-              allOrNothing: boolean;
-            };
-          };
-        };
-        const details = (await Promise.all(
-          ids.map((id) =>
-            publicClient.readContract({
-              address: contractAddress,
-              abi: CONTRACT_ABI,
-              functionName: 'getOrderDetails',
-              args: [id],
-            }),
-          ),
-        )) as OrderDetailsResult[];
-        if (cancelled) return;
-
-        // 3) Filter to orders accepting the user's input token, and rank by best rate for the buyer.
-        //    Maker's sellAmount is in toToken units; buyAmounts[j] for our match is in fromToken units.
-        const matched: AgoraxMatchedOrder[] = [];
-        for (let i = 0; i < details.length; i++) {
-          const d = details[i];
-          const od = d.orderDetailsWithID.orderDetails;
-          let buyAmount: bigint | null = null;
-          for (let j = 0; j < od.buyTokensIndex.length; j++) {
-            const idx = Number(od.buyTokensIndex[j]);
-            const whitelistAddr = whitelistTokens[idx]?.tokenAddress?.toLowerCase();
-            if (whitelistAddr === makerBuyTokenAddrLower) {
-              buyAmount = od.buyAmounts[j];
-              break;
-            }
-          }
-          if (buyAmount === null) continue;
-
-          // sellAmount is in toToken (what user receives); buyAmount is in fromToken (what user pays)
-          const sellNum = Number(od.sellAmount) / 10 ** toToken.decimals;
-          const buyNum = Number(buyAmount) / 10 ** fromToken.decimals;
-          // rate = how much toToken user gets per unit of fromToken
-          const rate = buyNum > 0 ? sellNum / buyNum : 0;
-          matched.push({
-            id: ids[i],
-            owner: d.userDetails.orderOwner,
-            remainingSellAmount: d.orderDetailsWithID.remainingSellAmount,
-            sellAmount: od.sellAmount,
-            buyAmount,
-            rate,
-            allOrNothing: od.allOrNothing,
-          });
-        }
-        // Curated list is in match order; fallback list needs ranking by best rate.
-        if (usingFallback) {
-          matched.sort((a, b) => b.rate - a.rate);
-        }
-        setAgoraxOrders(matched);
-      } catch (err) {
-        if (!cancelled) {
-          setAgoraxOrdersError(err instanceof Error ? err.message : 'Failed to load orders');
-        }
-      } finally {
-        setAgoraxOrdersLoading(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    routeOpen,
-    usesAgoraxAdapter,
-    agoraxOrders,
-    publicClient,
-    chainId,
-    quote,
-    fromToken,
-    toToken,
-    whitelistTokens,
-  ]);
 
   const canSubmit =
     isValidAmount && quote?.tx && !quoteLoading && !txPending && !taxBlocksAgorax;
@@ -1019,26 +854,6 @@ export default function DexPage() {
                   }}
                   className="flex-1 min-w-0 bg-transparent text-white text-xl font-medium outline-none placeholder-gray-600"
                 />
-                <div className="flex items-center gap-1 flex-shrink-0">
-                  <button
-                    onClick={() => handlePercent(0.25)}
-                    className="text-xs text-gray-400 hover:text-white bg-white/10 px-2 py-1 rounded transition-colors"
-                  >
-                    25%
-                  </button>
-                  <button
-                    onClick={() => handlePercent(0.5)}
-                    className="text-xs text-gray-400 hover:text-white bg-white/10 px-2 py-1 rounded transition-colors"
-                  >
-                    50%
-                  </button>
-                  <button
-                    onClick={handleMax}
-                    className="text-xs text-gray-400 hover:text-white bg-white/10 px-2 py-1 rounded transition-colors"
-                  >
-                    MAX
-                  </button>
-                </div>
                 <TokenSelect
                   value={fromToken}
                   onChange={(t) => {
@@ -1050,6 +865,26 @@ export default function DexPage() {
                   disabledAddress={toToken.address}
                 />
               </div>
+            </div>
+            <div className="flex items-center gap-1 mt-2">
+              <button
+                onClick={() => handlePercent(0.25)}
+                className="text-xs text-gray-400 hover:text-white bg-white/10 px-2 py-1 rounded transition-colors"
+              >
+                25%
+              </button>
+              <button
+                onClick={() => handlePercent(0.5)}
+                className="text-xs text-gray-400 hover:text-white bg-white/10 px-2 py-1 rounded transition-colors"
+              >
+                50%
+              </button>
+              <button
+                onClick={handleMax}
+                className="text-xs text-gray-400 hover:text-white bg-white/10 px-2 py-1 rounded transition-colors"
+              >
+                MAX
+              </button>
             </div>
           </div>
 
@@ -1125,204 +960,35 @@ export default function DexPage() {
               </div>
               {quote.effectiveSlippagePercent && (
                 <div className="flex justify-between">
-                  <span>Effective slippage</span>
+                  <span>Max slippage</span>
                   <span className="text-white">{quote.effectiveSlippagePercent}%</span>
                 </div>
               )}
-              {quote._fee && quote._fee.totalBps > 0 && (
-                <div className="flex justify-between gap-3">
-                  <span className="flex-shrink-0">Fee</span>
+              {priceImpactPct !== null && Math.abs(priceImpactPct) >= 0.1 && (
+                <div className="flex justify-between">
+                  <span>Price impact</span>
                   <span
-                    className="text-white text-right"
-                    title={
-                      quote._fee.partnerActive
-                        ? `Switch: ${(quote._fee.switchKeepsBps / 100).toFixed(2)}% · AgoraX: ${(quote._fee.partnerSharedBps / 100).toFixed(2)}%`
-                        : `Switch platform fee`
+                    className={
+                      priceImpactPct <= -5
+                        ? 'text-red-400'
+                        : priceImpactPct < 0
+                          ? 'text-yellow-400'
+                          : 'text-green-400'
                     }
                   >
-                    {(quote._fee.totalBps / 100).toFixed(2)}%
-                    {quote._fee.partnerActive && (
-                      <span className="text-gray-500 ml-1">
-                        (½ Switch · ½ AgoraX)
-                      </span>
-                    )}
+                    {priceImpactPct > 0 ? '+' : ''}
+                    {priceImpactPct.toFixed(2)}%
                   </span>
                 </div>
               )}
               {routeSummary && quote.paths && quote.paths.length > 0 && (
-                <>
-                  <button
-                    onClick={() => setRouteOpen((v) => !v)}
-                    className="flex justify-between gap-3 w-full text-left hover:text-gray-300 transition-colors"
-                  >
-                    <span className="flex-shrink-0">Route</span>
-                    <span className="flex items-center gap-1 min-w-0">
-                      <span className="text-white text-right truncate" title={routeSummary}>
-                        {routeSummary}
-                      </span>
-                      <ChevronDown
-                        size={12}
-                        className={`flex-shrink-0 transition-transform ${
-                          routeOpen ? 'rotate-180' : ''
-                        }`}
-                      />
-                    </span>
-                  </button>
-                  {routeOpen && (
-                    <div className="mt-2 pt-2 border-t border-white/5 space-y-2">
-                      {quote.paths.map((p, i) => {
-                        const legs = p.legs && p.legs.length > 0 ? p.legs : null;
-                        const pct = p.percentage ?? 100;
-                        return (
-                          <div key={i} className="space-y-1">
-                            {quote.paths!.length > 1 && (
-                              <div className="text-gray-500 text-[11px]">
-                                Path {i + 1} · {pct}% of input
-                              </div>
-                            )}
-                            {legs ? (
-                              legs.map((leg, j) => {
-                                const tIn = getTokenInfo(leg.tokenIn);
-                                const tOut = getTokenInfo(leg.tokenOut);
-                                return (
-                                  <div
-                                    key={j}
-                                    className="flex items-center justify-between gap-2 pl-2"
-                                  >
-                                    <div className="flex items-center gap-1 text-white truncate">
-                                      <span>{tIn.ticker}</span>
-                                      <span className="text-gray-500">→</span>
-                                      <span>{tOut.ticker}</span>
-                                    </div>
-                                    <span className="text-gray-400 flex-shrink-0">
-                                      {leg.percentage !== undefined &&
-                                        leg.percentage !== 100 && (
-                                          <span className="text-gray-500 mr-1">
-                                            {leg.percentage}%
-                                          </span>
-                                        )}
-                                      {leg.adapter}
-                                    </span>
-                                  </div>
-                                );
-                              })
-                            ) : (
-                              <div className="flex items-center justify-between gap-2 pl-2">
-                                <div className="flex items-center gap-1 text-white truncate">
-                                  {p.path.map((addr, k) => (
-                                    <span key={k} className="flex items-center gap-1">
-                                      {k > 0 && <span className="text-gray-500">→</span>}
-                                      <span>{getTokenInfo(addr).ticker}</span>
-                                    </span>
-                                  ))}
-                                </div>
-                                <span className="text-gray-400 flex-shrink-0">{p.adapter}</span>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-
-                      {/* AgoraX OTC orders being matched */}
-                      {usesAgoraxAdapter && (
-                        <div className="pt-2 border-t border-white/5">
-                          <div className="text-gray-500 text-[11px] mb-1">
-                            AgoraX maker orders
-                          </div>
-                          {agoraxOrdersLoading && (
-                            <div className="flex items-center gap-2 text-gray-400 pl-2">
-                              <Loader2 size={12} className="animate-spin" />
-                              <span className="text-[11px]">Loading matching orders…</span>
-                            </div>
-                          )}
-                          {agoraxOrdersError && !agoraxOrdersLoading && (
-                            <div className="text-red-400 text-[11px] pl-2">
-                              {agoraxOrdersError}
-                            </div>
-                          )}
-                          {agoraxOrders && !agoraxOrdersLoading && agoraxOrders.length === 0 && (
-                            <div className="text-gray-500 text-[11px] pl-2">
-                              No active orders match this pair right now.
-                            </div>
-                          )}
-                          {agoraxOrders && agoraxOrders.length > 0 && (
-                            <div className="space-y-1">
-                              {(() => {
-                                // For a user swap A→B: need is in fromToken (A) units.
-                                // Each order's capacity to absorb A is:
-                                //   remainingBuyForOrder = remainingSellAmount * buyAmount / sellAmount
-                                //   (remainingSellAmount is in B units, buyAmount/sellAmount in B per A)
-                                let need: bigint;
-                                try {
-                                  need = BigInt(quote.totalAmountIn);
-                                } catch {
-                                  need = 0n;
-                                }
-                                const used: typeof agoraxOrders = [];
-                                for (const o of agoraxOrders) {
-                                  if (need <= 0n) break;
-                                  if (o.sellAmount === 0n) continue;
-                                  const remainingBuyForOrder =
-                                    (o.remainingSellAmount * o.buyAmount) / o.sellAmount;
-                                  if (o.allOrNothing && remainingBuyForOrder > need) continue;
-                                  used.push(o);
-                                  if (remainingBuyForOrder >= need) {
-                                    need = 0n;
-                                    break;
-                                  }
-                                  need -= remainingBuyForOrder;
-                                }
-                                const display = used.length > 0 ? used : agoraxOrders.slice(0, 3);
-                                return display.map((o) => {
-                                  // Show how much fromToken this order can absorb
-                                  const remainingAcceptable =
-                                    o.sellAmount === 0n
-                                      ? 0
-                                      : Number(
-                                          (o.remainingSellAmount * o.buyAmount) / o.sellAmount,
-                                        ) / 10 ** fromToken.decimals;
-                                  const rateFmt = o.rate.toLocaleString('en-US', {
-                                    maximumFractionDigits: o.rate < 0.01 ? 8 : 4,
-                                  });
-                                  return (
-                                    <a
-                                      key={o.id.toString()}
-                                      href={`/order/${o.id.toString()}`}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="flex items-center justify-between gap-2 pl-2 hover:text-white transition-colors"
-                                    >
-                                      <span className="text-white truncate flex items-center gap-1">
-                                        <span>
-                                          #{o.id.toString()} · accepts up to{' '}
-                                          {remainingAcceptable.toLocaleString('en-US', {
-                                            maximumFractionDigits: 4,
-                                          })}{' '}
-                                          {fromToken.ticker}
-                                        </span>
-                                        {o.allOrNothing && (
-                                          <span
-                                            className="text-[10px] text-yellow-400/80 bg-yellow-400/10 px-1 rounded"
-                                            title="All-or-nothing: must be filled completely"
-                                          >
-                                            AON
-                                          </span>
-                                        )}
-                                      </span>
-                                      <span className="text-gray-400 flex-shrink-0">
-                                        @ {rateFmt} {toToken.ticker}
-                                      </span>
-                                    </a>
-                                  );
-                                });
-                              })()}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </>
+                <button
+                  onClick={() => setRouteOpen(true)}
+                  className="flex items-center gap-1 text-white hover:text-gray-300 transition-colors"
+                >
+                  See Route
+                  <ChevronDown size={12} className="-rotate-90 text-gray-400" />
+                </button>
               )}
             </div>
           )}
@@ -1545,6 +1211,112 @@ export default function DexPage() {
           </p>
         </div>
       </div>
+
+      {/* Route detail dialog */}
+      <Dialog open={routeOpen} onOpenChange={setRouteOpen}>
+        <DialogContent className="bg-black border border-white/10 text-white w-[calc(100vw-1rem)] max-w-2xl max-h-[85vh] overflow-y-auto !p-4 !rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-white text-left pr-8">Route Details</DialogTitle>
+          </DialogHeader>
+          {quote && quote.paths && quote.paths.length > 0 && (
+            <div className="space-y-4 text-xs text-gray-400 min-w-0">
+              {quote.paths.map((p, i) => {
+                const legs = p.legs && p.legs.length > 0 ? p.legs : null;
+                const pct = p.percentage ?? 100;
+                return (
+                  <div key={i} className="space-y-2 min-w-0">
+                    {quote.paths!.length > 1 && (
+                      <div className="flex items-center justify-between text-gray-400">
+                        <span>Path {i + 1}</span>
+                        <span className="text-white">{fmtPct(pct)} of input</span>
+                      </div>
+                    )}
+                    <div className="visible-scrollbar overflow-x-scroll -mx-1 px-1 pb-3 min-w-0">
+                      <div className="flex items-stretch gap-2 w-max mx-auto">
+                        <div className="flex items-center justify-center flex-shrink-0">
+                          <TokenLogo ticker={fromToken.ticker} className="w-9 h-9" />
+                        </div>
+                        {legs ? (
+                          (() => {
+                            // Group consecutive legs sharing the same tokenIn→tokenOut into one hop card.
+                            type Hop = { tokenIn: string; tokenOut: string; legs: typeof legs };
+                            const hops: Hop[] = [];
+                            for (const leg of legs) {
+                              const last = hops[hops.length - 1];
+                              if (
+                                last &&
+                                last.tokenIn.toLowerCase() === leg.tokenIn.toLowerCase() &&
+                                last.tokenOut.toLowerCase() === leg.tokenOut.toLowerCase()
+                              ) {
+                                last.legs.push(leg);
+                              } else {
+                                hops.push({
+                                  tokenIn: leg.tokenIn,
+                                  tokenOut: leg.tokenOut,
+                                  legs: [leg],
+                                });
+                              }
+                            }
+                            return hops.map((hop, j) => {
+                              const tIn = getTokenInfo(hop.tokenIn);
+                              const tOut = getTokenInfo(hop.tokenOut);
+                              return (
+                                <div key={j} className="flex items-center gap-2">
+                                  <ArrowRight size={14} className="text-gray-600 flex-shrink-0" />
+                                  <div className="bg-white/5 border border-white/10 rounded-md px-3 py-2 flex flex-col gap-0.5">
+                                    <div className="flex items-center gap-1 text-white text-sm font-medium">
+                                      <span>{tIn.ticker}</span>
+                                      <span className="text-gray-500">→</span>
+                                      <span>{tOut.ticker}</span>
+                                    </div>
+                                    {hop.legs.map((leg, k) => (
+                                      <div
+                                        key={k}
+                                        className="flex items-center justify-between gap-3 text-xs"
+                                      >
+                                        <span className="text-gray-400">{leg.adapter}</span>
+                                        <span className="text-white">
+                                          {leg.percentage !== undefined
+                                            ? fmtPct(leg.percentage)
+                                            : ''}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            });
+                          })()
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            {p.path.slice(1, -1).map((addr, k) => (
+                              <div key={k} className="flex items-center gap-2">
+                                <ArrowRight size={14} className="text-gray-600 flex-shrink-0" />
+                                <div className="bg-white/5 border border-white/10 rounded-md px-3 py-2 text-white text-sm font-medium">
+                                  {getTokenInfo(addr).ticker}
+                                </div>
+                              </div>
+                            ))}
+                            <ArrowRight size={14} className="text-gray-600 flex-shrink-0" />
+                            <div className="bg-white/5 border border-white/10 rounded-md px-3 py-2 text-xs text-gray-400 self-center">
+                              {p.adapter}
+                            </div>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <ArrowRight size={14} className="text-gray-600" />
+                          <TokenLogo ticker={toToken.ticker} className="w-9 h-9" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
