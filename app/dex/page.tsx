@@ -14,7 +14,8 @@ import {
 } from '@/components/ui/dialog';
 import { TokenLogo } from '@/components/TokenLogo';
 import { ConnectButton } from '@/components/ConnectButton';
-import { Loader2, ArrowDownUp, ChevronDown, AlertTriangle, ArrowRight } from 'lucide-react';
+import { ArrowDownUp, ChevronDown, AlertTriangle, ArrowRight } from 'lucide-react';
+import { PixelSpinner } from '@/components/ui/PixelSpinner';
 import useToast from '@/hooks/use-toast';
 import { getBlockExplorerTxUrl } from '@/utils/blockExplorer';
 import { formatNumberWithCommas, removeCommas } from '@/utils/format';
@@ -491,10 +492,15 @@ export default function DexPage() {
     return Number.isInteger(r) ? `${Math.round(r)}%` : `${r.toFixed(1)}%`;
   };
 
+  // Request-ID guard so stale in-flight responses don't overwrite fresh ones.
+  // Each new fetch bumps the counter; results that come back with an older ID get dropped.
+  const quoteRequestIdRef = useRef(0);
+
   const fetchQuote = useCallback(
     async (silent: boolean) => {
       if (!amount || parseFloat(amount) <= 0) return;
       if (recipient && !recipientValid) return;
+      const requestId = ++quoteRequestIdRef.current;
       try {
         if (!silent) setQuoteLoading(true);
         const amountWei = parseUnits(amount, fromToken.decimals).toString();
@@ -510,6 +516,8 @@ export default function DexPage() {
 
         const res = await fetch(`/api/switch-quote?${params.toString()}`);
         const data = await res.json();
+        // Drop the response if a newer request has been issued since.
+        if (requestId !== quoteRequestIdRef.current) return;
         if (!res.ok) {
           setQuoteError(data?.error || data?.message || 'Quote failed');
           if (!silent) setQuote(null);
@@ -519,9 +527,10 @@ export default function DexPage() {
           setQuoteFetchedAt(Date.now());
         }
       } catch (err) {
+        if (requestId !== quoteRequestIdRef.current) return;
         setQuoteError(err instanceof Error ? err.message : 'Quote failed');
       } finally {
-        if (!silent) setQuoteLoading(false);
+        if (requestId === quoteRequestIdRef.current && !silent) setQuoteLoading(false);
       }
     },
     [
@@ -538,6 +547,8 @@ export default function DexPage() {
 
   // Initial fetch on input change (debounced)
   useEffect(() => {
+    // Bump the request ID so any in-flight fetch from the previous deps is invalidated.
+    quoteRequestIdRef.current++;
     setQuote(null);
     setQuoteError(null);
     setQuoteFetchedAt(null);
@@ -917,20 +928,22 @@ export default function DexPage() {
               </div>
               <div className="flex items-center gap-2">
                 <span
-                  className={`flex-1 min-w-0 text-xl font-medium truncate ${
+                  className={`flex-1 min-w-0 text-xl font-medium truncate flex items-center ${
                     expectedOut && parseFloat(expectedOut) > 0 ? 'text-white' : 'text-gray-600'
                   }`}
                 >
-                  {quoteLoading
-                    ? '…'
-                    : expectedOut && parseFloat(expectedOut) > 0
-                      ? formatNumberWithCommas(
-                          parseFloat(expectedOut).toLocaleString('en-US', {
-                            maximumFractionDigits: 4,
-                            useGrouping: false,
-                          })
-                        )
-                      : '0.0'}
+                  {quoteLoading ? (
+                    <PixelSpinner size={20} />
+                  ) : expectedOut && parseFloat(expectedOut) > 0 ? (
+                    formatNumberWithCommas(
+                      parseFloat(expectedOut).toLocaleString('en-US', {
+                        maximumFractionDigits: 4,
+                        useGrouping: false,
+                      }),
+                    )
+                  ) : (
+                    '0.0'
+                  )}
                 </span>
                 <TokenSelect
                   value={toToken}
@@ -1118,7 +1131,10 @@ export default function DexPage() {
                     <p className="text-xs text-red-400 mt-1">Invalid address</p>
                   )}
                   {recipient && recipientFormatValid && recipientChecking && (
-                    <p className="text-xs text-gray-500 mt-1">Checking address…</p>
+                    <p className="text-xs text-gray-500 mt-1 flex items-center gap-1.5">
+                      <PixelSpinner size={10} />
+                      Checking address…
+                    </p>
                   )}
                   {recipient && recipientFormatValid && !recipientChecking && recipientIsContract && (
                     <p className="text-xs text-red-400 mt-1">
@@ -1146,12 +1162,12 @@ export default function DexPage() {
             >
               {txPending ? (
                 <>
-                  <Loader2 size={16} className="animate-spin" />
+                  <PixelSpinner size={14} />
                   Swapping...
                 </>
               ) : quoteLoading ? (
                 <>
-                  <Loader2 size={16} className="animate-spin" />
+                  <PixelSpinner size={14} />
                   Fetching quote...
                 </>
               ) : !isValidAmount ? (
