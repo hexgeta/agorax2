@@ -563,50 +563,43 @@ export function LimitOrderForm({
       return;
     }
 
-    // Fetch from DexScreener
+    // Fetch token info: try DexScreener first for marketing-friendly metadata,
+    // fall back to reading symbol()/name()/decimals() directly from the token contract.
     const fetchTokenInfo = async () => {
       setIsLoadingCustomToken(true);
       setCustomTokenError(null);
 
+      const ERC20_METADATA_ABI = [
+        {
+          name: 'decimals',
+          type: 'function',
+          stateMutability: 'view',
+          inputs: [],
+          outputs: [{ name: '', type: 'uint8' }],
+        },
+        {
+          name: 'symbol',
+          type: 'function',
+          stateMutability: 'view',
+          inputs: [],
+          outputs: [{ name: '', type: 'string' }],
+        },
+        {
+          name: 'name',
+          type: 'function',
+          stateMutability: 'view',
+          inputs: [],
+          outputs: [{ name: '', type: 'string' }],
+        },
+      ] as const;
+
       try {
-        const response = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${contractAddress}`);
-        if (!response.ok) {
-          throw new Error('Failed to fetch token info');
-        }
-
-        const data = await response.json();
-        const pairs = data.pairs || [];
-
-        // Only use pairs where our token is the base token (priceUsd is the base token's price)
-        const basePairs = pairs
-          .filter((pair: any) => pair.chainId === 'pulsechain' && pair.baseToken?.address?.toLowerCase() === contractAddress)
-          .sort((a: any, b: any) => {
-            const aLiq = parseFloat(a.liquidity?.usd || '0');
-            const bLiq = parseFloat(b.liquidity?.usd || '0');
-            return bLiq - aLiq;
-          });
-
-        if (basePairs.length === 0) {
-          setCustomTokenError('Token not found on PulseChain');
-          setCustomToken(null);
-          return;
-        }
-
-        const bestPair = basePairs[0];
-        const tokenInfo = bestPair.baseToken;
-
-        // Fetch decimals on-chain (DexScreener doesn't provide them)
+        // 1) Decimals are required — read on-chain.
         let decimals: number;
         try {
           decimals = Number(await publicClient!.readContract({
             address: contractAddress as `0x${string}`,
-            abi: [{
-              name: 'decimals',
-              type: 'function',
-              stateMutability: 'view',
-              inputs: [],
-              outputs: [{ name: '', type: 'uint8' }],
-            }] as const,
+            abi: ERC20_METADATA_ABI,
             functionName: 'decimals',
           }));
         } catch {
@@ -615,14 +608,71 @@ export function LimitOrderForm({
           return;
         }
 
+        // 2) Try DexScreener for symbol/name (preferred; sometimes nicer formatting).
+        let symbol: string | null = null;
+        let name: string | null = null;
+        try {
+          const response = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${contractAddress}`);
+          if (response.ok) {
+            const data = await response.json();
+            const pairs = data.pairs || [];
+            const basePairs = pairs
+              .filter((pair: any) =>
+                pair.chainId === 'pulsechain' &&
+                pair.baseToken?.address?.toLowerCase() === contractAddress,
+              )
+              .sort((a: any, b: any) => {
+                const aLiq = parseFloat(a.liquidity?.usd || '0');
+                const bLiq = parseFloat(b.liquidity?.usd || '0');
+                return bLiq - aLiq;
+              });
+            if (basePairs.length > 0) {
+              symbol = basePairs[0].baseToken?.symbol || null;
+              name = basePairs[0].baseToken?.name || null;
+            }
+          }
+        } catch {
+          // ignore — fall through to on-chain lookup
+        }
+
+        // 3) Fall back to on-chain symbol()/name() if DexScreener didn't provide them.
+        if (!symbol) {
+          try {
+            symbol = (await publicClient!.readContract({
+              address: contractAddress as `0x${string}`,
+              abi: ERC20_METADATA_ABI,
+              functionName: 'symbol',
+            })) as string;
+          } catch {
+            // ignore
+          }
+        }
+        if (!name) {
+          try {
+            name = (await publicClient!.readContract({
+              address: contractAddress as `0x${string}`,
+              abi: ERC20_METADATA_ABI,
+              functionName: 'name',
+            })) as string;
+          } catch {
+            // ignore
+          }
+        }
+
+        if (!symbol && !name) {
+          setCustomTokenError('Could not read token symbol/name from chain or DexScreener');
+          setCustomToken(null);
+          return;
+        }
+
         setCustomToken({
           a: contractAddress,
-          ticker: tokenInfo.symbol || 'UNKNOWN',
-          name: tokenInfo.name || 'Unknown Token',
-          decimals: decimals
+          ticker: symbol || 'UNKNOWN',
+          name: name || symbol || 'Unknown Token',
+          decimals: decimals,
         });
         setCustomTokenError(null);
-      } catch (error) {
+      } catch {
         setCustomTokenError('Failed to fetch token info');
         setCustomToken(null);
       } finally {
