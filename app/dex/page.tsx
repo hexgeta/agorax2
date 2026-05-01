@@ -262,11 +262,10 @@ function TokenSelect({
                       setOpen(false);
                       setSearch('');
                     }}
-                    className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${
-                      isDisabled
-                        ? 'opacity-30 cursor-not-allowed'
-                        : 'hover:bg-white/5'
-                    }`}
+                    className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${isDisabled
+                      ? 'opacity-30 cursor-not-allowed'
+                      : 'hover:bg-white/5'
+                      }`}
                   >
                     <TokenLogo ticker={t.ticker} className="w-7 h-7" />
                     <div className="flex-1 min-w-0">
@@ -285,6 +284,13 @@ function TokenSelect({
 }
 
 export default function DexPage() {
+  // Mount guard so SSR and the first client render produce identical (empty) markup.
+  // After mount, the localStorage-backed pair selection takes over without a hydration mismatch.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const { address, isConnected, chainId } = useAccount();
   const publicClient = usePublicClient();
   const { toast } = useToast();
@@ -327,12 +333,12 @@ export default function DexPage() {
       const saved = JSON.parse(raw) as { from?: string; to?: string };
       const from = saved.from
         ? tokens.find((t) => t.address.toLowerCase() === saved.from!.toLowerCase()) ||
-          defaultFrom
+        defaultFrom
         : defaultFrom;
       const to =
         saved.to && saved.to.toLowerCase() !== from.address.toLowerCase()
           ? tokens.find((t) => t.address.toLowerCase() === saved.to!.toLowerCase()) ||
-            defaultTo
+          defaultTo
           : defaultTo;
       return { from, to };
     } catch {
@@ -479,10 +485,10 @@ export default function DexPage() {
   const formatUsd = (n: number) =>
     n >= 0.01
       ? n.toLocaleString('en-US', {
-          style: 'currency',
-          currency: 'USD',
-          maximumFractionDigits: 2,
-        })
+        style: 'currency',
+        currency: 'USD',
+        maximumFractionDigits: 2,
+      })
       : n > 0
         ? `<$0.01`
         : '$0.00';
@@ -796,6 +802,22 @@ export default function DexPage() {
     isValidAmount && quote?.tx && !quoteLoading && !txPending && !taxBlocksAgorax;
 
 
+  if (!mounted) {
+    // Pre-mount placeholder — keeps SSR markup identical to first client render
+    // so the token-selector inline SVGs don't trip a hydration mismatch.
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4 py-16">
+        <div className="w-full max-w-md">
+          <h1 className="text-2xl font-bold text-white text-center mb-2">DEX Aggregator</h1>
+          <p className="text-gray-400 text-center text-sm mb-6">
+            Trade tokens via Switch.win — route through AgoraX OTC or all DEXes
+          </p>
+          <div className="h-[400px]" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-16">
       <div className="w-full max-w-md">
@@ -807,9 +829,8 @@ export default function DexPage() {
         {/* Routing toggle */}
         <div className="flex items-center justify-center gap-3 mb-6 text-sm">
           <span
-            className={`transition-colors ${
-              !agoraxOnly ? 'text-white' : 'text-gray-500'
-            }`}
+            className={`transition-colors ${!agoraxOnly ? 'text-white' : 'text-gray-500'
+              }`}
           >
             All DEXes
           </span>
@@ -822,9 +843,8 @@ export default function DexPage() {
             className="data-[state=checked]:bg-white data-[state=unchecked]:bg-white/20 [&>span]:bg-black data-[state=checked]:[&>span]:bg-black data-[state=unchecked]:[&>span]:bg-white"
           />
           <span
-            className={`transition-colors ${
-              agoraxOnly ? 'text-white' : 'text-gray-500'
-            }`}
+            className={`transition-colors ${agoraxOnly ? 'text-white' : 'text-gray-500'
+              }`}
           >
             AgoraX Only
           </span>
@@ -928,9 +948,8 @@ export default function DexPage() {
               </div>
               <div className="flex items-center gap-2">
                 <span
-                  className={`flex-1 min-w-0 text-xl font-medium truncate flex items-center ${
-                    expectedOut && parseFloat(expectedOut) > 0 ? 'text-white' : 'text-gray-600'
-                  }`}
+                  className={`flex-1 min-w-0 text-xl font-medium truncate flex items-center ${expectedOut && parseFloat(expectedOut) > 0 ? 'text-white' : 'text-gray-600'
+                    }`}
                 >
                   {quoteLoading ? (
                     <PixelSpinner size={20} />
@@ -1006,20 +1025,56 @@ export default function DexPage() {
             </div>
           )}
 
+          {/* No AgoraX route notice */}
+          {agoraxOnly &&
+            quote &&
+            !quoteLoading &&
+            !taxBlocksAgorax &&
+            (!quote.paths || quote.paths.length === 0) &&
+            amount &&
+            parseFloat(amount) > 0 && (
+              <div className="mb-4 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg flex items-start gap-2">
+                <AlertTriangle
+                  size={14}
+                  className="text-yellow-400 flex-shrink-0 mt-0.5"
+                />
+                <div className="space-y-1">
+                  <p className="text-xs text-yellow-400">
+                    No AgoraX orders match this pair at this size right now.
+                  </p>
+                  <p className="text-xs text-yellow-400/70">
+                    Switch to{' '}
+                    <button
+                      onClick={() => {
+                        setAgoraxOnly(false);
+                        setSlippageBps(50);
+                      }}
+                      className="underline hover:text-yellow-300"
+                    >
+                      All DEXes
+                    </button>{' '}
+                    to route via AMMs, or post a limit order on{' '}
+                    <a href="/trade" className="underline hover:text-yellow-300">
+                      /trade
+                    </a>
+                    .
+                  </p>
+                </div>
+              </div>
+            )}
+
           {/* Tax warning */}
           {taxWarning && (
             <div
-              className={`mb-4 p-3 border rounded-lg flex items-start gap-2 ${
-                taxBlocksAgorax
-                  ? 'bg-red-500/10 border-red-500/20'
-                  : 'bg-yellow-500/10 border-yellow-500/20'
-              }`}
+              className={`mb-4 p-3 border rounded-lg flex items-start gap-2 ${taxBlocksAgorax
+                ? 'bg-red-500/10 border-red-500/20'
+                : 'bg-yellow-500/10 border-yellow-500/20'
+                }`}
             >
               <AlertTriangle
                 size={14}
-                className={`flex-shrink-0 mt-0.5 ${
-                  taxBlocksAgorax ? 'text-red-400' : 'text-yellow-400'
-                }`}
+                className={`flex-shrink-0 mt-0.5 ${taxBlocksAgorax ? 'text-red-400' : 'text-yellow-400'
+                  }`}
               />
               <div className="space-y-1">
                 <p className={`text-xs ${taxBlocksAgorax ? 'text-red-400' : 'text-yellow-400'}`}>
@@ -1066,11 +1121,10 @@ export default function DexPage() {
                         <button
                           key={bps}
                           onClick={() => setSlippageBps(bps)}
-                          className={`text-xs px-2 py-1 rounded transition-colors ${
-                            slippageBps === bps
-                              ? 'bg-white text-black'
-                              : 'bg-white/5 text-gray-400 hover:text-white'
-                          }`}
+                          className={`text-xs px-2 py-1 rounded transition-colors ${slippageBps === bps
+                            ? 'bg-white text-black'
+                            : 'bg-white/5 text-gray-400 hover:text-white'
+                            }`}
                         >
                           {bps / 100}%
                         </button>
@@ -1097,11 +1151,10 @@ export default function DexPage() {
                             const bps = Math.round(Math.min(50, Math.max(0, pct)) * 100);
                             setSlippageBps(bps);
                           }}
-                          className={`text-xs w-[68px] px-2 py-1 rounded outline-none transition-colors text-right ${
-                            [10, 50, 100, 300].includes(slippageBps)
-                              ? 'bg-white/5 text-gray-400 placeholder-gray-500 pr-2'
-                              : 'bg-white text-black pr-5'
-                          }`}
+                          className={`text-xs w-[68px] px-2 py-1 rounded outline-none transition-colors text-right ${[10, 50, 100, 300].includes(slippageBps)
+                            ? 'bg-white/5 text-gray-400 placeholder-gray-500 pr-2'
+                            : 'bg-white text-black pr-5'
+                            }`}
                         />
                         {![10, 50, 100, 300].includes(slippageBps) && (
                           <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs pointer-events-none text-black">
@@ -1121,11 +1174,10 @@ export default function DexPage() {
                     placeholder="0x..."
                     value={recipient}
                     onChange={(e) => setRecipient(e.target.value.trim())}
-                    className={`w-full bg-white/5 border rounded-lg px-3 py-2 text-white text-sm font-mono outline-none placeholder-gray-600 transition-colors ${
-                      recipient && (!recipientFormatValid || recipientIsContract)
-                        ? 'border-red-500/50'
-                        : 'border-white/10 focus:border-white/20'
-                    }`}
+                    className={`w-full bg-white/5 border rounded-lg px-3 py-2 text-white text-sm font-mono outline-none placeholder-gray-600 transition-colors ${recipient && (!recipientFormatValid || recipientIsContract)
+                      ? 'border-red-500/50'
+                      : 'border-white/10 focus:border-white/20'
+                      }`}
                   />
                   {recipient && !recipientFormatValid && (
                     <p className="text-xs text-red-400 mt-1">Invalid address</p>
@@ -1230,7 +1282,7 @@ export default function DexPage() {
 
       {/* Route detail dialog */}
       <Dialog open={routeOpen} onOpenChange={setRouteOpen}>
-        <DialogContent className="bg-black border border-white/10 text-white w-[calc(100vw-1rem)] max-w-2xl max-h-[85vh] overflow-y-auto !p-4 !rounded-2xl">
+        <DialogContent className="bg-white/5 backdrop-blur-2xl border border-white/10 text-white w-[calc(100vw-1rem)] max-w-2xl max-h-[85vh] overflow-y-auto !p-4 !rounded-2xl shadow-2xl">
           <DialogHeader>
             <DialogTitle className="text-white text-left pr-8">Route Details</DialogTitle>
           </DialogHeader>
@@ -1247,7 +1299,7 @@ export default function DexPage() {
                         <span className="text-white">{fmtPct(pct)} of input</span>
                       </div>
                     )}
-                    <div className="visible-scrollbar overflow-x-scroll -mx-1 px-1 pb-3 min-w-0">
+                    <div className="visible-scrollbar overflow-x-auto -mx-1 px-1 pb-2 min-w-0">
                       <div className="flex items-stretch gap-2 w-max mx-auto">
                         <div className="flex items-center justify-center flex-shrink-0">
                           <TokenLogo ticker={fromToken.ticker} className="w-9 h-9" />
@@ -1276,6 +1328,14 @@ export default function DexPage() {
                             return hops.map((hop, j) => {
                               const tIn = getTokenInfo(hop.tokenIn);
                               const tOut = getTokenInfo(hop.tokenOut);
+                              // Recompute percentages from amountIn so they sum to 100% per hop —
+                              // Switch's `leg.percentage` field is unreliable for multi-leg hops.
+                              let totalHopIn = 0n;
+                              try {
+                                for (const leg of hop.legs) totalHopIn += BigInt(leg.amountIn);
+                              } catch {
+                                totalHopIn = 0n;
+                              }
                               return (
                                 <div key={j} className="flex items-center gap-2">
                                   <ArrowRight size={14} className="text-gray-600 flex-shrink-0" />
@@ -1285,19 +1345,32 @@ export default function DexPage() {
                                       <span className="text-gray-500">→</span>
                                       <span>{tOut.ticker}</span>
                                     </div>
-                                    {hop.legs.map((leg, k) => (
-                                      <div
-                                        key={k}
-                                        className="flex items-center justify-between gap-3 text-xs"
-                                      >
-                                        <span className="text-gray-400">{leg.adapter}</span>
-                                        <span className="text-white">
-                                          {leg.percentage !== undefined
-                                            ? fmtPct(leg.percentage)
-                                            : ''}
-                                        </span>
-                                      </div>
-                                    ))}
+                                    {hop.legs.map((leg, k) => {
+                                      let legPct: number | null = null;
+                                      if (totalHopIn > 0n) {
+                                        try {
+                                          // Scale to 4 decimals of precision via integer math
+                                          const scaled =
+                                            (BigInt(leg.amountIn) * 1_000_000n) / totalHopIn;
+                                          legPct = Number(scaled) / 10_000;
+                                        } catch {
+                                          legPct = leg.percentage ?? null;
+                                        }
+                                      } else if (leg.percentage !== undefined) {
+                                        legPct = leg.percentage;
+                                      }
+                                      return (
+                                        <div
+                                          key={k}
+                                          className="flex items-center justify-between gap-3 text-xs"
+                                        >
+                                          <span className="text-gray-400">{leg.adapter}</span>
+                                          <span className="text-white">
+                                            {legPct !== null ? fmtPct(legPct) : ''}
+                                          </span>
+                                        </div>
+                                      );
+                                    })}
                                   </div>
                                 </div>
                               );
